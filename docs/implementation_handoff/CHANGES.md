@@ -1,33 +1,42 @@
 # Changes and representation status
 
-The machine-readable overlay manifest is the authoritative file inventory.
+The supplied full-file overlay was a partial source starting point. This local
+checkout has since acquired additional source and tests. The old overlay
+manifest describes only its original payload; it does **not** describe the
+current working tree or later commits.
 
-New files use `Fount.Writing.*`, `FountProbe.Writing.*`, and
-`FountWorkshop.Writing.*` namespaces to preserve recovered work without silently
-replacing uninspected implementations. These are integration components, not a
-claim that the specification's public APIs have been migrated.
+## Implemented in the local checkout
 
-The Workshop dependency declaration is extended where its source manifest
-contains the ordinary `deps` function. Inspect it locally and resolve the actual
-graph. The new Probe manifest uses the three supplied repository layouts.
-Existing lockfile bytes are retained. A newly created Probe lockfile is empty
-when no resolved prior lock exists: this explicitly means **unresolved**, not a
-fabricated lock. Run `mix deps.get` locally and include the resulting lockfiles
-in the completed release.
+- Core now has a typed screenplay editor, exact target and slice APIs, content
+  projection, change impact, and a fresh PostgreSQL writing migration.
+- `Fount.Persistence` creates/loads accepted and historical revisions, saves
+  sessions/candidates/reports, and makes candidate acceptance transactional.
+  The fresh schema was migrated into a new isolated development database.
+- Probe now has scene inventory, literal search, exact view construction and
+  a Jev evaluation path for audience and confirmed-speaker scene views.
+- Workshop now generates candidate pages from an empty brief, rewrites exact
+  elements, rebuilds sequences, responds to a local note, runs six writing
+  profiles, rewrites character dialogue with partner replies, and restores
+  historical beats. All generated pages remain candidates until review.
+- The three Fount packages have resolved Mix lockfiles. Inference and Agent
+  Session Manager resolve from Hex; System One SDK is consumed from its local
+  checkout. Neither external repository was modified.
+- Default tests run without a database or authenticated provider. Separate
+  real examples and PostgreSQL/PDF integration checks are recorded in
+  `VERIFICATION.md`.
 
-Original Fountain parsing code is not replaced with a new parser. The original
-fixture and reference contracts are copied as assets. Reference SQL under
-`priv/writing_contracts/` is not being represented as an executed Ecto migration.
+The original Fountain parser and source fidelity code remain in use. The new
+writer features build on those values rather than replacing the parser.
 
-This delivery does not assert the old stores/migration chain were removed or the
-new revision-scoped schema was installed. Complete those changes together with
-all affected callers, tests, configuration and documentation. Use a fresh,
-explicitly selected database and never automatically drop an existing database.
+## Remaining integration
 
-Content-hash semantics require a domain projection excluding revision metadata,
-source offsets/blobs, generated provenance and note-resolution audit IDs while
-retaining authored wording/status. The new canonical JSON encoder alone does
-not supply that projection.
+The legacy filesystem/SQLite store modules and their compatibility callers
+remain. They must be removed or migrated before claiming the PostgreSQL model
+is the only application store. Most T01–T13 tools and full W01–W09 acceptance
+cases also remain. Complete CLI coverage, selective candidate combination,
+semantic checking, story-change propagation, investigation that writes,
+optional speech verification, and a rebuilt final overlay are outstanding.
 
-No compatibility shim or direct provider bypass is introduced. Integration
-should use the specified APIs rather than keeping duplicate long-term models.
+Use the actual checked-out source and `FEATURES.md` as the progress record.
+Do not treat the original overlay's source inventory or verification status as
+the current implementation result.

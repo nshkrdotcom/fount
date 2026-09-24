@@ -225,17 +225,33 @@ defmodule FountWorkshop.SequenceRebuild do
 
   defp valid_scene?(%{"heading" => heading, "elements" => elements})
        when is_binary(heading) and is_list(elements) and elements != [] do
-    Fount.SceneHeading.standard_fountain?(heading) and
-      Enum.all?(elements, fn
-        %{"type" => type, "text" => text} ->
-          type in @types and is_binary(text) and String.valid?(text) and String.trim(text) != ""
-
-        _ ->
-          false
-      end)
+    Fount.SceneHeading.standard_fountain?(heading) and valid_elements?(elements)
   end
 
   defp valid_scene?(_), do: false
+
+  defp valid_elements?(elements) do
+    Enum.reduce_while(elements, false, fn
+      %{"type" => type, "text" => text}, cue_active
+      when is_binary(type) and is_binary(text) ->
+        cond do
+          type not in @types or not String.valid?(text) or String.trim(text) == "" ->
+            {:halt, :invalid}
+
+          type in ["dialogue", "parenthetical"] and not cue_active ->
+            {:halt, :invalid}
+
+          type in ["character", "dialogue", "parenthetical"] ->
+            {:cont, true}
+
+          true ->
+            {:cont, false}
+        end
+
+      _, _ ->
+        {:halt, :invalid}
+    end) != :invalid
+  end
 
   defp materialize(base, ids, scenes) do
     old_scenes = Enum.map(ids, &Query.scene(base, &1))

@@ -37,19 +37,48 @@ defmodule FountWorkshop.TargetedRewrite do
         {:error, :empty_direction}
 
       length(Enum.uniq(element_ids)) != length(element_ids) or
-          Enum.any?(selected, &(&1 == nil or &1.type not in @editable)) ->
+        Enum.any?(selected, &(&1 == nil or &1.type not in @editable)) or
+          Enum.any?(element_ids, &(Query.scene_for(base, &1) == nil)) ->
         {:error, :invalid_targets}
 
       true ->
-        context =
+        selected_scene_ids =
           element_ids
           |> Enum.map(&Query.scene_for(base, &1))
           |> Enum.reject(&is_nil/1)
-          |> Enum.uniq_by(& &1.id)
-          |> Enum.map_join("\n\n", fn scene ->
-            scene.element_ids
-            |> Enum.map(&Query.node(base, &1))
-            |> Enum.map_join("\n", &"#{&1.type}: #{&1.text}")
+          |> Enum.map(& &1.id)
+          |> MapSet.new()
+
+        selected_indices =
+          base.ir.scenes
+          |> Enum.with_index()
+          |> Enum.filter(fn {scene, _} -> MapSet.member?(selected_scene_ids, scene.id) end)
+          |> Enum.map(&elem(&1, 1))
+
+        context_indices =
+          selected_indices
+          |> Enum.flat_map(&(max(0, &1 - 2)..min(length(base.ir.scenes) - 1, &1 + 2)))
+          |> MapSet.new()
+
+        context =
+          base.ir.scenes
+          |> Enum.with_index()
+          |> Enum.filter(fn {scene, index} ->
+            not scene.omitted? and MapSet.member?(context_indices, index)
+          end)
+          |> Enum.map_join("\n\n", fn {scene, _} ->
+            label =
+              if MapSet.member?(selected_scene_ids, scene.id),
+                do: "TARGET SCENE",
+                else: "CONTEXT SCENE"
+
+            body =
+              scene.element_ids
+              |> Enum.map(&Query.node(base, &1))
+              |> Enum.reject(&(&1.type in [:note, :boneyard, :section, :synopsis]))
+              |> Enum.map_join("\n", &"#{&1.type}: #{&1.text}")
+
+            "#{label}\n#{body}"
           end)
 
         targets =
@@ -57,8 +86,10 @@ defmodule FountWorkshop.TargetedRewrite do
 
         prompt = """
         Revise only the listed screenplay elements. Return one replacement text for each exact ID.
-        Keep the same screenplay element type, character intent and story facts unless the writer
-        direction explicitly changes them. Do not add scene headings, cues or commentary.
+        Keep the same screenplay element type, character intent, pronouns and established
+        story facts unless the writer direction explicitly changes them. The surrounding
+        scenes show continuity you must respect; only exact targets may be rewritten.
+        Do not add scene headings, cues or commentary.
 
         Writer direction: #{direction}
         Surrounding scenes:\n#{context}

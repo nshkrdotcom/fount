@@ -118,4 +118,34 @@ defmodule FountWorkshop.SequenceRebuildTest do
     assert length(trace) == 2
     assert Query.scene(base, scene.id)
   end
+
+  test "orphan dialogue is rejected while completion can repair it" do
+    base =
+      Screenplay.new(
+        scenes: [
+          %{
+            heading: "INT. ROOM - DAY",
+            elements: [
+              %{type: :action, text: "Mara waits."}
+            ]
+          }
+        ]
+      )
+
+    [scene] = base.ir.scenes
+
+    malformed = [
+      %{
+        "heading" => "INT. ROOM - DAY",
+        "elements" => [
+          %{"type" => "dialogue", "text" => "Where is Dan?"}
+        ]
+      }
+    ]
+
+    assert {:error, {:completion_failed, {:invalid_completion, :invalid_scene_shape}, trace}} =
+             SequenceRebuild.propose(base, [scene.id], "Add conflict.", client(malformed))
+
+    assert length(trace) == 2
+  end
 end

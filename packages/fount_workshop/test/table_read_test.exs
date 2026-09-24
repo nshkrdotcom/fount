@@ -34,4 +34,31 @@ defmodule FountWorkshop.TableReadTest do
     assert {:error, {:voice_not_configured, "JOHN"}} =
              TableRead.synthesize(model, scene.id, %{mara.id => "alto"}, synthesize)
   end
+
+  test "exports actual ordered turns to JSON and escaped HTML" do
+    model =
+      Screenplay.new(
+        scenes: [
+          %{
+            heading: "INT. ROOM - DAY",
+            elements: [
+              %{type: :character, text: "MARA"},
+              %{type: :dialogue, text: "The key <is> here."},
+              %{type: :character, text: "DAN"},
+              %{type: :dialogue, text: "Then open it."}
+            ]
+          }
+        ]
+      )
+
+    root = Path.join(System.tmp_dir!(), "fount-table-#{Fount.ID.v4()}")
+    on_exit(fn -> File.rm_rf(root) end)
+    assert {:ok, %{turn_count: 2}} = TableRead.export(model, Path.join(root, "read.json"), :json)
+    assert {:ok, %{turn_count: 2}} = TableRead.export(model, Path.join(root, "read.html"), :html)
+    json = root |> Path.join("read.json") |> File.read!() |> Jason.decode!()
+    assert Enum.map(json["turns"], & &1["cue"]) == ["MARA", "DAN"]
+    html = File.read!(Path.join(root, "read.html"))
+    assert html =~ "The key &lt;is&gt; here."
+    refute html =~ "The key <is> here."
+  end
 end

@@ -16,6 +16,431 @@ File.mkdir_p!(out)
 {:ok, _} = Fount.Repo.start_link(url: url, pool_size: 2)
 
 case mode do
+  "recover" ->
+    key = "live-recover-#{Fount.ID.v4()}"
+    fixture = Application.app_dir(:fount, "priv/fixtures/last_light.fountain")
+
+    root =
+      fixture
+      |> File.read!()
+      |> Fount.parse!()
+      |> Fount.Screenplay.from_document(cast_resolution: :literal_cues)
+
+    {:ok, _} = Fount.Persistence.create(Fount.Repo, key, root)
+
+    [lost] =
+      Enum.filter(
+        root.ir.elements,
+        &(&1.text ==
+            "Dan unlocks a tin cashbox. One brass key lies on a float shaped like a fish.")
+      )
+
+    {:ok, cut, _} =
+      Fount.Screenplay.apply(root, [
+        %{
+          "kind" => "delete_elements",
+          "value" => %{"ids" => [lost.id]}
+        }
+      ])
+
+    {:ok, _} =
+      Fount.Persistence.save_edit(Fount.Repo, key, cut, expected_revision: root.revision.id)
+
+    {:ok, result} = FountWorkshop.Recover.run(Fount.Repo, key, root.revision.id, lost.id)
+    candidate = result.candidate
+    {:ok, reopened} = Fount.Persistence.candidate(Fount.Repo, candidate.id)
+    {:ok, packet} = FountWorkshop.Review.packet(Fount.Repo, candidate.id)
+    restored = Fount.Query.node(reopened["screenplay"], lost.id)
+    if restored == nil or restored.text != lost.text, do: raise("Historical beat not restored")
+    prefix = Path.join(out, candidate.id)
+    File.write!(prefix <> ".fountain", packet["proposed_fountain"])
+
+    File.write!(
+      prefix <> ".review.json",
+      Jason.encode!(
+        %{
+          candidate_id: candidate.id,
+          source_revision_id: root.revision.id,
+          source_element_id: lost.id,
+          source_text: lost.text,
+          current_text: nil,
+          proposed_text: restored.text,
+          source_diff: inspect(packet["source_diff"])
+        },
+        pretty: true
+      )
+    )
+
+    {:ok, pdf} = FountWorkshop.Export.PDF.export(reopened["screenplay"], prefix <> ".pdf")
+    {:ok, head} = Fount.Persistence.load(Fount.Repo, key)
+    if head.revision.id != cut.revision.id, do: raise("Recover moved accepted head")
+
+    File.write!(
+      Path.join(out, "manifest.json"),
+      Jason.encode!(
+        %{
+          mode: mode,
+          screenplay_key: key,
+          session_id: result.session.id,
+          candidate_id: candidate.id,
+          source_revision_id: root.revision.id,
+          base_revision_id: cut.revision.id,
+          accepted_revision_id: head.revision.id,
+          result_revision_id: reopened["screenplay"].revision.id,
+          restored_element_id: lost.id,
+          fountain: prefix <> ".fountain",
+          pdf: pdf.path,
+          pages: pdf.pages,
+          pdf_sha256: pdf.sha256
+        },
+        pretty: true
+      )
+    )
+
+    IO.puts("Wrote a real historical recovery candidate and PDF in #{out}")
+
+  "speech" ->
+    fixture = Application.app_dir(:fount, "priv/fixtures/last_light.fountain")
+
+    model =
+      fixture
+      |> File.read!()
+      |> Fount.parse!()
+      |> Fount.Screenplay.from_document(cast_resolution: :literal_cues)
+
+    scene = hd(model.ir.scenes)
+    {:ok, turns} = Fount.Writer.table_read(model, scene.id)
+
+    executable =
+      System.get_env("FOUNT_ESPEAK_BIN") ||
+        System.find_executable("espeak-ng") || System.find_executable("espeak") ||
+        raise "Real eSpeak executable is required for speech mode"
+
+    clips =
+      turns
+      |> Enum.with_index()
+      |> Enum.map(fn {turn, index} ->
+        path =
+          Path.join(out, "turn-#{String.pad_leading(Integer.to_string(index + 1), 3, "0")}.wav")
+
+        {:ok, audio} =
+          FountWorkshop.Speech.Espeak.render(turn.dialogue, "en", path, executable: executable)
+
+        %{
+          block_id: turn.id,
+          cue: turn.cue,
+          path: audio.path,
+          bytes: audio.bytes,
+          sha256: audio.sha256
+        }
+      end)
+
+    File.write!(
+      Path.join(out, "manifest.json"),
+      Jason.encode!(
+        %{
+          mode: mode,
+          screenplay_id: model.id,
+          revision_id: model.revision.id,
+          scene_id: scene.id,
+          clips: clips
+        },
+        pretty: true
+      )
+    )
+
+    IO.puts("Wrote #{length(clips)} real speech WAV files in #{out}")
+
+  "table_read" ->
+    fixture = Application.app_dir(:fount, "priv/fixtures/last_light.fountain")
+
+    model =
+      fixture
+      |> File.read!()
+      |> Fount.parse!()
+      |> Fount.Screenplay.from_document(cast_resolution: :literal_cues)
+
+    {:ok, json} = FountWorkshop.TableRead.export(model, Path.join(out, "table_read.json"), :json)
+    {:ok, html} = FountWorkshop.TableRead.export(model, Path.join(out, "table_read.html"), :html)
+    {:ok, pdf} = FountWorkshop.Export.PDF.export(model, Path.join(out, "screenplay.pdf"))
+
+    File.write!(
+      Path.join(out, "manifest.json"),
+      Jason.encode!(
+        %{
+          mode: mode,
+          screenplay_id: model.id,
+          revision_id: model.revision.id,
+          turn_count: json.turn_count,
+          json: json.path,
+          html: html.path,
+          pdf: pdf.path,
+          pages: pdf.pages,
+          pdf_sha256: pdf.sha256
+        },
+        pretty: true
+      )
+    )
+
+    IO.puts("Wrote real table-read JSON/HTML and screenplay PDF in #{out}")
+
+  "character" ->
+    key = "live-character-#{Fount.ID.v4()}"
+    fixture = Application.app_dir(:fount, "priv/fixtures/last_light.fountain")
+
+    root =
+      fixture
+      |> File.read!()
+      |> Fount.parse!()
+      |> Fount.Screenplay.from_document(cast_resolution: :literal_cues)
+
+    {:ok, _} = Fount.Persistence.create(Fount.Repo, key, root)
+    [dan] = Enum.filter(Fount.Query.characters(root), &(&1.display_name == "DAN"))
+    scene_ids = root.ir.scenes |> Enum.take(3) |> Enum.map(& &1.id)
+
+    client =
+      Inference.Client.agent_session!(
+        adapter: Inference.Adapters.ASM,
+        provider: :codex,
+        model: System.get_env("FOUNT_CODEX_MODEL"),
+        adapter_opts: [query_opts: [stream_timeout_ms: 180_000]]
+      )
+
+    {:ok, result} =
+      FountWorkshop.CharacterRewrite.run(
+        Fount.Repo,
+        key,
+        dan.id,
+        scene_ids,
+        "Across these three scenes, Dan moves from dry evasions to giving up control of the ledger. Let Mara answer his changing behavior rather than just exchanging information. Preserve the key handoff and the fact that the accountant has the original across the water.",
+        client
+      )
+
+    candidate = result.candidate
+    {:ok, reopened} = Fount.Persistence.candidate(Fount.Repo, candidate.id)
+    {:ok, packet} = FountWorkshop.Review.packet(Fount.Repo, candidate.id)
+    prefix = Path.join(out, candidate.id)
+    File.write!(prefix <> ".fountain", packet["proposed_fountain"])
+
+    File.write!(
+      prefix <> ".review.json",
+      Jason.encode!(
+        %{
+          candidate_id: candidate.id,
+          character_id: dan.id,
+          selected_scene_ids: scene_ids,
+          source_diff: inspect(packet["source_diff"]),
+          structural_diff: Fount.Screenplay.Model.plain(packet["structural_diff"])
+        },
+        pretty: true
+      )
+    )
+
+    {:ok, pdf} = FountWorkshop.Export.PDF.export(reopened["screenplay"], prefix <> ".pdf")
+    {:ok, head} = Fount.Persistence.load(Fount.Repo, key)
+    if head.revision.id != root.revision.id, do: raise("Character rewrite moved accepted head")
+
+    File.write!(
+      Path.join(out, "manifest.json"),
+      Jason.encode!(
+        %{
+          mode: mode,
+          screenplay_key: key,
+          session_id: result.session.id,
+          candidate_id: candidate.id,
+          character_id: dan.id,
+          selected_scene_ids: scene_ids,
+          base_revision_id: root.revision.id,
+          accepted_revision_id: head.revision.id,
+          result_revision_id: reopened["screenplay"].revision.id,
+          fountain: prefix <> ".fountain",
+          pdf: pdf.path,
+          pages: pdf.pages,
+          pdf_sha256: pdf.sha256
+        },
+        pretty: true
+      )
+    )
+
+    IO.puts("Wrote a real three-scene character rewrite and PDF in #{out}")
+
+  "pass" ->
+    key = "live-pass-#{Fount.ID.v4()}"
+    fixture = Application.app_dir(:fount, "priv/fixtures/last_light.fountain")
+
+    root =
+      fixture
+      |> File.read!()
+      |> Fount.parse!()
+      |> Fount.Screenplay.from_document(cast_resolution: :literal_cues)
+
+    {:ok, _} = Fount.Persistence.create(Fount.Repo, key, root)
+    first = hd(root.ir.scenes)
+    profile_id = "dialogue_subtext"
+
+    client =
+      Inference.Client.agent_session!(
+        adapter: Inference.Adapters.ASM,
+        provider: :codex,
+        model: System.get_env("FOUNT_CODEX_MODEL"),
+        adapter_opts: [query_opts: [stream_timeout_ms: 180_000]]
+      )
+
+    {:ok, result} =
+      FountWorkshop.Pass.run(
+        Fount.Repo,
+        key,
+        profile_id,
+        [first.id],
+        "Make Mara and Dan's first exchange more responsive, without changing who has the original ledger or how the accountant is referred to later.",
+        client
+      )
+
+    candidate = result.candidate
+    {:ok, reopened} = Fount.Persistence.candidate(Fount.Repo, candidate.id)
+    {:ok, packet} = FountWorkshop.Review.packet(Fount.Repo, candidate.id)
+    prefix = Path.join(out, candidate.id)
+    File.write!(prefix <> ".fountain", packet["proposed_fountain"])
+
+    File.write!(
+      prefix <> ".review.json",
+      Jason.encode!(
+        %{
+          candidate_id: candidate.id,
+          profile_id: profile_id,
+          source_diff: inspect(packet["source_diff"]),
+          structural_diff: Fount.Screenplay.Model.plain(packet["structural_diff"])
+        },
+        pretty: true
+      )
+    )
+
+    {:ok, pdf} = FountWorkshop.Export.PDF.export(reopened["screenplay"], prefix <> ".pdf")
+    {:ok, head} = Fount.Persistence.load(Fount.Repo, key)
+    if head.revision.id != root.revision.id, do: raise("Pass moved accepted head")
+
+    File.write!(
+      Path.join(out, "manifest.json"),
+      Jason.encode!(
+        %{
+          mode: mode,
+          profile_id: profile_id,
+          screenplay_key: key,
+          session_id: result.session.id,
+          candidate_id: candidate.id,
+          base_revision_id: root.revision.id,
+          accepted_revision_id: head.revision.id,
+          result_revision_id: reopened["screenplay"].revision.id,
+          fountain: prefix <> ".fountain",
+          pdf: pdf.path,
+          pages: pdf.pages,
+          pdf_sha256: pdf.sha256
+        },
+        pretty: true
+      )
+    )
+
+    IO.puts("Wrote a real dialogue pass and PDF in #{out}")
+
+  "notes" ->
+    key = "live-notes-#{Fount.ID.v4()}"
+    fixture = Application.app_dir(:fount, "priv/fixtures/last_light.fountain")
+
+    root =
+      fixture
+      |> File.read!()
+      |> Fount.parse!()
+      |> Fount.Screenplay.from_document(cast_resolution: :literal_cues)
+
+    {:ok, _} = Fount.Persistence.create(Fount.Repo, key, root)
+
+    [note] =
+      Enum.filter(
+        root.ir.elements,
+        &(&1.type == :note and String.contains?(&1.text, "costs him something"))
+      )
+
+    [target] =
+      Enum.filter(
+        root.ir.elements,
+        &(&1.text == "The original is with the accountant across the water.")
+      )
+
+    other_note_ids =
+      root.ir.elements
+      |> Enum.filter(&(&1.type == :note and &1.id != note.id))
+      |> Enum.map(& &1.id)
+
+    client =
+      Inference.Client.agent_session!(
+        adapter: Inference.Adapters.ASM,
+        provider: :codex,
+        model: System.get_env("FOUNT_CODEX_MODEL"),
+        adapter_opts: [query_opts: [stream_timeout_ms: 180_000]]
+      )
+
+    {:ok, result} = FountWorkshop.NoteResponse.run(Fount.Repo, key, note.id, [target.id], client)
+    candidate = result.candidate
+    {:ok, reopened} = Fount.Persistence.candidate(Fount.Repo, candidate.id)
+    {:ok, packet} = FountWorkshop.Review.packet(Fount.Repo, candidate.id)
+
+    if Fount.Query.node(reopened["screenplay"], note.id),
+      do: raise("Addressed note still present")
+
+    if Enum.any?(
+         other_note_ids,
+         &(Fount.Query.node(reopened["screenplay"], &1) == nil)
+       ),
+       do: raise("Unrelated note was removed")
+
+    prefix = Path.join(out, candidate.id)
+    File.write!(prefix <> ".fountain", packet["proposed_fountain"])
+
+    File.write!(
+      prefix <> ".review.json",
+      Jason.encode!(
+        %{
+          candidate_id: candidate.id,
+          addressed_note_id: note.id,
+          retained_note_ids: other_note_ids,
+          target_element_id: target.id,
+          before: target.text,
+          after: Fount.Query.node(reopened["screenplay"], target.id).text,
+          source_diff: inspect(packet["source_diff"])
+        },
+        pretty: true
+      )
+    )
+
+    {:ok, pdf} = FountWorkshop.Export.PDF.export(reopened["screenplay"], prefix <> ".pdf")
+    {:ok, head} = Fount.Persistence.load(Fount.Repo, key)
+    if head.revision.id != root.revision.id, do: raise("Note response moved accepted head")
+
+    File.write!(
+      Path.join(out, "manifest.json"),
+      Jason.encode!(
+        %{
+          mode: mode,
+          screenplay_key: key,
+          session_id: result.session.id,
+          candidate_id: candidate.id,
+          addressed_note_id: note.id,
+          retained_note_ids: other_note_ids,
+          target_element_id: target.id,
+          base_revision_id: root.revision.id,
+          accepted_revision_id: head.revision.id,
+          result_revision_id: reopened["screenplay"].revision.id,
+          fountain: prefix <> ".fountain",
+          pdf: pdf.path,
+          pages: pdf.pages,
+          pdf_sha256: pdf.sha256
+        },
+        pretty: true
+      )
+    )
+
+    IO.puts("Wrote a real note response and PDF in #{out}")
+
   "sequence" ->
     key = "live-sequence-#{Fount.ID.v4()}"
     fixture = Application.app_dir(:fount, "priv/fixtures/last_light.fountain")

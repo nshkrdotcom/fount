@@ -124,6 +124,17 @@ defmodule Fount.Persistence.Schema.Mention do
   end
 end
 
+defmodule Fount.Persistence.Schema.MentionCandidate do
+  @moduledoc false
+  use Ecto.Schema
+  @primary_key false
+  schema "mention_candidates" do
+    field(:screenplay_id, Ecto.UUID)
+    field(:mention_id, Ecto.UUID)
+    field(:character_id, Ecto.UUID)
+  end
+end
+
 defmodule Fount.Persistence.Schema.Assertion do
   @moduledoc false
   use Ecto.Schema

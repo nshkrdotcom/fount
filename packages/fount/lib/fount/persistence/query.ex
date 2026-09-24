@@ -62,6 +62,19 @@ defmodule Fount.Persistence.Query do
     )
   end
 
+  @doc "Mentions proposing one cast identity, including unresolved ambiguous evidence."
+  def mention_candidates(screenplay_id, character_id) do
+    from(mention in Schema.Mention,
+      join: candidate in Schema.MentionCandidate,
+      on: candidate.mention_id == mention.id and candidate.screenplay_id == mention.screenplay_id,
+      join: element in Schema.Element,
+      on: element.id == mention.element_id,
+      where: mention.screenplay_id == ^screenplay_id and candidate.character_id == ^character_id,
+      order_by: [element.ordinal, mention.byte_start],
+      select: mention
+    )
+  end
+
   @doc "Dialogue turns explicitly linked to a character through confirmed cue evidence."
   def dialogue_for(screenplay_id, character_id) do
     from(turn in Schema.DialogueTurn,

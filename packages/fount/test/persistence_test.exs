@@ -1,9 +1,11 @@
 defmodule Fount.PersistenceTest do
   use ExUnit.Case, async: false
+  import Ecto.Query
 
   alias Ecto.Adapters.SQL
   alias Fount.Persistence
   alias Fount.Persistence.Query
+  alias Fount.Persistence.Schema
   alias Fount.Persistence.Schema.Mention
   alias Fount.Repo
   alias Fount.Screenplay
@@ -90,6 +92,66 @@ defmodule Fount.PersistenceTest do
              Persistence.save(Repo, key, changed, expected_revision: model.revision.id)
 
     assert {:ok, loaded} = Persistence.load(Repo, key)
+    assert loaded.revision.id == model.revision.id
+  end
+
+  test "ambiguous named candidates survive reload and remain queryable by cast ID" do
+    key = "test-#{Fount.ID.v4()}"
+    model = Screenplay.new(scenes: [%{heading: "INT. ROOM - DAY", elements: [%{type: :action, text: "Mara waits."}]}])
+    {model, first} = Screenplay.add_character(model, "Mara")
+    {model, second} = Screenplay.add_character(model, "Mara")
+    assert [candidate] = Screenplay.suggest_mentions(model)
+    assert candidate.status == :ambiguous
+    assert MapSet.new(candidate.candidate_ids) == MapSet.new([first.id, second.id])
+
+    model = %{model | mentions: %{candidate.id => candidate}}
+    assert :ok = Persistence.save(Repo, key, model)
+    assert {:ok, loaded} = Persistence.load(Repo, key)
+    assert loaded.mentions[candidate.id].character_id == nil
+    assert MapSet.new(loaded.mentions[candidate.id].candidate_ids) == MapSet.new([first.id, second.id])
+    assert Enum.map(Repo.all(Query.mention_candidates(model.id, first.id)), & &1.id) == [candidate.id]
+    assert Enum.map(Repo.all(Query.mention_candidates(model.id, second.id)), & &1.id) == [candidate.id]
+
+    action = Enum.find(loaded.ir.elements, &(&1.type == :action))
+    assert {:ok, edited} = Screenplay.apply(loaded, Fount.Edit.replace_text(action.id, "Nobody waits."))
+    assert :ok = Persistence.save(Repo, key, edited, expected_revision: loaded.revision.id)
+    assert {:ok, reloaded} = Persistence.load(Repo, key)
+    refute Map.has_key?(reloaded.mentions, candidate.id)
+    assert Repo.all(Query.mention_candidates(model.id, first.id)) == []
+  end
+
+  test "current load waits for a save holding the screenplay head" do
+    key = "test-#{Fount.ID.v4()}"
+    model = Screenplay.new(scenes: [%{heading: "INT. ROOM - DAY", elements: []}])
+    assert :ok = Persistence.save(Repo, key, model)
+    parent = self()
+    ref = make_ref()
+
+    writer =
+      Task.async(fn ->
+        Repo.transaction(fn ->
+          Repo.one(from(head in Schema.Screenplay, where: head.key == ^key, lock: "FOR UPDATE"))
+          send(parent, {ref, :locked})
+
+          receive do
+            {:release, ^ref} -> :ok
+          end
+        end)
+      end)
+
+    assert_receive {^ref, :locked}
+
+    reader =
+      Task.async(fn ->
+        send(parent, {ref, :reading})
+        Persistence.load(Repo, key)
+      end)
+
+    assert_receive {^ref, :reading}
+    assert Task.yield(reader, 100) == nil
+    send(writer.pid, {:release, ref})
+    assert {:ok, :ok} = Task.await(writer)
+    assert {:ok, loaded} = Task.await(reader)
     assert loaded.revision.id == model.revision.id
   end
 

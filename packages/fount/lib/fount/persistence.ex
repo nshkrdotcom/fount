@@ -20,6 +20,7 @@ defmodule Fount.Persistence do
   alias Fount.Store.SQLite
 
   @tables [
+    Schema.MentionCandidate,
     Schema.Mention,
     Schema.Assertion,
     Schema.Element,
@@ -46,10 +47,15 @@ defmodule Fount.Persistence do
   @doc "Loads current typed rows into an immutable screenplay value."
   @spec load(module(), String.t()) :: {:ok, Screenplay.t()} | {:error, :not_found}
   def load(repo, key) do
-    case repo.get_by(Schema.Screenplay, key: key) do
-      nil -> {:error, :not_found}
-      row -> {:ok, load_rows(repo, row)}
-    end
+    {:ok, result} =
+      repo.transaction(fn ->
+        case repo.one(from(s in Schema.Screenplay, where: s.key == ^key, lock: "FOR SHARE")) do
+          nil -> {:error, :not_found}
+          row -> {:ok, load_rows(repo, row)}
+        end
+      end)
+
+    result
   end
 
   @doc "Returns immutable historical revision identifiers in creation order."
@@ -263,7 +269,18 @@ defmodule Fount.Persistence do
     end)
 
     Enum.each(model.cast, fn {_id, character} -> insert_character(repo, id, character) end)
-    Enum.each(model.mentions, fn {_id, mention} -> insert_mention(repo, id, model.revision.id, mention) end)
+
+    Enum.each(model.mentions, fn {_id, mention} ->
+      insert_mention(repo, id, model.revision.id, mention)
+
+      Enum.each(mention.candidate_ids, fn character_id ->
+        repo.insert!(%Schema.MentionCandidate{
+          screenplay_id: id,
+          mention_id: mention.id,
+          character_id: character_id
+        })
+      end)
+    end)
 
     Enum.each(model.annotations, fn {_id, annotation} ->
       insert_assertion(repo, id, model.revision.id, annotation)
@@ -426,11 +443,31 @@ defmodule Fount.Persistence do
   defp invalid_mention?(model, mention, element_ids, cast_ids) do
     element = Screenplay.node(model, mention.element_id)
 
-    not MapSet.member?(element_ids, mention.element_id) or
-      (mention.character_id && not MapSet.member?(cast_ids, mention.character_id)) or
-      mention.byte_start < 0 or mention.byte_end <= mention.byte_start or
-      mention.byte_end > byte_size(element.text) or
-      binary_part(element.text, mention.byte_start, mention.byte_end - mention.byte_start) != mention.surface
+    not MapSet.member?(element_ids, mention.element_id) or is_nil(element) or
+      invalid_mention_candidates?(mention, cast_ids) or invalid_mention_span?(mention, element.text)
+  end
+
+  defp invalid_mention_candidates?(%Mention{candidate_ids: candidates} = mention, cast_ids)
+       when is_list(candidates) do
+    (not is_nil(mention.character_id) and not MapSet.member?(cast_ids, mention.character_id)) or
+      Enum.any?(candidates, &(not MapSet.member?(cast_ids, &1))) or
+      length(candidates) != length(Enum.uniq(candidates)) or
+      invalid_candidate_resolution?(mention, candidates)
+  end
+
+  defp invalid_mention_candidates?(_mention, _cast_ids), do: true
+
+  defp invalid_candidate_resolution?(mention, candidates) do
+    selected = mention.character_id
+
+    (mention.status == :ambiguous and (not is_nil(selected) or length(candidates) < 2)) or
+      (not is_nil(selected) and candidates != [] and selected not in candidates)
+  end
+
+  defp invalid_mention_span?(mention, text) do
+    mention.byte_start < 0 or mention.byte_end <= mention.byte_start or
+      mention.byte_end > byte_size(text) or
+      binary_part(text, mention.byte_start, mention.byte_end - mention.byte_start) != mention.surface
   end
 
   defp load_rows(repo, head) do
@@ -443,7 +480,9 @@ defmodule Fount.Persistence do
     characters = repo.all(from(x in Schema.Character, where: x.screenplay_id == ^id))
     aliases = repo.all(from(x in Schema.CharacterAlias, where: x.screenplay_id == ^id))
     mentions = repo.all(from(x in Schema.Mention, where: x.screenplay_id == ^id))
+    candidates = repo.all(from(x in Schema.MentionCandidate, where: x.screenplay_id == ^id))
     assertions = repo.all(from(x in Schema.Assertion, where: x.screenplay_id == ^id))
+    candidates_by_mention = Enum.group_by(candidates, & &1.mention_id, & &1.character_id)
 
     ir =
       %Script{
@@ -462,7 +501,7 @@ defmodule Fount.Persistence do
       revision: revision_from_row(revision),
       ir: ir,
       cast: Map.new(characters, &{&1.id, character_from_row(&1, aliases)}),
-      mentions: Map.new(mentions, &{&1.id, mention_from_row(&1)}),
+      mentions: Map.new(mentions, &{&1.id, mention_from_row(&1, Map.get(candidates_by_mention, &1.id, []))}),
       annotations: Map.new(assertions, &{&1.id, annotation_from_row(&1)})
     }
 
@@ -536,7 +575,7 @@ defmodule Fount.Persistence do
     }
   end
 
-  defp mention_from_row(row) do
+  defp mention_from_row(row, candidates) do
     %Mention{
       id: row.id,
       element_id: row.element_id,
@@ -548,7 +587,8 @@ defmodule Fount.Persistence do
       byte_end: row.byte_end,
       model_revision_id: row.model_revision_id,
       producer: row.producer,
-      confidence: row.confidence
+      confidence: row.confidence,
+      candidate_ids: Enum.sort(candidates)
     }
   end
 

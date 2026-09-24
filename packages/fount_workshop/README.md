@@ -1,6 +1,17 @@
+<p align="center">
+  <img src="assets/fount_workshop.svg" alt="Fount Workshop" width="200" height="200"/>
+</p>
+
+<p align="center">
+  <a href="https://hex.pm/packages/fount_workshop"><img src="https://img.shields.io/hexpm/v/fount_workshop.svg" alt="Hex.pm"/></a>
+  <a href="https://hexdocs.pm/fount_workshop"><img src="https://img.shields.io/badge/hex-docs-blue.svg" alt="HexDocs"/></a>
+  <a href="https://github.com/nshkrdotcom/fount"><img src="https://img.shields.io/badge/GitHub-repo-black?logo=github" alt="GitHub"/></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License"/></a>
+</p>
+
 # Fount Workshop
 
-Fount Workshop is a writer-controlled app layer over [Fount](../fount)'s canonical screenplay model. It adds model proposals, preview/accept, PDF export and dated submission checks. Fountain and FDX remain import/export formats. This is a separate Mix project in the poncho, with no web server or background process.
+Fount Workshop is a writer-controlled app layer over [Fount](https://hexdocs.pm/fount)'s canonical screenplay model. It adds model proposals, preview/accept, PDF export and dated submission checks. Fountain and FDX remain import/export formats. This is a separate Mix project in the poncho, with no web server or background process.
 
 ## Setup
 

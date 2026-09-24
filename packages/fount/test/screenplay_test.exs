@@ -41,10 +41,15 @@ defmodule Fount.ScreenplayTest do
     source = "INT. ROOM - DAY\r\n\r\nMARA\r\nHello."
     imported = source |> Fount.parse!() |> Screenplay.from_document()
     assert Screenplay.to_fountain(imported) == source
+    assert {:ok, unchanged} = Screenplay.export_fountain(imported)
+    assert unchanged.data == source
+    assert unchanged.losses == []
     dialogue = Enum.find(imported.ir.elements, &(&1.type == :dialogue))
     assert {:ok, changed} = Screenplay.apply(imported, Fount.Edit.replace_text(dialogue.id, "Goodbye."))
     refute Screenplay.to_fountain(changed) == source
     assert String.contains?(Screenplay.to_fountain(changed), "Goodbye.")
+    assert {:ok, regenerated} = Screenplay.export_fountain(changed)
+    assert regenerated.losses != []
   end
 
   test "cast links are stable and named references expose ambiguity with byte offsets" do
@@ -269,6 +274,12 @@ defmodule Fount.ScreenplayTest do
     assert String.contains?(exported.data, "McKay")
     assert {:ok, reparsed, _} = Screenplay.from_fdx(exported.data)
     assert Enum.any?(reparsed.ir.elements, &(&1.type == :dialogue and &1.text == "Fish & chips."))
+
+    dialogue = Enum.find(model.ir.elements, &(&1.type == :dialogue))
+    assert {:ok, revised} = Screenplay.apply(model, Fount.Edit.replace_text(dialogue.id, "Go & wait."))
+    assert {:ok, regenerated} = Screenplay.to_fdx(revised)
+    assert String.contains?(regenerated.data, "Go &amp; wait.")
+    assert Enum.any?(regenerated.losses, &String.contains?(&1, "production tags"))
   end
 
   test "literal scene numbering survives canonical edit, export, parse and reload" do
@@ -358,5 +369,36 @@ defmodule Fount.ScreenplayTest do
     assert diff.scenes.moved == [second.id, first.id]
     assert diff.elements.added == []
     assert diff.elements.removed == []
+  end
+
+  test "character rename plans confirmed cues and leaves literary references for review" do
+    model =
+      Screenplay.new(
+        scenes: [
+          %{
+            heading: "INT. ROOM - DAY",
+            elements: [
+              %{type: :action, text: "Mara waits."},
+              %{type: :character, text: "MARA"},
+              %{type: :dialogue, text: "Where is Mara?"}
+            ]
+          }
+        ]
+      )
+
+    {model, mara} = Screenplay.add_character(model, "Mara")
+    cue = Enum.find(model.ir.elements, &(&1.type == :character))
+    {:ok, model} = Screenplay.link_cue(model, cue.id, mara.id)
+
+    assert {:ok, plan} = Screenplay.plan_character_rename(model, mara.id, "Dr. Vance")
+    assert length(plan.cue_operations) == 1
+    assert Enum.map(plan.review, & &1.role) == [:action, :dialogue_reference]
+    assert {:ok, renamed} = Screenplay.accept_character_rename(model, plan)
+    assert renamed.cast[mara.id].display_name == "Dr. Vance"
+    assert Screenplay.node(renamed, cue.id).text == "Dr. Vance"
+    assert String.contains?(Screenplay.to_fountain(renamed), "@Dr. Vance")
+    assert Enum.any?(renamed.ir.elements, &(&1.type == :action and &1.text == "Mara waits."))
+    assert Enum.any?(renamed.ir.elements, &(&1.type == :dialogue and &1.text == "Where is Mara?"))
+    assert {:error, {:stale_rename_plan, _}} = Screenplay.accept_character_rename(renamed, plan)
   end
 end

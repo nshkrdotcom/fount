@@ -133,7 +133,8 @@ defmodule Fount.Persistence do
       | import: %{
           format: String.to_existing_atom(artifact.format),
           bytes: artifact.original_bytes,
-          revision_id: artifact.imported_model_revision_id
+          revision_id: artifact.imported_model_revision_id,
+          losses: artifact.fidelity["losses"] || []
         }
     }
   end
@@ -342,7 +343,7 @@ defmodule Fount.Persistence do
   defp insert_import(repo, model, now) do
     import = model.import
     hash = ID.hash(import.bytes)
-    artifact_id = ID.v5(model.id, [to_string(import.format), ":", hash])
+    artifact_id = ID.v5(model.id, [to_string(import.format), ":", import.revision_id, ":", hash])
 
     if is_nil(repo.get(Schema.ImportArtifact, artifact_id)) do
       repo.insert!(%Schema.ImportArtifact{
@@ -352,7 +353,7 @@ defmodule Fount.Persistence do
         original_bytes: import.bytes,
         bytes_sha256: hash,
         imported_model_revision_id: import.revision_id,
-        fidelity: %{},
+        fidelity: %{"losses" => import[:losses] || []},
         inserted_at: now
       })
     end
@@ -477,7 +478,8 @@ defmodule Fount.Persistence do
           | import: %{
               format: String.to_existing_atom(artifact.format),
               bytes: artifact.original_bytes,
-              revision_id: artifact.imported_model_revision_id
+              revision_id: artifact.imported_model_revision_id,
+              losses: artifact.fidelity["losses"] || []
             }
         }
     end

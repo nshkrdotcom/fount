@@ -102,6 +102,47 @@ defmodule Fount.PersistenceTest do
     assert Screenplay.to_fountain(loaded) == bytes
   end
 
+  test "FDX import bytes and fidelity losses survive relational reload" do
+    key = "test-#{Fount.ID.v4()}"
+
+    xml =
+      "<FinalDraft><Content><Paragraph Type=\"Action\"><Text>Wait.</Text></Paragraph></Content><TagData/></FinalDraft>"
+
+    assert {:ok, model, losses} = Screenplay.from_fdx(xml)
+    assert losses != []
+    assert :ok = Persistence.save(Repo, key, model)
+    assert {:ok, loaded} = Persistence.load(Repo, key)
+    assert {:ok, result} = Screenplay.to_fdx(loaded)
+    assert result.data == xml
+    action = Enum.find(loaded.ir.elements, &(&1.type == :action))
+    assert {:ok, changed} = Screenplay.apply(loaded, Fount.Edit.replace_text(action.id, "Go."))
+    assert :ok = Persistence.save(Repo, key, changed, expected_revision: loaded.revision.id)
+    assert {:ok, changed} = Persistence.load(Repo, key)
+    assert {:ok, regenerated} = Screenplay.to_fdx(changed)
+    assert regenerated.losses == losses
+    assert String.contains?(regenerated.data, "Go.")
+
+    changed_action = Enum.find(changed.ir.elements, &(&1.type == :action))
+    assert {:ok, changed_again} = Screenplay.apply(changed, Fount.Edit.replace_text(changed_action.id, "Stay."))
+    assert :ok = Persistence.save(Repo, key, changed_again, expected_revision: changed.revision.id)
+    assert {:ok, reloaded} = Persistence.load(Repo, key)
+    assert {:ok, reexported} = Screenplay.to_fdx(reloaded)
+    assert reexported.losses == losses
+    assert String.contains?(reexported.data, "Stay.")
+  end
+
+  test "reimporting identical FDX bytes at a new revision retains exact current export" do
+    key = "test-#{Fount.ID.v4()}"
+    xml = "<FinalDraft><Content><Paragraph Type=\"Action\"><Text>Same.</Text></Paragraph></Content></FinalDraft>"
+    {:ok, first, _} = Screenplay.from_fdx(xml)
+    assert :ok = Persistence.save(Repo, key, first)
+    {:ok, second, _} = Screenplay.from_fdx(xml, document_id: first.id)
+    assert :ok = Persistence.save(Repo, key, second, expected_revision: first.revision.id)
+    assert {:ok, loaded} = Persistence.load(Repo, key)
+    assert loaded.revision.id == second.revision.id
+    assert {:ok, %{data: ^xml}} = Screenplay.to_fdx(loaded)
+  end
+
   test "annotations retain query semantics and provenance across relational reload" do
     key = "test-#{Fount.ID.v4()}"
     model = Screenplay.new(scenes: [%{heading: "INT. ROOM - DAY", elements: [%{type: :action, text: "Mara waits."}]}])

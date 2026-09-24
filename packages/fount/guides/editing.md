@@ -28,6 +28,8 @@ Specialized operations preserve Fountain meaning. Examples:
 
 `replace_text/2` remains deliberately literal for callers that want exact control.
 
+For the canonical model, `Fount.Screenplay.plan_character_rename/3` identifies confirmed cues to change and exact named references in action, dialogue, and parentheticals for writer review. `accept_character_rename/2` updates the authored cast name and confirmed cues at one new revision; it leaves literary phrasing untouched. The plan rejects a changed base revision.
+
 ## Structured generation
 
 `Fount.Fragment` and `Fount.Builder` let a tool create screenplay constructs without knowing Fountain punctuation:

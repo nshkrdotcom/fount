@@ -73,7 +73,7 @@ defmodule Fount.Screenplay do
   def from_fdx(xml, opts \\ []) do
     with {:ok, result} <- FDX.decode(xml, opts) do
       model = from_document(result.document)
-      import = %{format: :fdx, bytes: xml, revision_id: model.revision.id}
+      import = %{format: :fdx, bytes: xml, revision_id: model.revision.id, losses: result.losses}
       {:ok, %{model | import: import}, result.losses}
     end
   end
@@ -86,8 +86,10 @@ defmodule Fount.Screenplay do
       do: {:ok, %ExportResult{data: bytes}}
 
   def to_fdx(%__MODULE__{} = model) do
-    with {:ok, document} <- Fount.parse(to_fountain(model)) do
-      FDX.export(document)
+    with {:ok, document} <- Fount.parse(to_fountain(model)),
+         {:ok, result} <- FDX.export(document) do
+      import_losses = if model.import, do: model.import[:losses] || [], else: []
+      {:ok, %{result | losses: Enum.uniq(result.losses ++ import_losses)}}
     end
   end
 
@@ -101,6 +103,20 @@ defmodule Fount.Screenplay do
 
   def to_fountain(%__MODULE__{ir: ir}, opts),
     do: Serializer.serialize(ir, Keyword.put(opts, :canonical_spacing, true))
+
+  @doc "Returns Fountain bytes with an explicit fidelity report for regenerated imports."
+  @spec export_fountain(t(), keyword()) :: {:ok, ExportResult.t()}
+  def export_fountain(%__MODULE__{} = model, opts \\ []) do
+    losses =
+      case model.import do
+        %{format: :fountain, revision_id: revision} when revision == model.revision.id -> []
+        %{format: :fountain} -> ["Original Fountain spacing and trivia may change after canonical editing"]
+        %{format: :fdx, losses: import_losses} -> import_losses
+        _ -> []
+      end
+
+    {:ok, %ExportResult{data: to_fountain(model, opts), losses: losses}}
+  end
 
   @doc "Applies typed operations to the model and advances its revision once."
   @spec apply(t(), Fount.Edit.Op.t() | [Fount.Edit.Op.t()]) :: {:ok, t()} | {:error, term()}
@@ -263,6 +279,51 @@ defmodule Fount.Screenplay do
     |> Map.values()
     |> Enum.filter(&(&1.character_id == character_id))
     |> Enum.sort_by(&{element_ordinal(screenplay, &1.element_id), &1.byte_start})
+  end
+
+  @doc "Plans a cast rename: confirmed cues are mechanical; prose references require review."
+  @spec plan_character_rename(t(), String.t(), String.t()) :: {:ok, map()} | {:error, term()}
+  def plan_character_rename(%__MODULE__{} = screenplay, character_id, new_name)
+      when is_binary(new_name) and new_name != "" do
+    case Map.get(screenplay.cast, character_id) do
+      nil ->
+        {:error, {:unknown_character, character_id}}
+
+      _character ->
+        cues =
+          screenplay
+          |> mentions_for(character_id)
+          |> Enum.filter(&(&1.role == :speaker_cue and &1.status == :confirmed))
+          |> Enum.map(&Fount.Edit.set_character_cue(&1.element_id, new_name))
+
+        review = Enum.filter(suggest_mentions(screenplay), &(character_id in &1.candidate_ids))
+
+        {:ok,
+         %{
+           base_revision: screenplay.revision.id,
+           character_id: character_id,
+           new_name: new_name,
+           cue_operations: cues,
+           review: review
+         }}
+    end
+  end
+
+  @doc "Accepts only the mechanical cue and cast-name part of a reviewed rename plan."
+  @spec accept_character_rename(t(), map()) :: {:ok, t()} | {:error, term()}
+  def accept_character_rename(%__MODULE__{} = screenplay, %{base_revision: base} = plan) do
+    if screenplay.revision.id == base do
+      with {:ok, renamed} <- __MODULE__.apply(screenplay, plan.cue_operations),
+           %Character{} = character <- Map.get(renamed.cast, plan.character_id) do
+        cast = Map.put(renamed.cast, character.id, %{character | display_name: plan.new_name})
+        {:ok, %{renamed | cast: cast}}
+      else
+        nil -> {:error, {:unknown_character, plan.character_id}}
+        error -> error
+      end
+    else
+      {:error, {:stale_rename_plan, screenplay.revision.id}}
+    end
   end
 
   defp element_suggestions(screenplay, element, aliases) do

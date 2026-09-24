@@ -1,3 +1,14 @@
+<p align="center">
+  <img src="assets/fount.svg" alt="Fount" width="200" height="200"/>
+</p>
+
+<p align="center">
+  <a href="https://hex.pm/packages/fount"><img src="https://img.shields.io/hexpm/v/fount.svg" alt="Hex.pm"/></a>
+  <a href="https://hexdocs.pm/fount"><img src="https://img.shields.io/badge/hex-docs-blue.svg" alt="HexDocs"/></a>
+  <a href="https://github.com/nshkrdotcom/fount"><img src="https://img.shields.io/badge/GitHub-repo-black?logo=github" alt="GitHub"/></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License"/></a>
+</p>
+
 # Fount
 
 Fount is a headless screenplay framework. Fountain is its preferred authoring surface, but Fountain text, the screenplay model, inferred analysis, and rendered/operational outputs are deliberately separate layers.

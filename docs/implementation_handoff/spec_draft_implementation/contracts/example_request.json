@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "workflow": "propagate",
+  "mode": "revise",
+  "base_revision_id": "00000000-0000-4000-8000-000000000001",
+  "instruction": "Move Dan's confession from the records room to the ferry queue. Repair earlier behavior that assumes his admission while preserving the key transfer and the reason to reach the accountant.",
+  "selection": {
+    "whole_screenplay": true
+  },
+  "constraints": [
+    {
+      "id": "keep-key-transfer",
+      "target": {
+        "kind": "element",
+        "id": "00000000-0000-4000-8000-000000000004"
+      },
+      "kind": "pin_text",
+      "spec": {
+        "text": "He puts the key in her hand. She pockets it."
+      },
+      "severity": "required",
+      "source": "writer"
+    }
+  ],
+  "alternatives": 2,
+  "options": {
+    "change": "delay_confession",
+    "destination": {
+      "kind": "replace_range",
+      "scene_ids": [
+        "00000000-0000-4000-8000-000000000006"
+      ]
+    },
+    "repair_scope": {
+      "whole_screenplay": true
+    }
+  }
+}

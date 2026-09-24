@@ -1,0 +1,156 @@
+{
+  "version": 1,
+  "decisions": {
+    "noul": {
+      "supported_min": 0.8,
+      "not_supported_max": 0.2
+    },
+    "choice": {
+      "confidence_min": 0.7,
+      "top_two_margin_min": 0.15
+    },
+    "constraint": {
+      "allowed_mass_pass_min": 0.8,
+      "allowed_mass_fail_max": 0.2,
+      "choice_score_confidence_min": 0.7
+    }
+  },
+  "profiles": [
+    {
+      "id": "knowledge_established",
+      "version": 1,
+      "tool": "knowledge_trace",
+      "projection": "subject_access",
+      "questions": [
+        {
+          "key": "established",
+          "type": "noul",
+          "instructions": "Does the supplied accessible evidence establish {{proposition}} for {{subject}}?",
+          "criteria": {
+            "true": "The supplied accessible evidence establishes it.",
+            "false": "The supplied accessible evidence does not establish it."
+          }
+        }
+      ]
+    },
+    {
+      "id": "dependency_support",
+      "version": 1,
+      "tool": "dependencies",
+      "projection": "exact_source_pairs",
+      "questions": [
+        {
+          "key": "establishes",
+          "type": "noul",
+          "instructions": "Does source A establish the object, ability, information or rule used by event B?"
+        },
+        {
+          "key": "relation",
+          "type": "choice",
+          "instructions": "Which relation best describes A supporting B?",
+          "options": [
+            [
+              "cause",
+              "A brings B about."
+            ],
+            [
+              "enable",
+              "A makes B possible."
+            ],
+            [
+              "motivate",
+              "A gives a character a reason for B."
+            ],
+            [
+              "setup",
+              "A prepares an audience for B."
+            ],
+            [
+              "none",
+              "No supported relation is established."
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "action_visibility",
+      "version": 1,
+      "tool": "action",
+      "projection": "performed_action",
+      "questions": [
+        {
+          "key": "visibility",
+          "type": "score",
+          "instructions": "How much of this action passage communicates visible behavior or audible events? This describes the prose, not its artistic quality.",
+          "levels": [
+            [
+              "none",
+              "Entirely explanatory interior information."
+            ],
+            [
+              "some",
+              "A small visible or audible part amid explanation."
+            ],
+            [
+              "mixed",
+              "Visible or audible events and explanation both carry the passage."
+            ],
+            [
+              "mostly",
+              "Mainly visible behavior or audible events."
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "suspicion",
+      "version": 1,
+      "tool": "knowledge_trace",
+      "projection": "subject_access",
+      "questions": [
+        {
+          "key": "suspicion",
+          "type": "score",
+          "instructions": "How strongly would the supplied accessible evidence invite suspicion of {{proposition}}?",
+          "levels": [
+            [
+              "absent",
+              "No supporting indication."
+            ],
+            [
+              "possible",
+              "A possibility without much support."
+            ],
+            [
+              "plausible",
+              "A reasonable interpretation among alternatives."
+            ],
+            [
+              "strong",
+              "Strong apparent support, alternatives remain."
+            ],
+            [
+              "conclusive",
+              "Apparently conclusive within the supplied evidence."
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "strategy_difference",
+      "version": 1,
+      "tool": "strategy_contrast",
+      "projection": "strategy_pair",
+      "questions": [
+        {
+          "key": "different",
+          "type": "noul",
+          "instructions": "Do these approaches change the causal route, character choice, source of resistance or disclosure in materially different ways?"
+        }
+      ]
+    }
+  ]
+}

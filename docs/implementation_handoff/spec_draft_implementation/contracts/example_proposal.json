@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "base_revision_id": "00000000-0000-4000-8000-000000000001",
+  "strategy_id": "deflect-with-a-task",
+  "summary": "Keep Dan evasive by making him turn the question into a practical instruction.",
+  "groups": [
+    {
+      "id": "office-response",
+      "title": "Make evasion playable",
+      "reason": "His answer makes Mara do something while avoiding the accusation.",
+      "depends_on": [],
+      "addresses_notes": [],
+      "evidence_ids": [],
+      "operations": [
+        {
+          "kind": "replace_text",
+          "target": {
+            "kind": "element",
+            "id": "00000000-0000-4000-8000-000000000009"
+          },
+          "value": "Hold that against the lamp. You will need both hands."
+        }
+      ],
+      "origin": "generated_text"
+    }
+  ],
+  "inventions": [],
+  "unresolved_questions": []
+}

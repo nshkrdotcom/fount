@@ -1,0 +1,190 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Fount candidate proposal",
+  "type": "object",
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "base_revision_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "strategy_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "summary": {
+      "type": "string"
+    },
+    "groups": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "depends_on": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 0
+          },
+          "addresses_notes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "minItems": 0
+          },
+          "evidence_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 0
+          },
+          "operations": {
+            "type": "array",
+            "items": {
+              "$ref": "operations.json"
+            },
+            "minItems": 1
+          },
+          "origin": {
+            "enum": [
+              "writer_edit",
+              "generated_text",
+              "generated_structural_edit",
+              "mixed"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "reason",
+          "depends_on",
+          "addresses_notes",
+          "evidence_ids",
+          "operations",
+          "origin"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 1
+    },
+    "inventions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "affected_targets": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "screenplay",
+                    "revision",
+                    "scene",
+                    "element",
+                    "dialogue_block",
+                    "character",
+                    "title_entry",
+                    "authored_item"
+                  ]
+                },
+                "id": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^new:[a-z][a-z0-9_-]*$"
+                    }
+                  ]
+                },
+                "span": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "byte_start": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "byte_end": {
+                          "type": "integer",
+                          "minimum": 1
+                        }
+                      },
+                      "required": [
+                        "byte_start",
+                        "byte_end"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "kind",
+                "id"
+              ],
+              "additionalProperties": false
+            },
+            "minItems": 0
+          }
+        },
+        "required": [
+          "description",
+          "category",
+          "affected_targets"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 0
+    },
+    "unresolved_questions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 0
+    }
+  },
+  "required": [
+    "version",
+    "base_revision_id",
+    "strategy_id",
+    "summary",
+    "groups",
+    "inventions",
+    "unresolved_questions"
+  ],
+  "additionalProperties": false
+}

@@ -1,0 +1,593 @@
+{
+  "format_version": 1,
+  "delivery_status": "partial_implementation_handoff",
+  "complete_required_release": false,
+  "base": {
+    "kind": "repomix_export",
+    "filename": "fount.xml",
+    "sha256": "8e203f33f02479ed982b094baea66baa848c7c9097e8d1e0dc0b87ed86fa93be",
+    "git_commit_verified": false,
+    "preimages": "Extracted Repomix file contents; byte differences require manual review"
+  },
+  "files": [
+    {
+      "path": "docs/implementation_handoff/CHANGES.md",
+      "action": "add",
+      "original_sha256": null,
+      "result_sha256": "fac75b2f14f6ccb2004108d6866b7ee3ac63f7e6097550496e5a009b162e0a64",
+      "mode": 420,
+      "bytes": 1862
+    },
+    {
+      "path": "docs/implementation_handoff/CONTINUE_PROMPT.md",
+      "action": "add",
+      "original_sha256": null,
+      "result_sha256": "99ef583a18ac733522f199fe107f850fa45a22906467df46cfb35832be690449",
+      "mode": 420,
+      "bytes": 8054
+    },
+    {
+      "path": "docs/implementation_handoff/FEATURES.md",
+      "action": "add",
+      "original_sha256": null,
+      "result_sha256": "4e7b6687533a08c22af726629f9ec45d0ff070e407d4d4268fd655695af4a4fa",
+      "mode": 420,
+      "bytes": 5692
+    },
+    {
+      "path": "docs/implementation_handoff/OPERATIONS.md",
+      "action": "add",
+      "original_sha256": null,
+      "result_sha256": "30442957e6f1cfeb0935475b7918b44fb4a308bbe4d74410b39fe8a861e58c8b",
+      "mode": 420,
+      "bytes": 2160
+    },
+    {
+      "path": "docs/implementation_handoff/PACKAGING_VERIFICATION.json",
+      "action": "add",
+      "original_sha256": null,
+      "result_sha256": "7ca5c7954dc9b9f12a2b1bdd2f63c1b27e15b89c9250b14c0a68c39d2a5be584",
+      "mode": 420,
+      "bytes": 947
+    },
+    {
+      "path": "docs/implementation_handoff/README.md",
+      "action": "add",
+      "original_sha256": null,
+      "result_sha256": "b2a0e1690a2750350440ca081b39ad406c6d29c20f18d408a6168eb07da8826a",
+      "mode": 420,
+      "bytes": 2165
+    },
+    {
+      "path": "docs/implementation_handoff/SETUP.md",
+      "action": "add",
+      "original_sha256": null,
+      "result_sha256": "25b696e628d7f1d6c08e7ea08dcaf64b04dacfb00bbc6e80847565bbba0b1c70",
+      "mode": 420,
+      "bytes": 3390
+    },
+    {
+      "path": "docs/implementation_handoff/SOURCE_RECORD.json",
+      "action": "add",
+      "original_sha256": null,
+      "result_sha256": "4f239e02442eb38ca1e3851b8af7c09802fdfce65a448377036c63475442554e",
+      "mode": 420,
+      "bytes": 862
+    },
+    {
+      "path": "docs/implementation_handoff/VERIFICATION.md",
+      "action": "add",
+      "original_sha256": null,
+      "result_sha256": "2de47eb45e32515cc152438c149492ce3f53bb89180305ad342bc671f6e1c51b",
+      "mode": 420,
+      "bytes": 1308
+    },
+    {
+      "path": "docs/implementation_handoff/WISHLIST.md",
+      "action": "add",
+      "original_sha256": null,
+      "result_sha256": "fd300a67f9277ea37f2a3fd29798b29f3bc2221a0561ea9f09554474d5d59e7e",
+      "mode": 420,
+      "bytes": 1057
+    },
+    {
+      "path": "docs/implementation_handoff/spec_draft_implementation/01_features_and_research.md",
+      "action": "add",
+      "original_sha256": null,
+      "result_sha256": "4790e2933a4bc2df7b177fe271eae669e1524ccf5aabd3efe155d9fff5b9b1f3",
+      "mode": 420,
+      "bytes": 13074
+    },
+    {
+      "path": "docs/implementation_handoff/spec_draft_implementation/01a_creative_workflows.md",
+      "action": "add",
+      "original_sha256": null,
+      "result_sha256": "e4fa5ffff50c188548a25e1107764e79f50294e7cd51f5b25c5013df100e4515",
+      "mode": 420,
+      "bytes": 16449
+    },
+    {
+      "path": "docs/implementation_handoff/spec_draft_implementation/02_repository_audit.md",
+      "action": "add",
+      "original_sha256": null,
+      "result_sha256": "a1d6e1d2601d97eed9f816d12ba0292aa9abd0e5ba6114c2c6402d109fd6777d",
+      "mode": 420,
+      "bytes": 8018
+    },
+    {
+      "path": "docs/implementation_handoff/spec_draft_implementation/03_architecture.md",
+      "action": "add",
+      "original_sha256": null,
+      "result_sha256": "b17f241ac6278b4f93e1df78a03d46dd82311b27e7540df190c69895a4a037b0",
+      "mode": 420,
+      "bytes": 7724
+    },
+    {
+      "path": "docs/implementation_handoff/spec_draft_implementation/04_postgresql_model.md",
+      "action": "add",
+      "original_sha256": null,
+      "result_sha256": "856d45749a80e2d16bbeaf59de161240b8cbaa5cca7af9a2601b7281b9253fcd",
+      "mode": 420,
+      "bytes": 12966
+    },
+    {
+      "path": "docs/implementation_handoff/spec_draft_implementation/05_core_apis.md",
+      "action": "add",
+      "original_sha256": null,
+      "result_sha256": "c58262318199b3356c715c8be404cd0c6bdc7fa639affda34c7fa3cb69d5f7b1",
+      "mode": 420,
+      "bytes": 14206
+    },
+    {
+      "path": "docs/implementation_handoff/spec_draft_implementation/06_perspective_and_evidence.md",
+      "action": "add",
+      "original_sha256": null,
+      "result_sha256": "387a52d3439541104fc760d9e74198b5f1f7c6253250c154ff46b2d74a6d44bd",
+      "mode": 420,
+      "bytes": 9810
+    },
+    {
+      "path": "docs/implementation_handoff/spec_draft_implementation/07_probe_features.md",
+      "action": "add",
+      "original_sha256": null,
+      "result_sha256": "989b8ebb1139717f807f22513d56345e9c757e581f046d0c073881c88fdb9cd5",
+      "mode": 420,
+      "bytes": 23972
+    },
+    {
+      "path": "docs/implementation_handoff/spec_draft_implementation/08_sdk_integration.md",
+      "action": "add",
+      "original_sha256": null,
+      "result_sha256": "119e15da951044acfb10c2c508350c88f8a2d8a19436950af4089d1d6af862de",
+      "mode": 420,
+      "bytes": 11123
+    },
+    {
+      "path": "docs/implementation_handoff/spec_draft_implementation/09_workshop.md",
+      "action": "add",
+      "original_sha256": null,
+      "result_sha256": "d7ad843f61d03411652c5e6119674d3b4c1185534c58dbbb34925d579ecc2a48",
+      "mode": 420,
+      "bytes": 20838
+    },
+    {
+      "path": "docs/implementation_handoff/spec_draft_implementation/10_live_examples.md",
+      "action": "add",
+      "original_sha256": null,
+      "result_sha256": "001efd90c0d98cd08ad64b6c06a3c1fda7337ec4a41f1c50bd040d6475b80523",
+      "mode": 420,
+      "bytes": 8846
+    },
+    {
+      "path": "docs/implementation_handoff/spec_draft_implementation/11_tests.md",
+      "action": "add",
+      "original_sha256": null,
+      "result_sha256": "19bd52d49a2d3bfa74d438d0c6fb1ed330bad80e7ee35ed568c29cc3e8de028b",
+      "mode": 420,
+      "bytes": 9103
+    },
+    {
+      "path": "docs/implementation_handoff/spec_draft_implementation/12_build_sequence.md",
+      "action": "add",
+      "original_sha256": null,
+      "result_sha256": "691f2ab0f9aa45c0313092dc882dc856704e624a7fc8e75d346419a1933ada64",
+      "mode": 420,
+      "bytes": 16385
+    },
+    {
+      "path": "docs/implementation_handoff/spec_draft_implementation/13_wishlist_and_upstream.md",
+      "action": "add",
+      "original_sha256": null,
+      "result_sha256": "18e57332e59c15da5ff0584bc7f7fe85e40228fcffb55a1b1a904d4a41daaa69",
+      "mode": 420,
+      "bytes": 4409
+    },
+    {
+      "path": "docs/implementation_handoff/spec_draft_implementation/14_delivery_and_handoff.md",
+      "action": "add",
+      "original_sha256": null,
+      "result_sha256": "d12857488d76ca611d43ab896f6a5bd1ee8343274d3b7265961cb18b4db161f1",
+      "mode": 420,
+      "bytes": 6706
+    },
+    {
+      "path": "docs/implementation_handoff/spec_draft_implementation/IMPLEMENTATION_PROMPT.md",
+      "action": "add",
+      "original_sha256": null,
+      "result_sha256": "1bc45b7c5dcdfa8a9e862c2c825cb6b0118afee2e68e7919a61bd9845c3455da",
+      "mode": 420,
+      "bytes": 7845
+    },
+    {
+      "path": "docs/implementation_handoff/spec_draft_implementation/README.md",
+      "action": "add",
+      "original_sha256": null,
+      "result_sha256": "8dadfa79d8a369066c9c217c42e401c71ac526207517eaf6340ff0930ad56498",
+      "mode": 420,
+      "bytes": 5648
+    },
+    {
+      "path": "docs/implementation_handoff/spec_draft_implementation/VALIDATION.md",
+      "action": "add",
+      "original_sha256": null,
+      "result_sha256": "4c12e0583a66c7c23cb974949b507d37aafe356234d26b0626a8ca7c04a751cb",
+      "mode": 420,
+      "bytes": 2280
+    },
+    {
+      "path": "docs/implementation_handoff/spec_draft_implementation/contracts/README.md",
+      "action": "add",
+      "original_sha256": null,
+      "result_sha256": "8781559c0edfd26c8fc189be31747856956de38ada7f3d667365bbf02377f85c",
+      "mode": 420,
+      "bytes": 7392
+    },
+    {
+      "path": "docs/implementation_handoff/spec_draft_implementation/contracts/example_proposal.json",
+      "action": "add",
+      "original_sha256": null,
+      "result_sha256": "c6d766e84396d1213e1464aa79811c7b0687c841973ac9f84e20020eb39ea394",
+      "mode": 420,
+      "bytes": 848
+    },
+    {
+      "path": "docs/implementation_handoff/spec_draft_implementation/contracts/example_request.json",
+      "action": "add",
+      "original_sha256": null,
+      "result_sha256": "e112b8a780bf6f93678921f238c086c91268ab393e2b4a16a76af2d9c4c2c4bc",
+      "mode": 420,
+      "bytes": 1002
+    },
+    {
+      "path": "docs/implementation_handoff/spec_draft_implementation/contracts/operations.json",
+      "action": "add",
+      "original_sha256": null,
+      "result_sha256": "b9c9c48bf826c4ff1fd3efb60697ee394f8130ec543a5b877518533582ed0b3a",
+      "mode": 420,
+      "bytes": 23313
+    },
+    {
+      "path": "docs/implementation_handoff/spec_draft_implementation/contracts/profiles.json",
+      "action": "add",
+      "original_sha256": null,
+      "result_sha256": "9f1942dad78087520339937e1ecf0dd392f3f34c0c0b73f04fbc35fefe7f11f0",
+      "mode": 420,
+      "bytes": 4192
+    },
+    {
+      "path": "docs/implementation_handoff/spec_draft_implementation/contracts/proposal.schema.json",
+      "action": "add",
+      "original_sha256": null,
+      "result_sha256": "81f7661fb95aea4a633332f801b827291c4472e2358a66ba7552c839f4617936",
+      "mode": 420,
+      "bytes": 4514
+    },
+    {
+      "path": "docs/implementation_handoff/spec_draft_implementation/contracts/schema.sql",
+      "action": "add",
+      "original_sha256": null,
+      "result_sha256": "fe216ab1cd08f293212095a15fa8ae92944e759e2c062ff95e8c5a85a651e613",
+      "mode": 420,
+      "bytes": 11266
+    },
+    {
+      "path": "docs/implementation_handoff/spec_draft_implementation/contracts/workflow.schema.json",
+      "action": "add",
+      "original_sha256": null,
+      "result_sha256": "a78739300c535f2d797c5b2148813a9912047e868e0666b657bc9b31a03087a6",
+      "mode": 420,
+      "bytes": 6333
+    },
+    {
+      "path": "docs/implementation_handoff/spec_draft_implementation/fixtures/README.md",
+      "action": "add",
+      "original_sha256": null,
+      "result_sha256": "dd6ea552d7390ed348a3dc8c7a5aa48010c90761b559218dc8f20c50eeb864ff",
+      "mode": 420,
+      "bytes": 5153
+    },
+    {
+      "path": "docs/implementation_handoff/spec_draft_implementation/fixtures/last_light.fountain",
+      "action": "add",
+      "original_sha256": null,
+      "result_sha256": "eab130c376b64c032a71d9d3441edafcb1401037503706063ced8640d8914068",
+      "mode": 420,
+      "bytes": 3395
+    },
+    {
+      "path": "handoff/apply_overlay.py",
+      "action": "add",
+      "original_sha256": null,
+      "result_sha256": "00f4f7383e992b3c288b19f84d713f1e617ced0cf8364af06054bb3b146489a3",
+      "mode": 493,
+      "bytes": 13632
+    },
+    {
+      "path": "packages/fount/lib/fount/writing/canonical_json.ex",
+      "action": "add",
+      "original_sha256": null,
+      "result_sha256": "750aedb2fc9d379fb85b94c29a8f5b6be8a4711c55bbef3ff051d4f178b32ca7",
+      "mode": 420,
+      "bytes": 2244
+    },
+    {
+      "path": "packages/fount/lib/fount/writing/local_references.ex",
+      "action": "add",
+      "original_sha256": null,
+      "result_sha256": "b4f823344005d5a2918867007079f9db9feb7715b10e881766396aa8fd750d73",
+      "mode": 420,
+      "bytes": 4725
+    },
+    {
+      "path": "packages/fount/lib/fount/writing/utf8_span.ex",
+      "action": "add",
+      "original_sha256": null,
+      "result_sha256": "0b0b6916aee21eda20e8f10b8e8c6216151de8bec85c6cfbaf584a55cdb91ed2",
+      "mode": 420,
+      "bytes": 2744
+    },
+    {
+      "path": "packages/fount/priv/fixtures/LAST_LIGHT_README.md",
+      "action": "add",
+      "original_sha256": null,
+      "result_sha256": "dd6ea552d7390ed348a3dc8c7a5aa48010c90761b559218dc8f20c50eeb864ff",
+      "mode": 420,
+      "bytes": 5153
+    },
+    {
+      "path": "packages/fount/priv/fixtures/last_light.fountain",
+      "action": "add",
+      "original_sha256": null,
+      "result_sha256": "eab130c376b64c032a71d9d3441edafcb1401037503706063ced8640d8914068",
+      "mode": 420,
+      "bytes": 3395
+    },
+    {
+      "path": "packages/fount/priv/writing_contracts/README.md",
+      "action": "add",
+      "original_sha256": null,
+      "result_sha256": "8781559c0edfd26c8fc189be31747856956de38ada7f3d667365bbf02377f85c",
+      "mode": 420,
+      "bytes": 7392
+    },
+    {
+      "path": "packages/fount/priv/writing_contracts/example_proposal.json",
+      "action": "add",
+      "original_sha256": null,
+      "result_sha256": "c6d766e84396d1213e1464aa79811c7b0687c841973ac9f84e20020eb39ea394",
+      "mode": 420,
+      "bytes": 848
+    },
+    {
+      "path": "packages/fount/priv/writing_contracts/example_request.json",
+      "action": "add",
+      "original_sha256": null,
+      "result_sha256": "e112b8a780bf6f93678921f238c086c91268ab393e2b4a16a76af2d9c4c2c4bc",
+      "mode": 420,
+      "bytes": 1002
+    },
+    {
+      "path": "packages/fount/priv/writing_contracts/operations.json",
+      "action": "add",
+      "original_sha256": null,
+      "result_sha256": "b9c9c48bf826c4ff1fd3efb60697ee394f8130ec543a5b877518533582ed0b3a",
+      "mode": 420,
+      "bytes": 23313
+    },
+    {
+      "path": "packages/fount/priv/writing_contracts/profiles.json",
+      "action": "add",
+      "original_sha256": null,
+      "result_sha256": "9f1942dad78087520339937e1ecf0dd392f3f34c0c0b73f04fbc35fefe7f11f0",
+      "mode": 420,
+      "bytes": 4192
+    },
+    {
+      "path": "packages/fount/priv/writing_contracts/proposal.schema.json",
+      "action": "add",
+      "original_sha256": null,
+      "result_sha256": "81f7661fb95aea4a633332f801b827291c4472e2358a66ba7552c839f4617936",
+      "mode": 420,
+      "bytes": 4514
+    },
+    {
+      "path": "packages/fount/priv/writing_contracts/schema.sql",
+      "action": "add",
+      "original_sha256": null,
+      "result_sha256": "fe216ab1cd08f293212095a15fa8ae92944e759e2c062ff95e8c5a85a651e613",
+      "mode": 420,
+      "bytes": 11266
+    },
+    {
+      "path": "packages/fount/priv/writing_contracts/workflow.schema.json",
+      "action": "add",
+      "original_sha256": null,
+      "result_sha256": "a78739300c535f2d797c5b2148813a9912047e868e0666b657bc9b31a03087a6",
+      "mode": 420,
+      "bytes": 6333
+    },
+    {
+      "path": "packages/fount/test/writing_contracts_test.exs",
+      "action": "add",
+      "original_sha256": null,
+      "result_sha256": "36bbab9b8a97553c9cbf0d94854196070ce20bdfb93d7589cbb41d6acd1aeb2d",
+      "mode": 420,
+      "bytes": 2072
+    },
+    {
+      "path": "packages/fount_probe/.formatter.exs",
+      "action": "add",
+      "original_sha256": null,
+      "result_sha256": "7ec72e5c694ae89e4948812ac962eaa05fb1c50b2aa08cd589a7a113948422a8",
+      "mode": 420,
+      "bytes": 75
+    },
+    {
+      "path": "packages/fount_probe/lib/fount_probe/writing/decision_policy.ex",
+      "action": "add",
+      "original_sha256": null,
+      "result_sha256": "544ea14e5ea18472a66af7808bbf14c96b6b512fa2fb6629e01865b8dd5732f5",
+      "mode": 420,
+      "bytes": 5736
+    },
+    {
+      "path": "packages/fount_probe/lib/fount_probe/writing/evidence.ex",
+      "action": "add",
+      "original_sha256": null,
+      "result_sha256": "72906b0ab54aadc35bbc07b8a3143e21ac8516572f94a57adfca39ed5edce168",
+      "mode": 420,
+      "bytes": 2072
+    },
+    {
+      "path": "packages/fount_probe/lib/fount_probe/writing/executor.ex",
+      "action": "add",
+      "original_sha256": null,
+      "result_sha256": "80192b940b735f17af283cc337a4740404c651a320e3c2de0e862a3eb12c8709",
+      "mode": 420,
+      "bytes": 3421
+    },
+    {
+      "path": "packages/fount_probe/mix.exs",
+      "action": "add",
+      "original_sha256": null,
+      "result_sha256": "1d9b172166d9d9f8472b85cecd4470425feb2382514caf173c79e70529826452",
+      "mode": 420,
+      "bytes": 589
+    },
+    {
+      "path": "packages/fount_probe/mix.lock",
+      "action": "add",
+      "original_sha256": null,
+      "result_sha256": "d77a30bb3762b71ad37424e85fbbee97bce5aedf785411efe9bad866c4b3fc73",
+      "mode": 420,
+      "bytes": 4
+    },
+    {
+      "path": "packages/fount_probe/test/test_helper.exs",
+      "action": "add",
+      "original_sha256": null,
+      "result_sha256": "b086ec47f0c6c7aaeb4cffca5ae5243dd05e0dc96ab761ced93325d5315f4b12",
+      "mode": 420,
+      "bytes": 15
+    },
+    {
+      "path": "packages/fount_probe/test/writing_policies_test.exs",
+      "action": "add",
+      "original_sha256": null,
+      "result_sha256": "61e5b11b0fb828c0d67b7e47022fd3ebaf0ced4000b379e98c1fddaae36b3877",
+      "mode": 420,
+      "bytes": 2364
+    },
+    {
+      "path": "packages/fount_workshop/lib/fount_workshop/writing/change_groups.ex",
+      "action": "add",
+      "original_sha256": null,
+      "result_sha256": "b1c7dcdfce48fa24ce580ada53b517ffad0f229aba9ab235db6fc13bfe41afa4",
+      "mode": 420,
+      "bytes": 4334
+    },
+    {
+      "path": "packages/fount_workshop/lib/fount_workshop/writing/completion.ex",
+      "action": "add",
+      "original_sha256": null,
+      "result_sha256": "aed9187448c8856af69b75943accb48ed5e83fdc29db2dae5c12f650c20f56c0",
+      "mode": 420,
+      "bytes": 3873
+    },
+    {
+      "path": "packages/fount_workshop/lib/fount_workshop/writing/review_gate.ex",
+      "action": "add",
+      "original_sha256": null,
+      "result_sha256": "6276d030adac22cb87c3ad4130c37ae4ad3633b18b10e427905e64104a547b9c",
+      "mode": 420,
+      "bytes": 2824
+    },
+    {
+      "path": "packages/fount_workshop/mix.exs",
+      "action": "modify",
+      "original_sha256": "124139f09530dae69a6addc3d312c5bedadfa1b741f7fb8f68f08cd5d3342648",
+      "result_sha256": "e8076bf846307b2aae3275c5353d44e5015126b6f37fe83f938a9728bcb07578",
+      "mode": 420,
+      "bytes": 2617
+    },
+    {
+      "path": "packages/fount_workshop/priv/writing_profiles/action_visual.json",
+      "action": "add",
+      "original_sha256": null,
+      "result_sha256": "f05d14d2d033361290df48135e32f497b2dd4430e97de687db16228b6cb2e3d0",
+      "mode": 420,
+      "bytes": 542
+    },
+    {
+      "path": "packages/fount_workshop/priv/writing_profiles/brevity.json",
+      "action": "add",
+      "original_sha256": null,
+      "result_sha256": "1f693676c9ab19e6def17d9dcaf61ba5973a12204faebafbb7b1b771248e7073",
+      "mode": 420,
+      "bytes": 538
+    },
+    {
+      "path": "packages/fount_workshop/priv/writing_profiles/custom.json",
+      "action": "add",
+      "original_sha256": null,
+      "result_sha256": "626db0e9e8575685723908bd3991fa32bf794b1b97f9884a100a11db93a69875",
+      "mode": 420,
+      "bytes": 505
+    },
+    {
+      "path": "packages/fount_workshop/priv/writing_profiles/dialogue_subtext.json",
+      "action": "add",
+      "original_sha256": null,
+      "result_sha256": "7e2625cc29cc0f8f7ac1ba6d4f12b5a01d50bc9974457b21ba93d4bddea82a72",
+      "mode": 420,
+      "bytes": 545
+    },
+    {
+      "path": "packages/fount_workshop/priv/writing_profiles/dry_comedy.json",
+      "action": "add",
+      "original_sha256": null,
+      "result_sha256": "7d3cb6e07931bd8f6555d4784e998a2b240970f611d745589a02a364df3e84c0",
+      "mode": 420,
+      "bytes": 547
+    },
+    {
+      "path": "packages/fount_workshop/priv/writing_profiles/tension.json",
+      "action": "add",
+      "original_sha256": null,
+      "result_sha256": "acc1471badb0d4e624b0c36383e42964a0eae95229629cd72f04b734f474c8fa",
+      "mode": 420,
+      "bytes": 530
+    },
+    {
+      "path": "packages/fount_workshop/test/writing_decisions_test.exs",
+      "action": "add",
+      "original_sha256": null,
+      "result_sha256": "c78ec11dfd96ebc35eaf92fff08f7accc1f02c6a78da89e22c50ccba34202ef9",
+      "mode": 420,
+      "bytes": 2563
+    }
+  ],
+  "deletions": [],
+  "deletion_note": "No new destructive deletion is inferred in this partial handoff.",
+  "runtime_verification": "not_run"
+}

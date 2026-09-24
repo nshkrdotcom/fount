@@ -1,0 +1,16 @@
+{
+  "id": "custom",
+  "version": 1,
+  "goal": "Write toward the explicit user-supplied creative direction.",
+  "creative_prompt": "Require a direction. Honor exact pins, source scope, story obligations and disclosed invention permissions. Return typed screenplay edits with actual action or dialogue.",
+  "context_needs": [
+    "exact_selected_pages",
+    "adjacent_scene_context",
+    "writer_constraints",
+    "source_provenance"
+  ],
+  "suggested_tools": [
+    "check_constraints",
+    "compare"
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "id": "brevity",
+  "version": 1,
+  "goal": "Find shorter causal routes without losing protected beats or required information.",
+  "creative_prompt": "Rewrite or combine beats rather than mechanically shortening every sentence. Report word changes exactly; page changes require identical real renderer settings.",
+  "context_needs": [
+    "exact_selected_pages",
+    "adjacent_scene_context",
+    "writer_constraints",
+    "source_provenance"
+  ],
+  "suggested_tools": [
+    "dependencies",
+    "scene_mechanics",
+    "compare"
+  ]
+}

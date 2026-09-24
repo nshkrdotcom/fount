@@ -1,0 +1,17 @@
+{
+  "id": "dialogue_subtext",
+  "version": 1,
+  "goal": "Rewrite responsive exchanges while preserving the writer's scene outcome.",
+  "creative_prompt": "Work on tactics, concealment, implication, interruption and partner responses. Direct emotion and hesitation are allowed. Do not simply remove repeated openings.",
+  "context_needs": [
+    "exact_selected_pages",
+    "adjacent_scene_context",
+    "writer_constraints",
+    "source_provenance"
+  ],
+  "suggested_tools": [
+    "dialogue",
+    "check_constraints",
+    "scene_mechanics"
+  ]
+}

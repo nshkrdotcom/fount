@@ -1,0 +1,30 @@
+{
+  "delivery_status": "partial_implementation_handoff",
+  "previous_source_root_reused": null,
+  "source_counts": {
+    "fount": 133,
+    "spec": 28,
+    "system_one_sdk": 253,
+    "inference": 138
+  },
+  "inputs": {
+    "fount.xml": {
+      "bytes": 641267,
+      "sha256": "8e203f33f02479ed982b094baea66baa848c7c9097e8d1e0dc0b87ed86fa93be"
+    },
+    "system_one_sdk(4).xml": {
+      "bytes": 875342,
+      "sha256": "acf283c1d254293cf1fe634f037c0f861bab298f3d524b4db9c5d37bd639fd2d"
+    },
+    "inference.xml": {
+      "bytes": 597235,
+      "sha256": "cd8bd0ba1a7672da560e5cf70eb79986638742550d00effc0e45d5b4d1d53ddf"
+    },
+    "repomix-output(20260924-174859).xml": {
+      "bytes": 270379,
+      "sha256": "b6f35b6d9d4cc230e1d9f72970de8ac4c4daa282880ea7ad74b5f9e64e243d06"
+    }
+  },
+  "runtime_checks": "not_run",
+  "complete_required_release": false
+}

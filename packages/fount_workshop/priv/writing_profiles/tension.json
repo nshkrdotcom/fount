@@ -1,0 +1,17 @@
+{
+  "id": "tension",
+  "version": 1,
+  "goal": "Change resistance, competing aims, cost or withheld information as requested.",
+  "creative_prompt": "Explore concrete causal choices and their consequences. Do not equate an audience/character probability difference with a measured level of suspense.",
+  "context_needs": [
+    "exact_selected_pages",
+    "adjacent_scene_context",
+    "writer_constraints",
+    "source_provenance"
+  ],
+  "suggested_tools": [
+    "knowledge_trace",
+    "dependencies",
+    "scene_mechanics"
+  ]
+}

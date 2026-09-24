@@ -1,0 +1,262 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Fount writing request",
+  "type": "object",
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "workflow": {
+      "enum": [
+        "develop",
+        "alternatives",
+        "propagate",
+        "sequence",
+        "character",
+        "notes",
+        "pass",
+        "recover",
+        "investigate"
+      ]
+    },
+    "mode": {
+      "enum": [
+        "explore",
+        "draft",
+        "revise",
+        "diagnose"
+      ]
+    },
+    "base_revision_id": {
+      "anyOf": [
+        {
+          "type": "string",
+          "format": "uuid"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "instruction": {
+      "type": "string",
+      "minLength": 1
+    },
+    "selection": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "whole_screenplay": {
+              "const": true
+            }
+          },
+          "required": [
+            "whole_screenplay"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "targets": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "enum": [
+                      "screenplay",
+                      "revision",
+                      "scene",
+                      "element",
+                      "dialogue_block",
+                      "character",
+                      "title_entry",
+                      "authored_item"
+                    ]
+                  },
+                  "id": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "^new:[a-z][a-z0-9_-]*$"
+                      }
+                    ]
+                  },
+                  "span": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "byte_start": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "byte_end": {
+                            "type": "integer",
+                            "minimum": 1
+                          }
+                        },
+                        "required": [
+                          "byte_start",
+                          "byte_end"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "kind",
+                  "id"
+                ],
+                "additionalProperties": false
+              },
+              "minItems": 1
+            }
+          },
+          "required": [
+            "targets"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "constraints": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "target": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "enum": [
+                  "screenplay",
+                  "revision",
+                  "scene",
+                  "element",
+                  "dialogue_block",
+                  "character",
+                  "title_entry",
+                  "authored_item"
+                ]
+              },
+              "id": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^new:[a-z][a-z0-9_-]*$"
+                  }
+                ]
+              },
+              "span": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "byte_start": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "byte_end": {
+                        "type": "integer",
+                        "minimum": 1
+                      }
+                    },
+                    "required": [
+                      "byte_start",
+                      "byte_end"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "kind",
+              "id"
+            ],
+            "additionalProperties": false
+          },
+          "kind": {
+            "enum": [
+              "pin_text",
+              "retain_ids",
+              "remove_ids",
+              "relative_order",
+              "word_limit",
+              "scene_count",
+              "page_goal",
+              "semantic",
+              "invention_policy"
+            ]
+          },
+          "spec": {
+            "type": "object"
+          },
+          "severity": {
+            "enum": [
+              "required",
+              "advisory"
+            ]
+          },
+          "source": {
+            "enum": [
+              "writer",
+              "imported",
+              "suggested"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "target",
+          "kind",
+          "spec",
+          "severity",
+          "source"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 0
+    },
+    "alternatives": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 5
+    },
+    "options": {
+      "type": "object"
+    }
+  },
+  "required": [
+    "version",
+    "workflow",
+    "mode",
+    "base_revision_id",
+    "instruction",
+    "selection",
+    "constraints",
+    "options"
+  ],
+  "additionalProperties": false
+}

@@ -1,0 +1,17 @@
+{
+  "id": "action_visual",
+  "version": 1,
+  "goal": "Express the requested dramatic information through clear action and images.",
+  "creative_prompt": "Consider behavior, physical obstacles, geography, silence and reactions. Do not treat all interior or writerly prose as defective. Preserve required information.",
+  "context_needs": [
+    "exact_selected_pages",
+    "adjacent_scene_context",
+    "writer_constraints",
+    "source_provenance"
+  ],
+  "suggested_tools": [
+    "action",
+    "knowledge_trace",
+    "check_constraints"
+  ]
+}

@@ -1,0 +1,1108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Fount canonical proposal operation",
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "replace_text"
+        },
+        "target": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/target"
+            },
+            {
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "element"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "target",
+        "value"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "set_scene_heading"
+        },
+        "target": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/target"
+            },
+            {
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "scene"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "target",
+        "value"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "set_scene_number"
+        },
+        "target": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/target"
+            },
+            {
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "scene"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "value": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "target",
+        "value"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "insert_elements"
+        },
+        "target": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/target"
+            },
+            {
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "scene",
+                    "screenplay"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "value": {
+          "type": "object",
+          "properties": {
+            "position": {
+              "enum": [
+                "before",
+                "after",
+                "start",
+                "end"
+              ]
+            },
+            "anchor_id": {
+              "anyOf": [
+                {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^new:[a-z][a-z0-9_-]*$"
+                    }
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "elements": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/element"
+              },
+              "minItems": 1
+            }
+          },
+          "required": [
+            "position",
+            "anchor_id",
+            "elements"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "kind",
+        "target",
+        "value"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "delete_elements"
+        },
+        "value": {
+          "type": "object",
+          "properties": {
+            "ids": {
+              "type": "array",
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^new:[a-z][a-z0-9_-]*$"
+                  }
+                ]
+              },
+              "minItems": 1
+            }
+          },
+          "required": [
+            "ids"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "kind",
+        "value"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "replace_scene_body"
+        },
+        "target": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/target"
+            },
+            {
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "scene"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "value": {
+          "type": "object",
+          "properties": {
+            "elements": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/element"
+              },
+              "minItems": 0
+            }
+          },
+          "required": [
+            "elements"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "kind",
+        "target",
+        "value"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "insert_scene"
+        },
+        "value": {
+          "type": "object",
+          "properties": {
+            "after_scene_id": {
+              "anyOf": [
+                {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^new:[a-z][a-z0-9_-]*$"
+                    }
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "scene": {
+              "$ref": "#/$defs/scene"
+            }
+          },
+          "required": [
+            "after_scene_id",
+            "scene"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "kind",
+        "value"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "delete_scene"
+        },
+        "target": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/target"
+            },
+            {
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "scene"
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "target"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "omit_scene"
+        },
+        "target": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/target"
+            },
+            {
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "scene"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "value": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "kind",
+        "target",
+        "value"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "move_scene"
+        },
+        "target": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/target"
+            },
+            {
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "scene"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "value": {
+          "type": "object",
+          "properties": {
+            "after_scene_id": {
+              "anyOf": [
+                {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^new:[a-z][a-z0-9_-]*$"
+                    }
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "after_scene_id"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "kind",
+        "target",
+        "value"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "replace_sequence"
+        },
+        "value": {
+          "type": "object",
+          "properties": {
+            "scene_ids": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "minItems": 1
+            },
+            "scenes": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/scene"
+              },
+              "minItems": 0
+            }
+          },
+          "required": [
+            "scene_ids",
+            "scenes"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "kind",
+        "value"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "rename_character"
+        },
+        "target": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/target"
+            },
+            {
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "character"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "value": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "mention_ids": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "minItems": 0
+            }
+          },
+          "required": [
+            "name",
+            "mention_ids"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "kind",
+        "target",
+        "value"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "put_character"
+        },
+        "value": {
+          "$ref": "#/$defs/character"
+        }
+      },
+      "required": [
+        "kind",
+        "value"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "link_speaker"
+        },
+        "target": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/target"
+            },
+            {
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "dialogue_block"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "value": {
+          "type": "object",
+          "properties": {
+            "character_id": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^new:[a-z][a-z0-9_-]*$"
+                }
+              ]
+            }
+          },
+          "required": [
+            "character_id"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "kind",
+        "target",
+        "value"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "put_authored_item"
+        },
+        "value": {
+          "$ref": "#/$defs/authored_item"
+        }
+      },
+      "required": [
+        "kind",
+        "value"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "delete_authored_item"
+        },
+        "target": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/target"
+            },
+            {
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "authored_item"
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "target"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "set_title"
+        },
+        "value": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/title_entry"
+          },
+          "minItems": 0
+        }
+      },
+      "required": [
+        "kind",
+        "value"
+      ],
+      "additionalProperties": false
+    }
+  ],
+  "$defs": {
+    "target": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "enum": [
+            "screenplay",
+            "revision",
+            "scene",
+            "element",
+            "dialogue_block",
+            "character",
+            "title_entry",
+            "authored_item"
+          ]
+        },
+        "id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "string",
+              "pattern": "^new:[a-z][a-z0-9_-]*$"
+            }
+          ]
+        },
+        "span": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "byte_start": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "byte_end": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              },
+              "required": [
+                "byte_start",
+                "byte_end"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "id"
+      ],
+      "additionalProperties": false
+    },
+    "element": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "keep": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "required": [
+            "keep"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "local_id": {
+              "type": "string",
+              "pattern": "^new:[a-z][a-z0-9_-]*$"
+            },
+            "type": {
+              "enum": [
+                "action",
+                "character",
+                "dialogue",
+                "parenthetical",
+                "transition",
+                "centered",
+                "lyric",
+                "section",
+                "synopsis",
+                "page_break",
+                "note",
+                "boneyard",
+                "blank"
+              ]
+            },
+            "text": {
+              "type": "string"
+            },
+            "attrs": {
+              "type": "object",
+              "properties": {
+                "character_id": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^new:[a-z][a-z0-9_-]*$"
+                    }
+                  ]
+                },
+                "dual_with_cue": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^new:[a-z][a-z0-9_-]*$"
+                    }
+                  ]
+                },
+                "dual_side": {
+                  "enum": [
+                    "left",
+                    "right"
+                  ]
+                },
+                "forced": {
+                  "type": "boolean"
+                },
+                "level": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "metadata": {
+                  "type": "object"
+                }
+              },
+              "required": [],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "type",
+            "text",
+            "attrs"
+          ],
+          "additionalProperties": false,
+          "oneOf": [
+            {
+              "required": [
+                "id"
+              ],
+              "not": {
+                "required": [
+                  "local_id"
+                ]
+              }
+            },
+            {
+              "required": [
+                "local_id"
+              ],
+              "not": {
+                "required": [
+                  "id"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "scene": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "local_id": {
+          "type": "string",
+          "pattern": "^new:[a-z][a-z0-9_-]*$"
+        },
+        "heading": {
+          "type": "string"
+        },
+        "number": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "omitted": {
+          "type": "boolean"
+        },
+        "elements": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/element"
+          },
+          "minItems": 0
+        }
+      },
+      "required": [
+        "heading",
+        "elements"
+      ],
+      "additionalProperties": false,
+      "oneOf": [
+        {
+          "required": [
+            "id"
+          ],
+          "not": {
+            "required": [
+              "local_id"
+            ]
+          }
+        },
+        {
+          "required": [
+            "local_id"
+          ],
+          "not": {
+            "required": [
+              "id"
+            ]
+          }
+        }
+      ]
+    },
+    "character": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "local_id": {
+          "type": "string",
+          "pattern": "^new:[a-z][a-z0-9_-]*$"
+        },
+        "display_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "notes": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "aliases": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "alias": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "alias",
+              "kind"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 0
+        },
+        "attributes": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "display_name",
+        "aliases",
+        "attributes"
+      ],
+      "additionalProperties": false,
+      "oneOf": [
+        {
+          "required": [
+            "id"
+          ],
+          "not": {
+            "required": [
+              "local_id"
+            ]
+          }
+        },
+        {
+          "required": [
+            "local_id"
+          ],
+          "not": {
+            "required": [
+              "id"
+            ]
+          }
+        }
+      ]
+    },
+    "authored_item": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "local_id": {
+          "type": "string",
+          "pattern": "^new:[a-z][a-z0-9_-]*$"
+        },
+        "namespace": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "brief",
+            "story_plan",
+            "note",
+            "constraint",
+            "fact",
+            "voice_direction",
+            "sequence",
+            "storyline",
+            "story_time",
+            "perspective_access"
+          ]
+        },
+        "target": {
+          "$ref": "#/$defs/target"
+        },
+        "value": {
+          "type": "object"
+        },
+        "dependencies": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/target"
+          },
+          "minItems": 0
+        },
+        "status": {
+          "enum": [
+            "active",
+            "unresolved",
+            "resolved"
+          ]
+        },
+        "provenance": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "namespace",
+        "kind",
+        "target",
+        "value",
+        "dependencies",
+        "status",
+        "provenance"
+      ],
+      "additionalProperties": false,
+      "oneOf": [
+        {
+          "required": [
+            "id"
+          ],
+          "not": {
+            "required": [
+              "local_id"
+            ]
+          }
+        },
+        {
+          "required": [
+            "local_id"
+          ],
+          "not": {
+            "required": [
+              "id"
+            ]
+          }
+        }
+      ]
+    },
+    "title_entry": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "local_id": {
+          "type": "string",
+          "pattern": "^new:[a-z][a-z0-9_-]*$"
+        },
+        "key": {
+          "type": "string"
+        },
+        "values": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "key",
+        "values"
+      ],
+      "additionalProperties": false,
+      "oneOf": [
+        {
+          "required": [
+            "id"
+          ],
+          "not": {
+            "required": [
+              "local_id"
+            ]
+          }
+        },
+        {
+          "required": [
+            "local_id"
+          ],
+          "not": {
+            "required": [
+              "id"
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

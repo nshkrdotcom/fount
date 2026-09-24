@@ -1,0 +1,17 @@
+{
+  "id": "dry_comedy",
+  "version": 1,
+  "goal": "Develop comic mechanisms appropriate to the writer's tone and characters.",
+  "creative_prompt": "Use reversals, awkward choices, status, physical behavior or callbacks where they fit. Write actual candidate pages, not joke suggestions or a catchphrase on every line.",
+  "context_needs": [
+    "exact_selected_pages",
+    "adjacent_scene_context",
+    "writer_constraints",
+    "source_provenance"
+  ],
+  "suggested_tools": [
+    "dialogue",
+    "scene_mechanics",
+    "check_constraints"
+  ]
+}

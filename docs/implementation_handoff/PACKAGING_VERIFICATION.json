@@ -1,0 +1,38 @@
+{
+  "scope": "Python installer and archive checks only; not Elixir/runtime verification",
+  "checks": [
+    {
+      "check": "installer Python syntax compilation",
+      "status": "passed"
+    },
+    {
+      "check": "installer dry-run leaves target files unchanged",
+      "status": "passed"
+    },
+    {
+      "check": "conflicting local edit is refused without partial application",
+      "status": "passed"
+    },
+    {
+      "check": "apply writes full files, deletes explicitly, and retains backups",
+      "status": "passed"
+    },
+    {
+      "check": "identical applied overlay is idempotent",
+      "status": "passed"
+    },
+    {
+      "check": "archive traversal is rejected",
+      "status": "passed"
+    },
+    {
+      "check": "symlink target ancestors are rejected",
+      "status": "passed"
+    },
+    {
+      "check": "payload checksum corruption is rejected",
+      "status": "passed"
+    }
+  ],
+  "runtime_checks": "not_run"
+}

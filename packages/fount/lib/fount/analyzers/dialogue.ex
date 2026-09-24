@@ -11,7 +11,7 @@ defmodule Fount.Analyzers.Dialogue do
       Enum.map(doc.ir.dialogue_blocks, fn block ->
         cue = Fount.Query.node(doc, block.cue_id)
         body = Enum.map(block.body_ids, &Fount.Query.node(doc, &1))
-        dialogue = body |> Enum.filter(&(&1.type == :dialogue)) |> Enum.map(& &1.text) |> Enum.join("\n")
+        dialogue = body |> Enum.filter(&(&1.type == :dialogue)) |> Enum.map_join("\n", & &1.text)
 
         value = %{
           character: cue && cue.text,

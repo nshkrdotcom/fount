@@ -34,6 +34,8 @@ Byte offsets are locations, not identities. Fount assigns IDs to structural obje
 
 This permits tools to say “replace dialogue `X`” even after material has been inserted earlier in the script.
 
+Reconciliation is best-effort for external source rewrites. If a changed object of the same type cannot be confidently matched, parsing emits `:identity_not_retained`; callers can inspect `doc.diagnostics` before applying annotations or further edits.
+
 ## No hidden mutable runtime
 
 The initial package is deliberately process-free. There is no application supervision tree, cache server, database process, or global registry. Documents are ordinary immutable values. Consumers can place them behind GenServers, web endpoints, collaborative systems, or job processors without Fount imposing a runtime topology.

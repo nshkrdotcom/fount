@@ -13,6 +13,7 @@ defmodule Fount.Validate do
     |> validate_unique_ids(doc)
     |> validate_spans(doc)
     |> validate_cst_ir_alignment(doc)
+    |> validate_title_identity(doc)
     |> validate_scene_refs(doc)
     |> validate_dialogue_refs(doc)
     |> Enum.reverse()
@@ -90,32 +91,35 @@ defmodule Fount.Validate do
 
   defp validate_spans(diags, doc) do
     Enum.reduce(doc.ir.elements, diags, fn element, acc ->
-      case element.source_span do
-        nil ->
-          acc
-
-        %Span{} = span ->
-          cond do
-            not Span.valid_for?(span, doc.source.raw) ->
-              [
-                %Diagnostic{
-                  severity: :error,
-                  code: :invalid_source_span,
-                  message: "Element source span is outside the source binary.",
-                  span: span,
-                  node_id: element.id
-                }
-                | acc
-              ]
-
-            not content_inside?(element.content_span, span) ->
-              [error(:element_content_span_outside_source, "Element content span lies outside its source span.", element.id) | acc]
-
-            true ->
-              acc
-          end
-      end
+      validate_element_span(acc, element, doc.source.raw)
     end)
+  end
+
+  defp validate_element_span(diags, %{source_span: nil}, _raw), do: diags
+
+  defp validate_element_span(diags, %{source_span: %Span{} = span} = element, raw) do
+    cond do
+      not Span.valid_for?(span, raw) ->
+        [
+          %Diagnostic{
+            severity: :error,
+            code: :invalid_source_span,
+            message: "Element source span is outside the source binary.",
+            span: span,
+            node_id: element.id
+          }
+          | diags
+        ]
+
+      not content_inside?(element.content_span, span) ->
+        [
+          error(:element_content_span_outside_source, "Element content span lies outside its source span.", element.id)
+          | diags
+        ]
+
+      true ->
+        diags
+    end
   end
 
   defp validate_cst_ir_alignment(diags, doc) do
@@ -131,6 +135,21 @@ defmodule Fount.Validate do
       diags
     else
       [error(:cst_ir_identity_mismatch, "CST screenplay node IDs and semantic IR element IDs diverge.") | diags]
+    end
+  end
+
+  defp validate_title_identity(diags, doc) do
+    cst_ids =
+      doc.cst.nodes
+      |> Enum.filter(&(&1.type == :title_page))
+      |> Enum.map(& &1.id)
+
+    ir_ids = if doc.ir.title_page, do: Enum.map(doc.ir.title_page.entries, & &1.id), else: []
+
+    if cst_ids == ir_ids do
+      diags
+    else
+      [error(:title_identity_mismatch, "CST title nodes and IR title entries have different IDs.") | diags]
     end
   end
 

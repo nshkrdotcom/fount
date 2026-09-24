@@ -55,8 +55,7 @@ defmodule Fount.Edit do
     operations = List.wrap(operations)
 
     result =
-      Enum.reduce_while(operations, {:ok, original, [], MapSet.new()}, fn op,
-                                                                          {:ok, doc, steps, affected} ->
+      Enum.reduce_while(operations, {:ok, original, [], MapSet.new()}, fn op, {:ok, doc, steps, affected} ->
         case apply_one(doc, op, opts) do
           {:ok, next, op_patches, op_affected} ->
             step = %Step{
@@ -158,12 +157,7 @@ defmodule Fount.Edit do
       {:error, {:unknown_character, old_name}}
     else
       patches =
-        Enum.map(cues, fn cue ->
-          forced? = Map.get(cue.attrs || %{}, :forced?, false)
-          needs_force? = not forced? and String.upcase(new_name) != new_name
-          replacement = if needs_force?, do: "@" <> new_name, else: new_name
-          patch(cue.content_span, replacement, cue.id, :rename_character)
-        end)
+        Enum.map(cues, &character_rename_patch(&1, new_name))
 
       hints =
         Enum.map(cues, fn cue ->
@@ -221,7 +215,11 @@ defmodule Fount.Edit do
 
   defp apply_one(
          doc,
-         %Op{kind: :insert_scene_after, target: scene_id, value: %{heading: heading, content: content, options: options}},
+         %Op{
+           kind: :insert_scene_after,
+           target: scene_id,
+           value: %{heading: heading, content: content, options: options}
+         },
          _opts
        ) do
     with scene when not is_nil(scene) <- Fount.Query.scene(doc, scene_id),
@@ -248,7 +246,11 @@ defmodule Fount.Edit do
 
   defp apply_one(
          doc,
-         %Op{kind: :insert_dialogue_after, target: element_id, value: %{character: character, text: text, options: options}},
+         %Op{
+           kind: :insert_dialogue_after,
+           target: element_id,
+           value: %{character: character, text: text, options: options}
+         },
          _opts
        ) do
     with element when not is_nil(element) <- Fount.Query.node(doc, element_id),
@@ -312,10 +314,13 @@ defmodule Fount.Edit do
         end
 
       without_source = apply_patch!(doc.source.raw, [delete_patch])
+      replacement = ensure_leading_blank(without_source, insertion_offset, raw, preferred_newline(doc))
+      leading_bytes = byte_size(replacement) - byte_size(raw)
+
       insert_patch = %Patch{
         byte_start: insertion_offset,
         byte_end: insertion_offset,
-        replacement: raw,
+        replacement: replacement,
         target_id: scene_id,
         kind: :move_scene_insert
       }
@@ -326,7 +331,7 @@ defmodule Fount.Edit do
       hints =
         Enum.map(moved_elements, fn element ->
           relative = element.source_span.byte_start - source_span.byte_start
-          %{old_id: element.id, type: element.type, byte_start: insertion_offset + relative}
+          %{old_id: element.id, type: element.type, byte_start: insertion_offset + leading_bytes + relative}
         end)
 
       affected = MapSet.new([source_scene.id, destination.id] ++ source_scene.element_ids ++ destination.element_ids)
@@ -350,6 +355,13 @@ defmodule Fount.Edit do
   end
 
   defp apply_one(_doc, %Op{} = op, _opts), do: {:error, {:unsupported_operation, op.kind}}
+
+  defp character_rename_patch(cue, new_name) do
+    forced? = Map.get(cue.attrs || %{}, :forced?, false)
+    needs_force? = not forced? and String.upcase(new_name) != new_name
+    replacement = if needs_force?, do: "@" <> new_name, else: new_name
+    patch(cue.content_span, replacement, cue.id, :rename_character)
+  end
 
   defp reparse_with_patches(doc, patches, hints, affected) do
     with {:ok, raw} <- Patch.apply(doc.source.raw, patches),

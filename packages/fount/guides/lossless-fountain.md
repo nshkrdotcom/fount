@@ -53,6 +53,7 @@ Unknown text falls back to action rather than being discarded.
 - each node's raw bytes equal its source slice
 - source/content spans are valid and nested correctly
 - CST screenplay IDs and IR element IDs remain aligned
+- CST title-page node IDs and IR title-entry IDs remain aligned
 - IR identities are unique
 - scene and dialogue references resolve
 

@@ -120,44 +120,37 @@ defmodule Fount.Adapter.FDX do
   end
 
   defp paragraph_to_fountain(paragraph, next, index, dual_second_characters) do
-    text =
-      if paragraph.type in ["Scene Heading", "Character", "Transition", "Shot"] do
-        paragraph.plain_text || ""
-      else
-        paragraph.text || ""
-      end
-
-    case paragraph.type do
-      "Scene Heading" ->
-        number = Map.get(paragraph.scene_properties || %{}, "Number")
-        suffix = if is_binary(number) and number != "", do: " ##{number}#", else: ""
-        [text, suffix, "\n\n"]
-
-      "Action" ->
-        [text, "\n\n"]
-
-      "Character" ->
-        [text, if(MapSet.member?(dual_second_characters, index), do: " ^\n", else: "\n")]
-
-      "Parenthetical" ->
-        [ensure_parenthetical(text), "\n"]
-
-      "Dialogue" ->
-        [text, if(dialogue_continues?(next), do: "\n", else: "\n\n")]
-
-      "Transition" ->
-        [text, "\n\n"]
-
-      "Lyrics" ->
-        ["~", text, "\n\n"]
-
-      "Shot" ->
-        [".", text, "\n\n"]
-
-      _ ->
-        [text, "\n\n"]
-    end
+    text = paragraph_text(paragraph)
+    fountain_paragraph(paragraph.type, text, paragraph, next, index, dual_second_characters)
   end
+
+  defp paragraph_text(%{type: type, plain_text: text})
+       when type in ["Scene Heading", "Character", "Transition", "Shot"],
+       do: text || ""
+
+  defp paragraph_text(paragraph), do: paragraph.text || ""
+
+  defp fountain_paragraph("Scene Heading", text, paragraph, _next, _index, _dual) do
+    number = Map.get(paragraph.scene_properties || %{}, "Number")
+    suffix = if is_binary(number) and number != "", do: " ##{number}#", else: ""
+    prefix = if Fount.SceneHeading.standard_fountain?(text), do: "", else: "."
+    [prefix, text, suffix, "\n\n"]
+  end
+
+  defp fountain_paragraph("Character", text, _paragraph, _next, index, dual) do
+    prefix = if String.upcase(text) == text, do: "", else: "@"
+    [prefix, text, if(MapSet.member?(dual, index), do: " ^\n", else: "\n")]
+  end
+
+  defp fountain_paragraph("Parenthetical", text, _paragraph, _next, _index, _dual),
+    do: [ensure_parenthetical(text), "\n"]
+
+  defp fountain_paragraph("Dialogue", text, _paragraph, next, _index, _dual),
+    do: [text, if(dialogue_continues?(next), do: "\n", else: "\n\n")]
+
+  defp fountain_paragraph("Lyrics", text, _paragraph, _next, _index, _dual), do: ["~", text, "\n\n"]
+  defp fountain_paragraph("Shot", text, _paragraph, _next, _index, _dual), do: [".", text, "\n\n"]
+  defp fountain_paragraph(_type, text, _paragraph, _next, _index, _dual), do: [text, "\n\n"]
 
   defp dialogue_continues?(%{type: type}) when type in ["Dialogue", "Parenthetical"], do: true
   defp dialogue_continues?(_), do: false
@@ -188,47 +181,53 @@ defmodule Fount.Adapter.FDX do
 
     {children, losses, _consumed} =
       Enum.reduce(doc.ir.elements, {[], [], MapSet.new()}, fn element, {children, losses, consumed} ->
-        cond do
-          MapSet.member?(consumed, element.id) ->
-            {children, losses, consumed}
-
-          element.type == :character and Map.has_key?(block_by_cue, element.id) ->
-            block = block_by_cue[element.id]
-
-            cond do
-              block.side == :left and block.dual_with ->
-                right = Enum.find(doc.ir.dialogue_blocks, &(&1.id == block.dual_with))
-                dual_ids = [block.cue_id | block.body_ids] ++ [right.cue_id | right.body_ids]
-                dual_paragraphs = Enum.map(dual_ids, &paragraph_element(Map.fetch!(element_map, &1)))
-                outer = element("Paragraph", [], [element("DualDialogue", [], dual_paragraphs)])
-                {children ++ [outer], inline_losses(dual_ids, element_map, losses), put_all(consumed, dual_ids)}
-
-              MapSet.member?(dual_right_ids, block.id) ->
-                {children, losses, consumed}
-
-              true ->
-                ids = [block.cue_id | block.body_ids]
-                paragraphs = Enum.map(ids, &paragraph_element(Map.fetch!(element_map, &1)))
-                {children ++ paragraphs, inline_losses(ids, element_map, losses), put_all(consumed, ids)}
-            end
-
-          element.type == :blank ->
-            {children, losses, MapSet.put(consumed, element.id)}
-
-          element.type in [:section, :synopsis, :note, :boneyard, :page_break] ->
-            {children, ["#{element.type} not represented in base FDX export" | losses], MapSet.put(consumed, element.id)}
-
-          true ->
-            losses =
-              losses
-              |> maybe_add_inline_loss(element)
-              |> maybe_add_projection_loss(element)
-
-            {children ++ [paragraph_element(element)], losses, MapSet.put(consumed, element.id)}
-        end
+        export_element(element, {children, losses, consumed}, doc, element_map, block_by_cue, dual_right_ids)
       end)
 
     {children, losses}
+  end
+
+  defp export_element(element_data, {children, losses, consumed}, doc, element_map, blocks, dual_right_ids) do
+    cond do
+      MapSet.member?(consumed, element_data.id) ->
+        {children, losses, consumed}
+
+      element_data.type == :character and Map.has_key?(blocks, element_data.id) ->
+        export_dialogue_block(blocks[element_data.id], {children, losses, consumed}, doc, element_map, dual_right_ids)
+
+      element_data.type == :blank ->
+        {children, losses, MapSet.put(consumed, element_data.id)}
+
+      element_data.type in [:section, :synopsis, :note, :boneyard, :page_break] ->
+        {children, ["#{element_data.type} not represented in base FDX export" | losses],
+         MapSet.put(consumed, element_data.id)}
+
+      true ->
+        losses = losses |> maybe_add_inline_loss(element_data) |> maybe_add_projection_loss(element_data)
+        {children ++ [paragraph_element(element_data)], losses, MapSet.put(consumed, element_data.id)}
+    end
+  end
+
+  defp export_dialogue_block(block, state, doc, element_map, dual_right_ids) do
+    cond do
+      block.side == :left and block.dual_with -> export_dual_block(block, state, doc, element_map)
+      MapSet.member?(dual_right_ids, block.id) -> state
+      true -> export_single_block(block, state, element_map)
+    end
+  end
+
+  defp export_dual_block(block, {children, losses, consumed}, doc, element_map) do
+    right = Enum.find(doc.ir.dialogue_blocks, &(&1.id == block.dual_with))
+    ids = [block.cue_id | block.body_ids] ++ [right.cue_id | right.body_ids]
+    paragraphs = Enum.map(ids, &paragraph_element(Map.fetch!(element_map, &1)))
+    outer = element("Paragraph", [], [element("DualDialogue", [], paragraphs)])
+    {children ++ [outer], inline_losses(ids, element_map, losses), put_all(consumed, ids)}
+  end
+
+  defp export_single_block(block, {children, losses, consumed}, element_map) do
+    ids = [block.cue_id | block.body_ids]
+    paragraphs = Enum.map(ids, &paragraph_element(Map.fetch!(element_map, &1)))
+    {children ++ paragraphs, inline_losses(ids, element_map, losses), put_all(consumed, ids)}
   end
 
   defp put_all(set, ids), do: Enum.reduce(ids, set, &MapSet.put(&2, &1))
@@ -248,45 +247,41 @@ defmodule Fount.Adapter.FDX do
   defp maybe_add_projection_loss(losses, _), do: losses
 
   defp paragraph_element(element_data) do
-    type =
-      case element_data.type do
-        :scene_heading -> "Scene Heading"
-        :action -> "Action"
-        :character -> "Character"
-        :dialogue -> "Dialogue"
-        :parenthetical -> "Parenthetical"
-        :transition -> "Transition"
-        :lyric -> "Lyrics"
-        :centered -> "Action"
-        _ -> "General"
-      end
-
-    text =
-      if element_data.type == :character do
-        case Map.get(element_data.attrs || %{}, :extension) do
-          nil -> element_data.text
-          "" -> element_data.text
-          extension -> element_data.text <> " " <> extension
-        end
-      else
-        element_data.text
-      end
-
-    children =
-      if element_data.type == :scene_heading do
-        attrs =
-          case Map.get(element_data.attrs || %{}, :number) do
-            nil -> []
-            number -> [{"Number", to_string(number)}]
-          end
-
-        [element("SceneProperties", attrs, []), element("Text", [], text)]
-      else
-        [element("Text", [], text)]
-      end
-
-    element("Paragraph", [{"Type", type}], children)
+    text = paragraph_export_text(element_data)
+    children = paragraph_children(element_data, text)
+    element("Paragraph", [{"Type", paragraph_type(element_data.type)}], children)
   end
+
+  defp paragraph_type(:scene_heading), do: "Scene Heading"
+  defp paragraph_type(:action), do: "Action"
+  defp paragraph_type(:character), do: "Character"
+  defp paragraph_type(:dialogue), do: "Dialogue"
+  defp paragraph_type(:parenthetical), do: "Parenthetical"
+  defp paragraph_type(:transition), do: "Transition"
+  defp paragraph_type(:lyric), do: "Lyrics"
+  defp paragraph_type(:centered), do: "Action"
+  defp paragraph_type(_), do: "General"
+
+  defp paragraph_export_text(%{type: :character} = data) do
+    case Map.get(data.attrs || %{}, :extension) do
+      extension when is_binary(extension) and extension != "" -> data.text <> " " <> extension
+      _ -> data.text
+    end
+  end
+
+  defp paragraph_export_text(data), do: data.text
+
+  defp paragraph_children(%{type: :scene_heading} = data, text) do
+    attrs =
+      case Map.get(data.attrs || %{}, :number) do
+        nil -> []
+        number -> [{"Number", to_string(number)}]
+      end
+
+    [element("SceneProperties", attrs, []), element("Text", [], text)]
+  end
+
+  defp paragraph_children(_data, text), do: [element("Text", [], text)]
 
   defp export_title_page(nil), do: []
 
@@ -324,7 +319,6 @@ defmodule Fount.Adapter.FDX do
     |> Enum.reject(&MapSet.member?(@supported_styles, &1))
     |> Enum.map(&"FDX text style #{&1} has no lossless Fountain equivalent")
   end
-
 
   defp structural_style_losses(paragraphs) do
     if Enum.any?(paragraphs, fn paragraph ->
@@ -377,8 +371,6 @@ defmodule Fount.Adapter.FDX do
     end)
   end
 
-  defp find_element(_, _), do: nil
-
   defp has_attribute?({_name, attrs, children}, wanted) do
     Enum.any?(attrs, fn {name, _value} -> name == wanted end) or
       Enum.any?(children, fn
@@ -386,8 +378,6 @@ defmodule Fount.Adapter.FDX do
         _ -> false
       end)
   end
-
-  defp has_attribute?(_, _), do: false
 
   defp text_children(children) do
     Enum.map_join(children, fn

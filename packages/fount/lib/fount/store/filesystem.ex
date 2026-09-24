@@ -13,10 +13,10 @@ defmodule Fount.Store.Filesystem do
   @impl true
   def save(%__MODULE__{} = store, key, doc, _opts) do
     with {:ok, base} <- base_path(store, key),
-         :ok <- File.mkdir_p(Path.dirname(base)),
-         :ok <- atomic_write(base <> ".fountain", doc.source.raw),
-         :ok <- atomic_write(base <> ".fount.json", Snapshot.encode!(doc)) do
-      :ok
+         :ok <- File.mkdir_p(Path.dirname(base)) do
+      with :ok <- atomic_write(base <> ".fountain", doc.source.raw) do
+        atomic_write(base <> ".fount.json", Snapshot.encode!(doc))
+      end
     end
   end
 
@@ -24,21 +24,17 @@ defmodule Fount.Store.Filesystem do
   def load(%__MODULE__{} = store, key, _opts) do
     with {:ok, base} <- base_path(store, key),
          {:ok, source} <- File.read(base <> ".fountain") do
-      sidecar_path = base <> ".fount.json"
-
-      opts =
-        case File.read(sidecar_path) do
-          {:ok, json} ->
-            case Snapshot.decode(json) do
-              {:ok, snapshot} -> Snapshot.parse_options(snapshot)
-              _ -> []
-            end
-
-          _ ->
-            []
-        end
-
+      opts = sidecar_options(base <> ".fount.json")
       Fount.parse(source, Keyword.put(opts, :path, base <> ".fountain"))
+    end
+  end
+
+  defp sidecar_options(path) do
+    with {:ok, json} <- File.read(path),
+         {:ok, snapshot} <- Snapshot.decode(json) do
+      Snapshot.parse_options(snapshot)
+    else
+      _ -> []
     end
   end
 
@@ -64,15 +60,15 @@ defmodule Fount.Store.Filesystem do
   @impl true
   def delete(%__MODULE__{} = store, key, _opts) do
     with {:ok, base} <- base_path(store, key) do
-      Enum.each([base <> ".fountain", base <> ".fount.json"], fn path ->
-        case File.rm(path) do
-          :ok -> :ok
-          {:error, :enoent} -> :ok
-          _ -> :ok
-        end
-      end)
+      Enum.reduce_while([base <> ".fountain", base <> ".fount.json"], :ok, &remove_file/2)
+    end
+  end
 
-      :ok
+  defp remove_file(path, :ok) do
+    case File.rm(path) do
+      :ok -> {:cont, :ok}
+      {:error, :enoent} -> {:cont, :ok}
+      {:error, reason} -> {:halt, {:error, reason}}
     end
   end
 
@@ -99,12 +95,17 @@ defmodule Fount.Store.Filesystem do
 
   defp replace(temp, target) do
     case File.rename(temp, target) do
-      :ok -> :ok
+      :ok ->
+        :ok
+
       {:error, :eexist} ->
         with :ok <- File.rm(target), do: File.rename(temp, target)
+
       {:error, :eacces} ->
         with :ok <- File.rm(target), do: File.rename(temp, target)
-      error -> error
+
+      error ->
+        error
     end
   end
 end

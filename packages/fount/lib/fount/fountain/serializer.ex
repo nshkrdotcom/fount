@@ -30,7 +30,7 @@ defmodule Fount.Fountain.Serializer do
 
   defp serialize_title_page(%{entries: entries}, newline) do
     entries
-    |> Enum.map(fn entry ->
+    |> Enum.map_join(newline, fn entry ->
       case entry.values do
         [] ->
           "#{entry.key}:"
@@ -43,7 +43,6 @@ defmodule Fount.Fountain.Serializer do
           |> Enum.join(newline)
       end
     end)
-    |> Enum.join(newline)
   end
 
   defp serialize_elements(elements, newline) do
@@ -123,7 +122,10 @@ defmodule Fount.Fountain.Serializer do
 
   defp serialize_element(%Element{} = e, newline), do: [lexical_text(e, newline), newline]
 
-  defp lexical_text(%Element{raw_text: raw, source_span: %Span{} = source, content_span: %Span{} = content} = element, newline)
+  defp lexical_text(
+         %Element{raw_text: raw, source_span: %Span{} = source, content_span: %Span{} = content} = element,
+         newline
+       )
        when is_binary(raw) do
     local_start = content.byte_start - source.byte_start
     length = Span.length(content)

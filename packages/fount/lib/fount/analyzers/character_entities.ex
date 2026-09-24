@@ -57,6 +57,7 @@ defmodule Fount.Analyzers.CharacterEntities do
   defp canonical_for(name, groups) do
     Enum.find_value(groups, name, fn {canonical, aliases} ->
       normalized_aliases = Enum.map(List.wrap(aliases), &Fount.Index.normalize_character/1)
+
       if name == Fount.Index.normalize_character(to_string(canonical)) or name in normalized_aliases,
         do: Fount.Index.normalize_character(to_string(canonical))
     end)

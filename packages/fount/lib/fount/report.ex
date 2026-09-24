@@ -80,6 +80,6 @@ defmodule Fount.Report do
     |> Enum.sort_by(&{-&1.scene_count, &1.location})
   end
 
-  defp sum_words(elements), do: elements |> Enum.map(& &1.text) |> Enum.join(" ") |> word_count()
+  defp sum_words(elements), do: elements |> Enum.map_join(" ", & &1.text) |> word_count()
   defp word_count(text), do: text |> String.split(~r/\s+/u, trim: true) |> length()
 end

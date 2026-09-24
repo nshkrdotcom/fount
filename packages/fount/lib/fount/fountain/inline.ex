@@ -2,7 +2,7 @@ defmodule Fount.Fountain.Inline do
   @moduledoc "Conservative inline Fountain markup discovery without rewriting source."
 
   defmodule Mark do
-    @moduledoc false
+    @moduledoc "A source span and exact spelling for an inline Fountain mark."
     @enforce_keys [:kind, :byte_start, :byte_end, :raw]
     defstruct [:kind, :byte_start, :byte_end, :raw, :content]
     @type t :: %__MODULE__{}
@@ -46,13 +46,17 @@ defmodule Fount.Fountain.Inline do
 
   defp scan_delimited(text, open, close, kind, offset, acc) do
     case :binary.match(text, open) do
-      :nomatch -> Enum.reverse(acc)
+      :nomatch ->
+        Enum.reverse(acc)
+
       {start, _} ->
         after_open = start + byte_size(open)
         remainder = binary_part(text, after_open, byte_size(text) - after_open)
 
         case :binary.match(remainder, close) do
-          :nomatch -> Enum.reverse(acc)
+          :nomatch ->
+            Enum.reverse(acc)
+
           {finish, _} ->
             size = byte_size(open) + finish + byte_size(close)
             raw = binary_part(text, start, size)

@@ -8,7 +8,7 @@ defmodule Fount.Fountain.CST do
   """
 
   defmodule Node do
-    @moduledoc false
+    @moduledoc "A byte-addressable concrete Fountain node, including source trivia."
     @enforce_keys [:id, :type, :span, :content_span, :raw, :text]
     defstruct [:id, :type, :span, :content_span, :raw, :text, :attrs, :inline, :line_start, :line_end]
     @type t :: %__MODULE__{}
@@ -28,7 +28,7 @@ defmodule Fount.Fountain.CST do
 
   @doc "Apply a semantic identity reconciliation map to the CST as well as title-page references."
   @spec remap_ids(t(), map(), String.t()) :: t()
-  def remap_ids(%__MODULE__{} = cst, id_map, document_id) do
+  def remap_ids(%__MODULE__{} = cst, id_map, _document_id) do
     title_page = remap_title_page(cst.title_page, id_map)
 
     nodes =
@@ -37,7 +37,7 @@ defmodule Fount.Fountain.CST do
           original_entry_id = get_in(node.attrs || %{}, [:entry_id])
           entry_id = Map.get(id_map, original_entry_id, original_entry_id) || node.id
           attrs = Map.put(node.attrs || %{}, :entry_id, entry_id)
-          %{node | id: Fount.ID.v5(document_id, ["title-node:", entry_id]), attrs: attrs}
+          %{node | id: entry_id, attrs: attrs}
 
         %Node{} = node ->
           %{node | id: Map.get(id_map, node.id, node.id)}

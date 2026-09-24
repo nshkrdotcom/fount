@@ -1,6 +1,8 @@
 defmodule Fount.StoreTest do
   use ExUnit.Case, async: false
 
+  alias Fount.Store.{Filesystem, SQLite}
+
   setup do
     root = Path.join(System.tmp_dir!(), "fount-store-#{System.unique_integer([:positive])}")
     File.mkdir_p!(root)
@@ -9,7 +11,7 @@ defmodule Fount.StoreTest do
   end
 
   test "filesystem store keeps Fountain canonical and restores IDs", %{root: root} do
-    store = Fount.Store.Filesystem.new(root)
+    store = Filesystem.new(root)
     doc = Fount.parse!("INT. ROOM - DAY\n\nMARA\nHello.\n")
     original_ids = Enum.map(doc.ir.elements, & &1.id)
 
@@ -20,7 +22,7 @@ defmodule Fount.StoreTest do
   end
 
   test "sqlite store saves current document and revision history", %{root: root} do
-    store = Fount.Store.SQLite.new(Path.join(root, "fount.sqlite3"))
+    store = SQLite.new(Path.join(root, "fount.sqlite3"))
     doc = Fount.parse!("INT. ROOM - DAY\n\nMARA\nHello.\n")
     :ok = Fount.Store.save(store, "main", doc)
 
@@ -30,7 +32,39 @@ defmodule Fount.StoreTest do
 
     assert {:ok, loaded} = Fount.Store.load(store, "main")
     assert Fount.render(loaded) == Fount.render(changed)
-    assert {:ok, history} = Fount.Store.SQLite.history(store, "main")
+    assert loaded.revision.id == changed.revision.id
+    assert Enum.map(loaded.ir.elements, & &1.id) == Enum.map(changed.ir.elements, & &1.id)
+    assert {:ok, history} = SQLite.history(store, "main")
     assert length(history) == 2
+  end
+
+  test "sidecar preserves title identity and annotation queries after reopen", %{root: root} do
+    store = Filesystem.new(root)
+    doc = Fount.parse!("Title: First Draft\n\nINT. ROOM - DAY\n\nMARA\nHi.\n")
+    title_id = hd(doc.ir.title_page.entries).id
+    {:ok, analyzed} = Fount.analyze(doc, Fount.Analyzers.CharacterEntities)
+    assert length(Fount.Annotations.by_kind(analyzed.annotations, :character_entity)) == 1
+
+    assert :ok = Fount.Store.save(store, "main", analyzed)
+    assert {:ok, loaded} = Fount.Store.load(store, "main")
+    assert hd(loaded.ir.title_page.entries).id == title_id
+    assert hd(Enum.filter(loaded.cst.nodes, &(&1.type == :title_page))).id == title_id
+    assert length(Fount.Annotations.by_kind(loaded.annotations, :character_entity)) == 1
+
+    assert {:ok, external_edit} = Fount.reparse(loaded, "Title: First Draft\n\nINT. ROOM - DAY\n\nNo dialogue.\n")
+    assert hd(external_edit.ir.title_page.entries).id == title_id
+    assert Fount.Annotations.by_kind(external_edit.annotations, :character_entity) == []
+  end
+
+  test "a unique title-page field retains identity when its value and position change" do
+    doc = Fount.parse!("Title: First\nAuthor: Writer\n\nINT. ROOM - DAY\n")
+    old_title = hd(doc.ir.title_page.entries)
+
+    assert {:ok, changed} =
+             Fount.reparse(doc, "Credit: Written by\nTitle: Second\nAuthor: Writer\n\nINT. ROOM - DAY\n")
+
+    new_title = Enum.find(changed.ir.title_page.entries, &(&1.key == "Title"))
+    assert new_title.id == old_title.id
+    assert Enum.find(changed.cst.nodes, &(&1.type == :title_page and &1.attrs.key == "Title")).id == old_title.id
   end
 end

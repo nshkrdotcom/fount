@@ -2,6 +2,7 @@ defmodule Fount.Source do
   @moduledoc "Exact source payload and byte-preserving line index."
 
   alias Fount.Source.Line
+  alias Fount.Source.Span
 
   @enforce_keys [:format, :raw, :lines]
   defstruct [:format, :raw, :lines, :path, :valid_utf8?, :newline_style]
@@ -16,6 +17,6 @@ defmodule Fount.Source do
           newline_style: :lf | :crlf | :cr | :mixed | :none
         }
 
-  @spec slice(t(), Fount.Source.Span.t()) :: binary()
-  def slice(%__MODULE__{raw: raw}, span), do: Fount.Source.Span.slice(raw, span)
+  @spec slice(t(), Span.t()) :: binary()
+  def slice(%__MODULE__{raw: raw}, span), do: Span.slice(raw, span)
 end

@@ -80,7 +80,7 @@ defmodule Fount.IR do
   defp normalize_type(type), do: type
 
   defp build_scenes(document_id, elements) do
-    {scenes, current, stack, paths} =
+    {scenes, current, _stack, paths} =
       Enum.reduce(elements, {[], nil, [], %{}}, fn element, {scenes, current, stack, paths} ->
         stack = update_section_stack(stack, element, document_id)
 
@@ -174,59 +174,62 @@ defmodule Fount.IR do
     scene_by_heading = Map.new(scenes, &{&1.heading_id, &1})
 
     {nodes, stack} =
-      Enum.reduce(elements, {[], []}, fn element, {nodes, stack} ->
-        cond do
-          element.type == :section ->
-            level = Map.get(element.attrs || %{}, :level, 1)
-            stack = Enum.take_while(stack, &(&1.level < level))
-            parent = List.last(stack)
-
-            node = %OutlineNode{
-              id: Fount.ID.v5(document_id, ["outline:", element.id]),
-              section_element_id: element.id,
-              level: level,
-              title: element.text,
-              parent_id: parent && parent.id,
-              child_ids: [],
-              scene_ids: []
-            }
-
-            nodes =
-              if parent do
-                Enum.map(nodes, fn existing ->
-                  if existing.id == parent.id,
-                    do: %{existing | child_ids: existing.child_ids ++ [node.id]},
-                    else: existing
-                end)
-              else
-                nodes
-              end
-
-            {nodes ++ [node], stack ++ [node]}
-
-          element.type == :scene_heading and stack != [] ->
-            case Map.get(scene_by_heading, element.id) do
-              nil -> {nodes, stack}
-              scene ->
-                ids = MapSet.new(Enum.map(stack, & &1.id))
-
-                nodes =
-                  Enum.map(nodes, fn node ->
-                    if MapSet.member?(ids, node.id),
-                      do: %{node | scene_ids: node.scene_ids ++ [scene.id]},
-                      else: node
-                  end)
-
-                {nodes, stack}
-            end
-
-          true ->
-            {nodes, stack}
-        end
+      Enum.reduce(elements, {[], []}, fn element, state ->
+        outline_step(element, state, document_id, scene_by_heading)
       end)
 
     _ = stack
     nodes
+  end
+
+  defp outline_step(%Element{type: :section} = element, {nodes, stack}, document_id, _scenes) do
+    level = Map.get(element.attrs || %{}, :level, 1)
+    stack = Enum.take_while(stack, &(&1.level < level))
+    parent = List.last(stack)
+
+    node = %OutlineNode{
+      id: Fount.ID.v5(document_id, ["outline:", element.id]),
+      section_element_id: element.id,
+      level: level,
+      title: element.text,
+      parent_id: parent && parent.id,
+      child_ids: [],
+      scene_ids: []
+    }
+
+    {append_outline_node(nodes, parent, node), stack ++ [node]}
+  end
+
+  defp outline_step(%Element{type: :scene_heading} = element, {nodes, stack}, _document_id, scenes) do
+    case Map.get(scenes, element.id) do
+      nil -> {nodes, stack}
+      scene -> {mark_scene_in_outline(nodes, stack, scene.id), stack}
+    end
+  end
+
+  defp outline_step(_element, state, _document_id, _scenes), do: state
+
+  defp append_outline_node(nodes, nil, node), do: nodes ++ [node]
+
+  defp append_outline_node(nodes, parent, node) do
+    updated =
+      Enum.map(nodes, fn existing ->
+        if existing.id == parent.id,
+          do: %{existing | child_ids: existing.child_ids ++ [node.id]},
+          else: existing
+      end)
+
+    updated ++ [node]
+  end
+
+  defp mark_scene_in_outline(nodes, stack, scene_id) do
+    ids = MapSet.new(Enum.map(stack, & &1.id))
+
+    Enum.map(nodes, fn node ->
+      if MapSet.member?(ids, node.id),
+        do: %{node | scene_ids: node.scene_ids ++ [scene_id]},
+        else: node
+    end)
   end
 
   defp update_section_stack(stack, %Element{type: :section} = element, document_id) do

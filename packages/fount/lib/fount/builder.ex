@@ -5,7 +5,11 @@ defmodule Fount.Builder do
 
   defstruct title_page: [], fragments: [], newline: "\n"
 
-  @type t :: %__MODULE__{title_page: [{String.t(), [String.t()]}], fragments: [Fragment.t() | binary()], newline: binary()}
+  @type t :: %__MODULE__{
+          title_page: [{String.t(), [String.t()]}],
+          fragments: [Fragment.t() | binary()],
+          newline: binary()
+        }
 
   @spec new(keyword()) :: t()
   def new(opts \\ []), do: %__MODULE__{newline: Keyword.get(opts, :newline, "\n")}
@@ -68,13 +72,12 @@ defmodule Fount.Builder do
 
   defp title_page_source(entries, newline) do
     entries
-    |> Enum.map(fn {key, values} ->
+    |> Enum.map_join(newline, fn {key, values} ->
       case values do
         [] -> key <> ":"
         [value] -> key <> ": " <> value
         values -> [key <> ":" | Enum.map(values, &("   " <> &1))] |> Enum.join(newline)
       end
     end)
-    |> Enum.join(newline)
   end
 end

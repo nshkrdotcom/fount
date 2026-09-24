@@ -50,11 +50,10 @@ defmodule Fount.Fragment do
       |> List.wrap()
       |> Enum.flat_map(&split_lines/1)
       |> drop_terminal_empty()
-      |> Enum.map(fn
+      |> Enum.map_join(newline, fn
         "" -> "  "
         value -> value
       end)
-      |> Enum.join(newline)
 
     %__MODULE__{
       source: cue <> extension <> dual <> newline <> parentheticals <> lines <> newline <> newline,
@@ -76,7 +75,7 @@ defmodule Fount.Fragment do
         value -> " ##{value}#"
       end
 
-    body = content |> List.wrap() |> Enum.map(&source/1) |> IO.iodata_to_binary()
+    body = content |> List.wrap() |> Enum.map(&(source(&1) |> normalize(newline))) |> IO.iodata_to_binary()
     source = prefix <> heading <> number <> newline <> newline <> body
     %__MODULE__{source: ensure_blank_terminated(source, newline), kind: :scene}
   end

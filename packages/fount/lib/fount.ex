@@ -5,7 +5,7 @@ defmodule Fount do
   """
 
   alias Fount.{Annotations, Document, ID, Identity, Index, Revision}
-  alias Fount.Fountain.{CST, Parser, Scanner}
+  alias Fount.Fountain.{CST, Parser, Scanner, Serializer}
 
   @version "0.1.0"
 
@@ -31,6 +31,12 @@ defmodule Fount do
       end
 
     cst = CST.remap_ids(cst, id_map, document_id)
+
+    diagnostics =
+      case Keyword.get(opts, :prior) do
+        %Document{ir: previous_ir} -> diagnostics ++ Identity.reconciliation_diagnostics(previous_ir, ir)
+        _ -> diagnostics
+      end
 
     revision =
       Revision.from_source(raw,
@@ -82,11 +88,12 @@ defmodule Fount do
 
   @doc "Canonical serialization from IR, for projections and adapter use."
   @spec serialize(Document.t(), keyword()) :: binary()
-  def serialize(%Document{ir: ir}, opts \\ []), do: Fount.Fountain.Serializer.serialize(ir, opts)
+  def serialize(%Document{ir: ir}, opts \\ []), do: Serializer.serialize(ir, opts)
 
   @spec reparse(Document.t(), binary(), keyword()) :: {:ok, Document.t()} | {:error, term()}
   def reparse(%Document{} = prior, new_raw, opts \\ []) do
-    parse(new_raw,
+    parse(
+      new_raw,
       Keyword.merge(opts,
         document_id: prior.id,
         prior: prior,

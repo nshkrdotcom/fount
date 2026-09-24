@@ -11,7 +11,8 @@ defmodule Fount.MixProject do
       name: "Fount",
       elixir: "~> 1.18",
       start_permanent: Mix.env() == :prod,
-      description: "Canonical headless screenplay substrate, semantic IR, lossless Fountain parser, and compilation runtime",
+      description:
+        "Canonical headless screenplay substrate, semantic IR, lossless Fountain parser, and compilation runtime",
       source_url: @source_url,
       homepage_url: @source_url,
       deps: deps(),
@@ -28,9 +29,11 @@ defmodule Fount.MixProject do
     [
       {:jason, "~> 1.4.5"},
       {:saxy, "~> 1.6"},
-      {:exqlite, "~> 0.40", optional: true},
+      {:exqlite, "~> 0.41", optional: true},
       {:stream_data, "~> 1.4", only: :test},
-      {:ex_doc, "~> 0.40", only: :dev, runtime: false}
+      {:ex_doc, "~> 0.40", only: :dev, runtime: false},
+      {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
+      {:dialyxir, "~> 1.4", only: :dev, runtime: false}
     ]
   end
 
@@ -58,7 +61,7 @@ defmodule Fount.MixProject do
         "guides/research.md"
       ],
       groups_for_extras: [
-        "Overview": ~r/(README|CHANGELOG|LICENSE)/,
+        Overview: ~r/(README|CHANGELOG|LICENSE)/,
         "Design & Architecture": ~r/guides\/(architecture|lossless-fountain|ir|editing)/,
         "Capabilities & Runtime": ~r/guides\/(annotations-and-analysis|persistence|adapters)/,
         "Research & Precedents": ~r/guides\/research/
@@ -125,12 +128,12 @@ defmodule Fount.MixProject do
           Fount.Semantics.Mention,
           Fount.Semantics.Relation
         ],
-        "Adapters": [
+        Adapters: [
           Fount.Adapter,
           Fount.Adapter.FDX,
           Fount.Adapter.JSON
         ],
-        "Persistence": [
+        Persistence: [
           Fount.Store,
           Fount.Store.Filesystem,
           Fount.Store.SQLite,

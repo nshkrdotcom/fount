@@ -11,9 +11,9 @@
 
 # Fount
 
-**The canonical headless screenplay substrate, semantic intermediate representation (IR), lossless Fountain parser, and screenplay compilation runtime.**
+**A headless screenplay framework with lossless Fountain source, a canonical screenplay IR, source-backed edits, and format adapters.**
 
-Fount is designed from first principles for script analysis, deterministic transformation algebra, and AI/agentic screenwriting workflows.
+The Mix project is at [`packages/fount`](packages/fount). It supports parsing, querying, structured generation and editing, deterministic analysis, filesystem/SQLite persistence, and practical FDX interchange.
 
 ---
 
@@ -42,27 +42,27 @@ Fount strictly decouples screenplay reality into four distinct architectural lay
                            ▼
 ┌──────────────────────────────────────────────────────────────┐
 │  4. PRESENTATION / OPERATIONAL TRUTH                         │
-│  Pages, timing, eighths, reports, FDX, PDF, breakdown sheets │
+│  Reports, JSON and FDX adapters, future layout projections    │
 └──────────────────────────────────────────────────────────────┘
 
              EDIT / PATCH / DIFF ALGEBRA
        cuts vertically through the whole system
 ```
 
-1. **Source Truth (`CST`)**: Exact character-for-character reproduction, formatting delimiters, line endings, comments, boneyards, and source spans. Untouched Fountain round-trips with zero loss (`print(parse(source)) == source`).
-2. **Screenplay Truth (`IR`)**: First-class typed domain model (`Scene`, `Heading`, `Action`, `DialogueBlock`, `Parenthetical`, `Transition`, `Shot`). Every meaningful node retains durable, position-independent identity (`UUID`).
-3. **Interpretive Truth (`Annotations`)**: Inferred data (narrative beats, dramatic polarities, entity coreference, character interaction networks, semantic actions) anchored to nodes via provenance-tracked annotations without polluting the screenplay model.
-4. **Presentation & Operational Truth (`Projections`)**: Read-only derived views including page-eighth calculations, pagination fragments, FDX interchange, PDF typesetting, and production breakdown reports.
+1. **Source truth (`CST`)**: Exact byte reproduction, including formatting delimiters, line endings, boneyards, and source spans. Untouched Fountain round-trips through `Fount.render/1` without changing bytes.
+2. **Screenplay truth (`IR`)**: Typed elements, scenes, dialogue blocks, title pages, and outline views. Identity reconciliation keeps IDs where continuity can be established; it is best-effort after arbitrary external rewrites.
+3. **Interpretive truth (`Annotations`)**: Derived analysis anchored to IDs and source revisions with provenance. The built-in analyzers cover characters, dialogue, and locations; richer narrative interpretation can be added by applications.
+4. **Presentation and operational truth (`Projections`)**: Reports plus JSON and FDX adapters. Pagination, PDF typesetting, page eighths, and production breakdowns are future work.
 
 ---
 
 ## Architectural Principles
 
 - **Lossless Fountain Round-Trip**: The Concrete Syntax Tree preserves whitespace, comments, forced syntax, and indentation.
-- **Durable Identity**: Structural elements possess persistent IDs so mutations and downstream annotations survive upstream insertions and reorderings.
-- **Screenplay Edit Algebra**: Modifications occur via explicit `ChangeSet` operations (`insert_scene`, `replace_dialogue`, `move_element`, `split_action`), yielding complete audit trails, deterministic undo/redo, and safe agent execution.
-- **Format Adapters**: Fountain is the native text surface. FDX and other external formats are pure bidirectional adapters with explicit fidelity reporting.
-- **Agent Interface**: LLMs interact with constrained semantic operations against the screenplay IR rather than blindly overwriting large raw text files.
+- **Stable identity**: Reconciliation retains object IDs across many source edits and reports when it cannot safely do so.
+- **Source-backed edits**: `Fount.Edit` offers text replacement, cue rename, heading changes, insertion, scene movement/deletion, and undo/redo through `ChangeSet` values.
+- **Format adapters**: FDX and JSON stay outside the canonical model. FDX returns fidelity losses for unsupported metadata or styling.
+- **Persistence boundary**: Fountain remains authoritative; filesystem sidecars or the optional SQLite store keep identity, annotations, and revision metadata.
 
 ---
 

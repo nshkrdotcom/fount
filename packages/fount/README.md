@@ -53,6 +53,26 @@ scene = doc |> Fount.scenes() |> hd()
 
 Fountain is line-oriented and context-sensitive. Whether an uppercase line is a character cue depends on neighboring empty lines; dialogue depends on the preceding cue; boneyards can span lines; notes have their own multiline rule; exact whitespace and mixed line endings matter. Fount therefore uses a custom byte-preserving scanner, a context-aware parser, and a CST. General parser combinators remain appropriate for small future subgrammars, but are not the architecture of the Fountain parser.
 
-## Status
+## Guarantees and limits
 
-This source tree was authored in an environment without Elixir installed. The code and tests are designed for Elixir 1.18+ and dependency versions current in September 2026, but the final compile/test pass must be run in an Elixir environment.
+Untouched Fountain renders byte-for-byte from its CST, including line endings, trivia, malformed notes, and unknown lines. Structural classification is conservative and contextual. Stable IDs survive source edits when a semantic match or explicit edit hint identifies the same object; an unmatched changed object gets an `:identity_not_retained` diagnostic. Arbitrary source rewrites can change IDs.
+
+FDX and JSON are adapters, not the canonical model. FDX supports practical spec-script interchange and returns `losses` for known unsupported production metadata and styling. Do not assume an arbitrary FDX file round-trips exactly.
+
+SQLite is optional for consumers. Add `{:exqlite, "~> 0.41"}` to the host application's dependencies when using `Fount.Store.SQLite`; the filesystem store needs no native database dependency.
+
+## Quality checks
+
+From `packages/fount`, run:
+
+```bash
+mix deps.get
+mix format --check-formatted
+mix deps.unlock --check-unused
+mix compile --warnings-as-errors
+mix test
+mix credo --strict
+mix dialyzer
+mix docs
+mix hex.build
+```

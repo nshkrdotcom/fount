@@ -30,6 +30,17 @@ defmodule Fount.ParserSemanticsTest do
     assert Enum.count(body, &(&1.type == :dialogue)) == 3
     assert Enum.at(body, 1).attrs.intentional_blank?
   end
+
+  test "first source line is classified without wrapping to the last line" do
+    scene = Fount.parse!("INT. ROOM - DAY\n\nAction.\n")
+    assert length(scene.ir.scenes) == 1
+    assert hd(Fount.elements(scene, :scene_heading)).text == "INT. ROOM - DAY"
+
+    dialogue = Fount.parse!("CHARACTER\nHello.\n")
+    assert length(dialogue.ir.dialogue_blocks) == 1
+    assert hd(Fount.elements(dialogue, :character)).text == "CHARACTER"
+  end
+
   test "an unclosed standalone note stops at a true blank line" do
     source = "[[unfinished note\nstill note\n\nINT. ROOM - DAY\n\nAction.\n"
     doc = Fount.parse!(source)
@@ -40,5 +51,4 @@ defmodule Fount.ParserSemanticsTest do
     assert Enum.any?(doc.ir.scenes, fn scene -> Fount.node(doc, scene.heading_id).text == "INT. ROOM - DAY" end)
     assert Fount.render(doc) == source
   end
-
 end

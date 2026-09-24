@@ -30,6 +30,8 @@ This is the right default for writers, repositories, CLIs, and local tools.
 
 `Fount.Store.SQLite` is available when the optional `exqlite` dependency is present. It stores the current source/snapshot plus append-only revision records, enables WAL mode, and wraps saves in transactions.
 
+An application that selects SQLite should include `{:exqlite, "~> 0.41"}` in its own `mix.exs`, then construct `Fount.Store.SQLite.new("path/to/fount.sqlite3")` and use the `Fount.Store` callbacks. `Fount.Store.SQLite.available?/0` reports whether Exqlite is loaded. Filesystem-only applications do not need a native SQLite dependency.
+
 SQLite is appropriate for desktop/server applications that manage many documents or want local revision history without running a database service. Fount talks to Exqlite directly; Ecto is deliberately not part of the core dependency graph.
 
 ## Why PostgreSQL is not in the initial package

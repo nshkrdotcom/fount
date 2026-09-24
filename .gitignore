@@ -1,6 +1,8 @@
 /_build/
 /deps/
 /doc/
+/packages/fount/doc/
+/packages/fount/*.tar
 /.elixir_ls/
 *.ez
 *.beam

@@ -1,7 +1,6 @@
 defmodule Fount.SceneHeading do
   @moduledoc "Conservative semantic decomposition of a scene heading. Raw heading text remains authoritative."
 
-
   @doc "True when a heading is recognized by Fountain without the forced `.` marker."
   @spec standard_fountain?(binary()) :: boolean()
   def standard_fountain?(heading) when is_binary(heading) do
@@ -13,7 +12,9 @@ defmodule Fount.SceneHeading do
     trimmed = String.trim(raw)
 
     {context, rest} =
-      case Regex.run(~r/^(INT\.?\/EXT\.?|EXT\.?\/INT\.?|INT\.?|EXT\.?|EST\.?|I\/E\.?)\s+(.*)$/iu, trimmed, capture: :all_but_first) do
+      case Regex.run(~r/^(INT\.?\/EXT\.?|EXT\.?\/INT\.?|INT\.?|EXT\.?|EST\.?|I\/E\.?)\s+(.*)$/iu, trimmed,
+             capture: :all_but_first
+           ) do
         [context, rest] -> {normalize_context(context), rest}
         _ -> {nil, trimmed}
       end
@@ -22,8 +23,12 @@ defmodule Fount.SceneHeading do
 
     {location_parts, time} =
       case parts do
-        [] -> {[], nil}
-        [only] -> {[only], nil}
+        [] ->
+          {[], nil}
+
+        [only] ->
+          {[only], nil}
+
         many ->
           last = List.last(many)
           if time_like?(last), do: {Enum.drop(many, -1), last}, else: {many, nil}
@@ -44,7 +49,20 @@ defmodule Fount.SceneHeading do
   defp time_like?(value) do
     upper = String.upcase(String.trim(value))
 
-    upper in ["DAY", "NIGHT", "MORNING", "AFTERNOON", "EVENING", "DAWN", "DUSK", "SUNSET", "SUNRISE", "LATER", "CONTINUOUS", "SAME"] or
+    upper in [
+      "DAY",
+      "NIGHT",
+      "MORNING",
+      "AFTERNOON",
+      "EVENING",
+      "DAWN",
+      "DUSK",
+      "SUNSET",
+      "SUNRISE",
+      "LATER",
+      "CONTINUOUS",
+      "SAME"
+    ] or
       Regex.match?(~r/^\d{1,2}(?::\d{2})?\s*(?:AM|PM)$/u, upper)
   end
 end

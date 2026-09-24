@@ -2,7 +2,7 @@ defmodule Fount.Fountain.Parser do
   @moduledoc "Context-aware Fountain parser producing a lossless CST and canonical IR."
 
   alias Fount.{Diagnostic, ID}
-  alias Fount.Fountain.{CST, Classifier, Inline}
+  alias Fount.Fountain.{Classifier, CST, Inline}
   alias Fount.Fountain.CST.Node
   alias Fount.IR
   alias Fount.Source
@@ -23,7 +23,8 @@ defmodule Fount.Fountain.Parser do
           %Diagnostic{
             severity: :warning,
             code: :invalid_utf8,
-            message: "Source contains invalid UTF-8 bytes; exact round-trip is preserved but semantic parsing is conservative."
+            message:
+              "Source contains invalid UTF-8 bytes; exact round-trip is preserved but semantic parsing is conservative."
           }
           | diagnostics
         ]
@@ -51,7 +52,9 @@ defmodule Fount.Fountain.Parser do
 
   defp take_title_lines(lines, index, acc) do
     case Enum.at(lines, index) do
-      nil -> {Enum.reverse(acc), index}
+      nil ->
+        {Enum.reverse(acc), index}
+
       %Line{content: ""} = line ->
         next = Enum.at(lines, index + 1)
 
@@ -61,7 +64,8 @@ defmodule Fount.Fountain.Parser do
           take_title_lines(lines, index + 1, [line | acc])
         end
 
-      line -> take_title_lines(lines, index + 1, [line | acc])
+      line ->
+        take_title_lines(lines, index + 1, [line | acc])
     end
   end
 
@@ -118,9 +122,9 @@ defmodule Fount.Fountain.Parser do
     String.starts_with?(content, "\t") or Regex.match?(~r/^ {3,}/, content)
   end
 
-  defp title_entry_node(entry, source, document_id) do
+  defp title_entry_node(entry, source, _document_id) do
     %Node{
-      id: ID.v5(document_id, ["title-node:", entry.id]),
+      id: entry.id,
       type: :title_page,
       span: entry.span,
       content_span: entry.span,
@@ -169,159 +173,140 @@ defmodule Fount.Fountain.Parser do
     lines = source.lines
 
     case Enum.at(lines, index) do
-      nil -> {Enum.reverse(acc), diagnostics}
+      nil ->
+        {Enum.reverse(acc), diagnostics}
+
       line ->
-        previous = Enum.at(lines, index - 1)
-        following = Enum.at(lines, index + 1)
-
-        cond do
-          Classifier.empty?(line) ->
-            node = single_node(:blank, line, source, document_id, "", %{})
-            parse_nodes(source, document_id, index + 1, [node | acc], diagnostics)
-
-          Classifier.standalone_boneyard_start?(line) ->
-            {taken, next_index, closed?} = take_until(lines, index, "*/")
-            node = delimited_node(:boneyard, taken, source, document_id, "/*", "*/", closed?)
-
-            diagnostics =
-              if closed? do
-                diagnostics
-              else
-                [diag(:warning, :unclosed_boneyard, "Boneyard is not closed before end of file.", node.span) | diagnostics]
-              end
-
-            parse_nodes(source, document_id, next_index, [node | acc], diagnostics)
-
-          Classifier.standalone_note_start?(line) ->
-            {taken, next_index, closed?} = take_note_until(lines, index)
-            node = delimited_node(:note, taken, source, document_id, "[[", "]]", closed?)
-
-            diagnostics =
-              if closed? do
-                diagnostics
-              else
-                [diag(:warning, :unclosed_note, "Standalone note is not closed before end of file.", node.span) | diagnostics]
-              end
-
-            parse_nodes(source, document_id, next_index, [node | acc], diagnostics)
-
-          Classifier.page_break?(line) ->
-            node = single_node(:page_break, line, source, document_id, "", %{})
-            parse_nodes(source, document_id, index + 1, [node | acc], diagnostics)
-
-          Classifier.section?(line) ->
-            parts = Classifier.section_parts(line)
-            content_span = span_from_local(line, parts.content_offset, parts.content_bytes)
-            node = single_node(:section, line, source, document_id, parts.text, %{level: parts.level}, content_span)
-            parse_nodes(source, document_id, index + 1, [node | acc], diagnostics)
-
-          Classifier.synopsis?(line) ->
-            parts = Classifier.synopsis_parts(line)
-            content_span = span_from_local(line, parts.content_offset, parts.content_bytes)
-            node = single_node(:synopsis, line, source, document_id, parts.text, %{}, content_span)
-            parse_nodes(source, document_id, index + 1, [node | acc], diagnostics)
-
-          Classifier.centered?(line) ->
-            parts = Classifier.centered_parts(line)
-            content_span = span_from_local(line, parts.content_offset, parts.content_bytes)
-            node = single_node(:centered, line, source, document_id, parts.text, %{}, content_span)
-            parse_nodes(source, document_id, index + 1, [node | acc], diagnostics)
-
-          Classifier.lyric?(line) ->
-            {text, content_span} = strip_prefix(line, "~")
-            node = single_node(:lyric, line, source, document_id, text, %{}, content_span)
-            parse_nodes(source, document_id, index + 1, [node | acc], diagnostics)
-
-          Classifier.scene_heading?(line, previous, following) ->
-            parts = Classifier.scene_parts(line)
-            content_span = span_from_local(line, parts.content_offset, parts.content_bytes)
-
-            node =
-              single_node(
-                :scene_heading,
-                line,
-                source,
-                document_id,
-                parts.heading,
-                %{forced?: parts.forced?, number: parts.number},
-                content_span
-              )
-
-            parse_nodes(source, document_id, index + 1, [node | acc], diagnostics)
-
-          Classifier.transition?(line, previous, following) ->
-            parts = Classifier.transition_parts(line)
-            content_span = span_from_local(line, parts.content_offset, parts.content_bytes)
-
-            node =
-              single_node(
-                :transition,
-                line,
-                source,
-                document_id,
-                parts.text,
-                %{forced?: parts.forced?},
-                content_span
-              )
-
-            parse_nodes(source, document_id, index + 1, [node | acc], diagnostics)
-
-          Classifier.character?(line, previous, following) ->
-            parts = Classifier.character_parts(line)
-            content_span = span_from_local(line, parts.content_offset, parts.content_bytes)
-
-            cue =
-              single_node(
-                :character,
-                line,
-                source,
-                document_id,
-                parts.name,
-                %{extension: parts.extension, dual?: parts.dual?, forced?: parts.forced?},
-                content_span
-              )
-
-            {dialogue_nodes, next_index} = parse_dialogue(lines, source, document_id, index + 1, [])
-            next_acc = Enum.reverse(dialogue_nodes, [cue | acc])
-            parse_nodes(source, document_id, next_index, next_acc, diagnostics)
-
-          Classifier.forced_action?(line) ->
-            {text, content_span} = strip_prefix(line, "!")
-            node = single_node(:action, line, source, document_id, text, %{forced?: true}, content_span)
-            parse_nodes(source, document_id, index + 1, [node | acc], diagnostics)
-
-          true ->
-            {taken, next_index} = take_action_lines(lines, index, [])
-            node = multi_node(:action, taken, source, document_id, semantic_text(taken), %{forced?: false})
-            parse_nodes(source, document_id, next_index, [node | acc], diagnostics)
-        end
+        {nodes, next_index, diagnostics} = parse_next(line, source, document_id, index, diagnostics)
+        parse_nodes(source, document_id, next_index, Enum.reverse(nodes, acc), diagnostics)
     end
   end
+
+  defp parse_next(line, source, document_id, index, diagnostics) do
+    cond do
+      Classifier.empty?(line) ->
+        node = single_node(:blank, line, source, document_id, "", %{})
+        {[node], index + 1, diagnostics}
+
+      Classifier.standalone_boneyard_start?(line) ->
+        {taken, next_index, closed?} = take_until(source.lines, index, "*/")
+        node = delimited_node(:boneyard, taken, source, document_id, "/*", "*/", closed?)
+        diagnostics = maybe_unclosed(diagnostics, closed?, :unclosed_boneyard, "Boneyard", node.span)
+        {[node], next_index, diagnostics}
+
+      Classifier.standalone_note_start?(line) ->
+        {taken, next_index, closed?} = take_note_until(source.lines, index)
+        node = delimited_node(:note, taken, source, document_id, "[[", "]]", closed?)
+        diagnostics = maybe_unclosed(diagnostics, closed?, :unclosed_note, "Standalone note", node.span)
+        {[node], next_index, diagnostics}
+
+      Classifier.page_break?(line) ->
+        node = single_node(:page_break, line, source, document_id, "", %{})
+        {[node], index + 1, diagnostics}
+
+      Classifier.section?(line) ->
+        parts = Classifier.section_parts(line)
+        content_span = span_from_local(line, parts.content_offset, parts.content_bytes)
+        node = single_node(:section, line, source, document_id, parts.text, %{level: parts.level}, content_span)
+        {[node], index + 1, diagnostics}
+
+      Classifier.synopsis?(line) ->
+        parts = Classifier.synopsis_parts(line)
+        content_span = span_from_local(line, parts.content_offset, parts.content_bytes)
+        node = single_node(:synopsis, line, source, document_id, parts.text, %{}, content_span)
+        {[node], index + 1, diagnostics}
+
+      Classifier.centered?(line) ->
+        parts = Classifier.centered_parts(line)
+        content_span = span_from_local(line, parts.content_offset, parts.content_bytes)
+        node = single_node(:centered, line, source, document_id, parts.text, %{}, content_span)
+        {[node], index + 1, diagnostics}
+
+      true ->
+        parse_story_node(line, source, document_id, index, diagnostics)
+    end
+  end
+
+  defp parse_story_node(line, source, document_id, index, diagnostics) do
+    previous = previous_line(source.lines, index)
+    following = Enum.at(source.lines, index + 1)
+
+    cond do
+      Classifier.lyric?(line) ->
+        {text, span} = strip_prefix(line, "~")
+        {[single_node(:lyric, line, source, document_id, text, %{}, span)], index + 1, diagnostics}
+
+      Classifier.scene_heading?(line, previous, following) ->
+        parts = Classifier.scene_parts(line)
+        span = span_from_local(line, parts.content_offset, parts.content_bytes)
+        attrs = %{forced?: parts.forced?, number: parts.number}
+        {[single_node(:scene_heading, line, source, document_id, parts.heading, attrs, span)], index + 1, diagnostics}
+
+      Classifier.transition?(line, previous, following) ->
+        parts = Classifier.transition_parts(line)
+        span = span_from_local(line, parts.content_offset, parts.content_bytes)
+        attrs = %{forced?: parts.forced?}
+        {[single_node(:transition, line, source, document_id, parts.text, attrs, span)], index + 1, diagnostics}
+
+      Classifier.character?(line, previous, following) ->
+        parse_character_node(line, source, document_id, index, diagnostics)
+
+      Classifier.forced_action?(line) ->
+        {text, span} = strip_prefix(line, "!")
+        {[single_node(:action, line, source, document_id, text, %{forced?: true}, span)], index + 1, diagnostics}
+
+      true ->
+        {taken, next_index} = take_action_lines(source.lines, index, [])
+        node = multi_node(:action, taken, source, document_id, semantic_text(taken), %{forced?: false})
+        {[node], next_index, diagnostics}
+    end
+  end
+
+  defp parse_character_node(line, source, document_id, index, diagnostics) do
+    parts = Classifier.character_parts(line)
+    span = span_from_local(line, parts.content_offset, parts.content_bytes)
+    attrs = %{extension: parts.extension, dual?: parts.dual?, forced?: parts.forced?}
+    cue = single_node(:character, line, source, document_id, parts.name, attrs, span)
+    {dialogue_nodes, next_index} = parse_dialogue(source.lines, source, document_id, index + 1, [])
+    {[cue | dialogue_nodes], next_index, diagnostics}
+  end
+
+  defp maybe_unclosed(diagnostics, true, _code, _name, _span), do: diagnostics
+
+  defp maybe_unclosed(diagnostics, false, code, name, span),
+    do: [diag(:warning, code, "#{name} is not closed before end of file.", span) | diagnostics]
 
   defp parse_dialogue(lines, source, document_id, index, acc) do
     case Enum.at(lines, index) do
-      nil -> {Enum.reverse(acc), index}
-      %Line{content: ""} -> {Enum.reverse(acc), index}
+      nil ->
+        {Enum.reverse(acc), index}
+
+      %Line{content: ""} ->
+        {Enum.reverse(acc), index}
+
       line ->
-        trimmed = Classifier.trimmed(line)
-        parenthetical? = String.starts_with?(trimmed, "(") and String.ends_with?(trimmed, ")")
-        type = if parenthetical?, do: :parenthetical, else: :dialogue
-        text = if Line.whitespace_only?(line), do: "", else: String.trim(line.content)
-        attrs = if Line.whitespace_only?(line), do: %{intentional_blank?: true}, else: %{}
-
-        content_span =
-          if parenthetical? and byte_size(trimmed) >= 2 do
-            inner = binary_part(trimmed, 1, byte_size(trimmed) - 2)
-            offset = match_offset(line.content, inner, match_offset(line.content, "(", 0) + 1)
-            span_from_local(line, offset, byte_size(inner))
-          else
-            line.content_span
-          end
-
-        node = single_node(type, line, source, document_id, Inline.plain(text), attrs, content_span)
+        node = dialogue_node(line, source, document_id)
         parse_dialogue(lines, source, document_id, index + 1, [node | acc])
     end
   end
+
+  defp dialogue_node(line, source, document_id) do
+    trimmed = Classifier.trimmed(line)
+    parenthetical? = String.starts_with?(trimmed, "(") and String.ends_with?(trimmed, ")")
+    type = if parenthetical?, do: :parenthetical, else: :dialogue
+    text = if Line.whitespace_only?(line), do: "", else: String.trim(line.content)
+    attrs = if Line.whitespace_only?(line), do: %{intentional_blank?: true}, else: %{}
+    content_span = dialogue_content_span(line, trimmed, parenthetical?)
+    single_node(type, line, source, document_id, Inline.plain(text), attrs, content_span)
+  end
+
+  defp dialogue_content_span(line, trimmed, true) when byte_size(trimmed) >= 2 do
+    inner = binary_part(trimmed, 1, byte_size(trimmed) - 2)
+    offset = match_offset(line.content, inner, match_offset(line.content, "(", 0) + 1)
+    span_from_local(line, offset, byte_size(inner))
+  end
+
+  defp dialogue_content_span(line, _trimmed, _parenthetical?), do: line.content_span
 
   defp take_action_lines(lines, index, acc) do
     line = Enum.at(lines, index)
@@ -336,23 +321,38 @@ defmodule Fount.Fountain.Parser do
 
   defp top_level_boundary?(lines, index) do
     line = Enum.at(lines, index)
-    previous = Enum.at(lines, index - 1)
+    previous = previous_line(lines, index)
     following = Enum.at(lines, index + 1)
 
-    Classifier.page_break?(line) or Classifier.section?(line) or Classifier.synopsis?(line) or
-      Classifier.lyric?(line) or Classifier.forced_action?(line) or Classifier.centered?(line) or
-      Classifier.standalone_boneyard_start?(line) or Classifier.standalone_note_start?(line) or
-      Classifier.scene_heading?(line, previous, following) or
-      Classifier.transition?(line, previous, following) or
-      Classifier.character?(line, previous, following)
+    simple_boundary? =
+      Enum.any?(
+        [
+          &Classifier.page_break?/1,
+          &Classifier.section?/1,
+          &Classifier.synopsis?/1,
+          &Classifier.lyric?/1,
+          &Classifier.forced_action?/1,
+          &Classifier.centered?/1,
+          &Classifier.standalone_boneyard_start?/1,
+          &Classifier.standalone_note_start?/1
+        ],
+        & &1.(line)
+      )
+
+    simple_boundary? or Classifier.scene_heading?(line, previous, following) or
+      Classifier.transition?(line, previous, following) or Classifier.character?(line, previous, following)
   end
 
   defp take_note_until(lines, index), do: do_take_note_until(lines, index, [])
 
   defp do_take_note_until(lines, index, acc) do
     case Enum.at(lines, index) do
-      nil -> {Enum.reverse(acc), index, false}
-      %Line{content: ""} when acc != [] -> {Enum.reverse(acc), index, false}
+      nil ->
+        {Enum.reverse(acc), index, false}
+
+      %Line{content: ""} when acc != [] ->
+        {Enum.reverse(acc), index, false}
+
       line ->
         next = [line | acc]
 
@@ -370,7 +370,9 @@ defmodule Fount.Fountain.Parser do
 
   defp do_take_until(lines, index, terminator, acc) do
     case Enum.at(lines, index) do
-      nil -> {Enum.reverse(acc), index, false}
+      nil ->
+        {Enum.reverse(acc), index, false}
+
       line ->
         next = [line | acc]
 
@@ -475,7 +477,7 @@ defmodule Fount.Fountain.Parser do
     |> :binary.replace("\r", "\n", [:global])
   end
 
-  defp semantic_text(lines), do: lines |> Enum.map(& &1.content) |> Enum.join("\n")
+  defp semantic_text(lines), do: Enum.map_join(lines, "\n", & &1.content)
 
   defp strip_prefix(line, prefix) do
     source = line.content
@@ -508,6 +510,9 @@ defmodule Fount.Fountain.Parser do
   end
 
   defp raw_text(lines), do: lines |> Enum.map(&Line.raw/1) |> IO.iodata_to_binary()
+
+  defp previous_line(_lines, 0), do: nil
+  defp previous_line(lines, index), do: Enum.at(lines, index - 1)
 
   defp node_id(document_id, type, span, raw) do
     ID.v5(document_id, [Atom.to_string(type), ":", Integer.to_string(span.byte_start), ":", ID.short_hash(raw)])

@@ -18,7 +18,10 @@ defmodule Fount.Semantics.Graph do
   @spec put(t(), Entity.t() | Mention.t() | Relation.t() | Event.t()) :: t()
   def put(%__MODULE__{} = graph, %Entity{} = value), do: %{graph | entities: Map.put(graph.entities, value.id, value)}
   def put(%__MODULE__{} = graph, %Mention{} = value), do: %{graph | mentions: Map.put(graph.mentions, value.id, value)}
-  def put(%__MODULE__{} = graph, %Relation{} = value), do: %{graph | relations: Map.put(graph.relations, value.id, value)}
+
+  def put(%__MODULE__{} = graph, %Relation{} = value),
+    do: %{graph | relations: Map.put(graph.relations, value.id, value)}
+
   def put(%__MODULE__{} = graph, %Event{} = value), do: %{graph | events: Map.put(graph.events, value.id, value)}
 
   @spec entity(t(), String.t()) :: Entity.t() | nil

@@ -1,4 +1,6 @@
 defmodule Fount.Source.Span do
+  import Kernel, except: [length: 1]
+
   @moduledoc """
   Half-open byte range into an exact source binary.
 

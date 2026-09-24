@@ -172,7 +172,10 @@ defmodule Fount.Fountain.Classifier do
     source = safe_text(line)
     leading = leading_bytes(source)
     trimmed = String.trim(source)
-    after_marker = if String.starts_with?(trimmed, "="), do: binary_part(trimmed, 1, byte_size(trimmed) - 1), else: trimmed
+
+    after_marker =
+      if String.starts_with?(trimmed, "="), do: binary_part(trimmed, 1, byte_size(trimmed) - 1), else: trimmed
+
     inner_leading = leading_bytes(after_marker)
     text = String.trim(after_marker)
 

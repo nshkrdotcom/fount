@@ -10,6 +10,9 @@ defmodule Fount.Identity do
   alias Fount.IR
   alias Fount.IR.{Element, Script, TitlePage}
 
+  @known_types ~w(scene_heading action character dialogue parenthetical transition centered lyric section synopsis page_break note boneyard blank)
+               |> Map.new(&{&1, String.to_atom(&1)})
+
   @type hint :: %{
           required(:old_id) => String.t(),
           required(:type) => atom(),
@@ -31,6 +34,32 @@ defmodule Fount.Identity do
   @spec anchors(Script.t()) :: [map()]
   def anchors(%Script{} = script) do
     element_anchors(script.elements) ++ title_anchors(script.title_page)
+  end
+
+  @doc "Warn when a reparse changes a source-backed object without a confident identity match."
+  @spec reconciliation_diagnostics(Script.t(), Script.t()) :: [Fount.Diagnostic.t()]
+  def reconciliation_diagnostics(%Script{} = old, %Script{} = new) do
+    old_ids = MapSet.new(Enum.map(old.elements, & &1.id))
+    new_ids = MapSet.new(Enum.map(new.elements, & &1.id))
+
+    unmatched_types =
+      new.elements
+      |> Enum.reject(&MapSet.member?(old_ids, &1.id))
+      |> Enum.map(& &1.type)
+      |> MapSet.new()
+
+    old.elements
+    |> Enum.reject(&MapSet.member?(new_ids, &1.id))
+    |> Enum.filter(&MapSet.member?(unmatched_types, &1.type))
+    |> Enum.map(fn element ->
+      %Fount.Diagnostic{
+        severity: :warning,
+        code: :identity_not_retained,
+        message: "Could not safely retain #{element.type} identity after source change.",
+        span: element.source_span,
+        node_id: element.id
+      }
+    end)
   end
 
   @doc "Restore persisted IDs by semantic signature and local context."
@@ -105,11 +134,31 @@ defmodule Fount.Identity do
   defp contextual_title_map(anchors, %TitlePage{entries: entries}) do
     signatures = Enum.map(entries, &title_signature/1)
     candidates = candidate_indexes(signatures)
+    title_anchors = Enum.filter(anchors, &(&1["scope"] == "title_page"))
 
-    anchors
-    |> Enum.filter(&(&1["scope"] == "title_page"))
-    |> Enum.sort_by(&anchor_ordinal/1)
-    |> match_anchors(entries, signatures, candidates, &title_anchor_signature/1)
+    exact =
+      title_anchors
+      |> Enum.sort_by(&anchor_ordinal/1)
+      |> match_anchors(entries, signatures, candidates, &title_anchor_signature/1)
+
+    retain_unique_title_keys(exact, title_anchors, entries)
+  end
+
+  defp retain_unique_title_keys(id_map, anchors, entries) do
+    old_counts = Enum.frequencies_by(anchors, & &1["key"])
+    new_counts = Enum.frequencies_by(entries, & &1.key)
+    used_old = MapSet.new(Map.values(id_map))
+
+    Enum.reduce(anchors, id_map, fn anchor, acc ->
+      key = anchor["key"]
+
+      if old_counts[key] == 1 and new_counts[key] == 1 and not MapSet.member?(used_old, anchor["id"]) do
+        entry = Enum.find(entries, &(&1.key == key))
+        Map.put_new(acc, entry.id, anchor["id"])
+      else
+        acc
+      end
+    end)
   end
 
   defp candidate_indexes(signatures) do
@@ -176,19 +225,18 @@ defmodule Fount.Identity do
   defp title_anchor_signature(anchor), do: {anchor["key"], anchor["value_hash"]}
 
   defp apply_hints(id_map, %Script{} = new, hints) do
-    Enum.reduce(hints, id_map, fn hint, acc ->
-      old_id = hint.old_id
-      used_old_ids = acc |> Map.values() |> MapSet.new()
+    Enum.reduce(hints, id_map, &apply_hint(&1, &2, new.elements))
+  end
 
-      if MapSet.member?(used_old_ids, old_id) do
-        acc
-      else
-        case best_hint_target(new.elements, hint, acc |> Map.keys() |> MapSet.new()) do
-          nil -> acc
-          %Element{} = element -> Map.put(acc, element.id, old_id)
-        end
+  defp apply_hint(hint, id_map, elements) do
+    if hint.old_id in Map.values(id_map) do
+      id_map
+    else
+      case best_hint_target(elements, hint, MapSet.new(Map.keys(id_map))) do
+        nil -> id_map
+        %Element{} = element -> Map.put(id_map, element.id, hint.old_id)
       end
-    end)
+    end
   end
 
   defp best_hint_target(elements, hint, already_mapped) do
@@ -233,25 +281,7 @@ defmodule Fount.Identity do
 
   defp safe_type(type) when is_atom(type), do: type
 
-  defp safe_type(type) when is_binary(type) do
-    case type do
-      "scene_heading" -> :scene_heading
-      "action" -> :action
-      "character" -> :character
-      "dialogue" -> :dialogue
-      "parenthetical" -> :parenthetical
-      "transition" -> :transition
-      "centered" -> :centered
-      "lyric" -> :lyric
-      "section" -> :section
-      "synopsis" -> :synopsis
-      "page_break" -> :page_break
-      "note" -> :note
-      "boneyard" -> :boneyard
-      "blank" -> :blank
-      _ -> :unknown
-    end
-  end
+  defp safe_type(type) when is_binary(type), do: Map.get(@known_types, type, :unknown)
 
   defp safe_type(_), do: :unknown
 end

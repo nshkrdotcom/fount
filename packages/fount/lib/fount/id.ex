@@ -44,7 +44,15 @@ defmodule Fount.ID do
 
   defp encode(<<a::32, b::16, c::16, d::16, e::48>>) do
     IO.iodata_to_binary([
-      hex(a, 8), "-", hex(b, 4), "-", hex(c, 4), "-", hex(d, 4), "-", hex(e, 12)
+      hex(a, 8),
+      "-",
+      hex(b, 4),
+      "-",
+      hex(c, 4),
+      "-",
+      hex(d, 4),
+      "-",
+      hex(e, 12)
     ])
   end
 

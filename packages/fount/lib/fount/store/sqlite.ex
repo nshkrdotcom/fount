@@ -7,6 +7,10 @@ defmodule Fount.Store.SQLite do
   """
   @behaviour Fount.Store
 
+  # Exqlite is optional for downstream applications. Compile the adapter even
+  # when its API is absent; available?/0 guards every entry point.
+  @compile {:no_warn_undefined, Exqlite.Sqlite3}
+
   alias Exqlite.Sqlite3
   alias Fount.Store.Snapshot
 
@@ -51,54 +55,57 @@ defmodule Fount.Store.SQLite do
     now = DateTime.utc_now() |> DateTime.to_iso8601()
 
     with_connection(store, fn conn ->
-      transaction(conn, fn ->
-        with :ok <-
-               exec(
-                 conn,
-                 """
-                 INSERT OR IGNORE INTO revisions
-                   (key, revision_id, parent_revision_id, source, snapshot_json, inserted_at)
-                 VALUES (?, ?, ?, ?, ?, ?)
-                 """,
-                 [key, doc.revision.id, doc.revision.parent_id, {:blob, doc.source.raw}, snapshot, now]
-               ),
-             :ok <-
-               exec(
-                 conn,
-                 """
-                 INSERT INTO documents (key, document_id, revision_id, source, snapshot_json, updated_at)
-                 VALUES (?, ?, ?, ?, ?, ?)
-                 ON CONFLICT(key) DO UPDATE SET
-                   document_id=excluded.document_id,
-                   revision_id=excluded.revision_id,
-                   source=excluded.source,
-                   snapshot_json=excluded.snapshot_json,
-                   updated_at=excluded.updated_at
-                 """,
-                 [key, doc.id, doc.revision.id, {:blob, doc.source.raw}, snapshot, now]
-               ) do
-          :ok
-        end
-      end)
+      transaction(conn, fn -> save_document(conn, key, doc, snapshot, now) end)
     end)
+  end
+
+  defp save_document(conn, key, doc, snapshot, now) do
+    with :ok <-
+           exec(
+             conn,
+             """
+             INSERT OR IGNORE INTO revisions
+               (key, revision_id, parent_revision_id, source, snapshot_json, inserted_at)
+             VALUES (?, ?, ?, ?, ?, ?)
+             """,
+             [key, doc.revision.id, doc.revision.parent_id, {:blob, doc.source.raw}, snapshot, now]
+           ) do
+      exec(
+        conn,
+        """
+        INSERT INTO documents (key, document_id, revision_id, source, snapshot_json, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+        ON CONFLICT(key) DO UPDATE SET
+          document_id=excluded.document_id,
+          revision_id=excluded.revision_id,
+          source=excluded.source,
+          snapshot_json=excluded.snapshot_json,
+          updated_at=excluded.updated_at
+        """,
+        [key, doc.id, doc.revision.id, {:blob, doc.source.raw}, snapshot, now]
+      )
+    end
   end
 
   @impl true
   def load(%__MODULE__{} = store, key, _opts) do
     with_connection(store, fn conn ->
-      case one(conn, "SELECT source, snapshot_json FROM documents WHERE key = ?", [key]) do
-        {:ok, [source, snapshot_json]} ->
-          with {:ok, snapshot} <- Snapshot.decode(snapshot_json) do
-            Fount.parse(source, Snapshot.parse_options(snapshot))
-          end
-
-        {:ok, nil} ->
-          {:error, :not_found}
-
-        error ->
-          error
-      end
+      load_document(conn, key)
     end)
+  end
+
+  defp load_document(conn, key) do
+    case one(conn, "SELECT source, snapshot_json FROM documents WHERE key = ?", [key]) do
+      {:ok, [source, snapshot_json]} -> parse_saved_document(source, snapshot_json)
+      {:ok, nil} -> {:error, :not_found}
+      error -> error
+    end
+  end
+
+  defp parse_saved_document(source, snapshot_json) do
+    with {:ok, snapshot} <- Snapshot.decode(snapshot_json) do
+      Fount.parse(source, Snapshot.parse_options(snapshot))
+    end
   end
 
   @impl true
@@ -127,13 +134,14 @@ defmodule Fount.Store.SQLite do
   @impl true
   def delete(%__MODULE__{} = store, key, _opts) do
     with_connection(store, fn conn ->
-      transaction(conn, fn ->
-        with :ok <- exec(conn, "DELETE FROM documents WHERE key = ?", [key]),
-             :ok <- exec(conn, "DELETE FROM revisions WHERE key = ?", [key]) do
-          :ok
-        end
-      end)
+      transaction(conn, fn -> delete_document(conn, key) end)
     end)
+  end
+
+  defp delete_document(conn, key) do
+    with :ok <- exec(conn, "DELETE FROM documents WHERE key = ?", [key]) do
+      exec(conn, "DELETE FROM revisions WHERE key = ?", [key])
+    end
   end
 
   @spec history(%__MODULE__{}, String.t()) :: {:ok, [map()]} | {:error, term()}
@@ -175,18 +183,11 @@ defmodule Fount.Store.SQLite do
     with :ok <- Sqlite3.execute(conn, "BEGIN IMMEDIATE") do
       case fun.() do
         :ok ->
-          case Sqlite3.execute(conn, "COMMIT") do
-            :ok -> :ok
-            {:error, _} = error -> error
-          end
+          Sqlite3.execute(conn, "COMMIT")
 
         {:error, _} = error ->
           _ = Sqlite3.execute(conn, "ROLLBACK")
           error
-
-        other ->
-          _ = Sqlite3.execute(conn, "ROLLBACK")
-          {:error, {:invalid_transaction_result, other}}
       end
     end
   end

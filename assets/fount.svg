@@ -1,0 +1,166 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200" role="img" aria-label="Fount Logo">
+  <defs>
+    <!-- Background Gradient -->
+    <linearGradient id="fountBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0a0d14"/>
+      <stop offset="45%" stop-color="#121824"/>
+      <stop offset="100%" stop-color="#07090e"/>
+    </linearGradient>
+
+    <!-- Metallic Gold Outer Hex Rim -->
+    <linearGradient id="goldRim" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fef08a"/>
+      <stop offset="25%" stop-color="#d97706"/>
+      <stop offset="50%" stop-color="#fbbf24"/>
+      <stop offset="75%" stop-color="#b45309"/>
+      <stop offset="100%" stop-color="#fef3c7"/>
+    </linearGradient>
+
+    <!-- Inner Bevel Accent -->
+    <linearGradient id="innerGlow" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.3"/>
+      <stop offset="50%" stop-color="#f59e0b" stop-opacity="0.4"/>
+      <stop offset="100%" stop-color="#fbbf24" stop-opacity="0.7"/>
+    </linearGradient>
+
+    <!-- Nib Shading Gradients -->
+    <linearGradient id="nibLeft" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fef3c7"/>
+      <stop offset="40%" stop-color="#f59e0b"/>
+      <stop offset="100%" stop-color="#78350f"/>
+    </linearGradient>
+
+    <linearGradient id="nibRight" x1="100%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#fffbeb"/>
+      <stop offset="40%" stop-color="#fbbf24"/>
+      <stop offset="100%" stop-color="#92400e"/>
+    </linearGradient>
+
+    <linearGradient id="nibInlay" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.9"/>
+      <stop offset="50%" stop-color="#0284c7" stop-opacity="0.6"/>
+      <stop offset="100%" stop-color="#0369a1" stop-opacity="0.2"/>
+    </linearGradient>
+
+    <!-- Lens Flare / Projector Light Beam -->
+    <radialGradient id="apertureGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#fef9c3" stop-opacity="1"/>
+      <stop offset="35%" stop-color="#38bdf8" stop-opacity="0.8"/>
+      <stop offset="70%" stop-color="#0284c7" stop-opacity="0.3"/>
+      <stop offset="100%" stop-color="#0284c7" stop-opacity="0"/>
+    </radialGradient>
+
+    <linearGradient id="beamGrad" x1="50%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.25"/>
+      <stop offset="100%" stop-color="#fbbf24" stop-opacity="0.0"/>
+    </linearGradient>
+
+    <!-- Drop Shadow Filter -->
+    <filter id="hexShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#000000" flood-opacity="0.75"/>
+    </filter>
+  </defs>
+
+  <!-- Outer Hexagon (Pointy-topped) -->
+  <polygon points="100,12 176,56 176,144 100,188 24,144 24,56"
+           fill="url(#fountBg)"
+           stroke="url(#goldRim)"
+           stroke-width="4.5"
+           stroke-linejoin="round"
+           filter="url(#hexShadow)"/>
+
+  <!-- Inner Hexagon Accent Border -->
+  <polygon points="100,20 169,60 169,140 100,180 31,140 31,60"
+           fill="none"
+           stroke="url(#innerGlow)"
+           stroke-width="1.2"
+           stroke-linejoin="round"
+           opacity="0.7"/>
+
+  <!-- Screenplay Script Margins / Cinematic Grid Guides -->
+  <g opacity="0.18" stroke="#38bdf8" stroke-width="0.75" stroke-dasharray="2,3">
+    <!-- Action Line Guide -->
+    <line x1="48" y1="52" x2="48" y2="148"/>
+    <!-- Dialogue Cue Guides (Centered indentations) -->
+    <line x1="78" y1="42" x2="78" y2="158"/>
+    <line x1="122" y1="42" x2="122" y2="158"/>
+    <!-- Parenthetical Guide -->
+    <line x1="152" y1="52" x2="152" y2="148"/>
+  </g>
+
+  <!-- Anamorphic Light Fan / Spotlight Projection Cone -->
+  <polygon points="100,28 156,150 44,150"
+           fill="url(#beamGrad)"
+           opacity="0.65"/>
+
+  <!-- Side Filmstrip Sprocket Perforations (Art Deco Integration) -->
+  <g fill="#fbbf24" opacity="0.35">
+    <!-- Left perforations -->
+    <rect x="36" y="70" width="5" height="7" rx="1.5"/>
+    <rect x="36" y="84" width="5" height="7" rx="1.5"/>
+    <rect x="36" y="98" width="5" height="7" rx="1.5"/>
+    <rect x="36" y="112" width="5" height="7" rx="1.5"/>
+    <rect x="36" y="126" width="5" height="7" rx="1.5"/>
+
+    <!-- Right perforations -->
+    <rect x="159" y="70" width="5" height="7" rx="1.5"/>
+    <rect x="159" y="84" width="5" height="7" rx="1.5"/>
+    <rect x="159" y="98" width="5" height="7" rx="1.5"/>
+    <rect x="159" y="112" width="5" height="7" rx="1.5"/>
+    <rect x="159" y="126" width="5" height="7" rx="1.5"/>
+  </g>
+
+  <!-- Central Hollywood Fountain Pen Nib Assembly -->
+  <!-- Left Nib Blade / Wing -->
+  <path d="M100,168 L98.5,168 Q88,142 80,122 C72,102 67,82 67,64 L86,40 L100,40 Z"
+        fill="url(#nibLeft)"/>
+
+  <!-- Right Nib Blade / Wing -->
+  <path d="M100,168 L101.5,168 Q112,142 120,122 C128,102 133,82 133,64 L114,40 L100,40 Z"
+        fill="url(#nibRight)"/>
+
+  <!-- Art Deco Inner Facet Filigree / Chevron Relief -->
+  <path d="M100,52 L82,68 C83,86 89,102 96,118 L100,118 Z"
+        fill="url(#nibInlay)"
+        opacity="0.85"/>
+  <path d="M100,52 L118,68 C117,86 111,102 104,118 L100,118 Z"
+        fill="url(#nibInlay)"
+        opacity="0.6"/>
+
+  <!-- Decorative Nib Breather Rib / Screenplay Arch -->
+  <path d="M78,64 Q100,48 122,64"
+        fill="none"
+        stroke="#fef08a"
+        stroke-width="1.8"
+        stroke-linecap="round"/>
+  <path d="M84,76 Q100,64 116,76"
+        fill="none"
+        stroke="#fef3c7"
+        stroke-width="1"
+        stroke-linecap="round"
+        opacity="0.7"/>
+
+  <!-- Breather Hole: Styled as a Camera Lens / Projector Shutter Aperture -->
+  <circle cx="100" cy="100" r="14" fill="#090d16" stroke="url(#goldRim)" stroke-width="2"/>
+  <circle cx="100" cy="100" r="10" fill="url(#apertureGlow)"/>
+
+  <!-- Camera Aperture Blades inside Breather Hole -->
+  <g stroke="#090d16" stroke-width="1.2" fill="none" opacity="0.85">
+    <path d="M96,91 L106,94"/>
+    <path d="M106,94 L108,104"/>
+    <path d="M108,104 L100,109"/>
+    <path d="M100,109 L92,104"/>
+    <path d="M92,104 L94,94"/>
+  </g>
+  <circle cx="100" cy="100" r="3.5" fill="#ffffff" opacity="0.95"/>
+
+  <!-- Nib Slit (Tine Separation) extending to the ultra-fine Tip -->
+  <line x1="100" y1="114" x2="100" y2="169"
+        stroke="#06090e"
+        stroke-width="1.5"
+        stroke-linecap="square"/>
+
+  <!-- Iridium Tip Point Accent -->
+  <circle cx="100" cy="169" r="1.8" fill="#fef08a"/>
+  <circle cx="100" cy="169" r="3.5" fill="#38bdf8" opacity="0.4"/>
+</svg>

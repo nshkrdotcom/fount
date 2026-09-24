@@ -18,6 +18,7 @@ defmodule Fount.Persistence.Codec do
       "turns" => Enum.map(screenplay.ir.dialogue_blocks, &plain/1),
       "cast" => Enum.map(Map.values(screenplay.cast), &plain/1),
       "mentions" => Enum.map(Map.values(screenplay.mentions), &plain/1),
+      "authored_items" => plain(screenplay.authored_items),
       "annotations" => Enum.map(Map.values(screenplay.annotations || %{}), &plain/1)
     }
   end
@@ -64,7 +65,16 @@ defmodule Fount.Persistence.Codec do
         {annotation.id, annotation}
       end)
 
-    %Screenplay{id: data["id"], revision: revision, ir: ir, cast: cast, mentions: mentions, annotations: annotations}
+    %Screenplay{
+      id: data["id"],
+      revision: revision,
+      ir: ir,
+      cast: cast,
+      mentions: mentions,
+      annotations: annotations,
+      authored_items: data["authored_items"] || %{}
+    }
+    |> Fount.Screenplay.Model.refresh()
   end
 
   defp decode_annotation(value) do

@@ -7,8 +7,12 @@ defmodule FountProbe.Writing.Executor do
   """
 
   @defaults [
-    max_concurrency: 4, max_pending: 8, ordered: false, on_error: :collect,
-    task_timeout_ms: 120_000, attempt_timeout_ms: 60_000
+    max_concurrency: 4,
+    max_pending: 8,
+    ordered: false,
+    on_error: :collect,
+    task_timeout_ms: 120_000,
+    attempt_timeout_ms: 60_000
   ]
 
   def evaluate(client, requests, questions, opts \\ []) do
@@ -22,8 +26,10 @@ defmodule FountProbe.Writing.Executor do
       case result do
         {:error, error} ->
           {:error, error}
+
         {:ok, stream} ->
           collect(stream, requests, prepared, started)
+
         stream ->
           collect(stream, requests, prepared, started)
       end
@@ -41,6 +47,7 @@ defmodule FountProbe.Writing.Executor do
           else
             {Map.put(by_index, n, item), errors}
           end
+
         _ ->
           {by_index, [%{"code" => "invalid_batch_index"} | errors]}
       end
@@ -64,7 +71,9 @@ defmodule FountProbe.Writing.Executor do
         "received" => map_size(by_index),
         "status" =>
           if(errors == [] and Enum.all?(entries, &match?({:ok, _}, &1["result"])),
-            do: "complete", else: "partial")
+            do: "complete",
+            else: "partial"
+          )
       }
     end)
   end
@@ -72,17 +81,20 @@ defmodule FountProbe.Writing.Executor do
   defp collect(stream, requests, prepared, started) do
     result = assemble(requests, Enum.to_list(stream))
 
-    {:ok, Map.merge(result, %{
-      "prepared_fingerprint" => SystemOneSDK.Prepared.fingerprint(prepared),
-      "elapsed_ms" => System.monotonic_time(:millisecond) - started
-    })}
+    {:ok,
+     Map.merge(result, %{
+       "prepared_fingerprint" => SystemOneSDK.Prepared.fingerprint(prepared),
+       "elapsed_ms" => System.monotonic_time(:millisecond) - started
+     })}
   end
 
   defp index({:ok, response}), do: Map.get(response, :batch_index)
+
   defp index({:error, error}) when is_map(error) do
     details = Map.get(error, :details, %{}) || %{}
     Map.get(details, :batch_index) || Map.get(details, "batch_index")
   end
+
   defp index(_), do: nil
 
   defp validate_requests(requests) when is_list(requests) and requests != [] do
@@ -90,10 +102,13 @@ defmodule FountProbe.Writing.Executor do
       Enum.all?(requests, fn
         %{"id" => id, "state" => state} when is_binary(id) and is_binary(state) ->
           id != "" and String.valid?(state)
-        _ -> false
+
+        _ ->
+          false
       end)
 
     ids = if valid, do: Enum.map(requests, & &1["id"]), else: []
+
     cond do
       not valid -> {:error, :invalid_requests}
       length(ids) != length(Enum.uniq(ids)) -> {:error, :duplicate_request_ids}

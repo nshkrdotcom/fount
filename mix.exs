@@ -22,17 +22,7 @@ defmodule Fount.Workspace.MixProject do
   def blitz_env(context) do
     env = [{"MIX_ENV", context.task_config.mix_env}]
 
-    if context.task == :test do
-      {variable, default} =
-        case context.project_path do
-          "packages/fount" -> {"FOUNT_TEST_DATABASE", "fount_test"}
-          "packages/fount_workshop" -> {"FOUNT_WORKSHOP_TEST_DATABASE", "fount_workshop_test"}
-        end
-
-      [{"FOUNT_TEST_DATABASE", System.get_env(variable, default)} | env]
-    else
-      env
-    end
+    env
   end
 
   defp workspace_dep(committed) do
@@ -67,7 +57,7 @@ defmodule Fount.Workspace.MixProject do
   defp blitz_workspace do
     [
       root: __DIR__,
-      projects: ["packages/fount", "packages/fount_workshop"],
+      projects: ["packages/fount", "packages/fount_probe", "packages/fount_workshop"],
       isolation: [deps_path: true, build_path: true, lockfile: true, hex_home: "_build/hex"],
       parallelism: [
         multiplier: :auto,
@@ -88,7 +78,7 @@ defmodule Fount.Workspace.MixProject do
             deps_get: [args: ["deps.get"], preflight?: false],
             format: [args: ["format"]],
             lock_check: [args: ["deps.unlock", "--check-unused"]],
-            compile: [args: ["compile", "--warnings-as-errors"]],
+            compile: [args: ["compile", "--warnings-as-errors"], mix_env: "test"],
             test: [args: ["test"], mix_env: "test", color: true],
             credo: [args: ["credo"]],
             dialyzer: [args: ["dialyzer"]],

@@ -63,21 +63,25 @@ defmodule Fount.Writing.LocalReferences do
 
   defp declaration(%{"local_id" => "new:" <> label = local} = object, acc) do
     cond do
-      Map.has_key?(object, "id") -> {:error, {:conflicting_identity, local}}
+      Map.has_key?(object, "id") ->
+        {:error, {:conflicting_identity, local}}
+
       label == "" or not Regex.match?(~r/^[A-Za-z0-9][A-Za-z0-9_.:-]*$/, label) ->
         {:error, {:invalid_local_id, local}}
-      true -> {:ok, acc ++ [local]}
+
+      true ->
+        {:ok, acc ++ [local]}
     end
   end
 
   defp declaration(%{"local_id" => value}, _acc),
     do: {:error, {:invalid_local_id, value}}
+
   defp declaration(_, acc), do: {:ok, acc}
 
   defp unique(labels) do
     duplicates =
-      labels |> Enum.frequencies() |> Enum.filter(fn {_, n} -> n > 1 end)
-      |> Enum.map(&elem(&1, 0)) |> Enum.sort()
+      labels |> Enum.frequencies() |> Enum.filter(fn {_, n} -> n > 1 end) |> Enum.map(&elem(&1, 0)) |> Enum.sort()
 
     if duplicates == [], do: :ok, else: {:error, {:duplicate_local_ids, duplicates}}
   end
@@ -95,6 +99,7 @@ defmodule Fount.Writing.LocalReferences do
 
   defp valid_uuid?(value) when is_binary(value),
     do: Regex.match?(~r/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/, value)
+
   defp valid_uuid?(_), do: false
 
   defp rewrite(map, mapping, _key) when is_map(map) do
@@ -110,7 +115,9 @@ defmodule Fount.Writing.LocalReferences do
         {:ok, rewritten} ->
           output_key = if key == "local_id", do: "id", else: key
           {:cont, {:ok, Map.put(output, output_key, rewritten)}}
-        error -> {:halt, error}
+
+        error ->
+          {:halt, error}
       end
     end)
   end

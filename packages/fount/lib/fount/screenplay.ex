@@ -1,4 +1,6 @@
 defmodule Fount.Screenplay do
+  import Kernel, except: [apply: 2, apply: 3]
+
   @moduledoc """
   Format-independent screenplay being authored by the writer.
 
@@ -16,7 +18,7 @@ defmodule Fount.Screenplay do
   alias Fount.Revision
 
   @enforce_keys [:id, :revision, :ir]
-  defstruct [:id, :revision, :ir, :import, cast: %{}, mentions: %{}, annotations: %{}]
+  defstruct [:id, :revision, :ir, :import, cast: %{}, mentions: %{}, annotations: %{}, authored_items: %{}, index: nil]
 
   @type t :: %__MODULE__{
           id: String.t(),
@@ -52,12 +54,19 @@ defmodule Fount.Screenplay do
       }
       |> refresh_outline()
 
-    %__MODULE__{id: id, revision: revision(nil), ir: ir}
+    %__MODULE__{
+      id: id,
+      revision: revision(nil),
+      ir: ir,
+      cast: Keyword.get(opts, :cast, %{}),
+      authored_items: Keyword.get(opts, :authored_items, %{})
+    }
+    |> Fount.Screenplay.Model.refresh()
   end
 
   @doc "Adopts a parsed Fountain document without making its source the edit authority."
   @spec from_document(Fount.Document.t()) :: t()
-  def from_document(doc) do
+  def from_document(doc, opts \\ []) do
     %__MODULE__{
       id: doc.id,
       revision: revision(nil),
@@ -65,6 +74,8 @@ defmodule Fount.Screenplay do
       annotations: doc.annotations,
       import: %{format: :fountain, bytes: doc.source.raw, revision_id: nil}
     }
+    |> Fount.Screenplay.Model.resolve_cast(Keyword.get(opts, :cast_resolution, :manual))
+    |> Fount.Screenplay.Model.refresh()
     |> bind_import_revision()
   end
 
@@ -73,7 +84,16 @@ defmodule Fount.Screenplay do
   def from_fdx(xml, opts \\ []) do
     with {:ok, result} <- FDX.decode(xml, opts) do
       model = from_document(result.document)
-      import = %{format: :fdx, bytes: xml, revision_id: model.revision.id, losses: result.losses}
+
+      import = %{
+        format: :fdx,
+        bytes: xml,
+        revision_id: model.revision.id,
+        render_hash: model.revision.render_hash,
+        id: ID.v4(),
+        losses: result.losses
+      }
+
       {:ok, %{model | import: import}, result.losses}
     end
   end
@@ -81,11 +101,15 @@ defmodule Fount.Screenplay do
   @doc "Exports the current canonical screenplay as FDX with adapter fidelity losses."
   @spec to_fdx(t()) :: {:ok, ExportResult.t()} | {:error, term()}
 
-  def to_fdx(%__MODULE__{import: %{format: :fdx, bytes: bytes, revision_id: revision}} = model)
-      when revision == model.revision.id,
-      do: {:ok, %ExportResult{data: bytes}}
+  def to_fdx(%__MODULE__{import: %{format: :fdx, bytes: bytes, render_hash: hash}} = model) do
+    if hash == Fount.Screenplay.Model.refresh(model).revision.render_hash,
+      do: {:ok, %ExportResult{data: bytes}},
+      else: regenerate_fdx(model)
+  end
 
-  def to_fdx(%__MODULE__{} = model) do
+  def to_fdx(%__MODULE__{} = model), do: regenerate_fdx(model)
+
+  defp regenerate_fdx(model) do
     with {:ok, document} <- Fount.parse(to_fountain(model)),
          {:ok, result} <- FDX.export(document) do
       import_losses = if model.import, do: model.import[:losses] || [], else: []
@@ -97,19 +121,25 @@ defmodule Fount.Screenplay do
   @spec to_fountain(t(), keyword()) :: binary()
   def to_fountain(screenplay, opts \\ [])
 
-  def to_fountain(%__MODULE__{import: %{format: :fountain, bytes: bytes, revision_id: revision}} = screenplay, _opts)
-      when revision == screenplay.revision.id,
-      do: bytes
-
-  def to_fountain(%__MODULE__{ir: ir}, opts),
-    do: Serializer.serialize(ir, Keyword.put(opts, :canonical_spacing, true))
+  def to_fountain(%__MODULE__{} = model, opts) do
+    if model.import && model.import[:format] == :fountain &&
+         model.import[:render_hash] == Fount.Screenplay.Model.refresh(model).revision.render_hash &&
+         Keyword.get(opts, :mode, :archival) == :archival do
+      model.import.bytes
+    else
+      ir = if Keyword.get(opts, :mode) == :spec, do: Fount.Screenplay.Editor.spec_ir(model), else: model.ir
+      Serializer.serialize(ir, Keyword.put(opts, :canonical_spacing, true))
+    end
+  end
 
   @doc "Returns Fountain bytes with an explicit fidelity report for regenerated imports."
   @spec export_fountain(t(), keyword()) :: {:ok, ExportResult.t()}
   def export_fountain(%__MODULE__{} = model, opts \\ []) do
+    current_render_hash = Fount.Screenplay.Model.refresh(model).revision.render_hash
+
     losses =
       case model.import do
-        %{format: :fountain, revision_id: revision} when revision == model.revision.id -> []
+        %{format: :fountain, render_hash: ^current_render_hash} -> []
         %{format: :fountain} -> ["Original Fountain spacing and trivia may change after canonical editing"]
         %{format: :fdx, losses: import_losses} -> import_losses
         _ -> []
@@ -121,16 +151,17 @@ defmodule Fount.Screenplay do
   @doc "Applies typed operations to the model and advances its revision once."
   @spec apply(t(), Fount.Edit.Op.t() | [Fount.Edit.Op.t()]) :: {:ok, t()} | {:error, term()}
   def apply(%__MODULE__{} = screenplay, operations) do
-    operations = List.wrap(operations)
+    case apply(screenplay, List.wrap(operations), []) do
+      {:ok, model, _changes} = result ->
+        if Enum.all?(List.wrap(operations), &is_struct(&1, Fount.Edit.Op)), do: {:ok, model}, else: result
 
-    with {:ok, updated} <- Enum.reduce_while(operations, {:ok, screenplay}, &apply_step/2) do
-      next_revision = revision(screenplay.revision.id)
-      mentions = rebind_mentions(updated, next_revision.id)
-      affected = affected_ids(screenplay, updated)
-      annotations = invalidate_annotations(updated, affected)
-      {:ok, %{updated | revision: next_revision, mentions: mentions, annotations: annotations}}
+      error ->
+        error
     end
   end
+
+  def apply(%__MODULE__{} = screenplay, operations, opts),
+    do: Fount.Screenplay.Editor.apply(screenplay, operations, opts)
 
   @doc "Creates a new head with a prior model's content and identities."
   @spec undo(t(), t()) :: {:ok, t()} | {:error, :different_screenplay}
@@ -180,31 +211,13 @@ defmodule Fount.Screenplay do
 
   defp restore_model(%__MODULE__{id: id} = current, %__MODULE__{id: id} = target, message) do
     next_revision = %{revision(current.revision.id) | message: message}
-    {:ok, %{target | revision: next_revision, mentions: rebind_mentions(target, next_revision.id)}}
+
+    {:ok,
+     %{target | revision: next_revision, mentions: rebind_mentions(target, next_revision.id)}
+     |> Fount.Screenplay.Model.refresh()}
   end
 
   defp restore_model(%__MODULE__{}, %__MODULE__{}, _message), do: {:error, :different_screenplay}
-
-  defp affected_ids(before, after_model) do
-    before_nodes = Map.new(before.ir.elements ++ before.ir.scenes, &{&1.id, &1})
-    after_nodes = Map.new(after_model.ir.elements ++ after_model.ir.scenes, &{&1.id, &1})
-
-    before_nodes
-    |> Enum.filter(fn {id, node} -> Map.get(after_nodes, id) != node end)
-    |> MapSet.new(&elem(&1, 0))
-  end
-
-  defp invalidate_annotations(screenplay, affected) do
-    live =
-      MapSet.new([screenplay.id | Enum.map(screenplay.ir.scenes, & &1.id) ++ Enum.map(screenplay.ir.elements, & &1.id)])
-
-    Map.reject(screenplay.annotations, fn {_id, annotation} ->
-      targets = [annotation.target.node_id | annotation.dependencies || []]
-
-      Enum.any?(targets, &(not MapSet.member?(live, &1))) or
-        (annotation.provenance.producer != "writer" and Enum.any?(targets, &MapSet.member?(affected, &1)))
-    end)
-  end
 
   @doc "Adds a writer-authored cast entry. Aliases are allowed to overlap across characters."
   @spec add_character(t(), String.t(), keyword()) :: {t(), Character.t()}
@@ -219,7 +232,9 @@ defmodule Fount.Screenplay do
 
     updated = %{screenplay | cast: Map.put(screenplay.cast, character.id, character)}
     next_revision = revision(screenplay.revision.id)
-    {%{updated | revision: next_revision, mentions: rebind_mentions(updated, next_revision.id)}, character}
+
+    {%{updated | revision: next_revision, mentions: rebind_mentions(updated, next_revision.id)}
+     |> Fount.Screenplay.Model.refresh(), character}
   end
 
   @doc "Confirms that one literal character cue refers to an authored cast entry."
@@ -248,7 +263,7 @@ defmodule Fount.Screenplay do
         |> Map.reject(fn {_id, item} -> item.element_id == cue_id and item.role == :speaker_cue end)
         |> Map.put(mention.id, mention)
 
-      {:ok, %{screenplay | mentions: mentions, revision: next_revision}}
+      {:ok, %{screenplay | mentions: mentions, revision: next_revision} |> Fount.Screenplay.Model.refresh()}
     else
       nil -> {:error, {:unknown_character_or_cue, character_id, cue_id}}
       _ -> {:error, {:not_a_character_cue, cue_id}}
@@ -316,7 +331,7 @@ defmodule Fount.Screenplay do
       with {:ok, renamed} <- __MODULE__.apply(screenplay, plan.cue_operations),
            %Character{} = character <- Map.get(renamed.cast, plan.character_id) do
         cast = Map.put(renamed.cast, character.id, %{character | display_name: plan.new_name})
-        {:ok, %{renamed | cast: cast}}
+        {:ok, %{renamed | cast: cast} |> Fount.Screenplay.Model.refresh()}
       else
         nil -> {:error, {:unknown_character, plan.character_id}}
         error -> error
@@ -386,190 +401,12 @@ defmodule Fount.Screenplay do
   end
 
   @spec node(t(), String.t()) :: Element.t() | nil
-  def node(%__MODULE__{ir: ir}, id), do: Enum.find(ir.elements, &(&1.id == id))
+  def node(%__MODULE__{} = model, id), do: Fount.Query.node(model, id)
 
   @spec scene(t(), String.t()) :: Scene.t() | nil
-  def scene(%__MODULE__{ir: ir}, id), do: Enum.find(ir.scenes, &(&1.id == id))
+  def scene(%__MODULE__{} = model, id), do: Fount.Query.scene(model, id)
 
-  defp apply_step(op, {:ok, screenplay}) do
-    case apply_one(screenplay, op) do
-      {:ok, updated} -> {:cont, {:ok, updated}}
-      error -> {:halt, error}
-    end
-  end
-
-  defp apply_one(screenplay, %Fount.Edit.Op{kind: :replace_text, target: id, value: text})
-       when is_binary(text) do
-    update_element(screenplay, id, fn element ->
-      %{element | text: text, raw_text: nil, source_span: nil, content_span: nil}
-    end)
-  end
-
-  defp apply_one(screenplay, %Fount.Edit.Op{kind: :set_character_cue, target: id, value: name})
-       when is_binary(name) and name != "" do
-    case node(screenplay, id) do
-      %Element{type: :character} ->
-        {:ok, updated} =
-          update_element(screenplay, id, fn element ->
-            attrs = Map.put(element.attrs || %{}, :forced?, name != String.upcase(name))
-            %{element | text: name, raw_text: nil, source_span: nil, content_span: nil, attrs: attrs}
-          end)
-
-        mentions = Map.new(updated.mentions, &rename_cue_mention(&1, id, name))
-
-        {:ok, %{updated | mentions: mentions}}
-
-      nil ->
-        {:error, {:unknown_element, id}}
-
-      _ ->
-        {:error, {:not_a_character_cue, id}}
-    end
-  end
-
-  defp apply_one(screenplay, %Fount.Edit.Op{kind: :set_scene_heading, target: id, value: heading})
-       when is_binary(heading) do
-    case scene(screenplay, id) do
-      nil ->
-        {:error, {:unknown_scene, id}}
-
-      scene ->
-        update_element(screenplay, scene.heading_id, fn element ->
-          %{
-            element
-            | text: heading,
-              raw_text: nil,
-              source_span: nil,
-              content_span: nil,
-              attrs: Map.put(element.attrs || %{}, :forced?, not Fount.SceneHeading.standard_fountain?(heading))
-          }
-        end)
-    end
-  end
-
-  defp apply_one(screenplay, %Fount.Edit.Op{kind: :omit_scene, target: id, value: omit?})
-       when is_boolean(omit?) do
-    if scene(screenplay, id) do
-      scenes = Enum.map(screenplay.ir.scenes, &set_omission(&1, id, omit?))
-
-      {:ok, %{screenplay | ir: %{screenplay.ir | scenes: scenes}}}
-    else
-      {:error, {:unknown_scene, id}}
-    end
-  end
-
-  defp apply_one(screenplay, %Fount.Edit.Op{kind: :set_scene_number, target: id, value: number})
-       when is_nil(number) or (is_binary(number) and number != "") do
-    case scene(screenplay, id) do
-      nil ->
-        {:error, {:unknown_scene, id}}
-
-      current ->
-        {:ok, update_scene_number(screenplay, current, number)}
-    end
-  end
-
-  defp apply_one(screenplay, %Fount.Edit.Op{kind: :move_scene, target: id, value: after_id}) do
-    cond do
-      is_nil(scene(screenplay, id)) -> {:error, {:unknown_scene, id}}
-      is_nil(scene(screenplay, after_id)) -> {:error, {:unknown_scene, after_id}}
-      id == after_id -> {:ok, screenplay}
-      true -> {:ok, move_scene_after(screenplay, id, after_id)}
-    end
-  end
-
-  defp apply_one(screenplay, %Fount.Edit.Op{kind: :insert_scene_after, target: id, value: value}) do
-    case scene(screenplay, id) do
-      nil ->
-        {:error, {:unknown_scene, id}}
-
-      preceding ->
-        spec = %{heading: value.heading, elements: value.content}
-        {[created], new_elements, new_turns} = build_scenes([spec])
-        after_element = List.last(preceding.element_ids)
-        index = Enum.find_index(screenplay.ir.elements, &(&1.id == after_element))
-        elements = List.insert_at(screenplay.ir.elements, index + 1, new_elements) |> List.flatten()
-        scene_index = Enum.find_index(screenplay.ir.scenes, &(&1.id == id))
-        scenes = List.insert_at(screenplay.ir.scenes, scene_index + 1, created)
-        ordinal = elements |> Enum.with_index() |> Map.new(fn {element, position} -> {element.id, position} end)
-        turns = Enum.sort_by(screenplay.ir.dialogue_blocks ++ new_turns, &Map.fetch!(ordinal, &1.cue_id))
-        ir = %{screenplay.ir | elements: elements, scenes: scenes, dialogue_blocks: turns}
-        {:ok, %{screenplay | ir: refresh_outline(ir)}}
-    end
-  end
-
-  defp apply_one(screenplay, %Fount.Edit.Op{kind: :delete_scene, target: id}) do
-    case scene(screenplay, id) do
-      nil ->
-        {:error, {:unknown_scene, id}}
-
-      removed ->
-        element_ids = MapSet.new(removed.element_ids)
-        elements = Enum.reject(screenplay.ir.elements, &MapSet.member?(element_ids, &1.id))
-        turns = Enum.reject(screenplay.ir.dialogue_blocks, &MapSet.member?(element_ids, &1.cue_id))
-        scenes = Enum.reject(screenplay.ir.scenes, &(&1.id == id))
-        ir = %{screenplay.ir | elements: elements, scenes: scenes, dialogue_blocks: turns}
-        {:ok, %{screenplay | ir: refresh_outline(ir)}}
-    end
-  end
-
-  defp apply_one(_screenplay, op), do: {:error, {:unsupported_model_operation, op.kind}}
-
-  defp rename_cue_mention({id, %{element_id: cue_id, role: :speaker_cue} = mention}, cue_id, name),
-    do: {id, %{mention | surface: name, byte_start: 0, byte_end: byte_size(name)}}
-
-  defp rename_cue_mention(entry, _cue_id, _name), do: entry
-
-  defp update_scene_number(screenplay, current, number) do
-    scenes = Enum.map(screenplay.ir.scenes, &number_scene(&1, current.id, number))
-    elements = Enum.map(screenplay.ir.elements, &number_heading(&1, current.heading_id, number))
-    %{screenplay | ir: %{screenplay.ir | scenes: scenes, elements: elements}}
-  end
-
-  defp number_scene(%{id: id} = scene, id, number), do: %{scene | number: number}
-  defp number_scene(scene, _id, _number), do: scene
-
-  defp number_heading(%{id: id} = element, id, nil),
-    do: %{element | attrs: Map.delete(element.attrs || %{}, :number)}
-
-  defp number_heading(%{id: id} = element, id, number),
-    do: %{element | attrs: Map.put(element.attrs || %{}, :number, number)}
-
-  defp number_heading(element, _id, _number), do: element
-
-  defp move_scene_after(screenplay, id, after_id) do
-    scene_for = Map.new(for scene <- screenplay.ir.scenes, element_id <- scene.element_ids, do: {element_id, scene.id})
-
-    chunks =
-      screenplay.ir.elements
-      |> Enum.chunk_by(&Map.get(scene_for, &1.id))
-      |> Enum.map(fn elements -> {Map.get(scene_for, hd(elements).id), elements} end)
-
-    {moving, remaining} = List.pop_at(chunks, Enum.find_index(chunks, &(elem(&1, 0) == id)))
-    destination = Enum.find_index(remaining, &(elem(&1, 0) == after_id))
-    chunks = List.insert_at(remaining, destination + 1, moving)
-    elements = Enum.flat_map(chunks, &elem(&1, 1))
-    scene_by_id = Map.new(screenplay.ir.scenes, &{&1.id, &1})
-    scenes = for {scene_id, _} <- chunks, scene_id != nil, do: Map.fetch!(scene_by_id, scene_id)
-    ordinal = elements |> Enum.with_index() |> Map.new(fn {element, index} -> {element.id, index} end)
-    turns = Enum.sort_by(screenplay.ir.dialogue_blocks, &Map.fetch!(ordinal, &1.cue_id))
-    ir = %{screenplay.ir | elements: elements, scenes: scenes, dialogue_blocks: turns}
-    %{screenplay | ir: refresh_outline(ir)}
-  end
-
-  defp refresh_outline(ir) do
-    Fount.IR.restore_views(ir)
-  end
-
-  defp update_element(screenplay, id, fun) do
-    if node(screenplay, id) do
-      elements = Enum.map(screenplay.ir.elements, &update_if_target(&1, id, fun))
-
-      {:ok, %{screenplay | ir: %{screenplay.ir | elements: elements}}}
-    else
-      {:error, {:unknown_element, id}}
-    end
-  end
+  defp refresh_outline(ir), do: Fount.IR.restore_views(ir)
 
   defp build_scenes(specs) do
     Enum.reduce(specs, {[], [], []}, fn spec, {scenes, elements, turns} ->
@@ -640,14 +477,6 @@ defmodule Fount.Screenplay do
   defp close_turn(turns, nil), do: turns
   defp close_turn(turns, pending), do: [pending | turns]
 
-  defp update_if_target(element, id, fun) do
-    if element.id == id, do: fun.(element), else: element
-  end
-
-  defp set_omission(scene, id, omit?) do
-    if scene.id == id, do: %{scene | omitted?: omit?}, else: scene
-  end
-
   defp title_page([]), do: nil
 
   defp title_page(entries) do
@@ -660,7 +489,15 @@ defmodule Fount.Screenplay do
   end
 
   defp bind_import_revision(%__MODULE__{import: import} = screenplay),
-    do: %{screenplay | import: %{import | revision_id: screenplay.revision.id}}
+    do: %{
+      screenplay
+      | import:
+          Map.merge(import, %{
+            revision_id: screenplay.revision.id,
+            render_hash: screenplay.revision.render_hash,
+            id: ID.v4()
+          })
+    }
 
   defp revision(parent), do: %Revision{id: ID.v4(), parent_id: parent, created_at: DateTime.utc_now()}
 end

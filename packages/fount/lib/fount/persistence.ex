@@ -1,637 +1,735 @@
 defmodule Fount.Persistence do
-  @moduledoc """
-  Transactional PostgreSQL boundary around Fount's immutable screenplay model.
+  @moduledoc "Immutable PostgreSQL revisions and explicit writer decisions for screenplays."
 
-  Fount owns the tables and queries. Callers start/configure `Fount.Repo`; pure
-  model construction, edits and adapter operations do not require it.
-  """
-
-  import Ecto.Query
-
-  alias Fount.Annotation
-  alias Fount.Annotation.{Provenance, Target}
-  alias Fount.Cast.{Character, Mention}
-  alias Fount.ID
-  alias Fount.IR.{DialogueBlock, Element, Scene, Script, TitlePage}
+  alias Fount.{ID, Screenplay}
   alias Fount.Persistence.Codec
-  alias Fount.Persistence.Schema
-  alias Fount.Revision
-  alias Fount.Screenplay
-  alias Fount.Store.SQLite
+  alias Fount.Screenplay.Model
 
-  @tables [
-    Schema.MentionCandidate,
-    Schema.Mention,
-    Schema.Assertion,
-    Schema.Element,
-    Schema.DialogueTurn,
-    Schema.Scene,
-    Schema.TitleEntry,
-    Schema.CharacterAlias,
-    Schema.Character
-  ]
-
-  @doc "Path to Fount-owned Ecto migrations."
-  @spec migrations_path() :: Path.t()
   def migrations_path, do: Application.app_dir(:fount, "priv/repo/migrations")
 
-  @doc "Saves a validated model as one new head, rejecting a stale expected revision."
-  @spec save(module(), String.t(), Screenplay.t(), keyword()) :: :ok | {:error, term()}
-  def save(repo, key, %Screenplay{} = model, opts \\ []) do
-    with :ok <- validate(model),
-         {:ok, :ok} <- repo.transaction(fn -> save_transaction(repo, key, model, opts) end) do
-      :ok
-    end
-  end
+  def create(repo, key, %Screenplay{} = root, opts \\ []) do
+    root = Model.refresh(root)
 
-  @doc "Loads current typed rows into an immutable screenplay value."
-  @spec load(module(), String.t()) :: {:ok, Screenplay.t()} | {:error, :not_found}
-  def load(repo, key) do
-    {:ok, result} =
-      repo.transaction(fn ->
-        case repo.one(from(s in Schema.Screenplay, where: s.key == ^key, lock: "FOR SHARE")) do
-          nil -> {:error, :not_found}
-          row -> {:ok, load_rows(repo, row)}
-        end
+    with :ok <- validate(root),
+         true <- is_nil(root.revision.parent_id) do
+      transaction(repo, fn ->
+        if one(repo, "SELECT id FROM screenplays WHERE key=$1", [key]), do: rollback(repo, :key_taken)
+        q(repo, "INSERT INTO screenplays(id,key) VALUES($1::uuid,$2)", [root.id, key])
+        insert_revision(repo, root)
+
+        acceptance(
+          repo,
+          root,
+          nil,
+          Keyword.get(opts, :actor, "writer"),
+          Keyword.get(opts, :origin, :writer_edit),
+          Keyword.get(opts, :operations, []),
+          Keyword.get(opts, :provenance, %{}),
+          Keyword.get(opts, :review, %{})
+        )
+
+        set_head(repo, root.id, root.revision.id)
+        root
       end)
-
-    result
-  end
-
-  @doc "Returns immutable historical revision identifiers in creation order."
-  @spec history(module(), String.t()) :: [Revision.t()]
-  def history(repo, key) do
-    case repo.get_by(Schema.Screenplay, key: key) do
-      nil ->
-        []
-
-      row ->
-        repo.all(from(r in Schema.Revision, where: r.screenplay_id == ^row.id, order_by: [r.inserted_at, r.id]))
-        |> Enum.map(&revision_from_row/1)
-    end
-  end
-
-  @doc "Reconstructs an immutable old model snapshot for history or undo."
-  @spec at_revision(module(), String.t()) :: {:ok, Screenplay.t()} | {:error, :not_found}
-  def at_revision(repo, id) do
-    case repo.get(Schema.Revision, id) do
-      nil ->
-        {:error, :not_found}
-
-      row ->
-        model = Codec.decode(row.model)
-        artifact = repo.get_by(Schema.ImportArtifact, screenplay_id: row.screenplay_id, imported_model_revision_id: id)
-        {:ok, attach_import(model, artifact)}
-    end
-  end
-
-  @doc "Imports all revisions of one v1 SQLite Fountain document into this Repo atomically."
-  @spec import_legacy(module(), SQLite.t(), String.t(), String.t()) ::
-          {:ok, Screenplay.t()} | {:error, term()}
-  def import_legacy(repo, legacy, source_key, target_key) do
-    with {:ok, history} <- SQLite.history(legacy, source_key),
-         {:ok, documents} <- legacy_documents(legacy, source_key, history) do
-      repo.transaction(fn -> save_legacy_documents(repo, target_key, documents) end)
-    end
-  end
-
-  defp legacy_documents(legacy, key, history) do
-    Enum.reduce_while(history, {:ok, []}, fn item, {:ok, acc} ->
-      case SQLite.load_revision(legacy, key, item.revision_id) do
-        {:ok, doc} -> {:cont, {:ok, [doc | acc]}}
-        error -> {:halt, error}
-      end
-    end)
-    |> case do
-      {:ok, []} -> {:error, :not_found}
-      {:ok, docs} -> {:ok, Enum.reverse(docs)}
+    else
+      false -> {:error, :root_has_parent}
       error -> error
     end
   end
 
-  defp save_legacy_documents(repo, key, docs) do
-    docs
-    |> Enum.with_index()
-    |> Enum.reduce(nil, fn {doc, index}, previous ->
-      revision_id = ID.v5(doc.id, ["legacy:", doc.revision.id])
-      model = Screenplay.from_document(doc)
+  def save(repo, key, %Screenplay{} = model, opts \\ []),
+    do: save_edit(repo, key, model, opts)
 
-      model = %{
-        model
-        | revision: %{model.revision | id: revision_id},
-          import: %{model.import | revision_id: revision_id}
-      }
+  def save_edit(repo, key, %Screenplay{} = candidate, opts \\ []) do
+    candidate = Model.refresh(candidate)
 
-      expected = if index == 0, do: :new, else: previous.revision.id
+    with :ok <- validate(candidate) do
+      transaction(repo, fn ->
+        row =
+          one(repo, "SELECT id,head_revision_id FROM screenplays WHERE key=$1 FOR UPDATE", [key]) ||
+            rollback(repo, :not_found)
 
-      case save(repo, key, model, expected_revision: expected) do
-        :ok -> model
-        {:error, reason} -> repo.rollback(reason)
+        if row["id"] != candidate.id, do: rollback(repo, :wrong_screenplay)
+        actual = row["head_revision_id"]
+        expected = Keyword.get(opts, :expected_revision, candidate.revision.parent_id)
+        if actual != expected, do: rollback(repo, {:stale_revision, actual})
+        if candidate.revision.parent_id != actual, do: rollback(repo, :wrong_parent)
+
+        if candidate.revision.id == actual do
+          candidate
+        else
+          insert_revision(repo, candidate)
+
+          acceptance(
+            repo,
+            candidate,
+            actual,
+            Keyword.get(opts, :actor, "writer"),
+            Keyword.get(opts, :origin, :writer_edit),
+            Keyword.get(opts, :operations, []),
+            Keyword.get(opts, :provenance, %{}),
+            Keyword.get(opts, :review, %{})
+          )
+
+          set_head(repo, candidate.id, candidate.revision.id)
+          candidate
+        end
+      end)
+    end
+  end
+
+  def load(repo, key) do
+    case one(repo, "SELECT id,head_revision_id FROM screenplays WHERE key=$1", [key]) do
+      nil -> {:error, :not_found}
+      row -> load_revision(repo, row["id"], row["head_revision_id"])
+    end
+  end
+
+  def load_revision(repo, screenplay_id, revision_id) do
+    case one(repo, "SELECT model,artifact_id FROM revisions WHERE screenplay_id=$1::uuid AND id=$2::uuid", [
+           screenplay_id,
+           revision_id
+         ]) do
+      nil ->
+        {:error, :not_found}
+
+      row ->
+        model = Codec.decode(row["model"])
+
+        import =
+          if row["artifact_id"] do
+            artifact =
+              one(
+                repo,
+                "SELECT id,format,original_bytes,render_hash,fidelity FROM import_artifacts WHERE screenplay_id=$1::uuid AND id=$2::uuid",
+                [screenplay_id, row["artifact_id"]]
+              )
+
+            %{
+              id: artifact["id"],
+              format: String.to_existing_atom(artifact["format"]),
+              bytes: artifact["original_bytes"],
+              render_hash: artifact["render_hash"],
+              losses: artifact["fidelity"]["losses"] || [],
+              revision_id: revision_id
+            }
+          end
+
+        {:ok, %{model | import: import}}
+    end
+  end
+
+  def at_revision(repo, revision_id) do
+    case one(repo, "SELECT screenplay_id FROM revisions WHERE id=$1::uuid", [revision_id]) do
+      nil -> {:error, :not_found}
+      row -> load_revision(repo, row["screenplay_id"], revision_id)
+    end
+  end
+
+  def history(repo, screenplay_id, opts \\ []) do
+    id =
+      case one(repo, "SELECT id FROM screenplays WHERE id=$1::uuid OR key=$2", [
+             if(uuid?(screenplay_id), do: screenplay_id, else: ID.v4()),
+             screenplay_id
+           ]) do
+        nil -> nil
+        row -> row["id"]
+      end
+
+    if id do
+      limit = min(max(Keyword.get(opts, :limit, 50), 1), 500)
+
+      head =
+        Keyword.get(opts, :head) ||
+          one(repo, "SELECT head_revision_id FROM screenplays WHERE id=$1::uuid", [id])["head_revision_id"]
+
+      rows =
+        all(
+          repo,
+          "WITH RECURSIVE chain AS (SELECT id,parent_id,inserted_at,actor,message,content_hash,render_hash,0 AS depth FROM revisions WHERE screenplay_id=$1::uuid AND id=$2::uuid UNION ALL SELECT r.id,r.parent_id,r.inserted_at,r.actor,r.message,r.content_hash,r.render_hash,c.depth+1 FROM revisions r JOIN chain c ON r.id=c.parent_id WHERE r.screenplay_id=$1::uuid) SELECT * FROM chain ORDER BY depth LIMIT $3",
+          [id, head, limit]
+        )
+
+      Enum.map(rows, fn row ->
+        %Fount.Revision{
+          id: row["id"],
+          parent_id: row["parent_id"],
+          created_at: row["inserted_at"],
+          actor: row["actor"],
+          message: row["message"],
+          content_hash: row["content_hash"],
+          render_hash: row["render_hash"]
+        }
+      end)
+    else
+      []
+    end
+  end
+
+  @doc "Creates or optimistically updates a durable writing session."
+  def save_session(repo, session) when is_map(session) do
+    id = field(session, :id) || ID.v4()
+    screenplay_id = field(session, :screenplay_id)
+    base_id = field(session, :base_revision_id)
+
+    transaction(repo, fn ->
+      previous = one(repo, "SELECT * FROM writing_sessions WHERE id=$1::uuid FOR UPDATE", [id])
+
+      if previous do
+        if previous["screenplay_id"] != screenplay_id or previous["base_revision_id"] != base_id or
+             previous["request"] != field(session, :request),
+           do: rollback(repo, :immutable_session_fields)
+
+        if previous["lock_version"] != field(session, :lock_version), do: rollback(repo, :stale_session)
+        next = previous["lock_version"] + 1
+
+        q(
+          repo,
+          "UPDATE writing_sessions SET status=$2,strategies=$3::jsonb,progress=$4::jsonb,provenance=$5::jsonb,lock_version=$6,updated_at=now() WHERE id=$1::uuid",
+          [
+            id,
+            field(session, :status) || previous["status"],
+            json(field(session, :strategies) || previous["strategies"]),
+            json(field(session, :progress) || previous["progress"]),
+            json(field(session, :provenance) || previous["provenance"]),
+            next
+          ]
+        )
+
+        Map.put(session, :lock_version, next) |> Map.put(:id, id)
+      else
+        if !one(repo, "SELECT id FROM revisions WHERE screenplay_id=$1::uuid AND id=$2::uuid", [screenplay_id, base_id]),
+           do: rollback(repo, :unknown_base)
+
+        q(
+          repo,
+          "INSERT INTO writing_sessions(id,screenplay_id,base_revision_id,workflow,status,request,strategies,progress,provenance) VALUES($1::uuid,$2::uuid,$3::uuid,$4,$5,$6::jsonb,$7::jsonb,$8::jsonb,$9::jsonb)",
+          [
+            id,
+            screenplay_id,
+            base_id,
+            field(session, :workflow),
+            field(session, :status) || "open",
+            json(field(session, :request) || %{}),
+            json(field(session, :strategies) || []),
+            json(field(session, :progress) || %{}),
+            json(field(session, :provenance) || %{})
+          ]
+        )
+
+        session |> Map.put(:id, id) |> Map.put(:lock_version, 1)
       end
     end)
   end
 
-  defp attach_import(model, nil), do: model
+  @doc "Saves an immutable candidate revision without changing the accepted head."
+  def save_candidate(repo, session_id, candidate) when is_map(candidate) do
+    model = field(candidate, :screenplay) |> Model.refresh()
 
-  defp attach_import(model, artifact) do
-    %{
-      model
-      | import: %{
-          format: String.to_existing_atom(artifact.format),
-          bytes: artifact.original_bytes,
-          revision_id: artifact.imported_model_revision_id,
-          losses: artifact.fidelity["losses"] || []
-        }
-    }
-  end
+    with :ok <- validate(model) do
+      transaction(repo, fn ->
+        session =
+          one(repo, "SELECT * FROM writing_sessions WHERE id=$1::uuid FOR SHARE", [session_id]) ||
+            rollback(repo, :unknown_session)
 
-  defp save_transaction(repo, key, model, opts) do
-    current = repo.one(from(s in Schema.Screenplay, where: s.key == ^key, lock: "FOR UPDATE"))
-    expected = Keyword.get(opts, :expected_revision, :new)
-    actual = if current, do: current.current_revision_id, else: nil
+        if session["screenplay_id"] != model.id or session["base_revision_id"] != model.revision.parent_id,
+          do: rollback(repo, :wrong_base)
 
-    cond do
-      current && current.id != model.id -> repo.rollback(:screenplay_identity_conflict)
-      not expected?(actual, expected) -> repo.rollback({:conflict, actual || :missing})
-      true -> persist(repo, current, key, model, actual, opts)
+        id = field(candidate, :id) || ID.v4()
+        previous = one(repo, "SELECT id,result_revision_id FROM writing_candidates WHERE id=$1::uuid", [id])
+
+        if previous do
+          existing = one(repo, "SELECT content_hash FROM revisions WHERE id=$1::uuid", [previous["result_revision_id"]])
+
+          if previous["result_revision_id"] != model.revision.id or
+               existing["content_hash"] != model.revision.content_hash,
+             do: rollback(repo, :candidate_identity_conflict)
+
+          Map.put(candidate, :id, id)
+        else
+          insert_revision(repo, model)
+
+          q(
+            repo,
+            "INSERT INTO writing_candidates(id,screenplay_id,session_id,base_revision_id,result_revision_id,parent_candidate_id,label,strategy,change_groups,lineage,provenance) VALUES($1::uuid,$2::uuid,$3::uuid,$4::uuid,$5::uuid,$6::uuid,$7,$8::jsonb,$9::jsonb,$10::jsonb,$11::jsonb)",
+            [
+              id,
+              model.id,
+              session_id,
+              model.revision.parent_id,
+              model.revision.id,
+              field(candidate, :parent_candidate_id),
+              field(candidate, :label) || "Candidate",
+              json(field(candidate, :strategy) || %{}),
+              json(field(candidate, :change_groups) || []),
+              json(field(candidate, :lineage) || []),
+              json(field(candidate, :provenance) || %{})
+            ]
+          )
+
+          Map.put(candidate, :id, id)
+        end
+      end)
     end
   end
 
-  defp expected?(nil, :new), do: true
-  defp expected?(actual, actual) when is_binary(actual), do: true
-  defp expected?(_actual, _expected), do: false
+  @doc "Loads a saved candidate and its actual revision value."
+  def candidate(repo, id) do
+    case one(repo, "SELECT * FROM writing_candidates WHERE id=$1::uuid", [id]) do
+      nil ->
+        {:error, :not_found}
 
-  defp persist(repo, current, key, model, parent, opts) do
-    now = DateTime.utc_now()
-    model = %{model | revision: %{model.revision | parent_id: parent}}
-
-    if is_nil(current) do
-      repo.insert!(%Schema.Screenplay{id: model.id, key: key, inserted_at: now, updated_at: now})
+      row ->
+        with {:ok, model} <- load_revision(repo, row["screenplay_id"], row["result_revision_id"]) do
+          {:ok, Map.put(row, "screenplay", model)}
+        end
     end
+  end
 
-    snapshot = Codec.encode(model)
+  def session(repo, id) do
+    case one(repo, "SELECT * FROM writing_sessions WHERE id=$1::uuid", [id]) do
+      nil -> {:error, :not_found}
+      row -> {:ok, row}
+    end
+  end
 
-    repo.insert!(%Schema.Revision{
-      id: model.revision.id,
-      screenplay_id: model.id,
-      parent_id: parent,
-      model: snapshot,
-      model_sha256: ID.hash(Jason.encode!(snapshot)),
-      actor: model.revision.actor,
-      message: model.revision.message,
-      inserted_at: now
-    })
+  def candidates_for_session(repo, session_id) do
+    all(repo, "SELECT id FROM writing_candidates WHERE session_id=$1::uuid ORDER BY inserted_at,id", [session_id])
+    |> Enum.map(fn row ->
+      {:ok, candidate} = candidate(repo, row["id"])
+      candidate
+    end)
+  end
 
-    clear_projection(repo, model.id)
-    insert_projection(repo, model)
-    insert_import(repo, model, now)
-    insert_acceptance(repo, model, parent, opts, now)
+  @doc "Accepts one reviewed candidate atomically when its base remains the head."
+  def accept_candidate(repo, candidate_id, opts) when is_list(opts) do
+    transaction(repo, fn ->
+      row =
+        one(
+          repo,
+          "SELECT c.*,r.content_hash FROM writing_candidates c JOIN revisions r ON r.id=c.result_revision_id WHERE c.id=$1::uuid FOR UPDATE OF c",
+          [candidate_id]
+        ) || rollback(repo, :not_found)
 
-    repo.update_all(from(s in Schema.Screenplay, where: s.id == ^model.id),
-      set: [current_revision_id: model.revision.id, updated_at: now]
+      screenplay =
+        one(repo, "SELECT head_revision_id FROM screenplays WHERE id=$1::uuid FOR UPDATE", [row["screenplay_id"]])
+
+      expected = Keyword.get(opts, :expected_revision)
+      review = Keyword.get(opts, :review)
+      actor = Keyword.get(opts, :actor)
+
+      cond do
+        row["decision"] == "rejected" ->
+          rollback(repo, :already_rejected)
+
+        row["decision"] == "accepted" ->
+          rollback(repo, :already_accepted)
+
+        is_nil(expected) or is_nil(actor) or !is_map(review) ->
+          rollback(repo, :missing_review)
+
+        screenplay["head_revision_id"] != expected or row["base_revision_id"] != expected ->
+          rollback(repo, {:stale_revision, screenplay["head_revision_id"]})
+
+        field(review, :candidate_id) != candidate_id or field(review, :content_hash) != row["content_hash"] ->
+          rollback(repo, :review_content_mismatch)
+
+        field(review, :actor) != actor ->
+          rollback(repo, :review_actor_mismatch)
+
+        field(review, :structural_errors) not in [nil, []] ->
+          rollback(repo, :unresolved_conflicts)
+
+        true ->
+          {:ok, model} = load_revision(repo, row["screenplay_id"], row["result_revision_id"])
+
+          acceptance(
+            repo,
+            model,
+            expected,
+            actor,
+            :generated_structural_edit,
+            field(review, :operations) || [],
+            field(review, :provenance) || %{},
+            review,
+            candidate_id
+          )
+
+          q(
+            repo,
+            "UPDATE writing_candidates SET decision='accepted',decision_actor=$2,decided_at=now() WHERE id=$1::uuid",
+            [candidate_id, actor]
+          )
+
+          set_head(repo, row["screenplay_id"], row["result_revision_id"])
+          model
+      end
+    end)
+  end
+
+  @doc "Rejects a candidate while preserving its material for history and recovery."
+  def reject_candidate(repo, candidate_id, opts) when is_list(opts) do
+    transaction(repo, fn ->
+      row =
+        one(repo, "SELECT * FROM writing_candidates WHERE id=$1::uuid FOR UPDATE", [candidate_id]) ||
+          rollback(repo, :not_found)
+
+      case row["decision"] do
+        "accepted" ->
+          rollback(repo, :already_accepted)
+
+        "rejected" ->
+          row
+
+        _ ->
+          actor = Keyword.get(opts, :actor) || rollback(repo, :missing_actor)
+
+          q(
+            repo,
+            "UPDATE writing_candidates SET decision='rejected',decision_actor=$2,decided_at=now() WHERE id=$1::uuid",
+            [candidate_id, actor]
+          )
+
+          Map.put(row, "decision", "rejected")
+      end
+    end)
+  end
+
+  @doc "Stores a revision-scoped analysis report with checked source revisions."
+  def save_report(repo, report, opts \\ []) when is_map(report) do
+    id = field(report, :id) || ID.v4()
+    screenplay_id = field(report, :screenplay_id)
+    primary_id = field(report, :primary_revision_id)
+    source_ids = Enum.uniq([primary_id | field(report, :source_revision_ids) || []])
+    payload = field(report, :payload) || %{}
+
+    transaction(repo, fn ->
+      Enum.each(Keyword.get(opts, :source_models, []), fn model ->
+        if model.id != screenplay_id, do: rollback(repo, :wrong_screenplay)
+
+        if !one(repo, "SELECT id FROM revisions WHERE screenplay_id=$1::uuid AND id=$2::uuid", [
+             screenplay_id,
+             model.revision.id
+           ]),
+           do: insert_revision(repo, Model.refresh(model))
+      end)
+
+      sources =
+        Map.new(source_ids, fn source_id ->
+          case load_revision(repo, screenplay_id, source_id) do
+            {:ok, model} -> {source_id, model}
+            _ -> rollback(repo, {:unknown_report_source, source_id})
+          end
+        end)
+
+      evidence = field(payload, :evidence) || []
+
+      registry =
+        Enum.reduce(evidence, %{}, fn entry, acc ->
+          evidence_id = field(entry, :evidence_id)
+          revision_id = field(entry, :revision_id)
+          target = field(entry, :target)
+          excerpt = field(entry, :excerpt)
+          source = sources[revision_id] || rollback(repo, :unlisted_evidence_revision)
+          if !is_binary(evidence_id) or Map.has_key?(acc, evidence_id), do: rollback(repo, :invalid_evidence_id)
+          if field(entry, :screenplay_id) != screenplay_id, do: rollback(repo, :foreign_evidence)
+
+          value =
+            case Fount.Target.resolve(source, target) do
+              {:ok, item} -> item
+              _ -> rollback(repo, :invalid_evidence_target)
+            end
+
+          text = if is_map(value), do: Map.get(value, :text), else: nil
+          span = field(target, :span)
+          span = if is_map(span), do: {field(span, :byte_start), field(span, :byte_end)}, else: span
+          valid = if span, do: Fount.Writing.UTF8Span.verify(text, span, excerpt) == :ok, else: text == excerpt
+          if !valid, do: rollback(repo, :evidence_excerpt_mismatch)
+          Map.put(acc, evidence_id, entry)
+        end)
+
+      citations = field(payload, :citations) || []
+      if Enum.any?(citations, &(!Map.has_key?(registry, &1))), do: rollback(repo, :uninspected_citation)
+
+      if !is_binary(field(report, :fingerprint)) or !is_binary(field(report, :tool)),
+        do: rollback(repo, :invalid_report)
+
+      q(
+        repo,
+        "INSERT INTO analysis_reports(id,screenplay_id,primary_revision_id,session_id,tool,status,fingerprint,payload) VALUES($1::uuid,$2::uuid,$3::uuid,$4::uuid,$5,$6,$7,$8::jsonb)",
+        [
+          id,
+          screenplay_id,
+          primary_id,
+          field(report, :session_id),
+          field(report, :tool),
+          field(report, :status) || "complete",
+          field(report, :fingerprint),
+          json(payload)
+        ]
+      )
+
+      Enum.each(source_ids, fn source_id ->
+        q(
+          repo,
+          "INSERT INTO analysis_report_sources(screenplay_id,report_id,revision_id) VALUES($1::uuid,$2::uuid,$3::uuid)",
+          [screenplay_id, id, source_id]
+        )
+      end)
+
+      Map.put(report, :id, id)
+    end)
+  end
+
+  defp field(map, key), do: Map.get(map, key) || Map.get(map, to_string(key))
+
+  defp insert_revision(repo, model) do
+    artifact_id = insert_artifact(repo, model)
+    revision = model.revision
+
+    q(
+      repo,
+      "INSERT INTO revisions(id,screenplay_id,parent_id,artifact_id,content_hash,render_hash,model,actor,message,inserted_at) VALUES($1::uuid,$2::uuid,$3::uuid,$4::uuid,$5,$6,$7::jsonb,$8,$9,$10::timestamptz)",
+      [
+        revision.id,
+        model.id,
+        revision.parent_id,
+        artifact_id,
+        revision.content_hash,
+        revision.render_hash,
+        json(Codec.encode(model)),
+        revision.actor,
+        revision.message,
+        revision.created_at || DateTime.utc_now()
+      ]
     )
 
-    :ok
+    insert_projection(repo, model)
   end
 
-  defp clear_projection(repo, id) do
-    Enum.each(@tables, fn table -> repo.delete_all(from(row in table, where: row.screenplay_id == ^id)) end)
+  defp insert_artifact(_repo, %{import: nil}), do: nil
+
+  defp insert_artifact(repo, model) do
+    import = model.import
+    id = import[:id] || ID.v5(model.id, ["artifact:", ID.hash(import.bytes)])
+
+    q(
+      repo,
+      "INSERT INTO import_artifacts(id,screenplay_id,format,original_bytes,bytes_sha256,render_hash,fidelity) VALUES($1::uuid,$2::uuid,$3,$4::bytea,$5,$6,$7::jsonb) ON CONFLICT(id) DO NOTHING",
+      [
+        id,
+        model.id,
+        to_string(import.format),
+        import.bytes,
+        ID.hash(import.bytes),
+        import.render_hash || model.revision.render_hash,
+        json(%{"losses" => import[:losses] || []})
+      ]
+    )
+
+    id
   end
 
   defp insert_projection(repo, model) do
-    id = model.id
-    elements = Map.new(model.ir.elements, &{&1.id, &1})
+    sid = model.id
+    rid = model.revision.id
     scene_for = Map.new(for scene <- model.ir.scenes, element_id <- scene.element_ids, do: {element_id, scene.id})
 
-    turn_for =
+    block_for =
       Map.new(
-        for turn <- model.ir.dialogue_blocks, element_id <- [turn.cue_id | turn.body_ids], do: {element_id, turn.id}
+        for block <- model.ir.dialogue_blocks, element_id <- [block.cue_id | block.body_ids], do: {element_id, block.id}
       )
 
-    if model.ir.title_page do
-      model.ir.title_page.entries
-      |> Enum.with_index()
-      |> Enum.each(fn {entry, ordinal} ->
-        repo.insert!(%Schema.TitleEntry{
-          id: entry.id,
-          screenplay_id: id,
-          ordinal: ordinal,
-          key: entry.key,
-          values: entry.values
-        })
-      end)
-    end
+    Enum.with_index((model.ir.title_page && model.ir.title_page.entries) || [])
+    |> Enum.each(fn {entry, ordinal} ->
+      q(
+        repo,
+        "INSERT INTO title_entries(screenplay_id,revision_id,id,ordinal,key,values) VALUES($1::uuid,$2::uuid,$3::uuid,$4,$5,$6::text[])",
+        [sid, rid, entry.id, ordinal, entry.key, entry.values]
+      )
+    end)
 
-    model.ir.scenes
-    |> Enum.with_index()
+    Enum.with_index(model.ir.scenes)
     |> Enum.each(fn {scene, ordinal} ->
-      parts = Fount.SceneHeading.parse(Map.fetch!(elements, scene.heading_id).text)
-
-      repo.insert!(%Schema.Scene{
-        id: scene.id,
-        screenplay_id: id,
-        ordinal: ordinal,
-        heading_element_id: scene.heading_id,
-        scene_number: scene.number,
-        omitted: scene.omitted?,
-        location_head: List.first(parts.locations),
-        location_parts: parts.locations,
-        time_of_day: parts.time
-      })
+      q(
+        repo,
+        "INSERT INTO scenes(screenplay_id,revision_id,id,ordinal,heading_element_id,scene_number,omitted) VALUES($1::uuid,$2::uuid,$3::uuid,$4,$5::uuid,$6,$7)",
+        [sid, rid, scene.id, ordinal, scene.heading_id, scene.number, scene.omitted?]
+      )
     end)
 
-    model.ir.dialogue_blocks
-    |> Enum.with_index()
-    |> Enum.each(fn {turn, ordinal} ->
-      repo.insert!(%Schema.DialogueTurn{
-        id: turn.id,
-        screenplay_id: id,
-        scene_id: Map.fetch!(scene_for, turn.cue_id),
-        cue_element_id: turn.cue_id,
-        ordinal: ordinal,
-        dual_with_id: turn.dual_with
-      })
+    Enum.with_index(model.ir.dialogue_blocks)
+    |> Enum.each(fn {block, ordinal} ->
+      q(
+        repo,
+        "INSERT INTO dialogue_blocks(screenplay_id,revision_id,id,ordinal,scene_id,cue_element_id,dual_with_id,side) VALUES($1::uuid,$2::uuid,$3::uuid,$4,$5::uuid,$6::uuid,$7::uuid,$8)",
+        [
+          sid,
+          rid,
+          block.id,
+          ordinal,
+          scene_for[block.cue_id],
+          block.cue_id,
+          block.dual_with,
+          block.side && to_string(block.side)
+        ]
+      )
     end)
 
-    model.ir.elements
-    |> Enum.with_index()
+    Enum.with_index(model.ir.elements)
     |> Enum.each(fn {element, ordinal} ->
-      repo.insert!(%Schema.Element{
-        id: element.id,
-        screenplay_id: id,
-        scene_id: Map.get(scene_for, element.id),
-        turn_id: Map.get(turn_for, element.id),
-        ordinal: ordinal,
-        type: Atom.to_string(element.type),
-        text: element.text,
-        attrs: json_map(element.attrs || %{})
-      })
+      q(
+        repo,
+        "INSERT INTO elements(screenplay_id,revision_id,id,ordinal,scene_id,dialogue_block_id,type,text,raw_text,inline,attrs,source_reference,origin) VALUES($1::uuid,$2::uuid,$3::uuid,$4,$5::uuid,$6::uuid,$7,$8,$9,$10::jsonb,$11::jsonb,$12::jsonb,$13)",
+        [
+          sid,
+          rid,
+          element.id,
+          ordinal,
+          scene_for[element.id],
+          block_for[element.id],
+          to_string(element.type),
+          element.text,
+          element.raw_text,
+          json(Model.plain(element.inline || [])),
+          json(Model.plain(element.attrs || %{})),
+          element.source_span && json(Model.plain(element.source_span)),
+          element.origin && to_string(element.origin)
+        ]
+      )
     end)
 
-    Enum.each(model.cast, fn {_id, character} -> insert_character(repo, id, character) end)
+    Enum.each(model.cast, fn {_id, character} ->
+      q(
+        repo,
+        "INSERT INTO characters(screenplay_id,revision_id,id,display_name,notes,attributes) VALUES($1::uuid,$2::uuid,$3::uuid,$4,$5,$6::jsonb)",
+        [
+          sid,
+          rid,
+          character.id,
+          character.display_name,
+          character.notes,
+          json(Model.plain(character.attributes || %{}))
+        ]
+      )
+
+      Enum.each(character.aliases || [], fn alias_entry ->
+        surface = alias_entry[:alias] || alias_entry["alias"]
+        kind = alias_entry[:kind] || alias_entry["kind"] || :name
+
+        q(
+          repo,
+          "INSERT INTO character_aliases(screenplay_id,revision_id,character_id,alias,normalized_alias,kind) VALUES($1::uuid,$2::uuid,$3::uuid,$4,$5,$6)",
+          [sid, rid, character.id, surface, String.downcase(surface), to_string(kind)]
+        )
+      end)
+    end)
 
     Enum.each(model.mentions, fn {_id, mention} ->
-      insert_mention(repo, id, model.revision.id, mention)
+      q(
+        repo,
+        "INSERT INTO mentions(screenplay_id,revision_id,id,element_id,character_id,role,status,surface,byte_start,byte_end,producer,confidence) VALUES($1::uuid,$2::uuid,$3::uuid,$4::uuid,$5::uuid,$6,$7,$8,$9,$10,$11,$12)",
+        [
+          sid,
+          rid,
+          mention.id,
+          mention.element_id,
+          mention.character_id,
+          to_string(mention.role),
+          to_string(mention.status),
+          mention.surface,
+          mention.byte_start,
+          mention.byte_end,
+          mention.producer || "writer",
+          mention.confidence
+        ]
+      )
+    end)
 
-      Enum.each(mention.candidate_ids, fn character_id ->
-        repo.insert!(%Schema.MentionCandidate{
-          screenplay_id: id,
-          mention_id: mention.id,
-          character_id: character_id
-        })
+    Enum.each(model.authored_items, fn {_id, item} ->
+      q(
+        repo,
+        "INSERT INTO authored_items(screenplay_id,revision_id,id,namespace,kind,target,value,dependencies,status,provenance) VALUES($1::uuid,$2::uuid,$3::uuid,$4,$5,$6::jsonb,$7::jsonb,$8::jsonb,$9,$10::jsonb)",
+        [
+          sid,
+          rid,
+          item["id"],
+          item["namespace"],
+          item["kind"],
+          json(item["target"]),
+          json(item["value"]),
+          json(item["dependencies"] || []),
+          item["status"],
+          json(item["provenance"] || %{})
+        ]
+      )
+    end)
+  end
+
+  defp acceptance(repo, model, parent, actor, origin, operations, provenance, review, candidate_id \\ nil) do
+    q(
+      repo,
+      "INSERT INTO acceptances(id,screenplay_id,base_revision_id,result_revision_id,candidate_id,actor,origin,operations,provenance,review) VALUES($1::uuid,$2::uuid,$3::uuid,$4::uuid,$5::uuid,$6,$7,$8::jsonb,$9::jsonb,$10::jsonb)",
+      [
+        ID.v4(),
+        model.id,
+        parent,
+        model.revision.id,
+        candidate_id,
+        actor,
+        to_string(origin),
+        json(operations),
+        json(provenance),
+        json(review)
+      ]
+    )
+  end
+
+  defp set_head(repo, id, revision),
+    do: q(repo, "UPDATE screenplays SET head_revision_id=$2::uuid,updated_at=now() WHERE id=$1::uuid", [id, revision])
+
+  defp validate(model), do: if(Fount.Validate.screenplay(model) == [], do: :ok, else: {:error, :invalid_model})
+  defp json(value), do: Jason.encode!(value)
+  defp uuid?(value), do: is_binary(value) and Regex.match?(~r/^[0-9a-f-]{36}$/, value)
+
+  defp q(repo, sql, params),
+    do:
+      Ecto.Adapters.SQL.query!(
+        repo,
+        sql |> String.replace("::uuid", "::text::uuid") |> String.replace("::jsonb", "::text::jsonb"),
+        params,
+        log: false
+      )
+
+  defp one(repo, sql, params), do: List.first(all(repo, sql, params))
+
+  defp all(repo, sql, params) do
+    result = q(repo, sql, params)
+
+    Enum.map(result.rows, fn row ->
+      result.columns
+      |> Enum.zip(row)
+      |> Map.new(fn
+        {column, <<_::binary-size(16)>> = value}
+        when column in [
+               "id",
+               "head_revision_id",
+               "parent_id",
+               "screenplay_id",
+               "artifact_id",
+               "base_revision_id",
+               "result_revision_id",
+               "session_id"
+             ] ->
+          {:ok, id} = Ecto.UUID.load(value)
+          {column, id}
+
+        pair ->
+          pair
       end)
     end)
-
-    Enum.each(model.annotations, fn {_id, annotation} ->
-      insert_assertion(repo, id, model.revision.id, annotation)
-    end)
   end
 
-  defp insert_assertion(repo, screenplay_id, revision_id, annotation) do
-    value = %{
-      "data" => json_value(annotation.value),
-      "provenance" => json_value(Map.from_struct(annotation.provenance)),
-      "span" => json_value(annotation.target.span)
-    }
-
-    repo.insert!(%Schema.Assertion{
-      id: annotation.id,
-      screenplay_id: screenplay_id,
-      namespace: annotation.namespace,
-      kind: to_string(annotation.kind),
-      target_kind: "node",
-      target_id: annotation.target.node_id,
-      value: value,
-      model_revision_id: revision_id,
-      producer: annotation.provenance.producer,
-      confidence: annotation.confidence,
-      dependencies: annotation.dependencies || [],
-      authored: annotation.provenance.producer == "writer"
-    })
-  end
-
-  defp insert_character(repo, screenplay_id, character) do
-    repo.insert!(%Schema.Character{
-      id: character.id,
-      screenplay_id: screenplay_id,
-      display_name: character.display_name,
-      notes: character.notes,
-      attributes: json_map(character.attributes)
-    })
-
-    aliases = [%{alias: character.display_name, kind: :name} | character.aliases]
-
-    aliases
-    |> Enum.uniq_by(&{Fount.Index.normalize_character(&1.alias), &1.kind})
-    |> Enum.each(fn item ->
-      normalized = Fount.Index.normalize_character(item.alias)
-      alias_id = ID.v5(character.id, [normalized, ":", to_string(item.kind)])
-
-      repo.insert!(%Schema.CharacterAlias{
-        id: alias_id,
-        screenplay_id: screenplay_id,
-        character_id: character.id,
-        alias: item.alias,
-        normalized_alias: normalized,
-        kind: to_string(item.kind)
-      })
-    end)
-  end
-
-  defp insert_mention(repo, screenplay_id, revision_id, mention) do
-    repo.insert!(%Schema.Mention{
-      id: mention.id,
-      screenplay_id: screenplay_id,
-      element_id: mention.element_id,
-      character_id: mention.character_id,
-      role: to_string(mention.role),
-      status: to_string(mention.status),
-      surface: mention.surface,
-      byte_start: mention.byte_start,
-      byte_end: mention.byte_end,
-      model_revision_id: revision_id,
-      producer: mention.producer || "unknown",
-      confidence: mention.confidence
-    })
-  end
-
-  defp insert_import(_repo, %Screenplay{import: nil}, _now), do: :ok
-
-  defp insert_import(repo, model, now) do
-    import = model.import
-    hash = ID.hash(import.bytes)
-    artifact_id = ID.v5(model.id, [to_string(import.format), ":", import.revision_id, ":", hash])
-
-    if is_nil(repo.get(Schema.ImportArtifact, artifact_id)) do
-      repo.insert!(%Schema.ImportArtifact{
-        id: artifact_id,
-        screenplay_id: model.id,
-        format: to_string(import.format),
-        original_bytes: import.bytes,
-        bytes_sha256: hash,
-        imported_model_revision_id: import.revision_id,
-        fidelity: %{"losses" => import[:losses] || []},
-        inserted_at: now
-      })
-    end
-  end
-
-  defp insert_acceptance(repo, model, parent, opts, now) do
-    if acceptance = opts[:acceptance] do
-      inference = acceptance.inference || %{}
-
-      repo.insert!(%Schema.Acceptance{
-        id: ID.v4(),
-        screenplay_id: model.id,
-        resulting_revision_id: model.revision.id,
-        base_revision_id: parent,
-        actor: opts[:actor],
-        provider: to_string(inference[:provider]),
-        model: inference[:model],
-        operations: Enum.map(acceptance.operations, &json_map(Map.take(&1, [:kind, :target]))),
-        inserted_at: now
-      })
-    end
-  end
-
-  defp validate(model) do
-    element_ids = MapSet.new(model.ir.elements, & &1.id)
-    scene_ids = MapSet.new(model.ir.scenes, & &1.id)
-    cast_ids = MapSet.new(Map.keys(model.cast))
-    title_ids = if model.ir.title_page, do: Enum.map(model.ir.title_page.entries, & &1.id), else: []
-    target_ids = MapSet.new([model.id | MapSet.to_list(element_ids) ++ MapSet.to_list(scene_ids) ++ title_ids])
-
-    cond do
-      MapSet.size(element_ids) != length(model.ir.elements) ->
-        {:error, :duplicate_element_id}
-
-      MapSet.size(scene_ids) != length(model.ir.scenes) ->
-        {:error, :duplicate_scene_id}
-
-      Enum.any?(model.ir.scenes, &invalid_scene?(&1, element_ids)) ->
-        {:error, :invalid_scene_reference}
-
-      Enum.any?(model.ir.dialogue_blocks, &invalid_turn?(&1, element_ids)) ->
-        {:error, :invalid_dialogue_reference}
-
-      Enum.any?(model.mentions, fn {_id, item} -> invalid_mention?(model, item, element_ids, cast_ids) end) ->
-        {:error, :invalid_mention_evidence}
-
-      Enum.any?(model.annotations, fn {_id, item} -> invalid_annotation?(item, target_ids) end) ->
-        {:error, :invalid_annotation_target}
-
-      true ->
-        :ok
-    end
-  end
-
-  defp invalid_scene?(scene, element_ids) do
-    not MapSet.member?(element_ids, scene.heading_id) or
-      Enum.any?(scene.element_ids, &(not MapSet.member?(element_ids, &1)))
-  end
-
-  defp invalid_turn?(turn, element_ids) do
-    not MapSet.member?(element_ids, turn.cue_id) or
-      Enum.any?(turn.body_ids, &(not MapSet.member?(element_ids, &1)))
-  end
-
-  defp invalid_annotation?(annotation, target_ids) do
-    not MapSet.member?(target_ids, annotation.target.node_id) or
-      Enum.any?(annotation.dependencies || [], &(not MapSet.member?(target_ids, &1)))
-  end
-
-  defp invalid_mention?(model, mention, element_ids, cast_ids) do
-    element = Screenplay.node(model, mention.element_id)
-
-    not MapSet.member?(element_ids, mention.element_id) or is_nil(element) or
-      invalid_mention_candidates?(mention, cast_ids) or invalid_mention_span?(mention, element.text)
-  end
-
-  defp invalid_mention_candidates?(%Mention{candidate_ids: candidates} = mention, cast_ids)
-       when is_list(candidates) do
-    (not is_nil(mention.character_id) and not MapSet.member?(cast_ids, mention.character_id)) or
-      Enum.any?(candidates, &(not MapSet.member?(cast_ids, &1))) or
-      length(candidates) != length(Enum.uniq(candidates)) or
-      invalid_candidate_resolution?(mention, candidates)
-  end
-
-  defp invalid_mention_candidates?(_mention, _cast_ids), do: true
-
-  defp invalid_candidate_resolution?(mention, candidates) do
-    selected = mention.character_id
-
-    (mention.status == :ambiguous and (not is_nil(selected) or length(candidates) < 2)) or
-      (not is_nil(selected) and candidates != [] and selected not in candidates)
-  end
-
-  defp invalid_mention_span?(mention, text) do
-    mention.byte_start < 0 or mention.byte_end <= mention.byte_start or
-      mention.byte_end > byte_size(text) or
-      binary_part(text, mention.byte_start, mention.byte_end - mention.byte_start) != mention.surface
-  end
-
-  defp load_rows(repo, head) do
-    id = head.id
-    revision = repo.get!(Schema.Revision, head.current_revision_id)
-    titles = repo.all(from(x in Schema.TitleEntry, where: x.screenplay_id == ^id, order_by: x.ordinal))
-    scenes = repo.all(from(x in Schema.Scene, where: x.screenplay_id == ^id, order_by: x.ordinal))
-    turns = repo.all(from(x in Schema.DialogueTurn, where: x.screenplay_id == ^id, order_by: x.ordinal))
-    elements = repo.all(from(x in Schema.Element, where: x.screenplay_id == ^id, order_by: x.ordinal))
-    characters = repo.all(from(x in Schema.Character, where: x.screenplay_id == ^id))
-    aliases = repo.all(from(x in Schema.CharacterAlias, where: x.screenplay_id == ^id))
-    mentions = repo.all(from(x in Schema.Mention, where: x.screenplay_id == ^id))
-    candidates = repo.all(from(x in Schema.MentionCandidate, where: x.screenplay_id == ^id))
-    assertions = repo.all(from(x in Schema.Assertion, where: x.screenplay_id == ^id))
-    candidates_by_mention = Enum.group_by(candidates, & &1.mention_id, & &1.character_id)
-
-    ir =
-      %Script{
-        document_id: id,
-        title_page: title_from_rows(titles),
-        scenes: Enum.map(scenes, &scene_from_row(&1, elements)),
-        dialogue_blocks: Enum.map(turns, &turn_from_row(&1, elements)),
-        elements: Enum.map(elements, &element_from_row/1),
-        outline: [],
-        metadata: %{}
-      }
-      |> Fount.IR.restore_views()
-
-    model = %Screenplay{
-      id: id,
-      revision: revision_from_row(revision),
-      ir: ir,
-      cast: Map.new(characters, &{&1.id, character_from_row(&1, aliases)}),
-      mentions: Map.new(mentions, &{&1.id, mention_from_row(&1, Map.get(candidates_by_mention, &1.id, []))}),
-      annotations: Map.new(assertions, &{&1.id, annotation_from_row(&1)})
-    }
-
-    case repo.one(
-           from(x in Schema.ImportArtifact, where: x.screenplay_id == ^id, order_by: [desc: x.inserted_at], limit: 1)
-         ) do
-      nil ->
-        model
-
-      artifact ->
-        %{
-          model
-          | import: %{
-              format: String.to_existing_atom(artifact.format),
-              bytes: artifact.original_bytes,
-              revision_id: artifact.imported_model_revision_id,
-              losses: artifact.fidelity["losses"] || []
-            }
-        }
-    end
-  end
-
-  defp title_from_rows([]), do: nil
-
-  defp title_from_rows(rows),
-    do: %TitlePage{entries: Enum.map(rows, &%TitlePage.Entry{id: &1.id, key: &1.key, values: &1.values})}
-
-  defp scene_from_row(row, elements) do
-    %Scene{
-      id: row.id,
-      heading_id: row.heading_element_id,
-      element_ids: for(element <- elements, element.scene_id == row.id, do: element.id),
-      number: row.scene_number,
-      omitted?: row.omitted
-    }
-  end
-
-  defp turn_from_row(row, elements) do
-    %DialogueBlock{
-      id: row.id,
-      cue_id: row.cue_element_id,
-      body_ids:
-        for(element <- elements, element.turn_id == row.id and element.id != row.cue_element_id, do: element.id),
-      dual_with: row.dual_with_id
-    }
-  end
-
-  defp element_from_row(row) do
-    attrs =
-      Map.new(row.attrs || %{}, fn {key, value} ->
-        if key in ["forced?", "number", "extension", "dual?", "level", "intentional_blank?"],
-          do: {String.to_existing_atom(key), value},
-          else: {key, value}
-      end)
-
-    %Element{id: row.id, type: String.to_existing_atom(row.type), text: row.text, attrs: attrs}
-  end
-
-  defp character_from_row(row, aliases) do
-    entries =
-      for alias_row <- aliases,
-          alias_row.character_id == row.id,
-          do: %{alias: alias_row.alias, kind: String.to_existing_atom(alias_row.kind)}
-
-    %Character{
-      id: row.id,
-      display_name: row.display_name,
-      notes: row.notes,
-      attributes: row.attributes,
-      aliases: entries
-    }
-  end
-
-  defp mention_from_row(row, candidates) do
-    %Mention{
-      id: row.id,
-      element_id: row.element_id,
-      character_id: row.character_id,
-      role: String.to_existing_atom(row.role),
-      status: String.to_existing_atom(row.status),
-      surface: row.surface,
-      byte_start: row.byte_start,
-      byte_end: row.byte_end,
-      model_revision_id: row.model_revision_id,
-      producer: row.producer,
-      confidence: row.confidence,
-      candidate_ids: Enum.sort(candidates)
-    }
-  end
-
-  defp annotation_from_row(row) do
-    source = row.value["provenance"] || %{}
-
-    created_at =
-      case source["created_at"] do
-        nil -> nil
-        text -> elem(DateTime.from_iso8601(text), 1)
-      end
-
-    provenance = %Provenance{
-      producer: row.producer,
-      producer_version: source["producer_version"],
-      model: source["model"],
-      source_revision: source["source_revision"],
-      created_at: created_at,
-      metadata: source["metadata"]
-    }
-
-    %Annotation{
-      id: row.id,
-      namespace: row.namespace,
-      kind: row.kind,
-      target: %Target{node_id: row.target_id, span: row.value["span"]},
-      value: row.value["data"],
-      provenance: provenance,
-      confidence: row.confidence,
-      dependencies: row.dependencies
-    }
-  end
-
-  defp revision_from_row(row) do
-    %Revision{
-      id: row.id,
-      parent_id: row.parent_id,
-      actor: row.actor,
-      message: row.message,
-      created_at: row.inserted_at
-    }
-  end
-
-  defp json_map(value), do: value |> Jason.encode!() |> Jason.decode!()
-  defp json_value(value), do: value |> Jason.encode!() |> Jason.decode!()
+  defp rollback(repo, reason), do: repo.rollback(reason)
+  defp transaction(repo, fun), do: repo.transaction(fun)
 end

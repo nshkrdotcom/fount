@@ -25,6 +25,7 @@ defmodule FountProbe.Writing.DecisionPolicy do
   end
 
   def semantic_noul(p, expected, opts \\ [])
+
   def semantic_noul(p, expected, opts) when is_boolean(expected) do
     with :ok <- probability(p) do
       mass = if expected, do: p, else: 1 - p
@@ -35,6 +36,7 @@ defmodule FountProbe.Writing.DecisionPolicy do
   def semantic_noul(_, _, _), do: {:error, :invalid_expectation}
 
   def semantic_distribution(distribution, allowed, confidence, opts \\ [])
+
   def semantic_distribution(distribution, allowed, confidence, opts)
       when is_map(distribution) and is_list(allowed) do
     with :ok <- distribution(distribution),
@@ -43,12 +45,13 @@ defmodule FountProbe.Writing.DecisionPolicy do
       mass = Enum.reduce(Enum.uniq(allowed), 0.0, &(&2 + Map.fetch!(distribution, &1)))
       minimum = Keyword.get(opts, :minimum_confidence, 0.7)
 
-      {:ok, %{
-        "probabilities" => distribution,
-        "confidence" => confidence,
-        "allowed_mass" => mass,
-        "status" => if(confidence < minimum, do: "uncertain", else: mass_status(mass, opts))
-      }}
+      {:ok,
+       %{
+         "probabilities" => distribution,
+         "confidence" => confidence,
+         "allowed_mass" => mass,
+         "status" => if(confidence < minimum, do: "uncertain", else: mass_status(mass, opts))
+       }}
     end
   end
 
@@ -57,23 +60,27 @@ defmodule FountProbe.Writing.DecisionPolicy do
   def choice(distribution, order, confidence, opts \\ []) do
     with :ok <- distribution(distribution),
          :ok <- probability(confidence),
-         true <- is_list(order) and length(order) >= 2 and
-                   MapSet.new(order) == MapSet.new(Map.keys(distribution)) and
-                   length(order) == map_size(distribution) do
+         true <-
+           is_list(order) and length(order) >= 2 and
+             MapSet.new(order) == MapSet.new(Map.keys(distribution)) and
+             length(order) == map_size(distribution) do
       ranked = Enum.sort_by(order, &(-Map.fetch!(distribution, &1)))
       [first, second | _] = ranked
       margin = distribution[first] - distribution[second]
-      usable = confidence >= Keyword.get(opts, :minimum_confidence, 0.7) and
-               margin >= Keyword.get(opts, :minimum_margin, 0.15)
 
-      {:ok, %{
-        "choice" => first,
-        "probabilities" => distribution,
-        "option_order" => order,
-        "confidence" => confidence,
-        "margin" => margin,
-        "status" => if(usable, do: "supported", else: "uncertain")
-      }}
+      usable =
+        confidence >= Keyword.get(opts, :minimum_confidence, 0.7) and
+          margin >= Keyword.get(opts, :minimum_margin, 0.15)
+
+      {:ok,
+       %{
+         "choice" => first,
+         "probabilities" => distribution,
+         "option_order" => order,
+         "confidence" => confidence,
+         "margin" => margin,
+         "status" => if(usable, do: "supported", else: "uncertain")
+       }}
     else
       false -> {:error, :invalid_option_order}
       {:error, _} = error -> error
@@ -97,7 +104,9 @@ defmodule FountProbe.Writing.DecisionPolicy do
           else
             {:cont, {:ok, Map.put(normalized, index, value)}}
           end
-        _ -> {:halt, {:error, {:invalid_score_level, key}}}
+
+        _ ->
+          {:halt, {:error, {:invalid_score_level, key}}}
       end
     end)
   end
@@ -106,28 +115,39 @@ defmodule FountProbe.Writing.DecisionPolicy do
 
   def boundary(curve, threshold \\ 0.8) when is_list(curve) do
     cond do
-      curve == [] -> {:error, :empty_curve}
+      curve == [] ->
+        {:error, :empty_curve}
+
       Enum.any?(curve, &(not is_number(&1["probability"]))) ->
         {:ok, %{"status" => "incomplete", "curve" => curve, "first_crossing" => nil}}
+
       true ->
         pairs = Enum.chunk_every(curve, 2, 1, :discard)
-        crossings = for [before, after_point] <- pairs,
-                        before["probability"] < threshold,
-                        after_point["probability"] >= threshold,
-                        do: after_point["point"]
-        drops = for [before, after_point] <- pairs,
-                    before["probability"] >= threshold,
-                    after_point["probability"] < threshold,
-                    do: after_point["point"]
 
-        {:ok, %{
-          "status" => if(hd(curve)["probability"] >= threshold,
-            do: "already_supported_at_entry", else: "complete"),
-          "curve" => curve,
-          "first_crossing" => List.first(crossings),
-          "crossings" => crossings,
-          "drops" => drops
-        }}
+        crossings =
+          for [before, after_point] <- pairs,
+              before["probability"] < threshold,
+              after_point["probability"] >= threshold,
+              do: after_point["point"]
+
+        drops =
+          for [before, after_point] <- pairs,
+              before["probability"] >= threshold,
+              after_point["probability"] < threshold,
+              do: after_point["point"]
+
+        {:ok,
+         %{
+           "status" =>
+             if(hd(curve)["probability"] >= threshold,
+               do: "already_supported_at_entry",
+               else: "complete"
+             ),
+           "curve" => curve,
+           "first_crossing" => List.first(crossings),
+           "crossings" => crossings,
+           "drops" => drops
+         }}
     end
   end
 
@@ -136,13 +156,16 @@ defmodule FountProbe.Writing.DecisionPolicy do
 
   defp distribution(values) when is_map(values) and map_size(values) > 0 do
     if Enum.all?(Map.values(values), &(probability(&1) == :ok)),
-      do: :ok, else: {:error, :invalid_distribution}
+      do: :ok,
+      else: {:error, :invalid_distribution}
   end
+
   defp distribution(_), do: {:error, :invalid_distribution}
 
   defp allowed_keys(values, allowed) do
     if allowed != [] and Enum.all?(allowed, &Map.has_key?(values, &1)),
-      do: :ok, else: {:error, :unknown_or_empty_allowed_region}
+      do: :ok,
+      else: {:error, :unknown_or_empty_allowed_region}
   end
 
   defp mass_status(mass, opts) do

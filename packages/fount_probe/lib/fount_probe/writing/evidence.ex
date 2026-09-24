@@ -9,15 +9,18 @@ defmodule FountProbe.Writing.Evidence do
   alias Fount.Writing.UTF8Span
 
   def validate(entries, resolver) when is_list(entries) and is_function(resolver, 3) do
-    ids = Enum.map(entries, fn entry ->
-      if is_map(entry), do: Map.get(entry, "evidence_id"), else: nil
-    end)
+    ids =
+      Enum.map(entries, fn entry ->
+        if is_map(entry), do: Map.get(entry, "evidence_id"), else: nil
+      end)
 
     cond do
       Enum.any?(ids, &(not is_binary(&1) or &1 == "")) ->
         {:error, :invalid_evidence_id}
+
       length(ids) != length(Enum.uniq(ids)) ->
         {:error, :duplicate_evidence_ids}
+
       true ->
         Enum.reduce_while(entries, {:ok, %{}}, fn entry, {:ok, registry} ->
           case validate_entry(entry, resolver) do
@@ -35,12 +38,15 @@ defmodule FountProbe.Writing.Evidence do
     if missing == [], do: :ok, else: {:error, {:uninspected_citations, missing}}
   end
 
-  defp validate_entry(%{
-         "screenplay_id" => screenplay,
-         "revision_id" => revision,
-         "target" => %{"kind" => kind, "id" => id} = target,
-         "excerpt" => excerpt
-       }, resolver)
+  defp validate_entry(
+         %{
+           "screenplay_id" => screenplay,
+           "revision_id" => revision,
+           "target" => %{"kind" => kind, "id" => id} = target,
+           "excerpt" => excerpt
+         },
+         resolver
+       )
        when is_binary(screenplay) and is_binary(revision) and is_binary(id) and is_binary(excerpt) do
     with {:ok, text} <- resolver.(screenplay, revision, target) do
       case Map.get(target, "span") do

@@ -46,22 +46,28 @@ defmodule FountWorkshop.Writing.Completion do
 
     request =
       if mode == "json_text" do
-        prompt <> "\nReturn exactly one JSON object conforming to this schema:\n" <>
+        prompt <>
+          "\nReturn exactly one JSON object conforming to this schema:\n" <>
           Jason.encode!(schema)
       else
         prompt
       end
 
     case Inference.complete(client, request, options) do
-      {:error, error} -> {:error, error, Enum.reverse(trace)}
+      {:error, error} ->
+        {:error, error, Enum.reverse(trace)}
+
       {:ok, response} ->
         entry = %{
           "mode" => mode,
           "request_sha256" => hash(request),
-          "response_sha256" => hash(Jason.encode!(%{
-            "text" => Map.get(response, :text),
-            "object" => Map.get(response, :object)
-          })),
+          "response_sha256" =>
+            hash(
+              Jason.encode!(%{
+                "text" => Map.get(response, :text),
+                "object" => Map.get(response, :object)
+              })
+            ),
           "model" => Map.get(response, :model),
           "finish_reason" => Map.get(response, :finish_reason)
         }
@@ -83,7 +89,9 @@ defmodule FountWorkshop.Writing.Completion do
           end
 
         case validated do
-          {:ok, object} -> {:ok, object, Enum.reverse([entry | trace])}
+          {:ok, object} ->
+            {:ok, object, Enum.reverse([entry | trace])}
+
           {:error, errors} when repairs > 0 ->
             repair_prompt =
               original <>
@@ -91,11 +99,14 @@ defmodule FountWorkshop.Writing.Completion do
                 "representation and these errors. Do not alter writer requirements or base IDs.\n" <>
                 inspect(errors, limit: 100, printable_limit: 8_000)
 
-            attempt(client, original, repair_prompt, schema, name, validator, mode,
-              repairs - 1, [Map.put(entry, "validation", "failed") | trace])
+            attempt(client, original, repair_prompt, schema, name, validator, mode, repairs - 1, [
+              Map.put(entry, "validation", "failed") | trace
+            ])
+
           {:error, errors} ->
             {:error, {:invalid_completion, errors},
-              Enum.reverse([Map.put(entry, "validation", "failed") | trace])}
+             Enum.reverse([Map.put(entry, "validation", "failed") | trace])}
+
           other ->
             {:error, {:invalid_validator_result, other}, Enum.reverse([entry | trace])}
         end

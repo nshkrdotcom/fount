@@ -2,7 +2,7 @@ defmodule Fount.Revision do
   @moduledoc "Content revision identity."
 
   @enforce_keys [:id]
-  defstruct [:id, :parent_id, :created_at, :actor, :message]
+  defstruct [:id, :parent_id, :created_at, :actor, :message, :content_hash, :render_hash]
 
   @type t :: %__MODULE__{
           id: String.t(),

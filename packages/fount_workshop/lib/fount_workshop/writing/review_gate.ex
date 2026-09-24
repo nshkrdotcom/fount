@@ -12,22 +12,30 @@ defmodule FountWorkshop.Writing.ReviewGate do
     cond do
       candidate["base_revision_id"] != expected_revision ->
         {:error, :candidate_base_mismatch}
+
       review["candidate_id"] != candidate["id"] ->
         {:error, :review_candidate_mismatch}
+
       review["content_hash"] != candidate["content_hash"] ->
         {:error, :review_content_mismatch}
+
       not is_binary(review["actor"]) or String.trim(review["actor"]) == "" ->
         {:error, :missing_actor}
+
       Map.get(candidate, "structural_errors", []) != [] ->
         {:error, :invalid_model}
+
       not is_list(Map.get(candidate, "checks", [])) or
           not Enum.all?(Map.get(candidate, "checks", []), &is_map/1) ->
         {:error, :invalid_check_results}
+
       not valid_overrides?(Map.get(review, "overrides", [])) ->
         {:error, :invalid_overrides}
+
       MapSet.new(Map.get(review, "report_ids", [])) !=
           MapSet.new(Map.get(candidate, "report_ids", [])) ->
         {:error, :review_reports_mismatch}
+
       true ->
         validate_checks(Map.get(candidate, "checks", []), Map.get(review, "overrides", []))
     end
@@ -40,7 +48,9 @@ defmodule FountWorkshop.Writing.ReviewGate do
       %{"constraint_id" => id, "reason" => reason}
       when is_binary(id) and is_binary(reason) ->
         id != "" and String.trim(reason) != ""
-      _ -> false
+
+      _ ->
+        false
     end)
   end
 
@@ -57,11 +67,23 @@ defmodule FountWorkshop.Writing.ReviewGate do
         id = check["constraint_id"]
 
         cond do
-          not required or status == "pass" -> []
-          deterministic -> [%{"constraint_id" => id, "reason" => "hard_requirement_failed"}]
+          not required or status == "pass" ->
+            []
+
+          deterministic ->
+            [%{"constraint_id" => id, "reason" => "hard_requirement_failed"}]
+
           not MapSet.member?(acknowledged, id) ->
-            [%{"constraint_id" => id, "reason" => "review_acknowledgment_required", "status" => status}]
-          true -> []
+            [
+              %{
+                "constraint_id" => id,
+                "reason" => "review_acknowledgment_required",
+                "status" => status
+              }
+            ]
+
+          true ->
+            []
         end
       end)
 

@@ -19,6 +19,58 @@ defmodule Fount.Validate do
     |> Enum.reverse()
   end
 
+  @doc "Checks canonical structure independently of source parsing."
+  def screenplay(model) do
+    ids = Enum.map(model.ir.elements, & &1.id)
+    membership = Enum.flat_map(model.ir.scenes, & &1.element_ids)
+    blocks = model.ir.dialogue_blocks
+    body_ids = Enum.flat_map(blocks, & &1.body_ids)
+    errors = []
+
+    errors =
+      if length(ids) != length(Enum.uniq(ids)),
+        do: [error(:duplicate_element_id, "Duplicate element identity") | errors],
+        else: errors
+
+    errors =
+      if length(membership) != length(Enum.uniq(membership)),
+        do: [error(:duplicate_membership, "Element belongs to multiple scenes") | errors],
+        else: errors
+
+    errors =
+      Enum.reduce(model.ir.elements, errors, fn e, acc ->
+        cond do
+          e.type in [:dialogue, :parenthetical] and e.id not in body_ids ->
+            [error(:orphan_dialogue, "Dialogue has no cue", e.id) | acc]
+
+          not is_binary(e.text) or not String.valid?(e.text) ->
+            [error(:invalid_text, "Invalid UTF-8 text", e.id) | acc]
+
+          true ->
+            acc
+        end
+      end)
+
+    errors =
+      Enum.reduce(blocks, errors, fn b, acc ->
+        partner = Enum.find(blocks, &(&1.id == b.dual_with))
+        cue = Fount.Query.node(model, b.cue_id)
+        scene = Fount.Query.scene_for(model, b.cue_id)
+
+        invalid =
+          b.body_ids == [] or
+            (not is_nil(b.dual_with) and
+               (is_nil(partner) or partner.dual_with != b.id or partner.side == b.side or
+                  Fount.Query.scene_for(model, partner.cue_id) != scene)) or
+            (Map.get(cue.attrs || %{}, :dual?, false) and is_nil(b.dual_with)) or
+            Enum.any?(b.body_ids, &(Fount.Query.scene_for(model, &1) != scene))
+
+        if invalid, do: [error(:invalid_dialogue_group, "Invalid dialogue or dual group", b.id) | acc], else: acc
+      end)
+
+    Enum.reverse(errors)
+  end
+
   defp validate_cst_exactness(diags, doc) do
     if CST.exact?(doc.cst, doc.source) do
       diags

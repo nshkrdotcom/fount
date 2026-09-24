@@ -3,8 +3,11 @@ defmodule FountWorkshop.WritingDecisionsTest do
   alias FountWorkshop.Writing.{ChangeGroups, ReviewGate}
 
   defp group(id, dependencies \\ []) do
-    %{"id" => id, "depends_on" => dependencies,
-      "operations" => [%{"kind" => "replace_text", "value" => id}]}
+    %{
+      "id" => id,
+      "depends_on" => dependencies,
+      "operations" => [%{"kind" => "replace_text", "value" => id}]
+    }
   end
 
   test "selection proposes required repairs without silently selecting them" do
@@ -14,6 +17,7 @@ defmodule FountWorkshop.WritingDecisionsTest do
 
     assert {:error, {:missing_required_groups, detail}} =
              ChangeGroups.select(groups, ["reveal"])
+
     assert detail["missing"] == ["repair"]
     assert detail["proposed_selection"] == ["repair", "reveal"]
   end
@@ -21,30 +25,55 @@ defmodule FountWorkshop.WritingDecisionsTest do
   test "cycles and missing dependencies are invalid" do
     assert {:error, {:cyclic_group_dependencies, _}} =
              ChangeGroups.order([group("a", ["b"]), group("b", ["a"])])
+
     assert {:error, {:unknown_group_dependencies, _}} =
              ChangeGroups.order([group("a", ["missing"])])
   end
 
   test "an unchecked semantic requirement needs an explicit reason" do
     candidate = %{
-      "id" => "candidate", "base_revision_id" => "base", "content_hash" => "hash",
-      "report_ids" => ["report"], "structural_errors" => [],
-      "checks" => [%{"constraint_id" => "knowledge", "severity" => "required",
-        "evaluation" => "semantic", "status" => "not_checked"}]
+      "id" => "candidate",
+      "base_revision_id" => "base",
+      "content_hash" => "hash",
+      "report_ids" => ["report"],
+      "structural_errors" => [],
+      "checks" => [
+        %{
+          "constraint_id" => "knowledge",
+          "severity" => "required",
+          "evaluation" => "semantic",
+          "status" => "not_checked"
+        }
+      ]
     }
-    review = %{"candidate_id" => "candidate", "content_hash" => "hash",
-      "report_ids" => ["report"], "actor" => "writer", "overrides" => []}
+
+    review = %{
+      "candidate_id" => "candidate",
+      "content_hash" => "hash",
+      "report_ids" => ["report"],
+      "actor" => "writer",
+      "overrides" => []
+    }
 
     assert {:error, {:review_blockers, _}} = ReviewGate.validate(candidate, review, "base")
-    approved = Map.put(review, "overrides", [
-      %{"constraint_id" => "knowledge", "reason" => "Reviewed the pages personally"}
-    ])
+
+    approved =
+      Map.put(review, "overrides", [
+        %{"constraint_id" => "knowledge", "reason" => "Reviewed the pages personally"}
+      ])
+
     assert :ok = ReviewGate.validate(candidate, approved, "base")
 
-    hard = put_in(candidate, ["checks"], [
-      %{"constraint_id" => "knowledge", "severity" => "required",
-        "evaluation" => "deterministic", "status" => "fail"}
-    ])
+    hard =
+      put_in(candidate, ["checks"], [
+        %{
+          "constraint_id" => "knowledge",
+          "severity" => "required",
+          "evaluation" => "deterministic",
+          "status" => "fail"
+        }
+      ])
+
     assert {:error, {:review_blockers, _}} = ReviewGate.validate(hard, approved, "base")
   end
 

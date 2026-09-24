@@ -1,8 +1,21 @@
 # Feature and implementation map
 
-Status terms: **source added** means an implementation file exists in this
-delivery, not that its Elixir tests passed. **Integration remaining** means
-release behavior must still be implemented or connected and verified.
+This file describes the supplied source overlay. The local implementation has
+advanced beyond it; the table below records the current verified additions.
+**Implemented in part** does not mean the full feature acceptance case passes.
+
+| Area | Current source and evidence | Status |
+| --- | --- | --- |
+| Canonical screenplay edits and revision values | `Fount.Screenplay.Editor`, `Fount.Screenplay.Model`, `Fount.Slice`, `Fount.Target`, `Fount.ChangeImpact`; 56 offline core tests pass | Implemented in part; full operation contract and interchange matrix remain |
+| PostgreSQL writing model | Fresh migration and `Fount.Persistence`; four real DB integration tests pass | Implemented in part; legacy stores still need removal and more acceptance cases remain |
+| Develop and continuation | `FountWorkshop.Develop` uses Hex Inference and writes real candidates; two real Codex drafts and PDFs verified | Implemented in part; full W01 editing/acceptance case remains |
+| Candidate review | `FountWorkshop.Review` and atomic acceptance; repeated acceptance now rejects | Implemented in part; full selection/rebase and report validation remain |
+| Perspective evaluation | `FountProbe.State` and `FountProbe.Knowledge`; real Jev example and offline tests pass | Implemented in part; complete character access ledger and T01–T13 remain |
+| Scene inventory | `FountProbe.Inventory` reports visible scene IDs, cue cast and dialogue/action word counts with exact inspected scope | Deterministic portion of T01 only; model extraction remains |
+| Exact passage retrieval | `FountProbe.Search` returns revision-labeled literal phrase hits, inspected counts and exact element IDs; private note and omitted content are excluded by default | Deterministic portion of T02 only; semantic relevance and historical scope remain |
+| Exact-target rewrite | `FountWorkshop.TargetedRewrite` uses Inference to replace selected action/dialogue elements by ID, saves/reopens a candidate and leaves accepted head unchanged; offline, DB and live Codex checks pass | A useful part of W07; complete six-pass workflow remains |
+| Sequence rebuilding | `FountWorkshop.SequenceRebuild` replaces selected consecutive scenes with generated scenes, validates required exact passages and target count, retains matching existing scene/element IDs, and saves a candidate; offline, PostgreSQL and live five-to-three checks pass | Part of W04; multi-route comparison and genuine page reduction remain |
+| Live examples | Exactly one entrypoint exists in each package | Partial mode coverage; see `VERIFICATION.md` |
 
 ## Concrete additions
 

@@ -72,8 +72,7 @@ defmodule FountWorkshop.Writing.ChangeGroups do
 
   defp identities(groups) do
     ids = Enum.map(groups, & &1["id"])
-    if length(ids) == length(Enum.uniq(ids)),
-      do: :ok, else: {:error, :duplicate_group_ids}
+    if length(ids) == length(Enum.uniq(ids)), do: :ok, else: {:error, :duplicate_group_ids}
   end
 
   defp references(groups) do
@@ -89,12 +88,14 @@ defmodule FountWorkshop.Writing.ChangeGroups do
   end
 
   defp topological([], ordered, _done), do: {:ok, Enum.reverse(ordered)}
+
   defp topological(pending, ordered, done) do
     case Enum.find(pending, fn group ->
            Enum.all?(Map.get(group, "depends_on", []), &MapSet.member?(done, &1))
          end) do
       nil ->
         {:error, {:cyclic_group_dependencies, Enum.map(pending, & &1["id"])}}
+
       next ->
         remaining = Enum.reject(pending, &(&1["id"] == next["id"]))
         topological(remaining, [next | ordered], MapSet.put(done, next["id"]))

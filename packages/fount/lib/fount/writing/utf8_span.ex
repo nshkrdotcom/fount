@@ -15,11 +15,15 @@ defmodule Fount.Writing.UTF8Span do
   def extract(text, {first, last})
       when is_binary(text) and is_integer(first) and is_integer(last) do
     cond do
-      not String.valid?(text) -> {:error, :invalid_utf8}
+      not String.valid?(text) ->
+        {:error, :invalid_utf8}
+
       first < 0 or last <= first or last > byte_size(text) ->
         {:error, :invalid_span}
+
       not boundary?(text, first) or not boundary?(text, last) ->
         {:error, :split_utf8_codepoint}
+
       true ->
         {:ok, binary_part(text, first, last - first)}
     end
@@ -46,6 +50,7 @@ defmodule Fount.Writing.UTF8Span do
     cond do
       not String.valid?(text) or not String.valid?(pin) ->
         {:error, :invalid_utf8}
+
       true ->
         case occurrences(text, pin, 0, []) do
           [{first, size}] -> {:ok, {first, first + size}}
@@ -66,6 +71,7 @@ defmodule Fount.Writing.UTF8Span do
       case :binary.match(text, pin, scope: {offset, remaining}) do
         :nomatch ->
           Enum.reverse(found)
+
         {first, size} ->
           # Advance one byte so overlapping occurrences also make a pin
           # ambiguous. Never silently choose one instance.
@@ -76,6 +82,7 @@ defmodule Fount.Writing.UTF8Span do
 
   defp boundary?(_text, 0), do: true
   defp boundary?(text, offset) when offset == byte_size(text), do: true
+
   defp boundary?(text, offset) do
     byte = :binary.at(text, offset)
     byte < 128 or byte >= 192

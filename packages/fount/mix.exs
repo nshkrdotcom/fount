@@ -56,6 +56,7 @@ defmodule Fount.MixProject do
         "guides/architecture.md",
         "guides/lossless-fountain.md",
         "guides/ir.md",
+        "guides/cast-and-mentions.md",
         "guides/editing.md",
         "guides/annotations-and-analysis.md",
         "guides/persistence.md",
@@ -64,7 +65,7 @@ defmodule Fount.MixProject do
       ],
       groups_for_extras: [
         Overview: ~r/(README|CHANGELOG|LICENSE)/,
-        "Design & Architecture": ~r/guides\/(architecture|lossless-fountain|ir|editing)/,
+        "Design & Architecture": ~r/guides\/(architecture|lossless-fountain|ir|cast-and-mentions|editing)/,
         "Capabilities & Runtime": ~r/guides\/(annotations-and-analysis|persistence|adapters)/,
         "Research & Precedents": ~r/guides\/research/
       ],

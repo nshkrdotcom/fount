@@ -11,73 +11,128 @@
 
 # Fount Workshop
 
-Fount Workshop is a writer-controlled app layer over [Fount](https://hexdocs.pm/fount)'s canonical screenplay model. It adds model proposals, preview/accept, PDF export and dated submission checks. Fountain and FDX remain import/export formats. This is a separate Mix project in the poncho, with no web server or background process.
+**Writer revision workshop, agent collaboration loop, and PDF handoff engine for the Fount screenplay framework.**
 
-## Setup
+Fount Workshop is the application layer built on top of [Fount](https://hexdocs.pm/fount). It provides the workflows writers and AI agents need to draft, iterate, inspect, and rehearse screenplays:
 
-Use Elixir 1.18 or later, PostgreSQL for accepted canonical revisions, Node.js 22 or later, and Poppler's `pdfinfo`, `pdffonts`, and `pdftotext` commands. Configure/start `Fount.Repo` and run `Ecto.Migrator.run(Fount.Repo, Fount.Persistence.migrations_path(), :up, all: true)` before using the relational workflow. From this directory:
+* **Bounded Scene Revision Loop:** An agentic workflow (`context → propose → preview → accept`) where the writer retains full editorial authority.
+* **Side-Effect-Free Previews:** Review Myers text diffs and structural changes before any edit touches the database.
+* **Forensic PDF Export:** Professional screenplay PDF generation via pinned Afterwriting 1.17.3, paired with automated Poppler inspection (US Letter geometry, Courier Prime font embedding, blank page checks).
+* **Dated Submission Audits:** Mechanical checks for competition and evaluation profiles (e.g. The Black List, Academy Nicholl Fellowship) with explicit AI policy and title-page anonymity flags.
+* **Dialogue Table Reads:** Extraction of ordered rehearsal sequences with pluggable TTS voice mapping.
+
+---
+
+## Quickstart
+
+### 1. Setup & Installation
+
+Ensure you have Poppler utilities installed on your system (`pdfinfo`, `pdffonts`, `pdftotext`). Then install the dependencies and the pinned renderer:
 
 ```bash
+cd packages/fount_workshop
 mix deps.get
 npm ci
-mix test
 ```
 
-`npm ci` installs the pinned Afterwriting 1.17.3 renderer. Model calls are opt-in. Offline tests use `Inference.Adapters.Mock`; a live provider is configured through an `Inference.Client` at the application edge. No model credentials are needed for PDF export or tests.
+### 2. Revise a Scene with AI
 
-## Revise a scene
-
-The loop is `context → propose → preview → accept`. For a canonical screenplay, `context/3` includes selected scene text and stable element IDs. The proposal decoder accepts bounded `replace_text` operations for action, dialogue or parentheticals and `set_scene_heading` for the selected scene. Preview runs through pure `Fount.Screenplay.apply/2`; accept commits through `Fount.Persistence.save/4` against the base revision.
+Extract a bounded scene context, generate structured proposals with an `Inference` client, preview diffs in memory, and commit atomically:
 
 ```elixir
 alias FountWorkshop, as: Workshop
 
-{:ok, script} = Fount.Persistence.load(Fount.Repo, "feature")
+# 1. Load canonical screenplay from PostgreSQL
+{:ok, script} = Fount.Persistence.load(Fount.Repo, "my-feature")
 scene = hd(script.ir.scenes)
+
+# 2. Extract scene context and stable element IDs
 {:ok, context} = Workshop.context(script, scene.id)
 
-# Configure this client with an Inference adapter/provider available to you.
-client = Inference.client!(adapter: MyAdapter, provider: :my_provider, model: "my-model")
-{:ok, proposal} = Workshop.propose(context, "Tighten the dialogue", client)
+# 3. Request a revision from an LLM
+client = Inference.client!(
+  adapter: Inference.Adapters.OpenAI, 
+  api_key: System.fetch_env!("OPENAI_API_KEY"), 
+  model: "gpt-4o"
+)
+{:ok, proposal} = Workshop.propose(context, "Sharpen the dialogue and heighten tension", client)
+
+# 4. Preview diffs in memory (zero database side effects)
 {:ok, preview} = Workshop.preview(script, proposal)
+preview.source_diff   # Inspect text additions/deletions
+preview.semantic_diff # Inspect element-level changes
 
-preview.source_diff
-preview.semantic_diff
-
-# Reject by discarding the preview; no database row has changed.
-# Accept after review, against the revision used to build the context:
-:ok = Workshop.accept(Fount.Repo, "feature", preview, script.revision.id)
+# 5. Accept changes atomically against the base revision
+:ok = Workshop.accept(Fount.Repo, "my-feature", preview, script.revision.id)
 ```
 
-`accept/5` compares the current relational revision and saves model, typed rows and acceptance provenance in one transaction. The earlier `Fount.Document`/filesystem workflow remains available as a compatibility path; it writes a separate acceptance record under `.fount_workshop/acceptances`. Do not infer that an unrecorded draft contains no AI content.
+If the writer rejects the proposal, simply drop the preview—no database rows are modified.
 
-## Export and check a submission artifact
+### 3. PDF Export and Inspection
+
+Generate industry-standard screenplay PDFs and receive an automated inspection report:
 
 ```elixir
-{:ok, script} = Fount.Persistence.load(Fount.Repo, "feature")
-{:ok, pdf} = FountWorkshop.Export.PDF.export(script, "out/feature.pdf")
-{:ok, profile} = FountWorkshop.Submission.profile(:black_list)
-check = FountWorkshop.Submission.check(script, pdf, profile)
+{:ok, report} = FountWorkshop.Export.PDF.export(script, "priv/exports/feature.pdf")
+
+report.pages          # => 102
+report.page_size      # => :us_letter
+report.courier_prime? # => true
+report.blank_pages    # => []
+report.sha256         # => "a4b2..."
 ```
 
-The PDF report contains page count, detected paper size and Courier Prime embedding, file hash, and model revision. The exporter uses US Letter and suppresses notes and scene numbers. Review the PDF visually before sending it. The renderer is a presentation adapter.
+### 4. Audit Submission Compliance
 
-## Rehearse dialogue
+Audit a rendered PDF against dated venue profiles before submitting:
 
-`Fount.Writer.table_read/3` returns ordered turns with literal cues, linked cast IDs, dialogue, parentheticals and dual-dialogue metadata. `FountWorkshop.TableRead.synthesize/4` routes those turns through a caller-supplied speech function and a voice map keyed by cast ID or cue. It returns ordered audio clips for playback; it reports missing voice mappings and speech failures explicitly. The workshop does not bundle a voice engine.
+```elixir
+alias FountWorkshop.Submission
 
-Profiles are dated mechanical checks, not eligibility certificates. `:black_list` checks the PDF without inventing a universal page range. `:nicholl_2026_27` checks its current 80–125 page range and title-page anonymity, and flags accepted AI-generated screenplay text against its published rule. Both leave rights, authorship, and current-rule verification to the writer. See the [Black List help center](https://help.blcklst.com/kb/guide/en/writers-pROPvK6l0J/Steps/2724678) and [Academy 2026–27 Nicholl rules](https://www.oscars.org/sites/oscars/files/2026-06/2026-2027%20Nicholl%20Rules%20Terms%20and%20Conditions%20%281%29.pdf).
+{:ok, profile} = Submission.profile(:nicholl_2026_27)
+check = Submission.check(script, report, profile)
 
-## Quality checks
-
-```bash
-mix format --check-formatted
-mix deps.unlock --check-unused
-mix compile --warnings-as-errors
-mix test
-mix credo --strict
-mix dialyzer
-mix docs --warnings-as-errors
+check.status              # => :failed or :review_required
+check.mechanical_problems # => []
+check.requires_writer_review
+# => [:authorship_rights_and_current_rules, :verify_no_ai_generated_script_content]
 ```
 
-The core package has its own independent gate. The workshop is an app project and is not published to Hex.
+### 5. Dialogue Table Reads
+
+Hear scenes aloud by routing ordered dialogue turns through a voice map and speech engine:
+
+```elixir
+alias FountWorkshop.TableRead
+
+# Map voices to characters
+voices = %{
+  sarah.id => "voice-sarah-lead",
+  "REESE" => "voice-reese"
+}
+
+# Define your TTS synthesis function
+speech_fn = fn text, voice -> MyTTS.speak(text, voice: voice) end
+
+# Synthesize rehearsal audio clips
+{:ok, audio_turns} = TableRead.synthesize(script, scene.id, voices, speech_fn)
+```
+
+---
+
+## Documentation Guides
+
+Explore comprehensive guides on Fount Workshop's systems:
+
+* [**Workshop Architecture**](guides/architecture.md) — Poncho layout, separation from core Fount, and revision lifecycle.
+* [**Scene Revision Loop**](guides/scene-revision-loop.md) — The 4-step workflow, mock testing, and atomic acceptance.
+* [**Proposals & Diffs**](guides/proposals-and-diffs.md) — JSON Schema enforcement, bounded operations, and Myers diffing.
+* [**PDF Export & Inspection**](guides/pdf-export-and-inspection.md) — Afterwriting layout engine, Poppler forensic checks, and revision hashing.
+* [**Submission Checks**](guides/submission-checks.md) — Black List and Nicholl profiles, mechanical criteria, and AI policy flags.
+* [**Dialogue Table Reads**](guides/table-reads-and-audio.md) — Turn extraction, voice routing, and pluggable speech synthesis.
+
+---
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

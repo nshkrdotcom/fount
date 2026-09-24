@@ -11,87 +11,161 @@
 
 # Fount
 
-Fount is a headless screenplay framework with a format-independent canonical model. Fountain and FDX are import/export adapters. Untouched Fountain imports retain exact bytes and CST for lossless export; structured authoring can begin without either format.
+**A headless screenplay engine and relational authoring platform for Elixir.**
 
-## Design
+Fount treats screenplays as structured, queryable data rather than flat text files. It decouples screenplay truth from external syntax: Fountain and Final Draft (FDX) serve as lossless import and export boundaries, while your screenplay exists as an immutable, typed model backed by PostgreSQL and Ecto.
 
-Fount has four kinds of truth:
+---
 
-1. **Source truth** - exact bytes, line endings, whitespace, syntax markers, comments, notes, boneyards, and source spans.
-2. **Screenplay truth** - normalized typed screenplay elements, scenes, dialogue blocks, outline structure, and durable IDs.
-3. **Interpretive truth** - annotations from deterministic analyzers, NLP, or model-backed systems, each tied to source revision and provenance.
-4. **Presentation/operational truth** - pagination, timing, reports, JSON, FDX, production breakdowns, and other projections.
+## The Four Truths
 
-Canonical edits transform immutable `Fount.Screenplay` values and preserve stable IDs. The older `Fount.Document` API remains for source-backed Fountain edits: it creates source patches, reparses and reconciles identities.
+Screenplay systems fail when they conflate formatting quirks with dramatic structure. Fount enforces four distinct architectural layers:
 
-## Quick use
+```text
+┌──────────────────────────────────────────────────────────────┐
+│  1. SOURCE TRUTH                                             │
+│  Exact imported bytes, CST, trivia, and syntax spans         │
+└──────────────────────────┬───────────────────────────────────┘
+                           │ import / project
+                           ▼
+┌──────────────────────────────────────────────────────────────┐
+│  2. SCREENPLAY TRUTH                                         │
+│  Canonical elements, scenes, dialogue turns, durable UUIDs   │
+└──────────────────────────┬───────────────────────────────────┘
+                           │ analyses / resolution
+                           ▼
+┌──────────────────────────────────────────────────────────────┐
+│  3. INTERPRETIVE TRUTH                                       │
+│  Authored cast, aliases, byte-anchored mentions, assertions  │
+└──────────────────────────┬───────────────────────────────────┘
+                           │ render / layout
+                           ▼
+┌──────────────────────────────────────────────────────────────┐
+│  4. PRESENTATION TRUTH                                       │
+│  Laid-out PDF pages, eighths, timing, and rehearsal audio    │
+└──────────────────────────────────────────────────────────────┘
+```
+
+1. **Source Truth:** Exact imported bytes, comments, boneyards, and line endings. Untouched files round-trip byte-for-byte.
+2. **Screenplay Truth:** Format-independent elements, scenes, and dialogue blocks identified by durable UUIDs.
+3. **Interpretive Truth:** Authored characters, aliases, byte-anchored occurrences, and evidence-backed claims tied to revisions.
+4. **Presentation Truth:** Laid-out PDF pages, page eighths, timing estimates, and audio table reads.
+
+---
+
+## Quickstart
+
+### 1. Parse Lossless Fountain
+
+Import raw Fountain text into an exact Concrete Syntax Tree (CST) and semantic Intermediate Representation (IR):
 
 ```elixir
 {:ok, doc} = Fount.parse("""
-INT. KITCHEN - NIGHT
+EXT. BRICK HOUSE - NIGHT
 
-MARA
-Don't.
+SARAH
+We have to keep moving.
+
+She checks the perimeter.
 """)
 
+# Untouched source round-trips byte-for-byte:
 Fount.render(doc) == doc.source.raw
-
-scene = doc |> Fount.scenes() |> hd()
-{:ok, changed, change_set} =
-  Fount.apply(doc, Fount.Edit.set_scene_heading(scene.id, "INT. KITCHEN - DAWN"))
 ```
 
-Create canonical screenplay content directly from typed elements:
+### 2. Author a Canonical Screenplay
+
+Build a screenplay directly from typed data without needing Fountain punctuation:
 
 ```elixir
-script = Fount.Screenplay.new(scenes: [
-  %{heading: "INT. KITCHEN - NIGHT", elements: [
-    %{type: :character, text: "MARA"},
-    %{type: :dialogue, text: "Don't."}
-  ]}
-])
+alias Fount.Screenplay
 
-dialogue = Enum.find(script.ir.elements, &(&1.type == :dialogue))
-{:ok, revised} = Fount.Screenplay.apply(script, Fount.Edit.replace_text(dialogue.id, "Wait."))
-Fount.Screenplay.to_fountain(revised)
+script = Screenplay.new(
+  title: [title: "TERMINUS", credit: "written by", author: "Jane Doe"],
+  scenes: [
+    %{
+      heading: "INT. BUNKER - NIGHT",
+      elements: [
+        %{type: :character, text: "SARAH"},
+        %{type: :dialogue, text: "The signal is gone."},
+        %{type: :action, text: "A distant rumble shakes the dust."}
+      ]
+    }
+  ]
+)
 ```
 
-## Persistence
+### 3. Atomic Edits and Revision Advancement
 
-`Fount.Persistence` is the canonical relational boundary. Fount owns its Ecto Repo, migrations, schemas, queries and transactions; PostgreSQL is the primary backend. The screenplay transformation functions remain usable without starting the Repo. Current scenes, elements, turns, cast and mentions are typed rows, while immutable revision snapshots provide history. See the [persistence guide](guides/persistence.md).
+Apply pure transformations to elements or scenes. Edits validate constraints, advance the revision hash, and compute semantic diffs:
 
-`Fount.Store.Filesystem` and `Fount.Store.SQLite` remain compatibility stores for source-backed Fountain documents. SQLite v1 is not the canonical relational model. It remains optional through Exqlite.
+```elixir
+dialogue_element = Enum.find(script.ir.elements, &(&1.type == :dialogue))
 
-## Why no whole-language parser generator?
+{:ok, revised} = Screenplay.apply(
+  script,
+  Fount.Edit.replace_text(dialogue_element.id, "The signal is back.")
+)
 
-Fountain is line-oriented and context-sensitive. Whether an uppercase line is a character cue depends on neighboring empty lines; dialogue depends on the preceding cue; boneyards can span lines; notes have their own multiline rule; exact whitespace and mixed line endings matter. Fount therefore uses a custom byte-preserving scanner, a context-aware parser, and a CST. General parser combinators remain appropriate for small future subgrammars, but are not the architecture of the Fountain parser.
-
-## Guarantees and limits
-
-Untouched Fountain renders byte-for-byte from its CST, including line endings, trivia, malformed notes, and unknown lines. Structural classification is conservative and contextual. Stable IDs survive source edits when a semantic match or explicit edit hint identifies the same object; an unmatched changed object gets an `:identity_not_retained` diagnostic. Arbitrary source rewrites can change IDs.
-
-FDX and JSON are adapters, not the canonical model. FDX supports practical spec-script interchange and returns `losses` for known unsupported production metadata and styling. Do not assume an arbitrary FDX file round-trips exactly.
-
-Filesystem saves can use `expected_revision: doc.revision.id` to reject an external edit before saving. This is a single-writer optimistic check, not a cross-process transaction. SQLite supports `Fount.Store.SQLite.init/1` and a caller-owned open connection via `Fount.Store.SQLite.new(conn: conn)`. The caller owns and closes that handle.
-
-Scene-heading decomposition has English default time terms and accepts `time_terms:` or `extra_time_terms:` in `Fount.SceneHeading.parse/2`; raw heading text is always retained.
-
-The separate [Fount Workshop](https://github.com/nshkrdotcom/fount/tree/main/packages/fount_workshop) app adds model proposals, PDF export, and dated submission checks without bringing those dependencies into the core.
-
-Add `{:exqlite, "~> 0.41"}` to a host application only when using the legacy `Fount.Store.SQLite` workflow.
-
-## Quality checks
-
-From `packages/fount`, run:
-
-```bash
-mix deps.get
-mix format --check-formatted
-mix deps.unlock --check-unused
-mix compile --warnings-as-errors
-mix test
-mix credo --strict
-mix dialyzer
-mix docs
-mix hex.build
+# Export the revised canonical model to Fountain:
+fountain_text = Screenplay.to_fountain(revised)
 ```
+
+### 4. Cast, Aliases, and Byte-Anchored Mentions
+
+Decouple dialogue cues from character identity. Track character presence vs. spoken references across scenes:
+
+```elixir
+alias Fount.Cast.{Character, Alias, Mention}
+
+# 1. Author the canonical character
+sarah = %Character{id: Fount.Id.v4(), display_name: "Sarah Connor"}
+
+# 2. Map aliases (cues vs direct address)
+alias_cue = %Alias{character_id: sarah.id, alias: "SARAH", kind: :cue}
+
+# 3. Track exact byte-anchored mentions in script elements
+mention = %Mention{
+  element_id: dialogue_element.id,
+  character_id: sarah.id,
+  surface: "SARAH",
+  byte_start: 0,
+  byte_end: 5,
+  role: :speaker_cue,
+  status: :confirmed
+}
+```
+
+### 5. Relational Persistence with Ecto
+
+Save canonical screenplays, normalized current rows, and immutable revision snapshots into PostgreSQL:
+
+```elixir
+# Start Fount.Repo in your supervision tree, then persist:
+{:ok, script} = Fount.Persistence.save(Fount.Repo, "my-feature", script)
+
+# Reload at the latest revision:
+{:ok, loaded} = Fount.Persistence.load(Fount.Repo, "my-feature")
+```
+
+---
+
+## Documentation Guides
+
+Explore comprehensive guides on Fount's subsystems:
+
+* [**Architecture Overview**](guides/architecture.md) — The Four Truths model, poncho workspace design, and functional core boundaries.
+* [**Lossless Fountain**](guides/lossless-fountain.md) — Byte-covering scanner, concrete syntax trees, and exact round-tripping.
+* [**Screenplay IR**](guides/ir.md) — Flat element streams, structural views, and durable object identities.
+* [**Cast & Mentions**](guides/cast-and-mentions.md) — Normalized character entities, alias resolution, and rename ripple plans.
+* [**Editing & Generation**](guides/editing.md) — Structured operations, immutable transforms, diffing, and undo/redo change sets.
+* [**Annotations & Analysis**](guides/annotations-and-analysis.md) — Provenance tracking, confidence scoring, and metric boundaries.
+* [**Relational Persistence**](guides/persistence.md) — Ecto schemas, PostgreSQL transactions, migrations, and query interfaces.
+* [**Format Adapters**](guides/adapters.md) — Fountain, Final Draft (FDX), and JSON projection boundaries.
+* [**Design Research**](guides/research.md) — Precedents and lessons from Beat, Story Architect (STARC), BookNLP, and ScreenPy.
+
+---
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

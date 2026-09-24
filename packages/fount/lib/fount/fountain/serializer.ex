@@ -16,7 +16,11 @@ defmodule Fount.Fountain.Serializer do
     newline = Keyword.get(opts, :newline, "\n")
 
     title = serialize_title_page(script.title_page, newline)
-    body = serialize_elements(script.elements, newline)
+
+    body =
+      if Keyword.get(opts, :canonical_spacing, false),
+        do: serialize_model_elements(script, newline),
+        else: serialize_elements(script.elements, newline)
 
     cond do
       title == "" -> body
@@ -50,6 +54,40 @@ defmodule Fount.Fountain.Serializer do
     |> Enum.map(&serialize_element(&1, newline))
     |> IO.iodata_to_binary()
   end
+
+  defp serialize_model_elements(script, newline) do
+    omitted_starts =
+      script.scenes
+      |> Enum.filter(& &1.omitted?)
+      |> Map.new(&{&1.heading_id, true})
+
+    omitted_ends =
+      script.scenes
+      |> Enum.filter(& &1.omitted?)
+      |> Map.new(&{List.last(&1.element_ids), true})
+
+    script.elements
+    |> Enum.with_index()
+    |> Enum.map(fn {element, index} ->
+      next = Enum.at(script.elements, index + 1)
+      before = if Map.has_key?(omitted_starts, element.id), do: ["/*", newline], else: []
+      after_scene = if Map.has_key?(omitted_ends, element.id), do: ["*/", newline], else: []
+      gap = if needs_gap?(element, next), do: [newline], else: []
+      [before, serialize_element(element, newline), after_scene, gap]
+    end)
+    |> IO.iodata_to_binary()
+  end
+
+  defp needs_gap?(_element, nil), do: false
+  defp needs_gap?(%Element{type: :blank}, _next), do: false
+  defp needs_gap?(_element, %Element{type: :blank}), do: false
+  defp needs_gap?(%Element{type: :character}, %Element{type: next}) when next in [:dialogue, :parenthetical], do: false
+
+  defp needs_gap?(%Element{type: :parenthetical}, %Element{type: next}) when next in [:dialogue, :parenthetical],
+    do: false
+
+  defp needs_gap?(%Element{type: :dialogue}, %Element{type: next}) when next in [:dialogue, :parenthetical], do: false
+  defp needs_gap?(_element, _next), do: true
 
   defp serialize_element(%Element{type: :blank}, newline), do: newline
 

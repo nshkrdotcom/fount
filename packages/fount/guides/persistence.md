@@ -1,41 +1,39 @@
 # Persistence
 
-Persistence is a boundary, not part of the screenplay model.
+Fount separates immutable screenplay transformations from effects, while keeping both the domain and its persistence interface in this package. `Fount.Screenplay` can be created, edited, queried, and exported in memory without starting a database. `Fount.Persistence` is the PostgreSQL transaction boundary around accepted canonical revisions. `Fount.Repo`, Ecto row schemas, migrations and composable queries all belong to Fount. The workshop configures and starts the Repo; it does not own the screenplay schema.
 
-## What must be persisted
+## Canonical relational store
 
-The Fountain source can reconstruct CST, semantic IR, indexes, scenes, and dialogue blocks. Fount therefore persists only information that cannot safely be regenerated:
+The Ecto migrations ship at `Fount.Persistence.migrations_path/0`. Configure `Fount.Repo` for a PostgreSQL database, start it in your supervision tree, and run the migrations during deployment. In an application, for example:
 
-- document identity
-- semantic identity anchors
-- annotations/provenance
-- revision metadata
-
-On load, source is parsed again and identities are restored. There is no stale serialized IR competing with Fountain as a second source of truth.
-
-## Filesystem store: default
-
-`Fount.Store.Filesystem` is the recommended default. It stores:
-
-```text
-name.fountain
-name.fount.json
+```elixir
+config :fount, Fount.Repo,
+  database: "fount",
+  username: "fount",
+  password: System.fetch_env!("FOUNT_DATABASE_PASSWORD"),
+  hostname: "localhost"
 ```
 
-The first file remains ordinary portable Fountain and is friendly to Git and external editors. The sidecar contains Fount-specific identity/analysis metadata. Writes use temporary files plus rename to avoid exposing partially-written individual files.
+```elixir
+children = [Fount.Repo]
+{:ok, _} = Supervisor.start_link(children, strategy: :one_for_one)
+Ecto.Migrator.run(Fount.Repo, Fount.Persistence.migrations_path(), :up, all: true)
 
-This is the right default for writers, repositories, CLIs, and local tools.
+model = Fount.Screenplay.new(scenes: [%{heading: "INT. ROOM - DAY", elements: [%{type: :action, text: "Mara waits."}]}])
+:ok = Fount.Persistence.save(Fount.Repo, "feature", model, expected_revision: :new)
+{:ok, loaded} = Fount.Persistence.load(Fount.Repo, "feature")
+```
 
-## SQLite store: application persistence
+The current title, scenes, elements, dialogue turns, cast, aliases and mentions live in typed relational rows. Immutable `revisions.model` snapshots support history and undo; `load/2` rebuilds the live screenplay from current rows. A save validates references and exact mention bytes, compares the expected head, then commits a new revision, current rows, import artifact and optional acceptance provenance in one transaction. Stale saves return `{:error, {:conflict, current_revision}}`. Use `Fount.Persistence.Query` with ordinary Ecto queries for joins and pipeline selection.
 
-`Fount.Store.SQLite` is available when the optional `exqlite` dependency is present. It stores the current source/snapshot plus append-only revision records, enables WAL mode, and wraps saves in transactions.
+The current implementation uses PostgreSQL. Ecto does not make the SQLite and PostgreSQL adapters interchangeable by configuration alone; their migrations and constraints differ. The pure screenplay API needs no running database process, but the relational workflow does.
 
-An application that selects SQLite should include `{:exqlite, "~> 0.41"}` in its own `mix.exs`, then construct `Fount.Store.SQLite.new("path/to/fount.sqlite3")` and use the `Fount.Store` callbacks. `Fount.Store.SQLite.available?/0` reports whether Exqlite is loaded. Filesystem-only applications do not need a native SQLite dependency.
+## Compatibility stores
 
-SQLite is appropriate for desktop/server applications that manage many documents or want local revision history without running a database service. Fount talks to Exqlite directly; Ecto is deliberately not part of the core dependency graph.
+`Fount.Store.Filesystem` and `Fount.Store.SQLite` retain the earlier Fountain-document workflow. They persist original `.fountain` source with identity/annotation sidecar data or a v1 SQLite source/snapshot store. They do **not** expose the normalized current screenplay rows. Use them for existing documents and compatibility; import a `Fount.Document` with `Fount.Screenplay.from_document/1` to enter the canonical authoring path. An untouched imported Fountain artifact can be exported byte-for-byte with `Fount.Screenplay.to_fountain/1`; after canonical edits the exporter emits new Fountain.
 
-## Why PostgreSQL is not in the initial package
+For a v1 SQLite database, `Fount.Persistence.import_legacy(Fount.Repo, legacy_store, source_key, target_key)` copies its revision history and current draft to PostgreSQL as one transaction. It retains the original bytes for every imported revision and leaves the SQLite file untouched. The target key must be new. `Fount.Store.SQLite.load_revision/3` exposes a historical source document for inspection.
 
-PostgreSQL solves a different deployment problem: multi-user server persistence, remote concurrency, operational backups, and large shared datasets. Pulling it into a headless screenplay library would impose configuration and server assumptions on every consumer.
+Filesystem writes use temporary files and renames, but the source and sidecar are not one atomic file. `expected_revision:` rejects a detected stale source before save; it is not a cross-process lock. SQLite v1 uses optional `:exqlite`; consumers of that compatibility store should add Exqlite to their own dependency list. A caller-owned Exqlite connection may be supplied with `Fount.Store.SQLite.new(conn: conn)` and must be closed by its owner.
 
-A future `packages/...` package can implement the same `Fount.Store` behavior for PostgreSQL without changing the document or edit model. The poncho workspace layout reserves that option.
+The compatibility stores and the canonical relational store have different authorities. Do not treat a v1 sidecar snapshot as a queryable substitute for canonical rows or silently synchronize both as independent heads.

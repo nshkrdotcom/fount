@@ -1,6 +1,6 @@
 # Screenplay IR
 
-`Fount.IR.Script` is format-neutral screenplay truth. It is rebuilt from the Fountain CST and can also be the target of future foreign-format adapters.
+`Fount.IR.Script` is format-neutral screenplay structure inside `Fount.Screenplay`. It can be constructed directly from typed data or populated through a Fountain import. The imported CST is retained separately for exact unchanged export.
 
 ## Flat ordered elements
 
@@ -28,7 +28,7 @@ Scenes, dialogue blocks, and outline nodes reference element IDs instead of copy
 
 ## Literal cues are not character entities
 
-A parser can know that `MOM (O.S.)` is a character cue without knowing whether `MOM`, `HELEN`, and `YOUNG HELEN` refer to one dramatic entity. Fount therefore keeps literal cue structure in the IR and performs entity resolution in the annotation/semantic layer.
+A parser can know that `MOM (O.S.)` is a character cue without knowing whether `MOM`, `HELEN`, and `YOUNG HELEN` refer to one dramatic entity. Literal cues stay in the IR. Writer-authored cast entries in `Fount.Screenplay.cast` have durable IDs; cue links and other occurrences are separate evidence in `Fount.Screenplay.mentions`.
 
 This prevents inference from becoming canonical screenplay fact.
 

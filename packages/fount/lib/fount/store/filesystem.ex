@@ -11,8 +11,9 @@ defmodule Fount.Store.Filesystem do
   def new(root), do: %__MODULE__{root: Path.expand(root)}
 
   @impl true
-  def save(%__MODULE__{} = store, key, doc, _opts) do
+  def save(%__MODULE__{} = store, key, doc, opts) do
     with {:ok, base} <- base_path(store, key),
+         :ok <- check_revision(base <> ".fountain", Keyword.get(opts, :expected_revision, :any)),
          :ok <- File.mkdir_p(Path.dirname(base)) do
       with :ok <- atomic_write(base <> ".fountain", doc.source.raw) do
         atomic_write(base <> ".fount.json", Snapshot.encode!(doc))
@@ -24,17 +25,70 @@ defmodule Fount.Store.Filesystem do
   def load(%__MODULE__{} = store, key, _opts) do
     with {:ok, base} <- base_path(store, key),
          {:ok, source} <- File.read(base <> ".fountain") do
-      opts = sidecar_options(base <> ".fount.json")
-      Fount.parse(source, Keyword.put(opts, :path, base <> ".fountain"))
+      with {:ok, opts, stale?} <- sidecar_options(base <> ".fount.json", source),
+           {:ok, doc} <- Fount.parse(source, Keyword.put(opts, :path, base <> ".fountain")) do
+        {:ok, if(stale?, do: add_stale_diagnostic(doc), else: doc)}
+      end
     end
   end
 
-  defp sidecar_options(path) do
-    with {:ok, json} <- File.read(path),
-         {:ok, snapshot} <- Snapshot.decode(json) do
-      Snapshot.parse_options(snapshot)
+  defp sidecar_options(path, source) do
+    case File.read(path) do
+      {:error, :enoent} ->
+        {:ok, [], false}
+
+      {:ok, json} ->
+        decode_sidecar(json, source)
+
+      error ->
+        error
+    end
+  end
+
+  defp decode_sidecar(json, source) do
+    with {:ok, snapshot} <- Snapshot.decode(json),
+         :ok <- Snapshot.validate(snapshot) do
+      stale? = snapshot["revision"]["id"] != Fount.ID.hash(source)
+      opts = Snapshot.parse_options(snapshot)
+      opts = if stale?, do: keep_writer_annotations(opts), else: opts
+      {:ok, opts, stale?}
     else
-      _ -> []
+      _ -> {:error, :malformed_sidecar}
+    end
+  end
+
+  defp keep_writer_annotations(opts) do
+    annotations =
+      opts
+      |> Keyword.get(:annotations, Fount.Annotations.new())
+      |> Map.filter(fn {_id, annotation} -> annotation.provenance.producer == "writer" end)
+
+    Keyword.put(opts, :annotations, annotations)
+  end
+
+  defp add_stale_diagnostic(doc) do
+    diagnostic = %Fount.Diagnostic{
+      severity: :warning,
+      code: :sidecar_source_changed,
+      message: "Fountain source changed since the sidecar snapshot; old derived annotations were discarded."
+    }
+
+    %{doc | diagnostics: [diagnostic | doc.diagnostics]}
+  end
+
+  defp check_revision(_path, :any), do: :ok
+
+  defp check_revision(path, expected) do
+    case File.read(path) do
+      {:ok, source} ->
+        actual = Fount.ID.hash(source)
+        if actual == expected, do: :ok, else: {:error, {:conflict, actual}}
+
+      {:error, :enoent} ->
+        if expected == :new, do: :ok, else: {:error, {:conflict, :missing}}
+
+      error ->
+        error
     end
   end
 

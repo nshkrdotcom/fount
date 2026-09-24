@@ -6,12 +6,12 @@ defmodule Fount.Analyzers.Locations do
   alias Fount.Annotation.{Provenance, Target}
 
   @impl true
-  def analyze(doc, _opts) do
+  def analyze(doc, opts) do
     annotations =
       doc
       |> Fount.Query.elements(:scene_heading)
       |> Enum.map(fn element ->
-        value = Fount.SceneHeading.parse(element.text)
+        value = Fount.SceneHeading.parse(element.text, opts)
 
         %Annotation{
           id: Fount.ID.v5(doc.id, ["analysis:scene-heading:", element.id]),

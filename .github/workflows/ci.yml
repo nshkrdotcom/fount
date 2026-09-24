@@ -1,0 +1,95 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  fount:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: fount
+          POSTGRES_PASSWORD: fount_test
+          POSTGRES_DB: fount_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U fount -d fount_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      FOUNT_TEST_PGHOST: localhost
+      FOUNT_TEST_PORT: '5432'
+      FOUNT_TEST_USER: fount
+      FOUNT_TEST_PASSWORD: fount_test
+    strategy:
+      matrix:
+        elixir: ['1.18', '1.20']
+        otp: ['27']
+    defaults:
+      run:
+        working-directory: packages/fount
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          elixir-version: ${{ matrix.elixir }}
+          otp-version: ${{ matrix.otp }}
+      - run: mix local.hex --force
+      - run: mix deps.get
+      - run: mix format --check-formatted
+      - run: mix deps.unlock --check-unused
+      - run: mix compile --warnings-as-errors
+      - run: mix test
+      - run: mix credo --strict
+      - run: mix dialyzer
+      - run: mix docs --warnings-as-errors
+      - run: mix hex.build
+
+  workshop:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: fount
+          POSTGRES_PASSWORD: fount_test
+          POSTGRES_DB: fount_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U fount -d fount_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      FOUNT_TEST_PGHOST: localhost
+      FOUNT_TEST_PORT: '5432'
+      FOUNT_TEST_USER: fount
+      FOUNT_TEST_PASSWORD: fount_test
+    defaults:
+      run:
+        working-directory: packages/fount_workshop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          elixir-version: '1.20'
+          otp-version: '29'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: sudo apt-get update && sudo apt-get install -y poppler-utils
+      - run: npm ci
+      - run: mix deps.get
+      - run: mix format --check-formatted
+      - run: mix deps.unlock --check-unused
+      - run: mix compile --warnings-as-errors
+      - run: mix test
+      - run: mix credo --strict
+      - run: mix dialyzer
+      - run: mix docs --warnings-as-errors

@@ -12,7 +12,7 @@ defmodule Fount.MixProject do
       elixir: "~> 1.18",
       start_permanent: Mix.env() == :prod,
       description:
-        "Canonical headless screenplay substrate, semantic IR, lossless Fountain parser, and compilation runtime",
+        "Headless screenplay framework with a typed model, lossless Fountain import, and relational persistence",
       source_url: @source_url,
       homepage_url: @source_url,
       deps: deps(),
@@ -29,6 +29,8 @@ defmodule Fount.MixProject do
     [
       {:jason, "~> 1.4.5"},
       {:saxy, "~> 1.6"},
+      {:ecto_sql, "~> 3.13"},
+      {:postgrex, "~> 0.20"},
       {:exqlite, "~> 0.41", optional: true},
       {:stream_data, "~> 1.4", only: :test},
       {:ex_doc, "~> 0.40", only: :dev, runtime: false},
@@ -70,6 +72,10 @@ defmodule Fount.MixProject do
         "Core & Document": [
           Fount,
           Fount.Document,
+          Fount.Screenplay,
+          Fount.Writer,
+          Fount.Cast.Character,
+          Fount.Cast.Mention,
           Fount.Query,
           Fount.Validate,
           Fount.Diff,
@@ -134,6 +140,9 @@ defmodule Fount.MixProject do
           Fount.Adapter.JSON
         ],
         Persistence: [
+          Fount.Repo,
+          Fount.Persistence,
+          Fount.Persistence.Query,
           Fount.Store,
           Fount.Store.Filesystem,
           Fount.Store.SQLite,
@@ -151,7 +160,7 @@ defmodule Fount.MixProject do
       links: %{
         "GitHub" => @source_url
       },
-      files: ~w(lib guides assets mix.exs README.md CHANGELOG.md LICENSE)
+      files: ~w(lib priv guides assets mix.exs README.md CHANGELOG.md LICENSE)
     ]
   end
 end

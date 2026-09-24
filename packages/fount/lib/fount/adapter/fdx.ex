@@ -1,5 +1,5 @@
 defmodule Fount.Adapter.FDX do
-  @moduledoc "Practical Final Draft XML adapter. Fountain/IR remain the canonical Fount model."
+  @moduledoc "Practical Final Draft XML adapter for import/export at Fount's model boundary."
 
   import Saxy.XML
 
@@ -278,10 +278,10 @@ defmodule Fount.Adapter.FDX do
         number -> [{"Number", to_string(number)}]
       end
 
-    [element("SceneProperties", attrs, []), element("Text", [], text)]
+    [element("SceneProperties", attrs, []), element("Text", [], characters(text))]
   end
 
-  defp paragraph_children(_data, text), do: [element("Text", [], text)]
+  defp paragraph_children(_data, text), do: [element("Text", [], characters(text))]
 
   defp export_title_page(nil), do: []
 
@@ -290,7 +290,7 @@ defmodule Fount.Adapter.FDX do
       values = if entry.values == [], do: [""], else: entry.values
 
       Enum.map(values, fn value ->
-        element("Paragraph", [{"Type", "Action"}], [element("Text", [], "#{entry.key}: #{value}")])
+        element("Paragraph", [{"Type", "Action"}], [element("Text", [], characters("#{entry.key}: #{value}"))])
       end)
     end)
   end

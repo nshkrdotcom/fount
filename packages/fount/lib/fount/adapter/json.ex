@@ -9,7 +9,7 @@ defmodule Fount.Adapter.JSON do
 
   alias Fount.Adapter.ExportResult
 
-  @spec export(Fount.Document.t(), keyword()) :: {:ok, ExportResult.t()}
+  @spec export(Fount.Document.t() | Fount.Screenplay.t(), keyword()) :: {:ok, ExportResult.t()}
   def export(doc, opts \\ []) do
     include_source? = Keyword.get(opts, :include_source, false)
     include_annotations? = Keyword.get(opts, :include_annotations, true)
@@ -29,8 +29,10 @@ defmodule Fount.Adapter.JSON do
       "scenes" => Enum.map(doc.ir.scenes, &struct_map/1),
       "dialogue_blocks" => Enum.map(doc.ir.dialogue_blocks, &struct_map/1),
       "outline" => Enum.map(doc.ir.outline, &struct_map/1),
+      "cast" => doc |> Map.get(:cast, %{}) |> Map.values() |> Enum.sort_by(& &1.id) |> Enum.map(&struct_map/1),
+      "mentions" => doc |> Map.get(:mentions, %{}) |> Map.values() |> Enum.sort_by(& &1.id) |> Enum.map(&struct_map/1),
       "annotations" => if(include_annotations?, do: annotations(doc), else: []),
-      "source" => if(include_source?, do: doc.source.raw, else: nil)
+      "source" => if(include_source?, do: source_bytes(doc), else: nil)
     }
 
     {:ok, %ExportResult{data: Jason.encode!(payload, pretty: Keyword.get(opts, :pretty, true))}}
@@ -75,6 +77,14 @@ defmodule Fount.Adapter.JSON do
       }
     end)
   end
+
+  defp source_bytes(%Fount.Document{source: source}), do: source.raw
+
+  defp source_bytes(%Fount.Screenplay{import: %{format: :fountain, bytes: bytes, revision_id: revision}} = doc)
+       when revision == doc.revision.id,
+       do: bytes
+
+  defp source_bytes(%Fount.Screenplay{}), do: nil
 
   defp provenance(nil), do: nil
 

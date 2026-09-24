@@ -1,10 +1,10 @@
 # Editing and Generation
 
-Fount edits canonical source rather than allowing arbitrary mutation of IR structs.
+`Fount.Screenplay.apply/2` edits the canonical typed model with immutable values. The older source-backed `Fount.Edit.apply/3` path remains for exact Fountain documents.
 
 ## Edit pipeline
 
-An operation such as `Fount.Edit.replace_text/2` follows this path:
+For `Fount.Document`, an operation such as `Fount.Edit.replace_text/2` follows this path:
 
 1. resolve the stable target ID
 2. resolve its exact content/source span
@@ -44,7 +44,7 @@ builder =
 {:ok, doc} = Fount.Builder.to_document(builder)
 ```
 
-Generated Fountain is always reparsed through the same canonical parser; generation does not create a competing mutable document representation.
+The legacy `Fount.Document` builder emits Fountain and reparses it through the lossless parser. `Fount.Screenplay.new/1` also supports direct typed construction without Fountain punctuation, including sections and synopses outside scenes. Canonical model edits keep stable IDs and regenerate Fountain on export.
 
 ## Agent/tool contract
 

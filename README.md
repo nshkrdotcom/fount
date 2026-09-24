@@ -11,9 +11,9 @@
 
 # Fount
 
-**A headless screenplay framework with lossless Fountain source, a canonical screenplay IR, source-backed edits, and format adapters.**
+**A headless screenplay framework with a format-independent canonical model, relational persistence, lossless Fountain imports, and format adapters.**
 
-The Mix project is at [`packages/fount`](packages/fount). It supports parsing, querying, structured generation and editing, deterministic analysis, filesystem/SQLite persistence, and practical FDX interchange.
+The core Mix project is at [`packages/fount`](packages/fount). [`packages/fount_workshop`](packages/fount_workshop) is a separate app for writer-reviewed model revisions and screenplay PDF handoff. Fount owns pure screenplay transformations and an Ecto/PostgreSQL persistence boundary. Older filesystem/SQLite stores remain for source-backed Fountain documents.
 
 ---
 
@@ -24,13 +24,13 @@ Fount strictly decouples screenplay reality into four distinct architectural lay
 ```text
 ┌──────────────────────────────────────────────────────────────┐
 │  1. SOURCE TRUTH                                             │
-│  Exact Fountain text + concrete syntax + source spans        │
+│  Exact imported Fountain bytes + CST + source spans          │
 └──────────────────────────┬───────────────────────────────────┘
-                           │ lossless parse / project
+                           │ import / project
                            ▼
 ┌──────────────────────────────────────────────────────────────┐
 │  2. SCREENPLAY TRUTH                                         │
-│  Typed screenplay structure & durable element UUID identity  │
+│  Typed canonical model, authored cast, durable identities    │
 └──────────────────────────┬───────────────────────────────────┘
                            │ analyses / resolution
                            ▼
@@ -42,17 +42,16 @@ Fount strictly decouples screenplay reality into four distinct architectural lay
                            ▼
 ┌──────────────────────────────────────────────────────────────┐
 │  4. PRESENTATION / OPERATIONAL TRUTH                         │
-│  Reports, JSON and FDX adapters, future layout projections    │
+│  Reports, format export, workshop PDF export                 │
 └──────────────────────────────────────────────────────────────┘
 
-             EDIT / PATCH / DIFF ALGEBRA
-       cuts vertically through the whole system
+       PURE CANONICAL EDITS + TRANSACTIONAL ACCEPTANCE
 ```
 
 1. **Source truth (`CST`)**: Exact byte reproduction, including formatting delimiters, line endings, boneyards, and source spans. Untouched Fountain round-trips through `Fount.render/1` without changing bytes.
 2. **Screenplay truth (`IR`)**: Typed elements, scenes, dialogue blocks, title pages, and outline views. Identity reconciliation keeps IDs where continuity can be established; it is best-effort after arbitrary external rewrites.
 3. **Interpretive truth (`Annotations`)**: Derived analysis anchored to IDs and source revisions with provenance. The built-in analyzers cover characters, dialogue, and locations; richer narrative interpretation can be added by applications.
-4. **Presentation and operational truth (`Projections`)**: Reports plus JSON and FDX adapters. Pagination, PDF typesetting, page eighths, and production breakdowns are future work.
+4. **Presentation and operational truth (`Projections`)**: Reports plus JSON and FDX adapters. The separate workshop app exports a spec-draft PDF and performs dated submission checks. Exact page eighths and production breakdowns remain future work.
 
 ---
 
@@ -62,7 +61,7 @@ Fount strictly decouples screenplay reality into four distinct architectural lay
 - **Stable identity**: Reconciliation retains object IDs across many source edits and reports when it cannot safely do so.
 - **Source-backed edits**: `Fount.Edit` offers text replacement, cue rename, heading changes, insertion, scene movement/deletion, and undo/redo through `ChangeSet` values.
 - **Format adapters**: FDX and JSON stay outside the canonical model. FDX returns fidelity losses for unsupported metadata or styling.
-- **Persistence boundary**: Fountain remains authoritative; filesystem sidecars or the optional SQLite store keep identity, annotations, and revision metadata.
+- **Persistence boundary**: The canonical screenplay is authoritative for structured edits. Fount's Ecto/PostgreSQL store holds typed current rows and immutable revisions. Fountain and FDX are I/O adapters; the older source-backed stores remain compatible.
 
 ---
 
@@ -78,7 +77,8 @@ This repository is structured as a Poncho project:
 ├── assets/
 │   └── fount.svg
 └── packages/
-    └── fount/          # Core Fount engine and Mix project
+    ├── fount/          # Core Fount engine and Mix project
+    └── fount_workshop/ # Model revision and PDF app Mix project
 ```
 
 ---

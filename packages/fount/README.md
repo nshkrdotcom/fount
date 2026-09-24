@@ -11,7 +11,7 @@
 
 # Fount
 
-Fount is a headless screenplay framework. Fountain is its preferred authoring surface, but Fountain text, the screenplay model, inferred analysis, and rendered/operational outputs are deliberately separate layers.
+Fount is a headless screenplay framework with a format-independent canonical model. Fountain and FDX are import/export adapters. Untouched Fountain imports retain exact bytes and CST for lossless export; structured authoring can begin without either format.
 
 ## Design
 
@@ -22,7 +22,7 @@ Fount has four kinds of truth:
 3. **Interpretive truth** - annotations from deterministic analyzers, NLP, or model-backed systems, each tied to source revision and provenance.
 4. **Presentation/operational truth** - pagination, timing, reports, JSON, FDX, production breakdowns, and other projections.
 
-Edits are explicit operations that create source patches and `Fount.Edit.ChangeSet` values. The source is reparsed and identities are reconciled rather than allowing arbitrary mutation of internal structs.
+Canonical edits transform immutable `Fount.Screenplay` values and preserve stable IDs. The older `Fount.Document` API remains for source-backed Fountain edits: it creates source patches, reparses and reconciles identities.
 
 ## Quick use
 
@@ -41,13 +41,26 @@ scene = doc |> Fount.scenes() |> hd()
   Fount.apply(doc, Fount.Edit.set_scene_heading(scene.id, "INT. KITCHEN - DAWN"))
 ```
 
+Create canonical screenplay content directly from typed elements:
+
+```elixir
+script = Fount.Screenplay.new(scenes: [
+  %{heading: "INT. KITCHEN - NIGHT", elements: [
+    %{type: :character, text: "MARA"},
+    %{type: :dialogue, text: "Don't."}
+  ]}
+])
+
+dialogue = Enum.find(script.ir.elements, &(&1.type == :dialogue))
+{:ok, revised} = Fount.Screenplay.apply(script, Fount.Edit.replace_text(dialogue.id, "Wait."))
+Fount.Screenplay.to_fountain(revised)
+```
+
 ## Persistence
 
-`Fount.Store` is the persistence boundary.
+`Fount.Persistence` is the canonical relational boundary. Fount owns its Ecto Repo, migrations, schemas, queries and transactions; PostgreSQL is the primary backend. The screenplay transformation functions remain usable without starting the Repo. Current scenes, elements, turns, cast and mentions are typed rows, while immutable revision snapshots provide history. See the [persistence guide](guides/persistence.md).
 
-- `Fount.Store.Filesystem` is the default recommendation: `.fountain` remains canonical and a `.fount.json` sidecar stores identity anchors, annotations, and revision metadata. It is portable and Git-friendly.
-- `Fount.Store.SQLite` is built in for applications that need transactional storage, revision history, indexed document lists, or many annotations without scattering sidecar files.
-- PostgreSQL is intentionally not a core dependency. A future server-oriented package can implement the same behavior without changing Fount's domain layer.
+`Fount.Store.Filesystem` and `Fount.Store.SQLite` remain compatibility stores for source-backed Fountain documents. SQLite v1 is not the canonical relational model. It remains optional through Exqlite.
 
 ## Why no whole-language parser generator?
 
@@ -59,7 +72,13 @@ Untouched Fountain renders byte-for-byte from its CST, including line endings, t
 
 FDX and JSON are adapters, not the canonical model. FDX supports practical spec-script interchange and returns `losses` for known unsupported production metadata and styling. Do not assume an arbitrary FDX file round-trips exactly.
 
-SQLite is optional for consumers. Add `{:exqlite, "~> 0.41"}` to the host application's dependencies when using `Fount.Store.SQLite`; the filesystem store needs no native database dependency.
+Filesystem saves can use `expected_revision: doc.revision.id` to reject an external edit before saving. This is a single-writer optimistic check, not a cross-process transaction. SQLite supports `Fount.Store.SQLite.init/1` and a caller-owned open connection via `Fount.Store.SQLite.new(conn: conn)`. The caller owns and closes that handle.
+
+Scene-heading decomposition has English default time terms and accepts `time_terms:` or `extra_time_terms:` in `Fount.SceneHeading.parse/2`; raw heading text is always retained.
+
+The separate [Fount Workshop](https://github.com/nshkrdotcom/fount/tree/main/packages/fount_workshop) app adds model proposals, PDF export, and dated submission checks without bringing those dependencies into the core.
+
+Add `{:exqlite, "~> 0.41"}` to a host application only when using the legacy `Fount.Store.SQLite` workflow.
 
 ## Quality checks
 

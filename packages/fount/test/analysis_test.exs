@@ -19,4 +19,16 @@ defmodule Fount.AnalysisTest do
     assert length(Fount.Annotations.by_kind(doc.annotations, :character_entity)) == 2
     assert length(doc.ir.elements) == length(Fount.elements(doc))
   end
+
+  test "caller time terms classify headings without changing source" do
+    source = "INT. CAFÉ - NUIT\n\nMARA\nBonsoir.\n"
+    doc = Fount.parse!(source)
+    heading = hd(Fount.elements(doc, :scene_heading))
+    assert Fount.SceneHeading.parse(heading.text).time == nil
+    assert Fount.SceneHeading.parse(heading.text, extra_time_terms: ["nuit"]).time == "NUIT"
+    assert {:ok, analyzed} = Fount.analyze(doc, Fount.Analyzers.Locations, extra_time_terms: ["NUIT"])
+    [annotation] = Fount.Annotations.by_kind(analyzed.annotations, :scene_heading_parts)
+    assert annotation.value.time == "NUIT"
+    assert Fount.render(analyzed) == source
+  end
 end

@@ -60,4 +60,4 @@ The initial package intentionally keeps the dependency surface small:
 - `stream_data` — property testing for lossless source invariants
 - `ex_doc` — development documentation
 
-No Ecto, web framework, NLP runtime, parser generator, or database server is required by the core.
+The pure transformation functions require no running database. Fount also ships an Ecto/PostgreSQL persistence boundary for accepted canonical revisions; web, NLP, and parser-generator frameworks are not required.

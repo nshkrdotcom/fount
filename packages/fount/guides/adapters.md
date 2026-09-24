@@ -25,4 +25,4 @@ FDX is deliberately not allowed to shape Fount's domain model. A valid FDX docum
 
 ## Future adapters
 
-An adapter should return data plus diagnostics/loss information. Future imports may target Fountain source first or construct the semantic IR through a dedicated importer, but either route must preserve the distinction between canonical screenplay facts and foreign-format application metadata.
+An adapter should return data plus diagnostics/loss information. Fountain and FDX imports map into `Fount.Screenplay`; Fountain retains its exact source/CST as an import artifact for unchanged export. Either route must preserve the distinction between canonical screenplay facts and foreign-format application metadata.

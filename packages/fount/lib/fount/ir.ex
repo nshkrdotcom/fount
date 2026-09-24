@@ -49,6 +49,21 @@ defmodule Fount.IR do
     %{script | scenes: scenes, dialogue_blocks: dialogue_blocks, outline: outline}
   end
 
+  @doc "Rebuilds derived outline and dialogue sides while preserving authored scene and turn IDs."
+  @spec restore_views(Script.t()) :: Script.t()
+  def restore_views(%Script{} = script) do
+    rebuilt = rebuild_views(script)
+    paths = Map.new(rebuilt.scenes, &{&1.heading_id, &1.outline_path})
+    sides = Map.new(rebuilt.dialogue_blocks, &{&1.cue_id, &1.side})
+
+    %{
+      script
+      | outline: rebuilt.outline,
+        scenes: Enum.map(script.scenes, &%{&1 | outline_path: Map.get(paths, &1.heading_id, [])}),
+        dialogue_blocks: Enum.map(script.dialogue_blocks, &%{&1 | side: Map.get(sides, &1.cue_id)})
+    }
+  end
+
   @doc "Replace element IDs and rebuild all views that reference them."
   @spec remap_ids(Script.t(), map()) :: Script.t()
   def remap_ids(%Script{} = script, id_map) when is_map(id_map) do

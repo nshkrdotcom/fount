@@ -1,6 +1,10 @@
 /_build/
 /deps/
 /doc/
+**/_build/
+**/deps/
+**/doc/
+**/node_modules/
 /packages/fount/doc/
 /packages/fount/*.tar
 /.elixir_ls/

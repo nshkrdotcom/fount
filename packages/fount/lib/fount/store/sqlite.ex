@@ -14,8 +14,9 @@ defmodule Fount.Store.SQLite do
   alias Exqlite.Sqlite3
   alias Fount.Store.Snapshot
 
-  @enforce_keys [:path]
-  defstruct [:path, busy_timeout: 5_000]
+  defstruct [:path, :conn, busy_timeout: 5_000]
+
+  @type t :: %__MODULE__{path: Path.t() | nil, conn: reference() | nil, busy_timeout: non_neg_integer()}
 
   @schema """
   PRAGMA journal_mode=WAL;
@@ -41,22 +42,55 @@ defmodule Fount.Store.SQLite do
   PRAGMA user_version=1;
   """
 
-  @spec new(Path.t(), keyword()) :: %__MODULE__{}
-  def new(path, opts \\ []) do
+  @spec new(Path.t() | keyword(), keyword()) :: %__MODULE__{}
+  def new(path_or_opts, opts \\ [])
+
+  def new([conn: conn], []) when is_reference(conn), do: %__MODULE__{conn: conn}
+
+  def new(path, opts) when is_binary(path) do
     %__MODULE__{path: Path.expand(path), busy_timeout: Keyword.get(opts, :busy_timeout, 5_000)}
+  end
+
+  @doc "Initializes or migrates a file-backed store before long-lived handle use."
+  @spec init(%__MODULE__{}) :: :ok | {:error, term()}
+  def init(%__MODULE__{path: path} = store) when is_binary(path) do
+    with_connection(store, fn _conn -> :ok end)
+  end
+
+  def init(%__MODULE__{conn: conn}) when is_reference(conn) do
+    if available?(), do: ensure_schema(conn), else: {:error, :exqlite_not_available}
   end
 
   @spec available?() :: boolean()
   def available?, do: Code.ensure_loaded?(Sqlite3)
 
   @impl true
-  def save(%__MODULE__{} = store, key, doc, _opts) do
+  def save(%__MODULE__{} = store, key, doc, opts) do
     snapshot = Snapshot.encode!(doc)
     now = DateTime.utc_now() |> DateTime.to_iso8601()
+    expected = Keyword.get(opts, :expected_revision, :any)
 
     with_connection(store, fn conn ->
-      transaction(conn, fn -> save_document(conn, key, doc, snapshot, now) end)
+      transaction(conn, fn -> save_if_current(conn, key, doc, snapshot, now, expected) end)
     end)
+  end
+
+  defp save_if_current(conn, key, doc, snapshot, now, expected) do
+    with :ok <- check_revision(conn, key, expected) do
+      save_document(conn, key, doc, snapshot, now)
+    end
+  end
+
+  defp check_revision(_conn, _key, :any), do: :ok
+
+  defp check_revision(conn, key, expected) do
+    case one(conn, "SELECT revision_id FROM documents WHERE key = ?", [key]) do
+      {:ok, [^expected]} -> :ok
+      {:ok, nil} when expected == :new -> :ok
+      {:ok, [actual]} -> {:error, {:conflict, actual}}
+      {:ok, nil} -> {:error, {:conflict, :missing}}
+      error -> error
+    end
   end
 
   defp save_document(conn, key, doc, snapshot, now) do
@@ -103,7 +137,8 @@ defmodule Fount.Store.SQLite do
   end
 
   defp parse_saved_document(source, snapshot_json) do
-    with {:ok, snapshot} <- Snapshot.decode(snapshot_json) do
+    with {:ok, snapshot} <- Snapshot.decode(snapshot_json),
+         :ok <- Snapshot.validate(snapshot) do
       Fount.parse(source, Snapshot.parse_options(snapshot))
     end
   end
@@ -161,6 +196,26 @@ defmodule Fount.Store.SQLite do
     end)
   end
 
+  @doc "Loads one immutable v1 Fountain revision for explicit canonical import."
+  @spec load_revision(%__MODULE__{}, String.t(), String.t()) :: {:ok, Fount.Document.t()} | {:error, term()}
+  def load_revision(%__MODULE__{} = store, key, revision_id) do
+    with_connection(store, fn conn ->
+      case one(conn, "SELECT source,snapshot_json FROM revisions WHERE key=? AND revision_id=?", [key, revision_id]) do
+        {:ok, [source, snapshot_json]} -> parse_saved_document(source, snapshot_json)
+        {:ok, nil} -> {:error, :not_found}
+        error -> error
+      end
+    end)
+  end
+
+  defp with_connection(%__MODULE__{conn: conn}, fun) when is_reference(conn) do
+    if available?() do
+      with :ok <- require_schema(conn), do: fun.(conn)
+    else
+      {:error, :exqlite_not_available}
+    end
+  end
+
   defp with_connection(%__MODULE__{} = store, fun) do
     if available?() do
       File.mkdir_p!(Path.dirname(store.path))
@@ -168,14 +223,32 @@ defmodule Fount.Store.SQLite do
       with {:ok, conn} <- Sqlite3.open(store.path) do
         try do
           :ok = Sqlite3.set_busy_timeout(conn, store.busy_timeout)
-          :ok = Sqlite3.execute(conn, @schema)
-          fun.(conn)
+          :ok = Sqlite3.execute(conn, "PRAGMA foreign_keys=ON")
+          with :ok <- ensure_schema(conn), do: fun.(conn)
         after
           Sqlite3.close(conn)
         end
       end
     else
       {:error, :exqlite_not_available}
+    end
+  end
+
+  defp ensure_schema(conn) do
+    case one(conn, "PRAGMA user_version", []) do
+      {:ok, [0]} -> Sqlite3.execute(conn, @schema)
+      {:ok, [1]} -> :ok
+      {:ok, [version]} -> {:error, {:unsupported_schema_version, version}}
+      error -> error
+    end
+  end
+
+  defp require_schema(conn) do
+    case one(conn, "PRAGMA user_version", []) do
+      {:ok, [1]} -> :ok
+      {:ok, [0]} -> {:error, :schema_not_initialized}
+      {:ok, [version]} -> {:error, {:unsupported_schema_version, version}}
+      error -> error
     end
   end
 

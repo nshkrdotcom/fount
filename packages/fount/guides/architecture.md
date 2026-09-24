@@ -1,6 +1,6 @@
 # Architecture
 
-Fount is a headless screenplay substrate. Fountain is the preferred authoring surface, not the in-memory architecture.
+Fount is a headless screenplay framework. Fountain and FDX are import/export formats around a canonical typed model.
 
 ## Four kinds of truth
 
@@ -11,7 +11,7 @@ Fount keeps four concerns separate:
 3. **Interpretive truth** — derived entities, events, relationships, metrics, summaries, NLP, or model output with provenance.
 4. **Presentation/operational truth** — pagination, reports, JSON, FDX, production breakdowns, and other projections.
 
-The edit algebra cuts vertically through those layers: a semantic edit resolves to exact source patches, reparses source, reconciles identities, invalidates affected derived annotations, and returns a `Fount.Edit.ChangeSet`.
+Canonical edits transform an immutable `Fount.Screenplay` and advance its revision. The source-backed `Fount.Document` compatibility path resolves edits to patches, reparses Fountain, reconciles identities, and returns a `Fount.Edit.ChangeSet`.
 
 ## CST plus screenplay IR, not an AST alone
 
@@ -36,15 +36,16 @@ This permits tools to say “replace dialogue `X`” even after material has bee
 
 Reconciliation is best-effort for external source rewrites. If a changed object of the same type cannot be confidently matched, parsing emits `:identity_not_retained`; callers can inspect `doc.diagnostics` before applying annotations or further edits.
 
-## No hidden mutable runtime
+## Functional core and persistence boundary
 
-The initial package is deliberately process-free. There is no application supervision tree, cache server, database process, or global registry. Documents are ordinary immutable values. Consumers can place them behind GenServers, web endpoints, collaborative systems, or job processors without Fount imposing a runtime topology.
+Screenplay construction, editing, analysis, and format projection work on immutable values without a database process. Fount also owns an Ecto/PostgreSQL persistence boundary: migrations, typed current rows, immutable revisions, transactions, and composable queries. The consuming application configures and starts `Fount.Repo`; Fount does not impose an application supervision tree.
 
 ## Extension boundaries
 
 - `Fount.Analyzer` — add derived interpretation without changing screenplay truth.
-- `Fount.Store` — persist source plus reconstructible metadata using any backend.
+- `Fount.Persistence` — persist the canonical model in PostgreSQL and query its current typed rows.
+- `Fount.Store` — compatibility persistence for Fountain source and sidecar metadata.
 - `Fount.Adapter` — import/export foreign formats while reporting fidelity losses.
 - `Fount.Fragment` / `Fount.Builder` — generate valid screenplay source from structured values.
 
-The core intentionally has no dependency on an LLM, vector database, web framework, editor toolkit, or PostgreSQL client.
+The core intentionally has no dependency on an LLM, vector database, web framework, or editor toolkit. Its relational boundary uses PostgreSQL; pure model APIs do not require a running database.

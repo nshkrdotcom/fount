@@ -30,6 +30,49 @@ defmodule Fount.Store.Snapshot do
   @spec decode(binary()) :: {:ok, map()} | {:error, term()}
   def decode(json), do: Jason.decode(json)
 
+  @doc "Validates the minimum schema needed to restore identity and annotation state."
+  @spec validate(term()) :: :ok | {:error, :invalid_snapshot}
+  def validate(%{
+        "schema_version" => @schema_version,
+        "document_id" => document_id,
+        "revision" => %{"id" => revision_id},
+        "identity_anchors" => anchors,
+        "annotations" => annotations
+      })
+      when is_binary(document_id) and is_binary(revision_id) and is_list(anchors) and is_list(annotations) do
+    if Enum.all?(anchors, &valid_anchor?/1) and Enum.all?(annotations, &valid_annotation?/1),
+      do: :ok,
+      else: {:error, :invalid_snapshot}
+  end
+
+  def validate(_), do: {:error, :invalid_snapshot}
+
+  defp valid_anchor?(%{"scope" => scope, "id" => id}) when is_binary(scope) and is_binary(id),
+    do: true
+
+  defp valid_anchor?(_), do: false
+
+  defp valid_annotation?(%{
+         "id" => id,
+         "namespace" => namespace,
+         "kind" => kind,
+         "target" => target,
+         "provenance" => provenance
+       })
+       when is_binary(id) and is_binary(namespace) and is_binary(kind) and is_map(target) and
+              is_map(provenance),
+       do: valid_span?(Map.get(target, "span"))
+
+  defp valid_annotation?(_), do: false
+
+  defp valid_span?(nil), do: true
+
+  defp valid_span?(%{"byte_start" => first, "byte_end" => last})
+       when is_integer(first) and is_integer(last),
+       do: true
+
+  defp valid_span?(_), do: false
+
   @spec parse_options(map()) :: keyword()
   def parse_options(snapshot) do
     revision = snapshot["revision"] || %{}

@@ -11,6 +11,14 @@ defmodule Fount.Edit do
   @spec set_scene_heading(String.t(), binary()) :: Op.t()
   def set_scene_heading(scene_id, heading), do: %Op{kind: :set_scene_heading, target: scene_id, value: heading}
 
+  @doc "Sets or clears a literal, locked scene number in the canonical model."
+  @spec set_scene_number(String.t(), String.t() | nil) :: Op.t()
+  def set_scene_number(scene_id, number), do: %Op{kind: :set_scene_number, target: scene_id, value: number}
+
+  @doc "Changes one literal character cue while retaining its structural identity."
+  @spec set_character_cue(String.t(), String.t()) :: Op.t()
+  def set_character_cue(cue_id, name), do: %Op{kind: :set_character_cue, target: cue_id, value: name}
+
   @spec rename_character(binary(), binary()) :: Op.t()
   def rename_character(old_name, new_name), do: %Op{kind: :rename_character, target: old_name, value: new_name}
 
@@ -42,6 +50,9 @@ defmodule Fount.Edit do
 
   @spec delete(String.t()) :: Op.t()
   def delete(element_id), do: %Op{kind: :delete, target: element_id}
+
+  @spec omit_scene(String.t(), boolean()) :: Op.t()
+  def omit_scene(scene_id, omit? \\ true), do: %Op{kind: :omit_scene, target: scene_id, value: omit?}
 
   @spec delete_scene(String.t()) :: Op.t()
   def delete_scene(scene_id), do: %Op{kind: :delete_scene, target: scene_id}

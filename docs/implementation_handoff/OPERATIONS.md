@@ -92,7 +92,7 @@ Run from the owning package with `MIX_ENV=dev mix run examples/live.exs -- --mod
 
 Set `FOUNT_CODEX_MODEL` to a model available through the configured Codex provider. `FOUNT_CODEX_REASONING_EFFORT` optionally selects `none`, `low`, `medium`, `high`, `xhigh`, or `max` for the shared Probe/Workshop launcher; omitting it uses the model default. For the current low-cost local check, `gpt-5.6-luna` with `low` was confirmed by the local SDK and a read-only Codex probe. Keep provider credentials in the local secret wrapper.
 
-Proposal generation sends a compact JSON guide and validates every response against the full local canonical contract. A provider response can require bounded JSON repair; a failed branch remains resumable while successful candidates stay saved. Apply all Fount migrations before live sessions, including the session-status migration, then inspect `session.json` and the review packet rather than assuming a returned model response means a valid candidate.
+Proposal generation sends a compact JSON guide and validates every response against the full local canonical contract. A provider response can require up to two JSON repair calls; a failed branch remains resumable while successful candidates stay saved. Apply all Fount migrations before live sessions, including the session-status migration, then inspect `session.json` and the review packet rather than assuming a returned model response means a valid candidate.
 
 | Package | Retained modes | New modes |
 | --- | --- | --- |

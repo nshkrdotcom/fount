@@ -28,7 +28,7 @@ The previous `Develop`, `TargetedRewrite`, `SequenceRebuild`, `NoteResponse`, `P
 
 ## Reading order for the receiving agent
 
-1. [STABILITY_CERTIFICATION.md](STABILITY_CERTIFICATION.md): current bounded stability gate; [FUTURE_DEVELOPMENT.md](FUTURE_DEVELOPMENT.md): deferred feature register.
+1. [STABILITY_CERTIFICATION.md](STABILITY_CERTIFICATION.md): current stability gate; [FUTURE_DEVELOPMENT.md](FUTURE_DEVELOPMENT.md): deferred feature register.
 2. [CONTINUE_PROMPT.md](CONTINUE_PROMPT.md): original instructions to apply, fix, verify and finish; feature-build instructions are superseded by the current freeze.
 3. [SETUP.md](SETUP.md): installer, exact repository paths, fresh database and dependency configuration.
 4. [KNOWN_GAPS.md](KNOWN_GAPS.md): original prioritized source gaps and risks.

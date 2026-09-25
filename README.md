@@ -466,13 +466,9 @@ When no workspace override is active, those dependencies remain their ordinary c
 
 ## Current Development Status
 
-The source continuation dated **2026-09-24** adds and extends canonical interchange, screenplay investigations, creative writing workflows, revision-aware sessions, candidate generation and combination, review and acceptance paths, CLI surfaces, and live-only example paths.
+The source continuation dated **2026-09-24** has since been compiled and tested locally. The three package suites pass under Elixir 1.20/OTP 29 and Elixir 1.19/OTP 28; a fresh PostgreSQL database passed all three migrations and 22 integration tests. Core interchange/database examples and three real Probe modes completed. Bridge, alternatives, and recovery have partial live writer-workflow evidence. Several other writer modes remain partial or unverified, including model-provider errors during sequence rebuilding and grouped notes.
 
-That continuation is explicitly **source-only at this stage and has not yet been compiled or tested as a completed release**.
-
-Do not interpret the presence of an API, workflow, test source, or example in this continuation as proof that the current tree has passed local compilation, provider integration, PostgreSQL integration, PDF rendering, or the full test suite.
-
-See [`docs/implementation_handoff/README.md`](docs/implementation_handoff/README.md) for the implementation inventory, known gaps, application notes, and verification work required in a working environment.
+**This is not a certified stable release or proof of all original feature acceptance cases.** Feature development is frozen for the current stability pass. Read the [stability gate](docs/implementation_handoff/STABILITY_CERTIFICATION.md) for dated checks and open certification work, and the [future development register](docs/implementation_handoff/FUTURE_DEVELOPMENT.md) for deferred behavior. The [handoff](docs/implementation_handoff/README.md) preserves the original specification and implementation history.
 
 ---
 

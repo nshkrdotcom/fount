@@ -51,16 +51,25 @@ defmodule FountProbe.Investigation do
       end
 
       prompt =
-        "Investigate this writer's specific creative question, not whether every scene follows a formula. Form tentative competing hypotheses and choose only needed catalog tools. Requests are inspections, never edits. Exact IDs below are authoritative.\n" <>
+        "Investigate this writer's specific creative question, not whether every scene follows a formula. Form tentative competing hypotheses and choose only needed catalog tools. Requests are inspections, never edits. Exact IDs below are authoritative. For any tool requiring selection, copy the supplied selection object exactly into params.selection; do not invent a selection shape.\n" <>
           Jason.encode!(%{
             "concern" => concern,
+            "selection" => Keyword.get(opts, :selection, %{"whole_screenplay" => true}),
             "material" => units,
             "tools" => Catalog.tools(),
             "cast" => Fount.Screenplay.Model.plain(Map.values(model.cast))
           })
 
+      # Catalog request params are tool-specific open objects. The provider's strict
+      # structured-output schema cannot express them; keep the full local validator.
       with {:ok, value, traces} <-
-             Completion.complete(clients[:inference], prompt, schema, validate, opts) do
+             Completion.complete(
+               clients[:inference],
+               prompt,
+               schema,
+               validate,
+               Keyword.put(opts, :force_json_text, true)
+             ) do
         {:ok,
          Report.new(model, "investigation_plan", %{"concern" => concern}, %{
            data: value,
@@ -187,7 +196,13 @@ defmodule FountProbe.Investigation do
         Jason.encode!(payload)
 
     with {:ok, value, traces} <-
-           Completion.complete(clients[:inference], prompt, schema, validate, opts) do
+           Completion.complete(
+             clients[:inference],
+             prompt,
+             schema,
+             validate,
+             Keyword.put(opts, :force_json_text, true)
+           ) do
       {:ok,
        Report.new(model, "investigation_explanation", %{"concern" => concern}, %{
          status:

@@ -151,13 +151,60 @@ defmodule Fount.WritingPersistenceIntegrationTest do
              )
 
     assert repeated.revision.id == accepted.revision.id
+
     assert {:error, :acceptance_identity_conflict} =
              Persistence.accept_candidate(Repo, candidate.id,
                expected_revision: root.revision.id,
                actor: "another-writer",
                review: %{review | actor: "another-writer"}
              )
+
     assert {:error, :already_accepted} = Persistence.reject_candidate(Repo, candidate.id, actor: "writer")
+  end
+
+  test "failed candidate insert rolls back its revision and preserves the accepted head" do
+    key = "candidate-rollback-#{ID.v4()}"
+
+    root =
+      Screenplay.new(
+        scenes: [
+          %{heading: "INT. ROOM - DAY", elements: [%{type: :action, text: "Mara waits."}]}
+        ]
+      )
+
+    assert {:ok, _} = Persistence.create(Repo, key, root)
+
+    assert {:ok, session} =
+             Persistence.save_session(Repo, %{
+               screenplay_id: root.id,
+               base_revision_id: root.revision.id,
+               workflow: "pass",
+               request: %{},
+               status: "open"
+             })
+
+    line = Enum.find(root.ir.elements, &(&1.type == :action))
+
+    assert {:ok, draft, _} =
+             Screenplay.apply(root, [
+               %{
+                 "kind" => "replace_text",
+                 "target" => %{"kind" => "element", "id" => line.id},
+                 "value" => "Mara leaves."
+               }
+             ])
+
+    assert_raise Postgrex.Error, fn ->
+      Persistence.save_candidate(Repo, session.id, %{
+        screenplay: draft,
+        parent_candidate_id: ID.v4()
+      })
+    end
+
+    assert {:error, :not_found} = Persistence.load_revision(Repo, root.id, draft.revision.id)
+    assert Persistence.candidates_for_session(Repo, session.id) == []
+    assert {:ok, accepted} = Persistence.load(Repo, key)
+    assert accepted.revision.id == root.revision.id
   end
 
   test "imported Fountain bytes survive a round trip through PostgreSQL" do
@@ -311,7 +358,9 @@ defmodule Fount.WritingPersistenceIntegrationTest do
                  tool: "continuity",
                  fingerprint: "own-result",
                  payload: %{"evidence" => []}
-               }, source_models: [result])
+               },
+               source_models: [result]
+             )
 
     assert {:ok, candidate} =
              Persistence.save_candidate(Repo, session.id, %{

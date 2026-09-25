@@ -1,5 +1,6 @@
 defmodule Fount.InterchangeContinuationTest do
   use ExUnit.Case, async: true
+
   test "canonical JSON roundtrips IDs, booleans, content and source bytes" do
     bytes = "Title: The Key\r\n\r\nINT. OFFICE - DAY\r\n\r\nMara takes the key.\r\n"
     {:ok, model, []} = Fount.Interchange.read(bytes, "fountain")
@@ -11,13 +12,21 @@ defmodule Fount.InterchangeContinuationTest do
     bad = Jason.decode!(json.data) |> put_in(["model", "revision", "content_hash"], "forged") |> Jason.encode!()
     assert {:error, :content_hash_mismatch} = Fount.Adapter.JSON.decode_model(bad)
   end
+
   test "a canonical scene split and merge retain body identities" do
-    model = Fount.parse!("INT. OFFICE - DAY\n\nShe takes the key.\n\nHe shuts the door.\n") |> Fount.Screenplay.from_document()
+    model =
+      Fount.parse!("INT. OFFICE - DAY\n\nShe takes the key.\n\nHe shuts the door.\n")
+      |> Fount.Screenplay.from_document()
+
     [scene] = model.ir.scenes
     [a, _b] = Enum.filter(model.ir.elements, &(&1.type == :action))
     assert {:ok, split, _} = Fount.Writing.Structure.split(model, scene.id, a.id, "EXT. DOCK - DAY")
     assert length(split.ir.scenes) == 2
-    assert {:ok, merged, _} = Fount.Writing.Structure.merge(split, Enum.map(split.ir.scenes, & &1.id), "INT. OFFICE - DAY")
-    assert Enum.map(Enum.filter(merged.ir.elements, &(&1.type == :action)), & &1.id) == Enum.map(Enum.filter(model.ir.elements, &(&1.type == :action)), & &1.id)
+
+    assert {:ok, merged, _} =
+             Fount.Writing.Structure.merge(split, Enum.map(split.ir.scenes, & &1.id), "INT. OFFICE - DAY")
+
+    assert Enum.map(Enum.filter(merged.ir.elements, &(&1.type == :action)), & &1.id) ==
+             Enum.map(Enum.filter(model.ir.elements, &(&1.type == :action)), & &1.id)
   end
 end

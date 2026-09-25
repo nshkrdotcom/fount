@@ -107,7 +107,15 @@ defmodule Fount.Screenplay.Model do
 
   def render_content(model) do
     %{
-      "elements" => Enum.map(model.ir.elements, fn e -> %{type: e.type, text: e.text, inline: e.inline, attrs: Map.take(e.attrs || %{}, [:forced?, :level, :number, :dual?, :dual_side, "dual_side"])} end),
+      "elements" =>
+        Enum.map(model.ir.elements, fn e ->
+          %{
+            type: e.type,
+            text: e.text,
+            inline: e.inline,
+            attrs: Map.take(e.attrs || %{}, [:forced?, :level, :number, :dual?, :dual_side, "dual_side"])
+          }
+        end),
       "title" => Enum.map(title(model), &Map.drop(&1, [:id, :raw, :span])),
       "scenes" => Enum.map(model.ir.scenes, &Map.take(&1, [:number, :omitted?]))
     }

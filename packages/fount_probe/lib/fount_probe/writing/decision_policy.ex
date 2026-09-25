@@ -155,9 +155,10 @@ defmodule FountProbe.Writing.DecisionPolicy do
   defp probability(_), do: {:error, :missing_or_invalid_probability}
 
   defp distribution(values) when is_map(values) and map_size(values) > 0 do
-    if Enum.all?(Map.values(values), &(probability(&1) == :ok)) and abs(Enum.sum(Map.values(values)) - 1.0) <= 0.02,
-      do: :ok,
-      else: {:error, :invalid_distribution}
+    if Enum.all?(Map.values(values), &(probability(&1) == :ok)) and
+         abs(Enum.sum(Map.values(values)) - 1.0) <= 0.02,
+       do: :ok,
+       else: {:error, :invalid_distribution}
   end
 
   defp distribution(_), do: {:error, :invalid_distribution}

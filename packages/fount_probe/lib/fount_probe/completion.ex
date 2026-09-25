@@ -16,6 +16,7 @@ defmodule FountProbe.Completion do
     mode = if structured, do: "json_schema", else: "json_text"
     original = prompt
     max_bytes = Keyword.get(opts, :max_context_bytes, 100_000)
+
     if byte_size(prompt) + byte_size(Jason.encode!(schema)) > max_bytes do
       {:error, :context_limit, []}
     else
@@ -58,11 +59,19 @@ defmodule FountProbe.Completion do
         prompt
       end
 
-    result = cond do
-      byte_size(request) + byte_size(Jason.encode!(schema)) > Keyword.get(opts, :max_context_bytes, 100_000) -> {:error, :context_limit}
-      FountProbe.Budget.take(Keyword.get(opts, :budget), :inference, 1) == 0 -> {:error, :session_inference_limit}
-      true -> Inference.complete(client, request, options)
-    end
+    result =
+      cond do
+        byte_size(request) + byte_size(Jason.encode!(schema)) >
+            Keyword.get(opts, :max_context_bytes, 100_000) ->
+          {:error, :context_limit}
+
+        FountProbe.Budget.take(Keyword.get(opts, :budget), :inference, 1) == 0 ->
+          {:error, :session_inference_limit}
+
+        true ->
+          Inference.complete(client, request, options)
+      end
+
     case result do
       {:error, error} ->
         {:error, error, Enum.reverse(trace)}
@@ -80,7 +89,8 @@ defmodule FountProbe.Completion do
             ),
           "model" => Map.get(response, :model),
           "finish_reason" => Map.get(response, :finish_reason),
-          "response_id" => Map.get(response, :id), "usage" => Map.get(response, :usage)
+          "response_id" => Map.get(response, :id),
+          "usage" => Map.get(response, :usage)
         }
 
         decoded =
@@ -110,9 +120,20 @@ defmodule FountProbe.Completion do
                 "representation and these errors. Do not alter writer requirements or base IDs.\n" <>
                 inspect(errors, limit: 100, printable_limit: 8_000)
 
-            attempt(client, original, repair_prompt, schema, name, validator, mode, repairs - 1, [
-              Map.put(entry, "validation", "failed") | trace
-            ], opts)
+            attempt(
+              client,
+              original,
+              repair_prompt,
+              schema,
+              name,
+              validator,
+              mode,
+              repairs - 1,
+              [
+                Map.put(entry, "validation", "failed") | trace
+              ],
+              opts
+            )
 
           {:error, errors} ->
             {:error, {:invalid_completion, errors},

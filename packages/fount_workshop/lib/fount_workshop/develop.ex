@@ -399,7 +399,9 @@ defmodule FountWorkshop.Develop do
                 scene["elements"]
                 |> Enum.with_index()
                 |> Enum.map(fn {element, ordinal} ->
-                  Map.put(element, "local_id", "new:element_#{index}_#{ordinal}")
+                  element
+                  |> Map.put_new("attrs", %{})
+                  |> Map.put("local_id", "new:element_#{index}_#{ordinal}")
                 end)
             }
           }

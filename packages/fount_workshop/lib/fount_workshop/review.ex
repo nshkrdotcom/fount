@@ -4,7 +4,8 @@ defmodule FountWorkshop.Review do
   alias Fount.{Persistence, Screenplay}
   alias FountWorkshop.Writing.ReviewGate
 
-  def export(session_id, directory, services, opts \\ []), do: FountWorkshop.ReviewExport.export(session_id, directory, services, opts)
+  def export(session_id, directory, services, opts \\ []),
+    do: FountWorkshop.ReviewExport.export(session_id, directory, services, opts)
 
   @doc "Loads actual base and candidate pages with source and structural changes."
   def packet(repo, candidate_id) do

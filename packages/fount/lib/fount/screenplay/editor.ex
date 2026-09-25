@@ -10,6 +10,7 @@ defmodule Fount.Screenplay.Editor do
   def apply(base, operations, opts) when is_list(operations) do
     try do
       normalized = Enum.map(operations, &normalize/1)
+
       Enum.each(normalized, fn operation ->
         if operation["kind"] != "set_character_cue" do
           case Fount.Writing.Schema.validate("operations.json", operation) do
@@ -18,6 +19,7 @@ defmodule Fount.Screenplay.Editor do
           end
         end
       end)
+
       {:ok, compiled, mapping} = unwrap(LocalReferences.compile(normalized, Keyword.put(opts, :screenplay_id, base.id)))
       allowed_new = MapSet.new(Map.values(mapping))
       context = %{new: allowed_new, restore: Keyword.get(opts, :restore_registry, %{})}
@@ -462,10 +464,10 @@ defmodule Fount.Screenplay.Editor do
     %Element{id: id, type: type, text: spec["text"], attrs: attrs, origin: (old && old.origin) || :generated}
   end
 
-
   defp link_explicit_cues(model) do
     Enum.reduce(model.ir.elements, model, fn element, acc ->
       id = (element.attrs || %{})["character_id"]
+
       if element.type == :character and id do
         case Screenplay.link_cue(acc, element.id, id) do
           {:ok, linked} -> %{linked | revision: acc.revision}

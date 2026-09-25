@@ -33,48 +33,100 @@ defmodule FountWorkshop.TableRead do
     with {:ok, turns} <- all_turns(model), :ok <- File.mkdir_p(directory) do
       Enum.reduce_while(turns, {:ok, [], 0.0, %{}}, fn turn, {:ok, clips, clock, starts} ->
         voice = voices[turn.character_id] || voices[turn.cue]
+
         if is_nil(voice) do
           {:halt, {:error, {:voice_not_configured, turn.cue}}}
         else
           path = Path.join(directory, turn.id <> ".wav")
+
           case FountWorkshop.Speech.Espeak.render(turn.dialogue, voice, path, opts) do
             {:ok, audio} ->
               case wav_duration(path) do
                 {:ok, duration} ->
                   partner = Map.get(turn, :dual_with)
-                  start = if partner && Map.has_key?(starts, partner), do: starts[partner], else: clock
-                  clip = %{"block_id" => turn.id, "scene_id" => turn.scene_id, "character_id" => turn.character_id,
-                    "path" => path, "sha256" => audio.sha256, "start_seconds" => start, "duration_seconds" => duration, "dual_with" => partner}
-                  {:cont, {:ok, clips ++ [clip], max(clock, start + duration), Map.put(starts, turn.id, start)}}
-                error -> {:halt, error}
+
+                  start =
+                    if partner && Map.has_key?(starts, partner), do: starts[partner], else: clock
+
+                  clip = %{
+                    "block_id" => turn.id,
+                    "scene_id" => turn.scene_id,
+                    "character_id" => turn.character_id,
+                    "path" => path,
+                    "sha256" => audio.sha256,
+                    "start_seconds" => start,
+                    "duration_seconds" => duration,
+                    "dual_with" => partner
+                  }
+
+                  {:cont,
+                   {:ok, clips ++ [clip], max(clock, start + duration),
+                    Map.put(starts, turn.id, start)}}
+
+                error ->
+                  {:halt, error}
               end
-            error -> {:halt, error}
+
+            error ->
+              {:halt, error}
           end
         end
-      end) |> case do
+      end)
+      |> case do
         {:ok, clips, duration, _} ->
-          manifest = %{"screenplay_id" => model.id, "revision_id" => model.revision.id, "duration_seconds" => duration, "clips" => clips,
-            "playback" => "Per-turn WAV clips; dual partners share timestamps. No mixed master file is claimed."}
+          manifest = %{
+            "screenplay_id" => model.id,
+            "revision_id" => model.revision.id,
+            "duration_seconds" => duration,
+            "clips" => clips,
+            "playback" =>
+              "Per-turn WAV clips; dual partners share timestamps. No mixed master file is claimed."
+          }
+
           File.write!(Path.join(directory, "audio.json"), Jason.encode!(manifest, pretty: true))
           {:ok, manifest}
-        error -> error
+
+        error ->
+          error
       end
     end
   end
+
   defp wav_duration(path) do
     with {:ok, <<"RIFF", _::little-32, "WAVE", rest::binary>>} <- File.read(path) do
       chunks(rest, nil, nil)
-    else _ -> {:error, :invalid_wav_header} end
-  end
-  defp chunks(<<>>, rate, bytes) when is_integer(rate) and rate > 0 and is_integer(bytes), do: {:ok, bytes / rate}
-  defp chunks(<<kind::binary-size(4), size::little-32, body::binary-size(size), rest::binary>>, rate, bytes) do
-    rest = if rem(size, 2) == 1 and byte_size(rest) > 0, do: binary_part(rest, 1, byte_size(rest) - 1), else: rest
-    case {kind, body} do
-      {"fmt ", <<_format::little-16, _channels::little-16, _sample_rate::little-32, byte_rate::little-32, _::binary>>} -> chunks(rest, byte_rate, bytes)
-      {"data", _} -> chunks(rest, rate, size)
-      _ -> chunks(rest, rate, bytes)
+    else
+      _ -> {:error, :invalid_wav_header}
     end
   end
+
+  defp chunks(<<>>, rate, bytes) when is_integer(rate) and rate > 0 and is_integer(bytes),
+    do: {:ok, bytes / rate}
+
+  defp chunks(
+         <<kind::binary-size(4), size::little-32, body::binary-size(size), rest::binary>>,
+         rate,
+         bytes
+       ) do
+    rest =
+      if rem(size, 2) == 1 and byte_size(rest) > 0,
+        do: binary_part(rest, 1, byte_size(rest) - 1),
+        else: rest
+
+    case {kind, body} do
+      {"fmt ",
+       <<_format::little-16, _channels::little-16, _sample_rate::little-32, byte_rate::little-32,
+         _::binary>>} ->
+        chunks(rest, byte_rate, bytes)
+
+      {"data", _} ->
+        chunks(rest, rate, size)
+
+      _ ->
+        chunks(rest, rate, bytes)
+    end
+  end
+
   defp chunks(_, _, _), do: {:error, :wav_duration_unavailable}
 
   defp all_turns(model) do

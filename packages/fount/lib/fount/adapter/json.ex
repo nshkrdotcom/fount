@@ -11,20 +11,42 @@ defmodule Fount.Adapter.JSON do
 
   @spec export(Fount.Document.t() | Fount.Screenplay.t(), keyword()) :: {:ok, ExportResult.t()}
   def export(doc, opts \\ [])
+
   def export(%Fount.Screenplay{} = model, opts) do
-    model = Fount.Screenplay.Model.refresh(model)
-    artifact = if Keyword.get(opts, :include_source, false) and model.import do
-      %{"format" => to_string(model.import.format), "bytes_base64" => Base.encode64(model.import.bytes),
-        "sha256" => :crypto.hash(:sha256, model.import.bytes) |> Base.encode16(case: :lower),
-        "render_hash" => model.import.render_hash, "revision_id" => model.import.revision_id,
-        "losses" => model.import[:losses] || []}
-    end
-    payload = %{"schema" => "fount.screenplay.v2", "model" => Fount.Persistence.Codec.encode(model), "import_artifact" => artifact}
-    {:ok, %ExportResult{data: Jason.encode!(payload, pretty: Keyword.get(opts, :pretty, true)),
-      metadata: %{fidelity: "canonical_revision_snapshot", content_hash: model.revision.content_hash}}}
+    if Keyword.get(opts, :projection, false), do: export_projection(model, opts), else: export_canonical(model, opts)
   end
 
-  def export(doc, opts) do
+  def export(doc, opts), do: export_projection(doc, opts)
+
+  defp export_canonical(model, opts) do
+    model = Fount.Screenplay.Model.refresh(model)
+
+    artifact =
+      if Keyword.get(opts, :include_source, false) and model.import do
+        %{
+          "format" => to_string(model.import.format),
+          "bytes_base64" => Base.encode64(model.import.bytes),
+          "sha256" => :crypto.hash(:sha256, model.import.bytes) |> Base.encode16(case: :lower),
+          "render_hash" => model.import.render_hash,
+          "revision_id" => model.import.revision_id,
+          "losses" => model.import[:losses] || []
+        }
+      end
+
+    payload = %{
+      "schema" => "fount.screenplay.v2",
+      "model" => Fount.Persistence.Codec.encode(model),
+      "import_artifact" => artifact
+    }
+
+    {:ok,
+     %ExportResult{
+       data: Jason.encode!(payload, pretty: Keyword.get(opts, :pretty, true)),
+       metadata: %{fidelity: "canonical_revision_snapshot", content_hash: model.revision.content_hash}
+     }}
+  end
+
+  defp export_projection(doc, opts) do
     include_source? = Keyword.get(opts, :include_source, false)
     include_annotations? = Keyword.get(opts, :include_annotations, true)
 
@@ -58,7 +80,7 @@ defmodule Fount.Adapter.JSON do
   @doc "Imports a complete canonical snapshot; rejects malformed identity, hash and source-artifact data."
   def decode_model(json) do
     with {:ok, %{"schema" => "fount.screenplay.v2", "model" => data} = payload} <- Jason.decode(json),
-         true <- (Map.keys(payload) -- ~w(schema model import_artifact)) == [] or {:error, :unknown_json_field},
+         true <- Map.keys(payload) -- ~w(schema model import_artifact) == [] or {:error, :unknown_json_field},
          :ok <- validate_model_fields(data),
          model = Fount.Persistence.Codec.decode(data),
          [] <- Fount.Validate.screenplay(model),
@@ -74,28 +96,46 @@ defmodule Fount.Adapter.JSON do
   rescue
     _ -> {:error, :invalid_canonical_json}
   end
+
   defp validate_model_fields(data) when is_map(data) do
     keys = ~w(id revision title elements scenes turns cast mentions authored_items annotations)
     lists = ~w(elements scenes turns cast mentions annotations)
-    if (Map.keys(data) -- keys) == [] and (keys -- Map.keys(data)) == [] and
-      Enum.all?(lists, &is_list(data[&1])) and is_map(data["revision"]) and is_map(data["authored_items"]) and
-      match?({:ok, _}, Ecto.UUID.cast(data["id"])) and match?({:ok, _}, Ecto.UUID.cast(data["revision"]["id"])), do: :ok, else: {:error, :invalid_canonical_fields}
+
+    if Map.keys(data) -- keys == [] and keys -- Map.keys(data) == [] and
+         Enum.all?(lists, &is_list(data[&1])) and is_map(data["revision"]) and is_map(data["authored_items"]) and
+         match?({:ok, _}, Ecto.UUID.cast(data["id"])) and match?({:ok, _}, Ecto.UUID.cast(data["revision"]["id"])),
+       do: :ok,
+       else: {:error, :invalid_canonical_fields}
   end
+
   defp validate_model_fields(_), do: {:error, :invalid_canonical_fields}
   defp decode_artifact(nil), do: {:ok, nil}
-  defp decode_artifact(%{"format" => format, "bytes_base64" => encoded, "sha256" => expected} = artifact) when format in ["fountain", "fdx"] do
+
+  defp decode_artifact(%{"format" => format, "bytes_base64" => encoded, "sha256" => expected} = artifact)
+       when format in ["fountain", "fdx"] do
     with {:ok, bytes} <- Base.decode64(encoded),
-         true <- (:crypto.hash(:sha256, bytes) |> Base.encode16(case: :lower)) == expected or {:error, :artifact_hash_mismatch},
+         true <-
+           :crypto.hash(:sha256, bytes) |> Base.encode16(case: :lower) == expected or {:error, :artifact_hash_mismatch},
          {:ok, decoded} <- artifact_model(bytes, format),
          true <- decoded.revision.render_hash == artifact["render_hash"] or {:error, :artifact_render_identity_mismatch} do
-      {:ok, %{format: if(format == "fountain", do: :fountain, else: :fdx), bytes: bytes, id: Fount.ID.v4(),
-        revision_id: artifact["revision_id"], render_hash: artifact["render_hash"], losses: artifact["losses"] || []}}
+      {:ok,
+       %{
+         format: if(format == "fountain", do: :fountain, else: :fdx),
+         bytes: bytes,
+         id: Fount.ID.v4(),
+         revision_id: artifact["revision_id"],
+         render_hash: artifact["render_hash"],
+         losses: artifact["losses"] || []
+       }}
     end
   end
+
   defp decode_artifact(_), do: {:error, :invalid_artifact}
+
   defp artifact_model(bytes, "fountain") do
     with {:ok, document} <- Fount.parse(bytes), do: {:ok, Fount.Screenplay.from_document(document)}
   end
+
   defp artifact_model(bytes, "fdx") do
     with {:ok, model, _} <- Fount.Screenplay.from_fdx(bytes), do: {:ok, model}
   end

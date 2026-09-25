@@ -4,7 +4,9 @@ defmodule FountProbe.Profile do
   def load(id) when is_binary(id) do
     if Regex.match?(~r/\A[a-z][a-z0-9_]*\z/, id) do
       path = Application.app_dir(:fount_probe, "priv/profiles/#{id}.json")
-      with {:ok, data} <- File.read(path), {:ok, profile} <- Jason.decode(data),
+
+      with {:ok, data} <- File.read(path),
+           {:ok, profile} <- Jason.decode(data),
            %{"id" => ^id, "version" => version, "questions" => questions} <- profile,
            true <- is_integer(version) and version > 0 and is_list(questions) do
         {:ok, Map.put(profile, "sha256", Fount.Writing.CanonicalJSON.hash(profile))}
@@ -15,34 +17,60 @@ defmodule FountProbe.Profile do
       {:error, :invalid_profile_id}
     end
   end
+
   def load(_), do: {:error, :invalid_profile_id}
 
   def compile(questions, nil), do: {:ok, questions, nil}
+
   def compile(questions, id) do
     with {:ok, profile} <- load(id) do
       overrides = Map.new(profile["questions"], &{&1["key"], &1})
-      compiled = Enum.reduce_while(questions, {:ok, []}, fn {key, question}, {:ok, acc} ->
-        case Map.get(overrides, to_string(key)) do
-          nil -> {:cont, {:ok, acc ++ [{key, question}]}}
-          spec ->
-            case construct(question, spec) do
-              {:ok, result} -> {:cont, {:ok, acc ++ [{key, result}]}}
-              error -> {:halt, error}
-            end
-        end
-      end)
+
+      compiled =
+        Enum.reduce_while(questions, {:ok, []}, fn {key, question}, {:ok, acc} ->
+          case Map.get(overrides, to_string(key)) do
+            nil ->
+              {:cont, {:ok, acc ++ [{key, question}]}}
+
+            spec ->
+              case construct(question, spec) do
+                {:ok, result} -> {:cont, {:ok, acc ++ [{key, result}]}}
+                error -> {:halt, error}
+              end
+          end
+        end)
+
       case compiled do
-        {:ok, compiled} -> {:ok, compiled, Map.take(profile, ~w(id version tool projection thresholds sha256))}
-        error -> error
+        {:ok, compiled} ->
+          {:ok, compiled, Map.take(profile, ~w(id version tool projection thresholds sha256))}
+
+        error ->
+          error
       end
     end
   end
 
-  defp construct(%SystemOneSDK.Question.Noul{} = q, %{"type" => "noul", "instructions" => text}) when is_binary(text),
-    do: SystemOneSDK.Question.Noul.new(text, extra: q.extra)
-  defp construct(%SystemOneSDK.Question.Choice{} = q, %{"type" => "choice", "instructions" => text} = spec) when is_binary(text),
-    do: SystemOneSDK.Question.Choice.new(text, Map.get(spec, "criteria", q.criteria), extra: q.extra)
-  defp construct(%SystemOneSDK.Question.Score{} = q, %{"type" => "score", "instructions" => text} = spec) when is_binary(text),
-    do: SystemOneSDK.Question.Score.new(text, Map.get(spec, "levels", q.levels), extra: q.extra)
+  defp construct(%SystemOneSDK.Question.Noul{} = q, %{"type" => "noul", "instructions" => text})
+       when is_binary(text),
+       do: SystemOneSDK.Question.Noul.new(text, extra: q.extra)
+
+  defp construct(
+         %SystemOneSDK.Question.Choice{} = q,
+         %{"type" => "choice", "instructions" => text} = spec
+       )
+       when is_binary(text),
+       do:
+         SystemOneSDK.Question.Choice.new(text, Map.get(spec, "criteria", q.criteria),
+           extra: q.extra
+         )
+
+  defp construct(
+         %SystemOneSDK.Question.Score{} = q,
+         %{"type" => "score", "instructions" => text} = spec
+       )
+       when is_binary(text),
+       do:
+         SystemOneSDK.Question.Score.new(text, Map.get(spec, "levels", q.levels), extra: q.extra)
+
   defp construct(_, _), do: {:error, :question_profile_type_mismatch}
 end

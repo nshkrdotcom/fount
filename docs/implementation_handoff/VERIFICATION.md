@@ -1,5 +1,7 @@
 # Verification provenance
 
+For the later local QA execution, see [LOCAL_QA_2026-09-24.md](LOCAL_QA_2026-09-24.md). The historical source-only and earlier-run records below remain separate.
+
 ## This continuation pass: application execution NOT RUN
 
 No application/runtime check was executed. This includes:

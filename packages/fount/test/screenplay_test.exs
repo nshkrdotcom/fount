@@ -312,7 +312,7 @@ defmodule Fount.ScreenplayTest do
     cue = Enum.find(model.ir.elements, &(&1.type == :character))
     {:ok, model} = Screenplay.link_cue(model, cue.id, mara.id)
 
-    assert {:ok, projection} = JSON.export(model)
+    assert {:ok, projection} = JSON.export(model, projection: true)
     assert {:ok, data} = Jason.decode(projection.data)
     assert hd(data["cast"])["id"] == mara.id
     assert hd(data["mentions"])["character_id"] == mara.id

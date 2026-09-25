@@ -295,7 +295,9 @@ defmodule FountWorkshop.SequenceRebuild do
             if matching_element do
               {%{"keep" => matching_element.id}, MapSet.put(used, matching_element.id)}
             else
-              {Map.put(element, "local_id", "new:element_#{index}_#{ordinal}"), used}
+              {element
+               |> Map.put_new("attrs", %{})
+               |> Map.put("local_id", "new:element_#{index}_#{ordinal}"), used}
             end
           end)
 

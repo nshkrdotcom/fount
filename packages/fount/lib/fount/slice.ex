@@ -26,11 +26,13 @@ defmodule Fount.Slice do
     with {:ok, elements} <- Fount.Query.scene_elements(model, id) do
       index = if is_nil(through), do: 0, else: Enum.find_index(elements, &(&1.id == through))
       block = Fount.Query.block_for(model, through)
-      joint_last = if block && block.dual_with do
-        partner = Fount.Query.dialogue_block(model, block.dual_with)
-        ids = block.body_ids ++ partner.body_ids
-        elements |> Enum.filter(&(&1.id in ids)) |> List.last() |> Map.fetch!(:id)
-      end
+
+      joint_last =
+        if block && block.dual_with do
+          partner = Fount.Query.dialogue_block(model, block.dual_with)
+          ids = block.body_ids ++ partner.body_ids
+          elements |> Enum.filter(&(&1.id in ids)) |> List.last() |> Map.fetch!(:id)
+        end
 
       cond do
         is_nil(index) ->

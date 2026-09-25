@@ -3,7 +3,18 @@ defmodule Fount.CLI.Support do
 
   def parse(argv, options) do
     {opts, args, invalid} = OptionParser.parse(argv, strict: Keyword.merge([help: :boolean, json: :boolean], options))
-    duplicates = opts |> Enum.group_by(&elem(&1, 0)) |> Enum.filter(fn {_, values} -> length(values) > 1 end)
+
+    duplicates =
+      argv
+      |> Enum.flat_map(fn argument ->
+        case Regex.run(~r/^--([a-z][a-z-]*)(?:=|$)/, argument) do
+          [_, name] -> [name]
+          _ -> []
+        end
+      end)
+      |> Enum.frequencies()
+      |> Enum.filter(fn {_, count} -> count > 1 end)
+
     cond do
       invalid != [] -> {:error, {:invalid_options, invalid}}
       duplicates != [] -> {:error, {:duplicate_options, Enum.map(duplicates, &elem(&1, 0))}}
@@ -12,25 +23,37 @@ defmodule Fount.CLI.Support do
   end
 
   def required(opts, names) do
-    missing = Enum.filter(names, fn name -> value = opts[name]; not is_binary(value) or String.trim(value) == "" end)
+    missing =
+      Enum.filter(names, fn name ->
+        value = opts[name]
+        not is_binary(value) or String.trim(value) == ""
+      end)
+
     if missing == [], do: :ok, else: {:error, {:required_options, missing}}
   end
 
   def ids(value) when is_binary(value) do
     values = value |> String.split(",", trim: false) |> Enum.map(&String.trim/1)
+
     if values != [] and Enum.all?(values, &(&1 != "")) and length(Enum.uniq(values)) == length(values),
-      do: {:ok, values}, else: {:error, :nonempty_unique_ids_required}
+      do: {:ok, values},
+      else: {:error, :nonempty_unique_ids_required}
   end
+
   def ids(_), do: {:error, :ids_required}
 
   def json_file(path) do
-    with {:ok, bytes} <- File.read(path), {:ok, value} <- Jason.decode(bytes) do {:ok, value} end
+    with {:ok, bytes} <- File.read(path), {:ok, value} <- Jason.decode(bytes) do
+      {:ok, value}
+    end
   end
 
   def write_json(path, value) do
     with :ok <- File.mkdir_p(Path.dirname(path)),
          {:ok, bytes} <- Jason.encode(Fount.Screenplay.Model.plain(value), pretty: true),
-         :ok <- File.write(path, bytes <> "\n") do {:ok, path} end
+         :ok <- File.write(path, bytes <> "\n") do
+      {:ok, path}
+    end
   end
 
   def connect do
@@ -41,7 +64,9 @@ defmodule Fount.CLI.Support do
           {:error, {:already_started, _pid}} -> {:ok, Fount.Repo}
           {:error, _} -> {:error, :postgres_connection_failed}
         end
-      _ -> {:error, :explicit_fount_database_url_required}
+
+      _ ->
+        {:error, :explicit_fount_database_url_required}
     end
   end
 
@@ -57,10 +82,17 @@ defmodule Fount.CLI.Support do
   def finish!({:ok, value}) do
     Mix.shell().info(Jason.encode!(Fount.Screenplay.Model.plain(value), pretty: true))
   end
+
   def finish!({:error, reason, session}) do
-    Mix.shell().error(Jason.encode!(%{"status" => "partial", "session_id" => session["id"], "progress" => session["progress"]}, pretty: true))
+    Mix.shell().error(
+      Jason.encode!(%{"status" => "partial", "session_id" => session["id"], "progress" => session["progress"]},
+        pretty: true
+      )
+    )
+
     Mix.raise("Fount operation incomplete: " <> error_name(reason))
   end
+
   def finish!({:error, reason}), do: Mix.raise("Fount operation failed: " <> error_name(reason))
   def finish!(other), do: Mix.raise("Unexpected Fount result: " <> error_name(other))
 

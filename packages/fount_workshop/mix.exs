@@ -62,7 +62,8 @@ defmodule FountWorkshop.MixProject do
       ],
       groups_for_extras: [
         Overview: ~r/(README|CHANGELOG|LICENSE)/,
-        "Agent Workflows": ~r/guides\/(architecture|creative-workflows|scene-revision-loop|proposals-and-diffs)/,
+        "Agent Workflows":
+          ~r/guides\/(architecture|creative-workflows|scene-revision-loop|proposals-and-diffs)/,
         "Export & Inspection": ~r/guides\/(pdf-export-and-inspection|submission-checks)/,
         "Rehearsal & Audio": ~r/guides\/table-reads-and-audio/
       ],

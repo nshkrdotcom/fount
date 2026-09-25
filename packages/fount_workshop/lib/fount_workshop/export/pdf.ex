@@ -45,7 +45,15 @@ defmodule FountWorkshop.Export.PDF do
              sha256: Fount.ID.hash(pdf),
              source_revision: doc.revision.id,
              renderer: "afterwriting 1.17.3",
-             settings_sha256: Fount.Writing.CanonicalJSON.hash(%{"renderer" => "afterwriting 1.17.3", "print_profile" => "usletter", "font_family" => "CourierPrime", "scene_numbers" => "none", "print_notes" => false, "dual_dialogue" => true}),
+             settings_sha256:
+               Fount.Writing.CanonicalJSON.hash(%{
+                 "renderer" => "afterwriting 1.17.3",
+                 "print_profile" => "usletter",
+                 "font_family" => "CourierPrime",
+                 "scene_numbers" => "none",
+                 "print_notes" => false,
+                 "dual_dialogue" => true
+               }),
              source_sha256: :crypto.hash(:sha256, doc.source.raw) |> Base.encode16(case: :lower)
            }}
         end

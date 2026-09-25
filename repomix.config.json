@@ -1,0 +1,47 @@
+{
+  "$schema": "https://raw.githubusercontent.com/yamadashy/repomix/main/repomix.schema.json",
+  "output": {
+    "filePath": "repomix-output.xml",
+    "style": "xml",
+    "removeComments": false,
+    "removeEmptyLines": false,
+    "showLineNumbers": false
+  },
+  "include": [
+    "README.md",
+    "mix.exs",
+    "packages/fount/mix.exs",
+    "packages/fount/README.md",
+    "packages/fount/config/**",
+    "packages/fount/lib/**",
+    "packages/fount/test/**",
+    "packages/fount/examples/**",
+    "packages/fount/guides/**",
+    "packages/fount_probe/mix.exs",
+    "packages/fount_probe/README.md",
+    "packages/fount_probe/lib/**",
+    "packages/fount_probe/test/**",
+    "packages/fount_probe/examples/**",
+    "packages/fount_probe/guides/**",
+    "packages/fount_workshop/mix.exs",
+    "packages/fount_workshop/README.md",
+    "packages/fount_workshop/lib/**",
+    "packages/fount_workshop/test/**",
+    "packages/fount_workshop/examples/**",
+    "packages/fount_workshop/guides/**"
+  ],
+  "ignore": {
+    "useGitignore": true,
+    "useDefaultPatterns": true,
+    "customPatterns": [
+      "**/_build/**",
+      "**/deps/**",
+      "**/doc/**",
+      "**/node_modules/**",
+      "**/*.dump",
+      "**/*.tar",
+      "**/examples/_downloads/**",
+      "**/examples/_output/**"
+    ]
+  }
+}

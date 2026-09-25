@@ -348,7 +348,7 @@ defmodule FountWorkshop.LiveExample do
     ]
 
     ops = Enum.map(notes, &%{"kind" => "put_authored_item", "value" => &1})
-    {base, _} = apply_and_save(root, key, ops, services)
+    {base, changes} = apply_and_save(root, key, ops, services)
 
     request =
       req(
@@ -356,7 +356,7 @@ defmodule FountWorkshop.LiveExample do
         "notes",
         "Address the local and sequence notes in coordinated selectable groups. Keep conflicting interpretations visible. Do not claim every note resolved when only one group is selected.",
         whole(),
-        %{"note_ids" => Enum.map(notes, & &1["id"])}
+        %{"note_ids" => Enum.map(notes, &changes.local_references[&1["local_id"]])}
       )
 
     session = start(base, request, services, opts)
@@ -532,7 +532,7 @@ defmodule FountWorkshop.LiveExample do
 
   defp note(_root, scene, id, instruction),
     do: %{
-      "id" => Fount.ID.v4(),
+      "local_id" => "new:note_#{id}",
       "namespace" => "writer",
       "kind" => "note",
       "target" => %{"kind" => "scene", "id" => scene.id},

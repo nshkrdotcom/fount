@@ -1,5 +1,7 @@
 # Stage 2 implementation and verification — 2026-09-24
 
+**Later scope decision:** feature development is frozen for the current stability pass. See [FUTURE_DEVELOPMENT.md](FUTURE_DEVELOPMENT.md) for deferred work and [STABILITY_CERTIFICATION.md](STABILITY_CERTIFICATION.md) for the bounded gate. This dated implementation record does not override that decision.
+
 This is a local continuation after the committed overlay and the separate QA commit `2d330e9`. The original delivery report and source-only handoff remain historical records. This stage implements and tests a substantial subset of `KNOWN_GAPS.md`; it does **not** certify the full F01–F09, W01–W09, or T01–T13 acceptance matrix.
 
 ## Implemented and exercised
@@ -17,16 +19,18 @@ This is a local continuation after the committed overlay and the separate QA com
 - Fresh-process persistence decoding now uses a fixed atom allowlist for element types, mention roles/statuses, struct fields and known attributes. This fixes reloads of `section`, `dual?` and `outline_path` without converting arbitrary stored strings to atoms. The new migration accepts `strategies_ready` and `review_ready` session checkpoints.
 - The local `gpt-5.6-luna` model was confirmed available at low reasoning effort. Proposal generation uses a compact JSON-text guide because its canonical schema contains `oneOf`, which the provider rejects as a structured-output schema. The complete canonical contract remains the local validator. Prompt context drops duplicated projection metadata, and proposal validation allows two bounded repair calls.
 - A live bridge session reached `review_ready` with two saved candidates. A writer edit reopened exactly, its review packet exported Fountain, table-read, JSON and three real PDFs, and the accepted head stayed at the base revision. The saved session was resumed across fresh VM processes; earlier malformed model JSON was rejected and retried. This is evidence for the bridge path, not the full W01 acceptance case.
+- A live alternatives session saved two candidates. One route added new playable material without altering old lines, exposing an overly narrow example-harness assumption; the harness now selects an insertion group in that case. The saved candidates were combined with a generated join and auditioned with a real four-page PDF. The one-shot `alternatives` example has not been rerun end to end after this harness change.
+- Exact recovery of a deleted scene now restores confirmed speaker links through dialogue-block targets, with a regression test. A live exact-copy session and a live adapted recovery session both reached `review_ready`, exported review packets and real PDFs, and left the accepted head unchanged. The adapted branch required a retry with locally supported `gpt-5.6-sol`; repeated `gpt-5.6-luna` low-effort responses were malformed JSON. Syntax repairs now use the malformed response itself as a compact repair input, still subject to the complete local validator.
 
 ## Actual checks
 
-`bash scripts/verify_handoff.sh --offline` passed all 12 dependency, format, warning-free test compilation and default ExUnit checks after the live fixes. Local status file: `/tmp/fount-handoff-offline-20260924T192756-379448/status.tsv`.
+`bash scripts/verify_handoff.sh --offline` passed all 12 dependency, format, warning-free test compilation and default ExUnit checks after the recovery fixes. Local status file: `/tmp/fount-handoff-offline-20260924T194343-391076/status.tsv`.
 
 | Package | Default suite |
 | --- | ---: |
 | Core | 69 passed (68 tests, 1 property) |
-| Probe | 44 passed |
-| Workshop | 46 passed |
+| Probe | 45 passed |
+| Workshop | 47 passed |
 
 Using the previously created local `fount_verify_20260924_qa` database on PostgreSQL 5433, Core integration passed 10 tests and Workshop integration passed 12 tests. The new status migration was applied to this local database. The Workshop suite includes real Afterwriting/Poppler checks. The database was not reset.
 
@@ -34,6 +38,10 @@ Standalone A4 PDF `/tmp/fount-stage2-a4.pdf` has SHA-256 `f6501b6f747106d1532c4b
 
 ## Still open
 
-The full writer acceptance fixtures have not been run through live generation, review and explicit acceptance. One bridge session exercised live generation, review export and writer editing, but no explicit acceptance was made. In particular W03's ferry/key/reveal repair, W04's two distinct five-to-three routes and measured page savings, W05's chosen outcome/secret/partner repair, W07's six real pass outputs, and W09's end-to-end evidence/strategy/writing run remain unproven.
+A later live `propagate` run (session `27990a5a-cf61-4ce0-ab40-ee5ead0839e5`) and `sequence_routes` run (session `d3e3ef04-95da-4bc6-a9a8-82653ef10a76`) both ended partial at strategy preparation with `:context_limit`; neither saved candidates. The saved inspection reports included large duplicated evidence, graph and provider provenance, making prompt data about 2.4 MB and 960 KB respectively. Prompt-only compaction now leaves the full saved reports intact while reducing these two contexts to 69,610 and 65,202 bytes, preserving report IDs, status, coverage, counts and sampled exact evidence. A focused regression passed. A resumed sequence run got past the context limit and made a real `gpt-5.6-sol` request, but the provider returned `Inference.Error` (`provider_error`, `runtime`); that live route remains partial and unverified. This is a defect repair for existing modes, not an added feature.
+
+The final repeated offline gate passed all 12 checks at `/tmp/fount-handoff-offline-20260924T195206-398419/status.tsv`: Core 69, Probe 45, Workshop 48. A **new** disposable database, `fount_verify_20260924_fresh_cert` on local PostgreSQL 5433, migrated through `20260924000000`, `20260924010000` and `20260924020000`; Core integration passed 10 and Workshop integration passed 12 tests there. The database was not dropped or reset.
+
+The full writer acceptance fixtures have not been run through live generation, review and explicit acceptance. Bridge, alternatives combination/audition, and recovery have partial live evidence, but no explicit acceptance was made. In particular W03's ferry/key/reveal repair, W04's two distinct five-to-three routes and measured page savings, W05's chosen outcome/secret/partner repair, W07's six real pass outputs, and W09's end-to-end evidence/strategy/writing run remain unproven.
 
 Additional work remains on full PostgreSQL concurrency and interchange edge matrices; broader audience/access fixtures; chronology, pronouns and relationships; integrated dialogue knowledge/voice and requested voice conformance; broader retrieval/history filters; cross-scene semantic note conflicts; richer repair-attempt traces, arbitrary PDF profiles; and mixed speech output. Action line mapping uses text matching against a real PDF and can report unavailable for ambiguous repeated text. Prohibited-fact checks cannot certify the absence of an undeclared invention. Review these as open acceptance work, not passes inferred from the smaller tests above.

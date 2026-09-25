@@ -288,7 +288,10 @@ defmodule FountWorkshop.Writing.RecoveryCopy do
         Map.has_key?(base.cast, character_id),
         do: %{
           "kind" => "link_speaker",
-          "target" => %{"kind" => "element", "id" => id},
+          "target" => %{
+            "kind" => "dialogue_block",
+            "id" => Fount.ID.v5(base.id, ["dialogue-block:", id])
+          },
           "value" => %{"character_id" => character_id}
         }
   end

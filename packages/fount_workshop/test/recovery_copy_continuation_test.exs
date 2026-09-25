@@ -70,6 +70,81 @@ defmodule FountWorkshop.RecoveryCopyContinuationTest do
     assert candidate["provenance"]["recovery"]["source_revision_id"] == base.revision.id
   end
 
+  test "exact scene recovery restores confirmed cue links through dialogue block targets" do
+    source =
+      Fount.Screenplay.new(
+        scenes: [
+          %{
+            heading: "INT. SHED - NIGHT",
+            elements: [
+              %{type: :character, text: "MARA"},
+              %{type: :dialogue, text: "The key is here."}
+            ]
+          },
+          %{heading: "EXT. ROAD - NIGHT", elements: [%{type: :action, text: "Mara leaves."}]}
+        ]
+      )
+
+    {source, character} = Fount.Screenplay.add_character(source, "Mara")
+    cue = Enum.find(source.ir.elements, &(&1.type == :character))
+    {:ok, source} = Fount.Screenplay.link_cue(source, cue.id, character.id)
+    [lost | _] = source.ir.scenes
+
+    {:ok, current, _} =
+      Fount.Screenplay.apply(source, [
+        %{"kind" => "delete_scene", "target" => %{"kind" => "scene", "id" => lost.id}}
+      ])
+
+    request = %{
+      "workflow" => "recover",
+      "selection" => %{"whole_screenplay" => true},
+      "constraints" => [],
+      "options" => %{
+        "adapt" => false,
+        "source_targets" => [%{"kind" => "scene", "id" => lost.id}],
+        "destination" => %{"kind" => "start"}
+      }
+    }
+
+    context = %{
+      selection: request["selection"],
+      evidence: [],
+      source_models: [source, current],
+      restore_registry: Map.new(source.ir.elements ++ source.ir.scenes, &{&1.id, &1}),
+      data: %{
+        "historical_source" => %{
+          "revision_id" => source.revision.id,
+          "speaker_links" => %{cue.id => character.id},
+          "scene_specs" => [
+            %{
+              "id" => lost.id,
+              "heading" => "INT. SHED - NIGHT",
+              "number" => nil,
+              "omitted" => false,
+              "elements" => Enum.map(tl(lost.element_ids), &%{"keep" => &1})
+            }
+          ]
+        }
+      }
+    }
+
+    assert {:ok, candidate} =
+             FountWorkshop.Writing.RecoveryCopy.propose(
+               current,
+               request,
+               %{"id" => "copy", "title" => "Restore"},
+               context,
+               []
+             )
+
+    assert Fount.Query.scene(candidate["screenplay"], lost.id)
+
+    assert Enum.any?(Map.values(candidate["screenplay"].mentions), fn mention ->
+             mention.element_id == cue.id and mention.character_id == character.id and
+               mention.status == :confirmed
+           end)
+  end
+
   test "a scene copied from another screenplay gets fresh scene and element IDs" do
     source =
       Fount.Screenplay.new(

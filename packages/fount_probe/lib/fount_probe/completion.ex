@@ -154,13 +154,16 @@ defmodule FountProbe.Completion do
                 inspect(errors, limit: 100, printable_limit: 8_000)
 
             repair_prompt =
-              case {errors, Map.get(response, :text)} do
-                {:invalid_json_response, previous} when is_binary(previous) ->
-                  excerpt = "\nPrevious malformed JSON to repair:\n" <> previous
+              case {mode, errors, Map.get(response, :text)} do
+                {"json_text", :invalid_json_response, previous} when is_binary(previous) ->
+                  syntax_prompt =
+                    "Repair the JSON syntax in the following previous response. Preserve its " <>
+                      "screenplay text, IDs, operations, and writer choices exactly. Return only " <>
+                      "one complete JSON object; do not explain the changes.\n" <> previous
 
-                  if byte_size(repair_prompt) + byte_size(excerpt) + byte_size(schema_prompt) <=
-                       min(Keyword.get(opts, :max_context_bytes, 100_000), 55_000),
-                     do: repair_prompt <> excerpt,
+                  if byte_size(syntax_prompt) + byte_size(schema_prompt) <=
+                       Keyword.get(opts, :max_context_bytes, 100_000),
+                     do: syntax_prompt,
                      else: repair_prompt
 
                 _ ->

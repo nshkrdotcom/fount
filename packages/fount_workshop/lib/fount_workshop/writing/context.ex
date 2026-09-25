@@ -41,6 +41,27 @@ defmodule FountWorkshop.Writing.Context do
         Map.take(mention, ~w(id element_id character_id role status byte_start byte_end))
       end)
     )
+    |> Map.update(
+      "inspections",
+      [],
+      &Enum.map(&1, fn report ->
+        report
+        |> Map.take(~w(id tool status coverage))
+        |> Map.put("data", compact_inspection_data(report["data"] || %{}))
+        |> Map.put("error_count", length(report["errors"] || []))
+        |> Map.put("finding_count", length(report["findings"] || []))
+      end)
+    )
+  end
+
+  defp compact_inspection_data(data) when is_map(data) do
+    Map.new(data, fn
+      {key, values} when is_list(values) ->
+        {key, %{"total" => length(values), "sample" => Enum.take(values, 8)}}
+
+      pair ->
+        pair
+    end)
   end
 
   def build(model, request, opts \\ []) do

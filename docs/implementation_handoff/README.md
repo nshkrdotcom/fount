@@ -1,5 +1,7 @@
 # Fount source continuation handoff - 2026-09-24
 
+**Current scope (2026-09-24):** feature development is frozen. Use [STABILITY_CERTIFICATION.md](STABILITY_CERTIFICATION.md) for the current gate and [FUTURE_DEVELOPMENT.md](FUTURE_DEVELOPMENT.md) for every known deferred feature. This later decision supersedes the source-only continuation instructions below that call for building all gaps. The original specification and delivery record remain preserved.
+
 ## Delivery status
 
 This is an **implemented source continuation, not a verified release**. Full source files, tests, migrations, CLI commands, real-only example modes, profile assets, and an installer are delivered relative to the supplied `fount(1).xml`. No Mix command, Elixir code, PostgreSQL operation, provider call, PDF rendering, speech synthesis, or application test was run in this pass. Python was used only for reading/writing source artifacts, inventory, hashing, ZIP packaging, and packaging validation; any installer exercises are confined to disposable reconstructed file trees.
@@ -26,13 +28,14 @@ The previous `Develop`, `TargetedRewrite`, `SequenceRebuild`, `NoteResponse`, `P
 
 ## Reading order for the receiving agent
 
-1. [CONTINUE_PROMPT.md](CONTINUE_PROMPT.md): instructions to apply, fix, verify and finish.
-2. [SETUP.md](SETUP.md): installer, exact repository paths, fresh database and dependency configuration.
-3. [KNOWN_GAPS.md](KNOWN_GAPS.md): prioritized source gaps and risks.
-4. [FEATURES.md](FEATURES.md): all F01-F09, W01-W09 and T01-T13 mapped to source/tests/live modes.
-5. [API_MAP.md](API_MAP.md) and [OPERATIONS.md](OPERATIONS.md): concrete API/state flow and commands.
-6. [VERIFICATION.md](VERIFICATION.md): prior evidence versus all newly unrun checks.
-7. [CHANGES.md](CHANGES.md), [WISHLIST.md](WISHLIST.md), [SOURCE_RECORD.json](SOURCE_RECORD.json).
+1. [STABILITY_CERTIFICATION.md](STABILITY_CERTIFICATION.md): current bounded stability gate; [FUTURE_DEVELOPMENT.md](FUTURE_DEVELOPMENT.md): deferred feature register.
+2. [CONTINUE_PROMPT.md](CONTINUE_PROMPT.md): original instructions to apply, fix, verify and finish; feature-build instructions are superseded by the current freeze.
+3. [SETUP.md](SETUP.md): installer, exact repository paths, fresh database and dependency configuration.
+4. [KNOWN_GAPS.md](KNOWN_GAPS.md): original prioritized source gaps and risks.
+5. [FEATURES.md](FEATURES.md): all F01-F09, W01-W09 and T01-T13 mapped to source/tests/live modes.
+6. [API_MAP.md](API_MAP.md) and [OPERATIONS.md](OPERATIONS.md): concrete API/state flow and commands.
+7. [VERIFICATION.md](VERIFICATION.md): prior evidence versus all newly unrun checks.
+8. [CHANGES.md](CHANGES.md), [WISHLIST.md](WISHLIST.md), [SOURCE_RECORD.json](SOURCE_RECORD.json).
 
 ## First local actions
 

@@ -143,22 +143,33 @@ defmodule FountWorkshop.LiveExample do
       end)
     end
 
-    [from_a | _] = changed.(a)
+    from_a = List.first(changed.(a))
 
     from_b =
-      Enum.find(changed.(b), &(&1.id != from_a.id)) ||
-        raise("Alternatives lack two independent selectable passages")
+      Enum.find(changed.(b), &(&1.id != (from_a && from_a.id)))
+
+    pick = fn candidate, changed_element ->
+      if changed_element do
+        %{
+          "candidate_id" => candidate["id"],
+          "ranges" => [
+            %{"source" => target(changed_element), "target" => target(changed_element)}
+          ]
+        }
+      else
+        group =
+          Enum.find(candidate["change_groups"], fn group ->
+            Enum.any?(group["operations"], &(&1["kind"] == "insert_elements"))
+          end) || raise("Alternative has no selectable passage")
+
+        %{"candidate_id" => candidate["id"], "group_ids" => [group["id"]]}
+      end
+    end
 
     selection = %{
       "picks" => [
-        %{
-          "candidate_id" => a["id"],
-          "ranges" => [%{"source" => target(from_a), "target" => target(from_a)}]
-        },
-        %{
-          "candidate_id" => b["id"],
-          "ranges" => [%{"source" => target(from_b), "target" => target(from_b)}]
-        }
+        pick.(a, from_a),
+        pick.(b, from_b)
       ],
       "join" => %{
         "instruction" =>

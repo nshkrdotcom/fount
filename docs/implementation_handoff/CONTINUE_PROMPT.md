@@ -1,5 +1,7 @@
 # Apply, verify, and finish the Fount source continuation
 
+**Later scope decision (2026-09-24):** the overlay has already been committed and local QA has run. Feature development is now frozen. The feature-build directions in this historical prompt are superseded for the present pass. Use [STABILITY_CERTIFICATION.md](STABILITY_CERTIFICATION.md) for current verification/defect work and [FUTURE_DEVELOPMENT.md](FUTURE_DEVELOPMENT.md) for deferred feature behavior. Preserve the original instructions below as delivery provenance.
+
 You are the local implementing agent with the actual environment. Your repositories are **`~/p/g/n/fount`**, **`~/p/g/n/system_one_sdk`**, and **`~/p/g/n/inference`**. Apply and edit Fount only. You receive `fount-overlay.zip`, its exact external manifest, deletion list, installer, extracted handoff, and the existing original specification under `docs/implementation_handoff/spec_draft_implementation/`.
 
 This overlay contains substantial implemented source, tests, migrations, commands, real example modes and supporting assets. It is **not a verified release**. The source-writing agent could not run Mix, Elixir, PostgreSQL, providers, tests, rendering or speech. Python artifact inspection/packaging is not runtime verification. No independent code-review agent ran. Preserve that provenance and all dated earlier-run evidence. Do not claim unrun checks passed.

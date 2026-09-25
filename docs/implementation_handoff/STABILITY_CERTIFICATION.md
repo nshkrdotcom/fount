@@ -22,6 +22,18 @@ No release certification is claimed yet. The separate [Stage 2 record](STAGE2_ST
 
 As of 2026-09-25, the gate status for the tested boundary is **S01 passed, S02 passed, S03 passed, S04 partial, S05 partial, S06 partial, S07 passed**. S04 remains partial because the real `consequences` continuity extraction failed local validation and the full Probe fixture matrix is unrun. S05 remains partial because `propagate`, `sequence_routes`, `grouped_notes` and `character_workspace` have no reviewable live candidates, the bundled `pass_all` route stopped on its first Luna response, and the original story assertions and explicit acceptance have not been demonstrated. S06 has real PDF evidence; per-turn speech was not run because no speech engine was configured. This status does not certify a full Fount release or screenplay quality. The Core persistence and tested interchange boundary can be evaluated separately using S01–S03 and S07 evidence.
 
+| Existing writer mode | Real-run outcome | Remaining certification condition |
+| --- | --- | --- |
+| `bridge` | Two saved candidates, edit/reopen and review export | Original W01 story assertions and explicit acceptance |
+| `alternatives` | Two candidates, generated join and audition | Rerun the repaired one-shot fixture and judge route/join assertions |
+| `propagate` | Partial; no candidate | Complete ferry/key/reveal repair and before/after checks |
+| `sequence_routes` | Partial; no candidate | Two distinct five-to-three routes and same-settings PDF comparison |
+| `character_workspace` | Partial; two strategies, no candidate | Three-scene outcome, secret, agency and partner-response checks |
+| `grouped_notes` | Partial; two strategies, no candidate | Written groups and partial note selection |
+| `pass_all` | Bundled run partial; six individual profiles saved candidates | One-shot run and per-profile story review |
+| `recover_scene` | Exact and adapted review-ready candidates | Full historical/current/proposed fixture assertions |
+| `investigate` | Three strategies and two review-ready remedies | Optional follow-up branch and remedy review |
+
 Report each gate as passed, failed, partial, or not run with command, date, and artifact path. If S01, S02, S03 or S07 is incomplete, do not call even the bounded implementation stable. If S04–S06 are incomplete, identify the exact unverified surface and certify only a narrower surface if it is useful and truthful. Real model generation can demonstrate operation but cannot guarantee screenplay quality or a universal semantic judgment. A candidate and review packet are not an accepted revision.
 
 The current pass may repair regressions in supported behavior, improve tests that expose those defects, and update evidence. It may not implement the deferred capabilities in FUTURE_DEVELOPMENT merely to turn this table green. The original full-feature acceptance remains a separate future effort.

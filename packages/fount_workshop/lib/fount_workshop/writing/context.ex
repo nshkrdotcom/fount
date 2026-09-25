@@ -2,6 +2,47 @@ defmodule FountWorkshop.Writing.Context do
   @moduledoc false
   alias FountProbe.Projection
 
+  @doc "Compacts duplicated projection metadata for provider prompts; saved evidence stays complete."
+  def prompt_data(data) when is_map(data) do
+    data
+    |> Map.delete("known_neighbor_pages")
+    |> Map.update(
+      "selected_pages",
+      [],
+      &Enum.map(&1, fn unit ->
+        Map.take(unit, ~w(evidence_id ordinal scene_id target text type))
+      end)
+    )
+    |> Map.update(
+      "adjacent_read_only_pages",
+      [],
+      &Enum.map(&1, fn unit ->
+        Map.take(unit, ~w(evidence_id ordinal scene_id target text type))
+      end)
+    )
+    |> Map.update(
+      "scene_index",
+      [],
+      &Enum.map(&1, fn scene ->
+        Map.take(scene, ~w(id heading_id heading omitted))
+      end)
+    )
+    |> Map.update(
+      "dialogue_blocks",
+      [],
+      &Enum.map(&1, fn block ->
+        Map.take(block, ~w(id cue_id body_ids dual_with side scene_id))
+      end)
+    )
+    |> Map.update(
+      "confirmed_mentions",
+      [],
+      &Enum.map(&1, fn mention ->
+        Map.take(mention, ~w(id element_id character_id role status byte_start byte_end))
+      end)
+    )
+  end
+
   def build(model, request, opts \\ []) do
     selection = editable_selection(model, request)
 

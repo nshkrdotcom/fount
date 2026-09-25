@@ -14,23 +14,26 @@ This is a local continuation after the committed overlay and the separate QA com
 - Exact recovery supports a same-screenplay fragment or contiguous range and cross-screenplay copy with new IDs and explicit cast mapping. Sessions can selectively retry cached failed inspections; repeated partial group selection retains the full note dependency set. Notes with overlapping scene/element targets are flagged as potential conflicts.
 - A failed optional semantic repair now leaves a branch record with the source candidate ID, repair round, and safe error category/reason while preserving the original reviewable candidate.
 - Investigation uses structured hypothesis records and one bounded follow-up batch. Its explanation must revise every initial hypothesis. Rebase rejects malformed resolution shapes before replay.
+- Fresh-process persistence decoding now uses a fixed atom allowlist for element types, mention roles/statuses, struct fields and known attributes. This fixes reloads of `section`, `dual?` and `outline_path` without converting arbitrary stored strings to atoms. The new migration accepts `strategies_ready` and `review_ready` session checkpoints.
+- The local `gpt-5.6-luna` model was confirmed available at low reasoning effort. Proposal generation uses a compact JSON-text guide because its canonical schema contains `oneOf`, which the provider rejects as a structured-output schema. The complete canonical contract remains the local validator. Prompt context drops duplicated projection metadata, and proposal validation allows two bounded repair calls.
+- A live bridge session reached `review_ready` with two saved candidates. A writer edit reopened exactly, its review packet exported Fountain, table-read, JSON and three real PDFs, and the accepted head stayed at the base revision. The saved session was resumed across fresh VM processes; earlier malformed model JSON was rejected and retried. This is evidence for the bridge path, not the full W01 acceptance case.
 
 ## Actual checks
 
-`bash scripts/verify_handoff.sh --offline` passed all 12 dependency, format, warning-free test compilation and default ExUnit checks. Local status file: `/tmp/fount-handoff-offline-20260924T185204-356722/status.tsv`.
+`bash scripts/verify_handoff.sh --offline` passed all 12 dependency, format, warning-free test compilation and default ExUnit checks after the live fixes. Local status file: `/tmp/fount-handoff-offline-20260924T192756-379448/status.tsv`.
 
 | Package | Default suite |
 | --- | ---: |
-| Core | 68 passed (67 tests, 1 property) |
+| Core | 69 passed (68 tests, 1 property) |
 | Probe | 44 passed |
 | Workshop | 46 passed |
 
-Using the previously created local `fount_verify_20260924_qa` database on PostgreSQL 5433, Core integration passed 9 tests and Workshop integration passed 12 tests. A new concurrent candidate-acceptance test verifies that only one candidate can advance a shared head. The Workshop suite includes real Afterwriting/Poppler checks. This stage did not create a new fresh database or rerun migrations.
+Using the previously created local `fount_verify_20260924_qa` database on PostgreSQL 5433, Core integration passed 10 tests and Workshop integration passed 12 tests. The new status migration was applied to this local database. The Workshop suite includes real Afterwriting/Poppler checks. The database was not reset.
 
 Standalone A4 PDF `/tmp/fount-stage2-a4.pdf` has SHA-256 `f6501b6f747106d1532c4b69831c9229ae5c09577c2a3a4be65204e11d209659`, two pages, no blank pages, A4 dimensions 595.28 × 841.89 points, and embedded CourierPrime. The title and script pages were visually inspected. These files are local temporary evidence, not committed artifacts.
 
 ## Still open
 
-The full writer acceptance fixtures have not been run through live generation, review and explicit acceptance. `FOUNT_CODEX_MODEL` was not configured during this stage. In particular W03's ferry/key/reveal repair, W04's two distinct five-to-three routes and measured page savings, W05's chosen outcome/secret/partner repair, W07's six real pass outputs, and W09's end-to-end evidence/strategy/writing run remain unproven.
+The full writer acceptance fixtures have not been run through live generation, review and explicit acceptance. One bridge session exercised live generation, review export and writer editing, but no explicit acceptance was made. In particular W03's ferry/key/reveal repair, W04's two distinct five-to-three routes and measured page savings, W05's chosen outcome/secret/partner repair, W07's six real pass outputs, and W09's end-to-end evidence/strategy/writing run remain unproven.
 
 Additional work remains on full PostgreSQL concurrency and interchange edge matrices; broader audience/access fixtures; chronology, pronouns and relationships; integrated dialogue knowledge/voice and requested voice conformance; broader retrieval/history filters; cross-scene semantic note conflicts; richer repair-attempt traces, arbitrary PDF profiles; and mixed speech output. Action line mapping uses text matching against a real PDF and can report unavailable for ambiguous repeated text. Prohibited-fact checks cannot certify the absence of an undeclared invention. Review these as open acceptance work, not passes inferred from the smaller tests above.

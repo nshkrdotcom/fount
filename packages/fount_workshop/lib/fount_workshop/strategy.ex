@@ -41,7 +41,7 @@ defmodule FountWorkshop.Strategy do
 
       prompt =
         "You are developing choices for a professional spec screenplay. Create exactly #{count} genuinely different dramatic approaches to the writer's request. Change causal route, character choice, resistance, or disclosure, not merely adjectives. No universal act formula, quality score, winner, or invented PDF savings. Describe actionable screenplay beats and concrete consequences. Disclose inventions. Nothing is accepted yet.\n" <>
-          Jason.encode!(context.data)
+          Jason.encode!(FountWorkshop.Writing.Context.prompt_data(context.data))
 
       with {:ok, value, traces} <-
              Completion.complete(

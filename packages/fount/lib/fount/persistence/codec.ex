@@ -7,6 +7,38 @@ defmodule Fount.Persistence.Codec do
   alias Fount.IR.{DialogueBlock, Element, Scene, Script, TitlePage}
   alias Fount.{Revision, Screenplay}
 
+  @element_types Map.new(
+                   ~w(scene_heading action character dialogue parenthetical transition centered lyric section synopsis page_break note boneyard blank unknown),
+                   fn name -> {name, String.to_atom(name)} end
+                 )
+  @mention_roles Map.new(~w(speaker_cue action dialogue_reference parenthetical), fn name ->
+                   {name, String.to_atom(name)}
+                 end)
+  @mention_statuses Map.new(~w(confirmed suggested ambiguous), fn name ->
+                      {name, String.to_atom(name)}
+                    end)
+  @atom_attrs Map.new(
+                ~w(forced? number extension dual? level intentional_blank? dual_with_cue dual_side),
+                fn name -> {name, String.to_atom(name)} end
+              )
+  @codec_keys [
+                Revision,
+                Element,
+                Scene,
+                DialogueBlock,
+                Character,
+                Mention,
+                Annotation,
+                Target,
+                Provenance,
+                Fount.Source.Span,
+                TitlePage.Entry
+              ]
+              |> Enum.flat_map(fn module -> module |> struct() |> Map.keys() end)
+              |> Enum.reject(&(&1 == :__struct__))
+              |> Enum.uniq()
+              |> Map.new(&{Atom.to_string(&1), &1})
+
   @spec encode(Screenplay.t()) :: map()
   def encode(screenplay) do
     %{
@@ -54,7 +86,13 @@ defmodule Fount.Persistence.Codec do
     mentions =
       Map.new(data["mentions"], fn value ->
         value = keys(value)
-        value = %{value | role: String.to_existing_atom(value.role), status: String.to_existing_atom(value.status)}
+
+        value = %{
+          value
+          | role: Map.fetch!(@mention_roles, value.role),
+            status: Map.fetch!(@mention_statuses, value.status)
+        }
+
         mention = struct(Mention, value)
         {mention.id, mention}
       end)
@@ -95,7 +133,7 @@ defmodule Fount.Persistence.Codec do
 
     value = %{
       value
-      | type: String.to_existing_atom(value.type),
+      | type: Map.fetch!(@element_types, value.type),
         attrs: attr_keys(value[:attrs] || %{}),
         source_span: decode_span(value[:source_span]),
         content_span: decode_span(value[:content_span])
@@ -145,13 +183,11 @@ defmodule Fount.Persistence.Codec do
   defp plain(value) when is_atom(value), do: Atom.to_string(value)
   defp plain(value), do: value
 
-  defp keys(map), do: Map.new(map, fn {key, value} -> {String.to_existing_atom(key), value} end)
+  defp keys(map), do: Map.new(map, fn {key, value} -> {Map.fetch!(@codec_keys, key), value} end)
 
   defp attr_keys(map) do
     Map.new(map, fn {key, value} ->
-      if key in ["forced?", "number", "extension", "dual?", "level", "intentional_blank?", "dual_with_cue", "dual_side"],
-        do: {String.to_existing_atom(key), value},
-        else: {key, value}
+      {Map.get(@atom_attrs, key, key), value}
     end)
   end
 end

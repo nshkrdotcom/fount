@@ -13,14 +13,34 @@ defmodule FountProbe.Completion do
     repairs = Keyword.get(opts, :decode_repairs, 1)
     capabilities = Inference.capabilities(client)
     structured = Inference.Capability.supported?(capabilities, :response_format_json_schema)
-    mode = if structured, do: "json_schema", else: "json_text"
+
+    mode =
+      if structured and not Keyword.get(opts, :force_json_text, false),
+        do: "json_schema",
+        else: "json_text"
+
     original = prompt
+    schema_prompt = Keyword.get(opts, :schema_prompt, Jason.encode!(schema))
     max_bytes = Keyword.get(opts, :max_context_bytes, 100_000)
 
-    if byte_size(prompt) + byte_size(Jason.encode!(schema)) > max_bytes do
+    if byte_size(prompt) +
+         byte_size(if(mode == "json_text", do: schema_prompt, else: Jason.encode!(schema))) >
+         max_bytes do
       {:error, :context_limit, []}
     else
-      attempt(client, original, original, schema, name, validator, mode, repairs, [], opts)
+      attempt(
+        client,
+        original,
+        original,
+        schema,
+        schema_prompt,
+        name,
+        validator,
+        mode,
+        repairs,
+        [],
+        opts
+      )
     end
   end
 
@@ -42,7 +62,19 @@ defmodule FountProbe.Completion do
 
   def decode(_), do: {:error, :missing_response_text}
 
-  defp attempt(client, original, prompt, schema, name, validator, mode, repairs, trace, opts) do
+  defp attempt(
+         client,
+         original,
+         prompt,
+         schema,
+         schema_prompt,
+         name,
+         validator,
+         mode,
+         repairs,
+         trace,
+         opts
+       ) do
     options =
       if mode == "json_schema" do
         [response_format: {:json_schema, %{name: name, strict: true, schema: schema}}]
@@ -54,14 +86,15 @@ defmodule FountProbe.Completion do
       if mode == "json_text" do
         prompt <>
           "\nReturn exactly one JSON object conforming to this schema:\n" <>
-          Jason.encode!(schema)
+          schema_prompt
       else
         prompt
       end
 
     result =
       cond do
-        byte_size(request) + byte_size(Jason.encode!(schema)) >
+        byte_size(request) +
+          if(mode == "json_schema", do: byte_size(Jason.encode!(schema)), else: 0) >
             Keyword.get(opts, :max_context_bytes, 100_000) ->
           {:error, :context_limit}
 
@@ -120,11 +153,26 @@ defmodule FountProbe.Completion do
                 "representation and these errors. Do not alter writer requirements or base IDs.\n" <>
                 inspect(errors, limit: 100, printable_limit: 8_000)
 
+            repair_prompt =
+              case {errors, Map.get(response, :text)} do
+                {:invalid_json_response, previous} when is_binary(previous) ->
+                  excerpt = "\nPrevious malformed JSON to repair:\n" <> previous
+
+                  if byte_size(repair_prompt) + byte_size(excerpt) + byte_size(schema_prompt) <=
+                       min(Keyword.get(opts, :max_context_bytes, 100_000), 55_000),
+                     do: repair_prompt <> excerpt,
+                     else: repair_prompt
+
+                _ ->
+                  repair_prompt
+              end
+
             attempt(
               client,
               original,
               repair_prompt,
               schema,
+              schema_prompt,
               name,
               validator,
               mode,

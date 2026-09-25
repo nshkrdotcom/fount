@@ -8,6 +8,29 @@ defmodule Fount.WritingPersistenceIntegrationTest do
     :ok
   end
 
+  test "session checkpoints persist strategy and review states" do
+    root = Screenplay.new()
+    assert {:ok, _} = Persistence.create(Repo, "session-status-#{ID.v4()}", root)
+
+    assert {:ok, session} =
+             Persistence.save_session(Repo, %{
+               screenplay_id: root.id,
+               base_revision_id: root.revision.id,
+               workflow: "develop",
+               request: %{},
+               status: "open"
+             })
+
+    assert {:ok, strategies} =
+             Persistence.save_session(Repo, %{session | status: "strategies_ready"})
+
+    assert {:ok, review} =
+             Persistence.save_session(Repo, %{strategies | status: "review_ready"})
+
+    assert {:ok, reopened} = Persistence.session(Repo, review.id)
+    assert reopened["status"] == "review_ready"
+  end
+
   test "accepted revisions reload with immutable history and scoped structural rows" do
     key = "writing-#{ID.v4()}"
 

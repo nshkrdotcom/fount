@@ -100,14 +100,13 @@ defmodule FountWorkshop.Writing.Preparation do
     end
   end
 
-  defp inspections(_, %{"workflow" => "develop", "options" => opts}, context) do
+  defp inspections(_, %{"workflow" => "develop", "options" => opts}, _context) do
     {[],
      %{
        "development_brief" => opts["brief"],
        "entry_requirements" => opts["entry_requirements"] || [],
        "exit_requirements" => opts["exit_requirements"] || [],
-       "placement" => opts["placement"],
-       "known_neighbor_pages" => context.data["selected_pages"]
+       "placement" => opts["placement"]
      }}
   end
 

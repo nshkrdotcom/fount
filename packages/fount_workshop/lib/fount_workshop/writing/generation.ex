@@ -35,7 +35,7 @@ defmodule FountWorkshop.Writing.Generation do
         "\n" <>
         Jason.encode!(%{
           "strategy" => strategy,
-          "context" => context.data,
+          "context" => Context.prompt_data(context.data),
           "repair_feedback" => Keyword.get(opts, :repair_feedback),
           "source_candidate" => Keyword.get(opts, :source_candidate)
         })
@@ -46,7 +46,11 @@ defmodule FountWorkshop.Writing.Generation do
              prompt,
              schema,
              validate,
-             Keyword.put(opts, :name, "fount_candidate")
+             opts
+             |> Keyword.put(:name, "fount_candidate")
+             |> Keyword.put(:force_json_text, true)
+             |> Keyword.put_new(:decode_repairs, 2)
+             |> Keyword.put(:schema_prompt, FountWorkshop.Writing.ProposalGuide.text())
            ),
          {:ok, candidate} <- Candidate.compile(base, proposal, compile_opts) do
       provenance =

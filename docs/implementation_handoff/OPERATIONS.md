@@ -90,6 +90,10 @@ Probe requests are an array of `{id, tool, params}` records. `FountProbe.tools/0
 
 Run from the owning package with `MIX_ENV=dev mix run examples/live.exs -- --mode MODE --out DIRECTORY`. Exactly one such entrypoint exists per package. Start with the cheap/file-only cases; new writer modes require actual PostgreSQL/Codex/Jev and requested PDF tools. The new Workshop harness caps its shared work at 40 Inference calls and 1,500 Jev states, with 100,000-byte context limits; these are caps, not promised consumption or cost. Oversized/unfinished work remains partial.
 
+Set `FOUNT_CODEX_MODEL` to a model available through the configured Codex provider. `FOUNT_CODEX_REASONING_EFFORT` optionally selects `none`, `low`, `medium`, `high`, `xhigh`, or `max` for the shared Probe/Workshop launcher; omitting it uses the model default. For the current low-cost local check, `gpt-5.6-luna` with `low` was confirmed by the local SDK and a read-only Codex probe. Keep provider credentials in the local secret wrapper.
+
+Proposal generation sends a compact JSON guide and validates every response against the full local canonical contract. A provider response can require bounded JSON repair; a failed branch remains resumable while successful candidates stay saved. Apply all Fount migrations before live sessions, including the session-status migration, then inspect `session.json` and the review packet rather than assuming a returned model response means a valid candidate.
+
 | Package | Retained modes | New modes |
 | --- | --- | --- |
 | Core | `roundtrip`, `database` | `interchange` |

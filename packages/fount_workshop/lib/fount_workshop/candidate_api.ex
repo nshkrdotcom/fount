@@ -156,7 +156,16 @@ defmodule FountWorkshop.CandidateAPI do
         })
 
     with {:ok, joins, traces} <-
-           FountProbe.Completion.complete(services[:inference], prompt, schema, validator, opts) do
+           FountProbe.Completion.complete(
+             services[:inference],
+             prompt,
+             schema,
+             validator,
+             opts
+             |> Keyword.put(:force_json_text, true)
+             |> Keyword.put_new(:decode_repairs, 2)
+             |> Keyword.put(:schema_prompt, FountWorkshop.Writing.ProposalGuide.text())
+           ) do
       existing = Candidate.proposal(combined)
       namespaced = Fount.Writing.LocalReferences.namespace(joins["groups"], "join")
       names = Map.new(namespaced, &{&1["id"], "join:" <> &1["id"]})

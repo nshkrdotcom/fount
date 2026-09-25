@@ -31,7 +31,7 @@ defmodule FountProbe.Launcher do
           adapter: Inference.Adapters.ASM,
           provider: :codex,
           model: model,
-          adapter_opts: [query_opts: [stream_timeout_ms: 180_000]]
+          adapter_opts: [query_opts: [stream_timeout_ms: 180_000] ++ reasoning_effort()]
         )
       end
 
@@ -48,5 +48,18 @@ defmodule FountProbe.Launcher do
     {:ok, %{inference: inference, system_one: jev}}
   rescue
     _ in ArgumentError -> {:error, :explicit_provider_configuration_required}
+  end
+
+  defp reasoning_effort do
+    case System.get_env("FOUNT_CODEX_REASONING_EFFORT") do
+      nil -> []
+      "none" -> [reasoning_effort: :none]
+      "low" -> [reasoning_effort: :low]
+      "medium" -> [reasoning_effort: :medium]
+      "high" -> [reasoning_effort: :high]
+      "xhigh" -> [reasoning_effort: :xhigh]
+      "max" -> [reasoning_effort: :max]
+      _ -> raise ArgumentError, "invalid FOUNT_CODEX_REASONING_EFFORT"
+    end
   end
 end

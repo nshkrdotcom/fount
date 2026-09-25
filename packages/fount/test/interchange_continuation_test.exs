@@ -40,4 +40,33 @@ defmodule Fount.InterchangeContinuationTest do
     assert Enum.map(Enum.filter(merged.ir.elements, &(&1.type == :action)), & &1.id) ==
              Enum.map(Enum.filter(model.ir.elements, &(&1.type == :action)), & &1.id)
   end
+
+  test "scene split rejects a cut inside dual dialogue and merge retains the joint turn" do
+    model =
+      Fount.parse!("INT. OFFICE - DAY\n\nMARA\nTake the key.\n\nDAN ^\nI have it.\n\nThe door closes.\n")
+      |> Fount.Screenplay.from_document(cast_resolution: :literal_cues)
+
+    [scene] = model.ir.scenes
+    [first, second] = Enum.filter(model.ir.elements, &(&1.type == :dialogue))
+    action = Enum.find(model.ir.elements, &(&1.type == :action))
+
+    assert {:error, :split_simultaneous_group} =
+             Fount.Writing.Structure.split(model, scene.id, first.id, "EXT. ROAD - DAY")
+
+    assert {:ok, split, _} =
+             Fount.Writing.Structure.split(model, scene.id, second.id, "EXT. ROAD - DAY")
+
+    assert Enum.map(split.ir.dialogue_blocks, & &1.id) ==
+             Enum.map(model.ir.dialogue_blocks, & &1.id)
+
+    assert Fount.Query.scene_for(split, action.id).id != scene.id
+
+    assert {:ok, merged, _} =
+             Fount.Writing.Structure.merge(split, Enum.map(split.ir.scenes, & &1.id), nil)
+
+    assert Enum.map(merged.ir.dialogue_blocks, & &1.id) ==
+             Enum.map(model.ir.dialogue_blocks, & &1.id)
+
+    assert Fount.Query.scene_for(merged, action.id).id == scene.id
+  end
 end

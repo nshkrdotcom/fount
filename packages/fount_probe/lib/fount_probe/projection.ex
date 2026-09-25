@@ -174,13 +174,22 @@ defmodule FountProbe.Projection do
           state(model, point, visible, projection, %{"complete_context" => true})
 
         "audience_estimate" ->
-          # Cues may disclose identities unavailable to a viewer. Keep linkage opaque.
-          neutral = neutral_cues(visible, model)
+          # Page directions can include interior knowledge. Admit visual beats only when
+          # an exact fragment has been explicitly classified as observable.
+          observable = MapSet.new(Keyword.get(opts, :observable_evidence_ids) || [])
+
+          audience =
+            Enum.filter(visible, fn unit ->
+              unit["type"] in ~w(character dialogue lyric) or
+                (unit["type"] == "action" and MapSet.member?(observable, unit["evidence_id"]))
+            end)
+
+          neutral = neutral_cues(audience, model)
 
           state(model, point, neutral, projection, %{
             "complete_context" => false,
             "projection_gaps" => [
-              "Cue identities are neutralized. Interior prose remains a page-based estimate unless observable units are supplied."
+              "Only dialogue and explicitly observable action fragments are included. Visual access, speaker identity and off-screen hearing remain uncertain."
             ]
           })
 

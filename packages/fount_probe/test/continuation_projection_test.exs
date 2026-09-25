@@ -41,6 +41,35 @@ defmodule FountProbe.ContinuationProjectionTest do
     end
   end
 
+  test "audience projection excludes interior prose unless an exact action fragment is approved" do
+    m =
+      Fount.parse!(
+        "INT. ROOM - DAY\n\nMara privately remembers the hidden key.\n\nA door slams.\n\nDAN\nDid you hear that?\n"
+      )
+      |> Fount.Screenplay.from_document()
+
+    scene = hd(m.ir.scenes)
+    point = List.last(elem(Projection.points(m, scene.id), 1))
+    {:ok, units} = Projection.select(m, %{"whole_screenplay" => true})
+    door = Enum.find(units, &(&1["text"] == "A door slams."))
+
+    assert {:ok, default, evidence} = Projection.at(m, point, "audience_estimate")
+    refute Jason.encode!(default) =~ "hidden key"
+    refute Jason.encode!(default) =~ "door slams"
+    assert Jason.encode!(default) =~ "Did you hear that?"
+    refute Enum.any?(evidence, &(&1["evidence_id"] == door["evidence_id"]))
+
+    assert {:ok, approved, approved_evidence} =
+             Projection.at(m, point, "audience_estimate",
+               observable_evidence_ids: [door["evidence_id"]]
+             )
+
+    assert Jason.encode!(approved) =~ "A door slams."
+    refute Jason.encode!(approved) =~ "hidden key"
+    assert Enum.any?(approved_evidence, &(&1["evidence_id"] == door["evidence_id"]))
+    refute approved["complete_context"]
+  end
+
   test "new structured extraction cannot invent evidence" do
     assert {:error, _} =
              FountProbe.Extraction.validate(

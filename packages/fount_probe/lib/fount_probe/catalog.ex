@@ -132,6 +132,10 @@ defmodule FountProbe.Catalog do
   defp ids(model, params) do
     scene_ids = Map.get(params, "scene_ids", []) ++ List.wrap(params["scene_id"])
     characters = Map.get(params, "character_ids", []) ++ List.wrap(params["character_id"])
+    search_filters = Map.get(params, "filters", %{})
+    searched_scenes = Map.get(search_filters, "scene_ids", [])
+    searched_characters = Map.get(search_filters, "character_ids", [])
+    collections = Map.get(search_filters, "authored_collection_ids", [])
     behavior_ids = Map.get(params, "behavior_element_ids", [])
     changed_targets = Map.get(params, "changed_targets", [])
 
@@ -145,6 +149,18 @@ defmodule FountProbe.Catalog do
 
       Enum.any?(characters, &(not Map.has_key?(model.cast, &1))) ->
         {:error, :unknown_character}
+
+      is_list(searched_scenes) and
+          Enum.any?(searched_scenes, &is_nil(Fount.Query.scene(model, &1))) ->
+        {:error, :unknown_scene}
+
+      is_list(searched_characters) and
+          Enum.any?(searched_characters, &(not Map.has_key?(model.cast, &1))) ->
+        {:error, :unknown_character}
+
+      is_list(collections) and
+          Enum.any?(collections, &(not Map.has_key?(model.authored_items, &1))) ->
+        {:error, :unknown_authored_collection}
 
       Enum.any?(behavior_ids, fn id ->
         case Map.get(model.index.by_id, id) do
@@ -178,7 +194,20 @@ defmodule FountProbe.Catalog do
         ~w(scene_ids character_ids character_role element_types location authored_collection_ids include_omitted include_notes include_boneyards) ==
         [] and
         Map.get(p, "mode", "retrieve") in ~w(retrieve inspect_all) and
-        Map.get(filters, "character_role", "speaker") in ~w(speaker reference declared_present)
+        Map.get(filters, "character_role", "speaker") in ~w(speaker reference declared_present) and
+        Enum.all?(~w(scene_ids character_ids element_types authored_collection_ids), fn key ->
+          is_nil(filters[key]) or
+            (is_list(filters[key]) and Enum.all?(filters[key], &(is_binary(&1) and &1 != "")))
+        end) and
+        Enum.all?(~w(include_omitted include_notes include_boneyards), fn key ->
+          is_nil(filters[key]) or is_boolean(filters[key])
+        end) and
+        (is_nil(filters["location"]) or
+           (is_binary(filters["location"]) and String.trim(filters["location"]) != "")) and
+        Enum.all?(
+          filters["element_types"] || [],
+          &(&1 in ~w(scene_heading action character dialogue parenthetical transition centered lyric note boneyard))
+        )
 
     if valid, do: :ok, else: {:error, :invalid_search_filter}
   end

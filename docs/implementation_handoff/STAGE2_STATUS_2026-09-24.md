@@ -9,21 +9,22 @@ This is a local continuation after the committed overlay and the separate QA com
 - Canonical JSON import now rejects unknown fields in the encoded revision, screenplay elements/scenes/turns, cast/mentions, annotations, source spans, title entries and source artifact envelope; authored item payloads and element attributes remain extensible.
 - Probe implements adjacent-scene extraction, same-scene dependency ordering and prior-material ablation, validated saved extraction-record reuse, intended-reveal/behavior localization, changed-target continuity, profile threshold dispatch, typed constraint targets and sequence scene counts. Prohibited-fact policy evaluates listed facts against before/after material where semantic clients are available; deterministic mode stays unknown rather than certifying absence.
 - Audience projection now limits default material to anonymous cues and spoken lines; exact action fragments enter only when explicitly supplied as observable evidence IDs. It remains an incomplete estimate of the viewing experience and does not certify visual or off-screen access.
+- Search filters now validate nested list, flag, location and element-type shapes, and reject unknown scene, character and authored-collection IDs instead of silently returning empty results.
 - Action can measure printed PDF line regions from a verified layout report. Workshop PDF export honors A4 and title-page selection in the settings hash. A real A4 sample was rendered and visually inspected.
 - Exact recovery supports a same-screenplay fragment or contiguous range and cross-screenplay copy with new IDs and explicit cast mapping. Sessions can selectively retry cached failed inspections; repeated partial group selection retains the full note dependency set. Notes with overlapping scene/element targets are flagged as potential conflicts.
 - Investigation uses structured hypothesis records and one bounded follow-up batch. Its explanation must revise every initial hypothesis. Rebase rejects malformed resolution shapes before replay.
 
 ## Actual checks
 
-`bash scripts/verify_handoff.sh --offline` passed all 12 dependency, format, warning-free test compilation and default ExUnit checks. Local status file: `/tmp/fount-handoff-offline-20260924T184522-351998/status.tsv`.
+`bash scripts/verify_handoff.sh --offline` passed all 12 dependency, format, warning-free test compilation and default ExUnit checks. Local status file: `/tmp/fount-handoff-offline-20260924T184823-354143/status.tsv`.
 
 | Package | Default suite |
 | --- | ---: |
 | Core | 68 passed (67 tests, 1 property) |
-| Probe | 43 passed |
+| Probe | 44 passed |
 | Workshop | 45 passed |
 
-Using the previously created local `fount_verify_20260924_qa` database on PostgreSQL 5433, Core integration passed 8 tests and Workshop integration passed 12 tests. The Workshop suite includes real Afterwriting/Poppler checks. This stage did not create a new fresh database or rerun migrations.
+Using the previously created local `fount_verify_20260924_qa` database on PostgreSQL 5433, Core integration passed 9 tests and Workshop integration passed 12 tests. A new concurrent candidate-acceptance test verifies that only one candidate can advance a shared head. The Workshop suite includes real Afterwriting/Poppler checks. This stage did not create a new fresh database or rerun migrations.
 
 Standalone A4 PDF `/tmp/fount-stage2-a4.pdf` has SHA-256 `f6501b6f747106d1532c4b69831c9229ae5c09577c2a3a4be65204e11d209659`, two pages, no blank pages, A4 dimensions 595.28 × 841.89 points, and embedded CourierPrime. The title and script pages were visually inspected. These files are local temporary evidence, not committed artifacts.
 

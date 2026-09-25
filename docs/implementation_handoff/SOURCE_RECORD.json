@@ -1,30 +1,40 @@
 {
-  "delivery_status": "partial_implementation_handoff",
-  "previous_source_root_reused": null,
-  "source_counts": {
-    "fount": 133,
-    "spec": 28,
-    "system_one_sdk": 253,
-    "inference": 138
-  },
-  "inputs": {
-    "fount.xml": {
-      "bytes": 641267,
-      "sha256": "8e203f33f02479ed982b094baea66baa848c7c9097e8d1e0dc0b87ed86fa93be"
+  "date": "2026-09-24",
+  "scope": "Fount-only source continuation",
+  "base_identity": "uploaded fount(1).xml, not a newly verified Git commit",
+  "inputs": [
+    {
+      "input": "fount(1).xml",
+      "sha256": "9e785c2dfe0324f8d75eedbbfe6da1a51094e4b2aba2cb83a678a415ab3baf8e",
+      "role": "baseline",
+      "file_count": 233
     },
-    "system_one_sdk(4).xml": {
-      "bytes": 875342,
-      "sha256": "acf283c1d254293cf1fe634f037c0f861bab298f3d524b4db9c5d37bd639fd2d"
+    {
+      "input": "spec_draft_implementation.xml",
+      "sha256": "b6f35b6d9d4cc230e1d9f72970de8ac4c4daa282880ea7ad74b5f9e64e243d06",
+      "role": "spec",
+      "file_count": 28
     },
-    "inference.xml": {
-      "bytes": 597235,
-      "sha256": "cd8bd0ba1a7672da560e5cf70eb79986638742550d00effc0e45d5b4d1d53ddf"
+    {
+      "input": "spec_draft_continuation(1).xml",
+      "sha256": "d2ba43b8bbbf1c3d86e3c3f68ef951ee27bf6ead31edea831150b8f681d7bc4a",
+      "role": "continuation",
+      "file_count": 4
     },
-    "repomix-output(20260924-174859).xml": {
-      "bytes": 270379,
-      "sha256": "b6f35b6d9d4cc230e1d9f72970de8ac4c4daa282880ea7ad74b5f9e64e243d06"
+    {
+      "input": "system_one_sdk(5).xml",
+      "sha256": "acf283c1d254293cf1fe634f037c0f861bab298f3d524b4db9c5d37bd639fd2d",
+      "role": "system_one",
+      "file_count": 253
+    },
+    {
+      "input": "inference(1).xml",
+      "sha256": "fe8a2a4db9626803e9e1197138aa858ad426fdf24335dc2bc961f1f56c9c6e33",
+      "role": "inference",
+      "file_count": 69
     }
-  },
-  "runtime_checks": "not_run",
-  "complete_required_release": false
+  ],
+  "reconstruction": "Bytes between the file tag opening newline and newline before closing file tag; no XML delimiter newline included. A separately hashed one-terminal-LF alternative is explicit, not automatic.",
+  "runtime_execution": "not run",
+  "prior_results_source": "spec_draft_continuation(1).xml BASELINE_AND_GAPS.md; dated historical provenance only"
 }

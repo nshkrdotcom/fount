@@ -1,0 +1,20 @@
+{
+  "id": "continuity",
+  "version": 1,
+  "tool": "continuity",
+  "questions": [
+    {
+      "key": "transition",
+      "type": "choice",
+      "instructions": "How do these exact state observations relate? An unshown transfer or elapsed time may explain a change; heading differences alone are not contradictions."
+    }
+  ],
+  "thresholds": {
+    "support_probability": 0.8,
+    "unsupported_probability": 0.2,
+    "minimum_confidence": 0.7,
+    "minimum_margin": 0.15
+  },
+  "projection": "runtime_explicit",
+  "runtime_choices": "Effective criteria/levels are supplied by the inspected tool and hashed in question_profile_sha256."
+}

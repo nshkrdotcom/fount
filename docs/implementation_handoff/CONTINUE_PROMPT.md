@@ -1,161 +1,41 @@
-# Continue the Fount implementation from the attached full-file source overlay
+# Apply, verify, and finish the Fount source continuation
 
-You have a **partial code implementation handoff**, not a completed release.
-Continue the actual implementation; do not replace it with another speculative
-design, repeat the previous environment excuses, or claim all features exist
-because some support files have been written.
+You are the local implementing agent with the actual environment. Your repositories are **`~/p/g/n/fount`**, **`~/p/g/n/system_one_sdk`**, and **`~/p/g/n/inference`**. Apply and edit Fount only. You receive `fount-overlay.zip`, its exact external manifest, deletion list, installer, extracted handoff, and the existing original specification under `docs/implementation_handoff/spec_draft_implementation/`.
 
-## Repositories and inputs
+This overlay contains substantial implemented source, tests, migrations, commands, real example modes and supporting assets. It is **not a verified release**. The source-writing agent could not run Mix, Elixir, PostgreSQL, providers, tests, rendering or speech. Python artifact inspection/packaging is not runtime verification. No independent code-review agent ran. Preserve that provenance and all dated earlier-run evidence. Do not claim unrun checks passed.
 
-The repositories are located at:
+## Start with the actual state
 
-- `~/p/g/n/fount`
-- `~/p/g/n/system_one_sdk`
-- `~/p/g/n/inference`
+Read this handoff's README, FEATURES, KNOWN_GAPS, API_MAP, SETUP, OPERATIONS and VERIFICATION. Read the original complete specification in its README order, especially creative workflows, Probe tools, Workshop, live examples, tests, build sequence, contracts and fixture. Inspect current source before changing it. The specification remains the feature target; the supplied Fount XML was the overlay baseline. The old progress notes/manifest are not an instruction to reconstruct an earlier overlay or remove stores already removed.
 
-Inputs are `fount-overlay.zip`, `fount-overlay.manifest.json`, the inspectable
-`apply_overlay.py`, and this docset. The entire authoritative implementation
-specification is included under `docs/implementation_handoff/spec_draft_implementation/`.
-The original `fount.xml`, `system_one_sdk.xml` and `inference.xml` describe the
-baseline when available; the actual local checkouts and local changes must be
-inspected before application.
+Inspect `git status --short` and local diffs before application. Preserve unrelated changes. Dry-run the provided installer against `~/p/g/n/fount`, the ZIP and the external manifest. Review preimage mismatches and new-file collisions manually; there is no force/reset escape hatch. If an inspected mismatch is only the XML body's missing final newline, use the manifest's computed one-LF alternative via `--allow-terminal-newline`, then dry-run again. Apply only after conflicts are reconciled; retain `.fount-overlay-backups/`. Do not require an exact Git HEAD, reset a branch, remove unrelated files or drop a database. Deletions in this delivery are explicitly empty.
 
-Read this handoff's VERIFICATION.md, CHANGES.md and FEATURES.md first. Then follow
-the specification's complete reading order, including all contracts and the
-original fixture. Do not ask the user to invent product requirements already
-specified there.
+## Finish the actual implementation, not its labels
 
-## Apply safely
+First compile and inspect the new cross-package call paths. All new source is unformatted/uncompiled by Elixir in this pass; fix real errors and run all old and new tests. The old convenience APIs remain and must continue to work or be consciously revised with documentation and corresponding source tests. Keep Hex `inference` and Hex `agent_session_manager`; use the sibling System One dependency exactly as the supplied source specifies. Do not edit either reference repository, introduce direct alternative providers, add Antigravity, copy SDK internals or create a generic workflow runtime.
 
-1. Inspect `git status`, local diffs and untracked work in all three repositories.
-2. Read the installer and manifest. Run its dry-run against Fount.
-3. Preserve unrelated changes. A changed touched file requires an explicit
-   three-way/manual content review, not a force reset. New-file collisions must
-   also be reviewed. Apply complete files and the explicit deletion list; plain
-   ZIP extraction cannot implement deletions.
-4. Apply only to Fount. Do not copy code into or edit System One or Inference.
-   Keep the installer's backup until verification is finished.
+Prioritize the explicit known gaps:
 
-Do not rely on prior conversation statements that core persistence or all Probe
-tools were completed. Determine the actual source state.
+1. Complete strict edit-scope enforcement for byte spans, insertion positions, moved outside-scope elements and restricted character workspaces. Prove selected candidate groups, local IDs, overlaps, rebases and note dependencies cannot bypass it.
+2. Harden actual candidate/report/source/session identity checks and complete the PostgreSQL FK/deferrable-trigger/rollback/concurrency matrix. Keep immutable original bases and explicit writer review. Repeated identical acceptance is idempotent; different repeated decisions conflict.
+3. Finish Probe's marked incomplete option semantics, same-scene dependency links, full chronological/access/behavior localization, integrated dialogue knowledge/voice checks, profile threshold dispatch and measured action layout density. Unknown results remain unknown or errors, never zero or clean checks.
+4. Finish multi-stage partial note resolution and semantic note conflict handling; complete exact partial/cross-screenplay recovery with new IDs and explicit cast mapping; implement structured hypothesis records and the single allowed investigation follow-up cycle. Retain successes and failures across session retries without silently shifting base or spending again.
+5. Complete remaining PDF/profile/CLI edge behavior and actual feature-specific tests. Do not claim universal craft correctness or page savings from word counts or model probabilities.
 
-## Concrete source already supplied
+Use FEATURES for all F01-F09, W01-W09 and T01-T13, not merely this priority list. A tool name, prompt asset, successful model request or saved report is not a complete writer action. Keep actual candidate screenplay pages and writer choice central.
 
-Integrate or move the supplied components into their specified owning APIs,
-rather than retaining duplicate long-term models:
+## Verify in stages
 
-- `Fount.Writing.UTF8Span`: byte-span validation and exact pin relocation.
-- `Fount.Writing.CanonicalJSON`: deterministic JSON encoding and hashing; add the
-  proper domain projection before using it as content_hash.
-- `Fount.Writing.LocalReferences`: explicit local declarations and UUID mapping.
-- `FountWorkshop.Writing.ChangeGroups`: stable dependency ordering and explicit
-  missing-dependency handling.
-- `FountWorkshop.Writing.ReviewGate`: pure review checks, not a head transaction.
-- `FountProbe.Writing.DecisionPolicy`: typed probability/allowed-mass/crossing
-  interpretation.
-- `FountProbe.Writing.Evidence`: exact revision-aware registry validation.
-- `FountProbe.Writing.Executor`: public SDK preparation/batching and index joins;
-  complete SDK Test-client coverage and report serialization.
-- `FountWorkshop.Writing.Completion`: Inference structured/text output, mandatory
-  local validator and limited malformed-output repair.
-- Their new ExUnit tests, six writing profile assets, reference contracts and
-  the original screenplay fixture.
+For each of `packages/fount`, `packages/fount_probe`, `packages/fount_workshop`, record actual results for dependency resolution, `mix format --check-formatted`, `MIX_ENV=test mix compile --warnings-as-errors`, and `MIX_ENV=test mix test` with `SYSTEM_ONE_API_KEY`, `FOUNT_DATABASE_URL`, `FOUNT_CODEX_MODEL` unset. Use `scripts/verify_handoff.sh --offline` or the exact commands in VERIFICATION. Resolve actual Hex versions locally and retain legitimate lockfiles; never fabricate a resolution. Fix failures and rerun the full suites, not only a targeted test.
 
-The helpers are not an implementation of all required workflows. Inspect and
-correct their source/API details against the actual dependency checkouts.
-Preserve the original useful Fountain parser/CST/IR and source fidelity.
+Use an explicitly chosen fresh `FOUNT_DATABASE_URL`. Confirm the intended local host/port without disclosing credentials. Apply both migrations using the actual current Ecto API. Never drop/reset a pre-existing database. Execute Core and Workshop integration tests; these use real PostgreSQL and, where required, real PDF tooling, though some provider inputs are intentionally offline fixtures.
 
-## Finish the implementation
+Install/confirm Workshop's pinned Afterwriting and Poppler commands before actual PDF integration. Run configured real modes from each owning package with `MIX_ENV=dev mix run examples/live.exs -- --mode MODE --out DIRECTORY`. The `/home/home/scripts/with_bash_secrets` wrapper may be used for authenticated calls if present, without printing its environment or output secrets. No live entrypoint may substitute mock data after failure.
 
-Follow `12_build_sequence.md` from the first genuinely unfinished task. Complete
-all F01–F09, W01–W09 and T01–T13. In particular:
+Run all new writer modes: bridge, alternatives, propagate, sequence_routes, character_workspace, grouped_notes, pass_all, recover_scene, investigate. Also retain/regress the original modes and run Core interchange and Probe tools/voice/knowledge_access/consequences. Visually inspect actual PDF pages and compare page counts only with identical settings. Run optional speech only when configured; otherwise record it not run. Ordinary candidate generation and packet export must leave the accepted head unchanged.
 
-- Implement the full typed canonical edit union, exact IDs and current UTF-8
-  spans, local references, stable retained sequence identities, dual integrity,
-  cast decisions, authored items, indexes/slices and change-impact closure.
-- Replace partial persistence and old filesystem/SQLite stores with the complete
-  immutable revision-scoped PostgreSQL schema. Use one loader for accepted,
-  historical and candidate values. Implement create/save/load/history,
-  optimistic session updates, candidate saves, reports and atomic accept/reject.
-- Complete actual writing from an empty brief, continuing/bridging, alternatives,
-  selection/combination with pinned passages and generated joins, story changes
-  with consequence repair, sequence rebuilding, character rewriting, note
-  workflows, six passes, real history recovery, and investigation that writes.
-- Complete exact evidence retrieval, perspective isolation and every specified
-  Probe tool. Missing results are errors/unknown, never zero or a clean check.
-  Jev is probabilistic and has no artistic quality score.
-- Complete safe stale-base/review checking, explicit acceptance, source and
-  structural diffs, inventions, source provenance, review packets, durable resume
-  and real candidate values.
-- Complete all CLI commands, proper runtime Afterwriting PDF integration,
-  table-read exports and optional real espeak speech. Page-saving claims require
-  measured baseline/candidate output under identical settings.
+Demonstrate the exact fixture outcomes: retained bridge neighbors plus edited/reopened/explicitly accepted candidate; two alternatives and a third attributed combined candidate with real joins; reveal movement from scene 3 to 6 with earlier accusation repaired, independent ferry motive and key setup/use retained, and before/after knowledge; two meaningfully different five-to-three routes with protected text and measured PDFs; character-wide actions/voice/partner responses with chosen secrets/outcomes; grouped local/sequence notes and partial acceptance; six real passes; historical/current/proposed recovery; revised hypotheses, three strategies and at least two written investigation remedies. The earlier sequence run saved zero pages. Do not invent improvement to close that case.
 
-Core must have no model dependency. Probe consumes System One and Inference.
-Workshop consumes Inference and Probe. All generative completions use
-**Inference with Codex**. `agent_session_manager` is only Inference's optional
-runtime. No Antigravity, no direct alternate provider or CLI wrapper, no copied
-SDK internals, no general workflow runtime, no graph/vector database.
+## Return evidence and a truthful handoff
 
-## Fresh database and dependency setup
-
-Resolve dependencies in all three Fount packages and write genuine lockfiles.
-The new Probe lock may be empty; do not call it resolved. Preserve compatible
-actual versions and inspect transitive sibling dependencies.
-
-Implement/review the fresh migration from the supplied reference SQL before
-migrating. Choose an explicit **unused development database**. Never drop,
-truncate or reset an existing database. `FOUNT_DATABASE_URL` must be explicit
-for real examples; keep passwords out of reports.
-
-## Verify locally
-
-First ensure default application/test startup cannot start PostgreSQL, a
-renderer, speech or authenticated provider. Move real checks outside `test/`.
-Use SDK Test clients and Inference Mock at the real external boundaries; keep
-pure screenplay behavior and temporary file I/O real.
-
-For each of `packages/fount`, `packages/fount_probe`, and
-`packages/fount_workshop`, run:
-
-```bash
-mix deps.get
-mix format --check-formatted
-MIX_ENV=test mix compile --warnings-as-errors
-env -u SYSTEM_ONE_API_KEY -u FOUNT_DATABASE_URL -u FOUNT_CODEX_MODEL \
-  MIX_ENV=test mix test
-```
-
-Then run explicit PostgreSQL and PDF integration checks against the new
-development database. Create exactly these executable real-only entrypoints:
-
-```text
-packages/fount/examples/live.exs
-packages/fount_probe/examples/live.exs
-packages/fount_workshop/examples/live.exs
-```
-
-Execute configured real modes from each owning package with:
-
-```bash
-MIX_ENV=dev mix run examples/live.exs -- --mode MODE
-```
-
-Use dynamic fixture bindings, not hardcoded UUIDs. Develop must generate actual
-pages from a genuinely empty root. Each creative mode saves/reopens candidates,
-exports actual Fountain/review output and renders real PDFs. Exercise
-`--accept-demo` only in newly created demonstration projects, and prove that
-without it the accepted head does not move. Inspect the actual pages and use
-PDF tools plus visual inspection; do not equate a nonempty PDF with correct
-screenplay layout. Run speech only when configured and verify real playable
-audio. Missing required services produce a failed/partial requested mode, not
-mock output or a passing skipped mode.
-
-## Deliver the completed result
-
-Keep exact command results and distinguish passed, failed and not run.
-Record concrete known failures, not only generic limitations. Update the
-feature map with actual source/tests/commands/mode evidence. Provide the full
-new/modified-file overlay, explicit deletions, hashes/modes, safe installer,
-resolved lockfiles and updated handoff. Do not claim the release is complete
-while any required workflow is merely a prompt, catalog name or support helper.
+Record commands, passed/failed/partial/not-run statuses, real IDs, generated public-fixture artifacts and hashes. Keep prior results dated and separate from your reruns. Update the handoff and exact source manifest for your final changes. List all remaining implementation gaps explicitly; do not replace missing functionality with another roadmap or claim release completion while a required case remains a prompt/helper. Preserve the user's screenplay, unrelated local work, credentials, immutable history and explicit acceptance choices throughout.

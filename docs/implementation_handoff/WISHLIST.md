@@ -1,19 +1,15 @@
-# Upstream and remaining work
+# Upstream findings and deferred work
 
-No proven System One or Inference capability gap is claimed as a blocker to the
-required Fount feature set. The unfinished work is local implementation and
-integration; do not reclassify it as an upstream defect.
+## Dependency boundary
 
-Antigravity remains outside this release. The supplied Inference audit reports
-that its adapter does not establish the required completion-only capability for
-that provider. Do not add Antigravity configuration or direct provider calls.
-Any future request belongs upstream with actual adapter evidence and tests.
+The supplied System One snapshot exposes the Noul/Choice/Score constructors and prepared execution APIs needed by this source. The supplied Inference snapshot exposes ASM completion clients, capability inspection, declared response formats, responses and errors. Fount uses those interfaces. No missing upstream function was invented or worked around by copying dependency internals. No changes to `system_one_sdk` or `inference` are delivered.
 
-Possible future improvements include documented context estimation, immutable
-resolved model identifiers, richer attribution if actually supported by the
-provider, richer FDX production metadata, collaborative review, graphical
-editing and professional multi-voice rehearsal. These do not replace required
-F01–F09, W01–W09 or T01–T13 work.
+Agent Session Manager is an ordinary optional runtime dependency selected by the consuming application. No ASM source snapshot was supplied, and no newer Hex resolution was attempted here; the supplied continuation's resolved version is historical evidence only. A runtime mismatch must first be reproduced locally and compared against the actual installed public API. Do not convert Hex dependencies to sibling path overrides merely to avoid investigating an imagined mismatch.
 
-Use `spec_draft_implementation/13_wishlist_and_upstream.md` for the full distinction
-between mandatory implementation and genuinely deferred features.
+Antigravity is not a Fount execution route in this implementation and is outside the required Codex completion path. It was not added. No generic workflow engine, autonomous accepted-head writer or universal screenplay score was introduced.
+
+## Fount work, not invented upstream blockers
+
+The concrete unfinished work is listed in KNOWN_GAPS: scope authorization, complete report lineage checks, remaining Probe option semantics and chronological/access coverage, exact fragment/cross-screenplay recovery, structured hypotheses and a finite follow-up investigation, configurable profile thresholds and fuller prompt assets, measured printed-line mapping, optional mixed audio and comprehensive acceptance evidence. These are Fount implementation tasks unless local source inspection proves an upstream capability is actually absent.
+
+Full Final Draft production-format fidelity and custom page profiles require explicit supported-feature decisions and tests, not an undocumented claim that XML roundtripping proves application interoperability. Preserve the spec-writing use case and writer control while finishing the supported matrix.

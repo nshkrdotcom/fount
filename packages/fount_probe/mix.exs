@@ -18,7 +18,7 @@ defmodule FountProbe.MixProject do
       {:fount, path: "../fount"},
       {:system_one_sdk, path: "../../../system_one_sdk/packages/system_one_sdk"},
       {:inference, "~> 0.4.0"},
-      {:agent_session_manager, "~> 0.16.0", only: :dev},
+      {:agent_session_manager, "~> 0.16.0"},
       {:jason, "~> 1.4"}
     ]
   end

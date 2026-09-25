@@ -1,110 +1,43 @@
 defmodule Fount.Persistence.Query do
-  @moduledoc "Composable Ecto queries over Fount's current screenplay projection."
-
+  @moduledoc "Relational queries always name the screenplay AND immutable revision."
   import Ecto.Query
-
   alias Fount.Persistence.Schema
 
-  @doc "Ordered scenes for one screenplay, optionally including omitted scenes."
-  def scenes(screenplay_id, opts \\ []) do
-    include_omitted? = Keyword.get(opts, :include_omitted, false)
-
-    from(scene in Schema.Scene,
-      where: scene.screenplay_id == ^screenplay_id and (^include_omitted? or not scene.omitted),
-      order_by: scene.ordinal
-    )
+  def scenes(screenplay, revision, opts \\ []) do
+    omitted = Keyword.get(opts, :include_omitted, false)
+    from s in Schema.Scene, where: s.screenplay_id == ^screenplay and s.revision_id == ^revision and (^omitted or not s.omitted), order_by: s.ordinal
   end
-
-  @doc "Cast entries in display-name order."
-  def cast(screenplay_id) do
-    from(character in Schema.Character,
-      where: character.screenplay_id == ^screenplay_id,
-      order_by: [character.display_name, character.id]
-    )
+  def cast(screenplay, revision), do: from(c in Schema.Character, where: c.screenplay_id == ^screenplay and c.revision_id == ^revision, order_by: [c.display_name, c.id])
+  def storylines(screenplay, revision), do: from(a in Schema.AuthoredItem, where: a.screenplay_id == ^screenplay and a.revision_id == ^revision and a.kind == "storyline")
+  def mentions(screenplay, revision, character) do
+    from m in Schema.Mention, join: e in Schema.Element,
+      on: e.screenplay_id == m.screenplay_id and e.revision_id == m.revision_id and e.id == m.element_id,
+      where: m.screenplay_id == ^screenplay and m.revision_id == ^revision and m.character_id == ^character,
+      order_by: [e.ordinal, m.byte_start], select: %{mention: m, element: e}
   end
-
-  @doc "Authored storyline assertions, optionally limited to one named thread."
-  def storylines(screenplay_id, thread \\ nil) do
-    base =
-      from(assertion in Schema.Assertion,
-        where:
-          assertion.screenplay_id == ^screenplay_id and assertion.namespace == "writer" and
-            assertion.kind == "storyline"
-      )
-
-    if is_nil(thread),
-      do: base,
-      else: from(assertion in base, where: assertion.value["data"]["thread"] == ^thread)
+  def mention_candidates(screenplay, revision, character) do
+    from m in Schema.Mention, join: c in Schema.MentionCandidate,
+      on: c.screenplay_id == m.screenplay_id and c.revision_id == m.revision_id and c.mention_id == m.id,
+      where: m.screenplay_id == ^screenplay and m.revision_id == ^revision and c.character_id == ^character,
+      select: m
   end
-
-  @doc "Visible scenes tagged with one authored storyline, in screenplay order."
-  def scenes_for_storyline(screenplay_id, thread) do
-    from(scene in Schema.Scene,
-      join: assertion in Schema.Assertion,
-      on: assertion.target_id == scene.id,
-      where:
-        scene.screenplay_id == ^screenplay_id and not scene.omitted and
-          assertion.screenplay_id == ^screenplay_id and assertion.namespace == "writer" and
-          assertion.kind == "storyline" and assertion.value["data"]["thread"] == ^thread,
-      distinct: true,
-      order_by: scene.ordinal
-    )
+  def dialogue_for(screenplay, revision, character) do
+    from b in Schema.DialogueBlock, join: m in Schema.Mention,
+      on: m.screenplay_id == b.screenplay_id and m.revision_id == b.revision_id and m.element_id == b.cue_element_id,
+      where: b.screenplay_id == ^screenplay and b.revision_id == ^revision and m.character_id == ^character and m.status == "confirmed" and m.role == "speaker_cue",
+      order_by: b.ordinal, select: b
   end
-
-  @doc "Evidence for one character, with role/status retained for caller interpretation."
-  def mentions(screenplay_id, character_id) do
-    from(mention in Schema.Mention,
-      join: element in Schema.Element,
-      on: element.id == mention.element_id,
-      where: mention.screenplay_id == ^screenplay_id and mention.character_id == ^character_id,
-      order_by: [element.ordinal, mention.byte_start],
-      select: %{mention: mention, element: element}
-    )
+  def scenes_with(screenplay, revision, character) do
+    from s in Schema.Scene, join: e in Schema.Element,
+      on: e.screenplay_id == s.screenplay_id and e.revision_id == s.revision_id and e.scene_id == s.id,
+      join: m in Schema.Mention, on: m.screenplay_id == e.screenplay_id and m.revision_id == e.revision_id and m.element_id == e.id,
+      where: s.screenplay_id == ^screenplay and s.revision_id == ^revision and m.character_id == ^character and m.status == "confirmed" and m.role == "speaker_cue",
+      distinct: true, order_by: s.ordinal
   end
-
-  @doc "Mentions proposing one cast identity, including unresolved ambiguous evidence."
-  def mention_candidates(screenplay_id, character_id) do
-    from(mention in Schema.Mention,
-      join: candidate in Schema.MentionCandidate,
-      on: candidate.mention_id == mention.id and candidate.screenplay_id == mention.screenplay_id,
-      join: element in Schema.Element,
-      on: element.id == mention.element_id,
-      where: mention.screenplay_id == ^screenplay_id and candidate.character_id == ^character_id,
-      order_by: [element.ordinal, mention.byte_start],
-      select: mention
-    )
-  end
-
-  @doc "Dialogue turns explicitly linked to a character through confirmed cue evidence."
-  def dialogue_for(screenplay_id, character_id) do
-    from(turn in Schema.DialogueTurn,
-      join: cue in Schema.Element,
-      on: cue.id == turn.cue_element_id,
-      join: mention in Schema.Mention,
-      on: mention.element_id == cue.id,
-      where:
-        turn.screenplay_id == ^screenplay_id and mention.character_id == ^character_id and
-          mention.role == "speaker_cue" and mention.status == "confirmed",
-      order_by: turn.ordinal,
-      select: %{turn: turn, cue: cue}
-    )
-  end
-
-  @doc "Scenes with a confirmed speaking cue or named action evidence for a character."
-  def scenes_with(screenplay_id, character_id, opts \\ []) do
-    include_suggestions? = Keyword.get(opts, :include_suggestions, false)
-    statuses = if include_suggestions?, do: ["confirmed", "suggested"], else: ["confirmed"]
-
-    from(scene in Schema.Scene,
-      join: element in Schema.Element,
-      on: element.scene_id == scene.id,
-      join: mention in Schema.Mention,
-      on: mention.element_id == element.id,
-      where:
-        scene.screenplay_id == ^screenplay_id and mention.character_id == ^character_id and
-          mention.status in ^statuses and mention.role in ["speaker_cue", "action"],
-      distinct: true,
-      order_by: scene.ordinal
-    )
+  def search(screenplay, revision, query, opts \\ []) do
+    limit = Keyword.get(opts, :limit, 50)
+    from e in Schema.Element,
+      where: e.screenplay_id == ^screenplay and e.revision_id == ^revision and fragment("to_tsvector('simple', ?) @@ websearch_to_tsquery('simple', ?)", e.text, ^query),
+      order_by: e.ordinal, limit: ^limit
   end
 end

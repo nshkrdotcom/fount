@@ -177,3 +177,7 @@ The workshop's `../fount` dependency remains an ordinary in-repository path.
 ## License
 
 [MIT License](LICENSE) — Copyright (c) 2026 nshkrdotcom
+
+## Source continuation (2026-09-24)
+
+The continuation adds canonical interchange, revision-aware inspection and writer-session/candidate APIs with CLI and real-only example modes. This pass is **uncompiled and untested**; it is not a release-completion claim. Read the [implementation handoff](docs/implementation_handoff/README.md) for actual source coverage, explicit missing functionality, safe application and local verification.

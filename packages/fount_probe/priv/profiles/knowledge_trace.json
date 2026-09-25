@@ -1,0 +1,35 @@
+{
+  "id": "knowledge_trace",
+  "version": 1,
+  "tool": "knowledge_trace",
+  "questions": [
+    {
+      "key": "established",
+      "type": "noul",
+      "instructions": "Does the accessible evidence establish the positive proposition? A statement may be a lie; intentions are not established facts."
+    },
+    {
+      "key": "could_infer",
+      "type": "noul",
+      "instructions": "Could this subject reasonably infer the proposition from this accessible material? Do not use outside or later information."
+    },
+    {
+      "key": "believes",
+      "type": "noul",
+      "instructions": "Does the accessible material support this subject believing the proposition? Belief and truth are separate; for a reader/audience assess the invited belief."
+    },
+    {
+      "key": "suspicion",
+      "type": "score",
+      "instructions": "How much does the accessible material invite suspicion of the proposition?"
+    }
+  ],
+  "thresholds": {
+    "support_probability": 0.8,
+    "unsupported_probability": 0.2,
+    "minimum_confidence": 0.7,
+    "minimum_margin": 0.15
+  },
+  "projection": "runtime_explicit",
+  "runtime_choices": "Effective criteria/levels are supplied by the inspected tool and hashed in question_profile_sha256."
+}

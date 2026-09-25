@@ -1,0 +1,20 @@
+{
+  "id": "strategy_contrast",
+  "version": 1,
+  "tool": "strategy_contrast",
+  "questions": [
+    {
+      "key": "different",
+      "type": "noul",
+      "instructions": "Do the approaches change the causal route, character choice, source of resistance or disclosure in materially different ways, rather than paraphrasing?"
+    }
+  ],
+  "thresholds": {
+    "support_probability": 0.8,
+    "unsupported_probability": 0.2,
+    "minimum_confidence": 0.7,
+    "minimum_margin": 0.15
+  },
+  "projection": "runtime_explicit",
+  "runtime_choices": "Effective criteria/levels are supplied by the inspected tool and hashed in question_profile_sha256."
+}

@@ -11,6 +11,23 @@ model = Fount.Screenplay.from_document(doc, cast_resolution: :literal_cues)
 if Fount.Screenplay.to_fountain(model) != raw, do: raise "Fountain import changed source bytes"
 
 case mode do
+  "interchange" ->
+    Fount.LiveArtifacts.run("interchange", out, fn directory ->
+      reports = Enum.map(["fountain", "fdx", "json"], fn format ->
+        result = Fount.Interchange.write(model, format, include_source: true) |> Fount.LiveArtifacts.require!()
+        File.write!(Path.join(directory, "last_light." <> format), result.data)
+        {reopened, diagnostics} = case Fount.Interchange.read(result.data, format) do
+          {:ok, value, messages} -> {value, messages}
+          error -> Fount.LiveArtifacts.require!(error)
+        end
+        if format == "json" and reopened.revision.content_hash != model.revision.content_hash, do: raise("Canonical JSON content hash changed")
+        if format == "fountain" and result.data != raw, do: raise("Unchanged Fountain bytes changed")
+        %{"format" => format, "losses" => result.losses, "diagnostics" => diagnostics, "reopened_scenes" => length(reopened.ir.scenes)}
+      end)
+      Fount.LiveArtifacts.write!(directory, "fidelity.json", Fount.Interchange.matrix())
+      %{"formats" => reports, "source_sha256" => Fount.ID.hash(raw)}
+    end) |> Fount.LiveArtifacts.require!()
+
   "roundtrip" ->
     File.write!(Path.join(out, "last_light.fountain"), Fount.Screenplay.to_fountain(model))
     {:ok, fdx} = Fount.Screenplay.to_fdx(model)

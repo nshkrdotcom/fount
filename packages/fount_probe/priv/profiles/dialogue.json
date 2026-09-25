@@ -1,0 +1,40 @@
+{
+  "id": "dialogue",
+  "version": 1,
+  "tool": "dialogue",
+  "questions": [
+    {
+      "key": "responsive",
+      "type": "noul",
+      "instructions": "Does the current turn respond to the immediately preceding turn, including a playable refusal or deflection?"
+    },
+    {
+      "key": "explicit_intention",
+      "type": "noul",
+      "instructions": "Does this turn explicitly state the speaker's emotion or intention? Direct speech is allowed; this is descriptive."
+    },
+    {
+      "key": "information",
+      "type": "noul",
+      "instructions": "Does this turn primarily communicate story information?"
+    },
+    {
+      "key": "reason_to_say",
+      "type": "noul",
+      "instructions": "Does the supplied scene show a specific reason for the speaker to say this now?"
+    },
+    {
+      "key": "repeats",
+      "type": "noul",
+      "instructions": "Does the current turn repeat the same audience information in the supplied prior turns without an evident new purpose?"
+    }
+  ],
+  "thresholds": {
+    "support_probability": 0.8,
+    "unsupported_probability": 0.2,
+    "minimum_confidence": 0.7,
+    "minimum_margin": 0.15
+  },
+  "projection": "runtime_explicit",
+  "runtime_choices": "Effective criteria/levels are supplied by the inspected tool and hashed in question_profile_sha256."
+}

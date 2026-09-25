@@ -169,3 +169,7 @@ Explore comprehensive guides on Fount's subsystems:
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Source continuation (2026-09-24)
+
+The continuation adds canonical interchange, revision-aware inspection and writer-session/candidate APIs with CLI and real-only example modes. This pass is **uncompiled and untested**; it is not a release-completion claim. Read the [implementation handoff](../../docs/implementation_handoff/README.md) for actual source coverage, explicit missing functionality, safe application and local verification.

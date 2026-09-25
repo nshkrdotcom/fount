@@ -46,7 +46,7 @@ defmodule Fount.Persistence.Codec do
     cast =
       Map.new(data["cast"], fn value ->
         value = keys(value)
-        aliases = Enum.map(value[:aliases] || [], &%{alias: &1["alias"], kind: String.to_existing_atom(&1["kind"])})
+        aliases = Enum.map(value[:aliases] || [], &%{alias: &1["alias"], kind: &1["kind"]})
         character = struct(Character, %{value | aliases: aliases})
         {character.id, character}
       end)
@@ -111,8 +111,12 @@ defmodule Fount.Persistence.Codec do
 
   defp decode_turn(value) do
     value = keys(value)
-    struct(DialogueBlock, %{value | source_span: decode_span(value[:source_span])})
+    struct(DialogueBlock, %{value | source_span: decode_span(value[:source_span]), side: side(value[:side])})
   end
+
+  defp side("left"), do: :left
+  defp side("right"), do: :right
+  defp side(nil), do: nil
 
   defp decode_span(nil), do: nil
   defp decode_span(value), do: struct(Fount.Source.Span, keys(value))
@@ -145,7 +149,7 @@ defmodule Fount.Persistence.Codec do
 
   defp attr_keys(map) do
     Map.new(map, fn {key, value} ->
-      if key in ["forced?", "number", "extension", "dual?", "level", "intentional_blank?"],
+      if key in ["forced?", "number", "extension", "dual?", "level", "intentional_blank?", "dual_with_cue", "dual_side"],
         do: {String.to_existing_atom(key), value},
         else: {key, value}
     end)

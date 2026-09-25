@@ -10,6 +10,9 @@ out = Path.expand(opts[:out] || System.get_env("FOUNT_EXAMPLE_OUT") || "examples
 File.mkdir_p!(out)
 
 case mode do
+  new_mode when new_mode in ["tools", "voice", "knowledge_access", "consequences"] ->
+    FountProbe.LiveExample.run(new_mode, out) |> Fount.LiveArtifacts.require!()
+
   "knowledge" ->
     key = System.fetch_env!("SYSTEM_ONE_API_KEY")
     fixture = Application.app_dir(:fount, "priv/fixtures/last_light.fountain")

@@ -46,7 +46,7 @@ defmodule Fount.WritingPersistenceIntegrationTest do
     op = %{"kind" => "insert_scene", "value" => %{
       "after_scene_id" => nil,
       "scene" => %{"local_id" => "new:one", "heading" => "EXT. STATION - NIGHT",
-        "elements" => [%{"local_id" => "new:action", "type" => "action", "text" => "Mara misses the last train."}]}
+        "elements" => [%{"local_id" => "new:action", "type" => "action", "text" => "Mara misses the last train.", "attrs" => %{}}]}
     }}
     assert {:ok, materialized, changes} = Screenplay.apply(root, [op], [])
     candidate = %{screenplay: materialized, label: "Missed train", change_groups: [%{"id" => "scene", "operations" => changes.operations}]}
@@ -64,8 +64,9 @@ defmodule Fount.WritingPersistenceIntegrationTest do
     assert accepted.revision.id == materialized.revision.id
     assert {:ok, head} = Persistence.load(Repo, key)
     assert head.revision.id == materialized.revision.id
-    assert {:error, :already_accepted} = Persistence.accept_candidate(Repo, candidate.id,
+    assert {:ok, repeated} = Persistence.accept_candidate(Repo, candidate.id,
       expected_revision: root.revision.id, actor: "writer", review: review)
+    assert repeated.revision.id == accepted.revision.id
     assert {:error, :already_accepted} = Persistence.reject_candidate(Repo, candidate.id, actor: "writer")
   end
 

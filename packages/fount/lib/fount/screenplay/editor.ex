@@ -10,13 +10,22 @@ defmodule Fount.Screenplay.Editor do
   def apply(base, operations, opts) when is_list(operations) do
     try do
       normalized = Enum.map(operations, &normalize/1)
-      {:ok, compiled, mapping} = unwrap(LocalReferences.compile(normalized, opts))
+      Enum.each(normalized, fn operation ->
+        if operation["kind"] != "set_character_cue" do
+          case Fount.Writing.Schema.validate("operations.json", operation) do
+            :ok -> :ok
+            {:error, errors} -> fail({:operation_contract, errors})
+          end
+        end
+      end)
+      {:ok, compiled, mapping} = unwrap(LocalReferences.compile(normalized, Keyword.put(opts, :screenplay_id, base.id)))
       allowed_new = MapSet.new(Map.values(mapping))
       context = %{new: allowed_new, restore: Keyword.get(opts, :restore_registry, %{})}
 
       updated =
         Enum.reduce(compiled, Model.refresh(base), fn op, model -> step(model, op, context) |> Model.refresh() end)
 
+      updated = updated |> link_explicit_cues() |> Model.refresh()
       diagnostics = Fount.Validate.screenplay(updated)
       if diagnostics != [], do: fail({:invalid_model, diagnostics})
       changed = Model.content(updated) != Model.content(base)
@@ -378,10 +387,10 @@ defmodule Fount.Screenplay.Editor do
   defp scene_spec(model, spec, available, context) do
     id = spec["id"]
     ensure_id(id, available, context)
-    old = Query.scene(model, id)
+    old = Query.scene(model, id) || Map.get(context.restore, id)
 
     heading = %Element{
-      id: (old && old.heading_id) || ID.v4(),
+      id: (old && old.heading_id) || ID.v5(model.id, ["scene-heading:", id]),
       type: :scene_heading,
       text: spec["heading"],
       attrs: %{number: spec["number"], forced?: not Fount.SceneHeading.standard_fountain?(spec["heading"])}
@@ -451,6 +460,21 @@ defmodule Fount.Screenplay.Editor do
     if type == :character and attrs[:dual_side] == "right", do: :ok
     attrs = if attrs[:dual_side] == "right", do: Map.put(attrs, :dual?, true), else: attrs
     %Element{id: id, type: type, text: spec["text"], attrs: attrs, origin: (old && old.origin) || :generated}
+  end
+
+
+  defp link_explicit_cues(model) do
+    Enum.reduce(model.ir.elements, model, fn element, acc ->
+      id = (element.attrs || %{})["character_id"]
+      if element.type == :character and id do
+        case Screenplay.link_cue(acc, element.id, id) do
+          {:ok, linked} -> %{linked | revision: acc.revision}
+          {:error, reason} -> fail(reason)
+        end
+      else
+        acc
+      end
+    end)
   end
 
   defp ensure_id(id, available, context) do

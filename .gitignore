@@ -16,3 +16,7 @@
 *.sqlite3-wal
 /tmp/
 /.blitz/
+
+# Overlay installation journals and recoverable originals
+.fount-overlay-backups/
+.fount-overlay-stage-*/

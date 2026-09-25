@@ -107,7 +107,7 @@ defmodule Fount.Screenplay.Model do
 
   def render_content(model) do
     %{
-      "elements" => Enum.map(model.ir.elements, &Map.take(&1, [:type, :text, :inline, :attrs])),
+      "elements" => Enum.map(model.ir.elements, fn e -> %{type: e.type, text: e.text, inline: e.inline, attrs: Map.take(e.attrs || %{}, [:forced?, :level, :number, :dual?, :dual_side, "dual_side"])} end),
       "title" => Enum.map(title(model), &Map.drop(&1, [:id, :raw, :span])),
       "scenes" => Enum.map(model.ir.scenes, &Map.take(&1, [:number, :omitted?]))
     }
@@ -118,6 +118,7 @@ defmodule Fount.Screenplay.Model do
   def plain(%_{} = value), do: value |> Map.from_struct() |> plain()
   def plain(value) when is_map(value), do: Map.new(value, fn {k, v} -> {to_string(k), plain(v)} end)
   def plain(value) when is_list(value), do: Enum.map(value, &plain/1)
+  def plain(value) when is_tuple(value), do: value |> Tuple.to_list() |> plain()
   def plain(value) when is_boolean(value) or is_nil(value), do: value
   def plain(value) when is_atom(value), do: Atom.to_string(value)
   def plain(value), do: value

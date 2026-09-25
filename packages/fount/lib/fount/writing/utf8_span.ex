@@ -10,6 +10,9 @@ defmodule Fount.Writing.UTF8Span do
 
   @spec extract(String.t(), span() | [integer()]) ::
           {:ok, String.t()} | {:error, atom()}
+  def extract(text, %{"byte_start" => first, "byte_end" => last}), do: extract(text, {first, last})
+  def extract(text, %{byte_start: first, byte_end: last}), do: extract(text, {first, last})
+
   def extract(text, [first, last]), do: extract(text, {first, last})
 
   def extract(text, {first, last})

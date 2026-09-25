@@ -1,87 +1,65 @@
-# Feature and implementation map
+# Acceptance coverage - source state, not runtime certification
 
-This file describes the supplied source overlay. The local implementation has
-advanced beyond it; the table below records the current verified additions.
-**Implemented in part** does not mean the full feature acceptance case passes.
+Every row below is **unverified in this pass**. "Implemented" refers to actual source paths, not a claim that a tool or workflow meets every acceptance condition. File paths in Core/Probe/Workshop are relative to their corresponding package unless stated otherwise. Known gaps are part of the handoff, not waived requirements.
 
-| Area | Current source and evidence | Status |
-| --- | --- | --- |
-| Canonical screenplay edits and revision values | `Fount.Screenplay.Editor`, `Fount.Screenplay.Model`, `Fount.Slice`, `Fount.Target`, `Fount.ChangeImpact`; 56 offline core tests pass | Implemented in part; full operation contract and interchange matrix remain |
-| PostgreSQL writing model | Fresh migration and `Fount.Persistence`; four real DB integration tests pass | Implemented in part; legacy stores still need removal and more acceptance cases remain |
-| Develop and continuation | `FountWorkshop.Develop` uses Hex Inference and writes real candidates; two real Codex drafts and PDFs verified | Implemented in part; full W01 editing/acceptance case remains |
-| Candidate review | `FountWorkshop.Review` and atomic acceptance; repeated acceptance now rejects | Implemented in part; full selection/rebase and report validation remain |
-| Perspective evaluation | `FountProbe.State` and `FountProbe.Knowledge`; real Jev example and offline tests pass | Implemented in part; complete character access ledger and T01–T13 remain |
-| Scene inventory | `FountProbe.Inventory` reports visible scene IDs, cue cast and dialogue/action word counts with exact inspected scope | Deterministic portion of T01 only; model extraction remains |
-| Exact passage retrieval | `FountProbe.Search` returns revision-labeled literal phrase hits, inspected counts and exact element IDs; private note and omitted content are excluded by default | Deterministic portion of T02 only; semantic relevance and historical scope remain |
-| Exact-target rewrite | `FountWorkshop.TargetedRewrite` uses Inference to replace selected action/dialogue elements by ID, saves/reopens a candidate and leaves accepted head unchanged; offline, DB and live Codex checks pass | A useful part of W07; complete six-pass workflow remains |
-| Sequence rebuilding | `FountWorkshop.SequenceRebuild` replaces selected consecutive scenes with generated scenes, validates required exact passages and target count, retains matching existing scene/element IDs, and saves a candidate; offline, PostgreSQL and live five-to-three checks pass | Part of W04; multi-route comparison and genuine page reduction remain |
-| Local note response | `FountWorkshop.NoteResponse` converts one writer note into an exact target rewrite, removes only that note in the candidate, and preserves other notes and the accepted draft; offline, PostgreSQL and live checks pass | Part of W06; sequence notes and selective group acceptance remain |
-| Six writing profiles | `FountWorkshop.Pass` loads all six profile assets and dispatches dialogue/action passes to exact element rewrites and scene-level passes to sequence rebuilding; offline and PostgreSQL checks pass, with a live dialogue pass | Part of W07; complete checks, selective group review and all live profile modes remain |
-| Table read output | `FountWorkshop.TableRead.export/3` writes ordered dialogue turns as actual JSON or escaped HTML; offline file I/O and live output checks pass | Optional `Espeak` WAV path exists but was not run because the executable is unavailable |
-| Character progression rewrite | `FountWorkshop.CharacterRewrite` selects confirmed character dialogue and immediate partner replies across chosen scenes, generates exact element edits and saves a candidate; offline and live three-scene checks pass | Part of W05; wider character workspace and semantic outcome checks remain |
-| Historical beat recovery | `FountWorkshop.Recover` compares source/current/proposed text, restores cut elements at their historical position with their original IDs and saves a candidate; offline, PostgreSQL and live checks pass | Part of W08; deleted-scene recovery, adaptation and branch merging remain |
-| Live examples | Exactly one entrypoint exists in each package | Partial mode coverage; see `VERIFICATION.md` |
+## Product foundations F01-F09
 
-## Concrete additions
+| Case | Outcome | Source | Authored / existing tests | Real mode or command | Remaining acceptance work |
+| --- | --- | --- | --- | --- | --- |
+| F01 | Interchange and exact source | Core `interchange.ex`, `adapter/json.ex`, `screenplay/editor.ex`; Workshop `export/pdf.ex` | Core `interchange_continuation_test.exs`, existing lossless/FDX tests; Workshop `integration/pdf_export_test.exs` | Core `roundtrip`, `interchange`; Workshop `sequence_routes` | Canonical JSON v2 and fidelity descriptions are written. Real FDX interoperability, unsupported nested fields, A4/profile selection, visual PDF fidelity and exact roundtrips remain unverified; line-density mapping is missing. |
+| F02 | Typed editing and identity | Core `writing/schema.ex`, `writing/local_references.ex`, `screenplay/editor.ex`, `writing/structure.ex` | Core `continuation_contract_test.exs`, `canonical_edit_test.exs`, `writing_contracts_test.exs` | Core `database`; writer workflows use canonical edits | All canonical edit kinds have source routes; split/merge use those routes. Exhaustive operation negatives, restored-ID/cue/dual tests and fine-grained scope protection still need completion. |
+| F03 | PostgreSQL canonical history | Core `persistence.ex`, `persistence/{schema,query,codec}.ex`, migration `20260924010000_harden_candidate_identity.exs` | Core `persistence_scope_test.exs`; `integration/{writing_persistence_test,continuation_concurrency_test}.exs` | Core `database`; all new Workshop modes | Immutable payload identities, session lock versions, acceptance locks and same-decision idempotency are written. Full FK/deferrable-trigger/rollback/concurrency matrix is not proven. |
+| F04 | Writer-authored state | Core typed authored-item operations; Workshop `Candidate.resolve_notes`, `Writing.Context` | Existing Core authored-item tests; Workshop candidate selection tests | Workshop `grouped_notes` | Briefs/notes/constraints are kept distinct from reports. Multi-stage partial note resolution, semantic note conflicts, and all authored collection/access permutations remain incomplete. |
+| F05 | Revision-aware retrieval | Probe `retrieval.ex`, `projection.ex`, Core history/revision loaders | Probe `retrieval_exact_continuation_test.exs`, existing `search_test.exs` | Probe `tools`; CLI `fount.search --history` | Literal and semantic/history paths retain revisions and spans. History search currently uses explicit revision lists/accepted ancestry; complete branch indexing and filter validation need work. |
+| F06 | Screenplay craft tools | Probe modules listed in T01-T13 below | New Probe tests and tool-specific baseline tests | Probe `tools`, `voice`, `knowledge_access`, `consequences` | Real tools exist, but several optional semantics remain partial. The result records incomplete options instead of calling them clean checks. |
+| F07 | Review and explicit acceptance | Workshop `Candidate`, `CandidateAPI`, `Rebase`, `ReviewExport`, `Acceptance`; Core `Writing.ReviewGate` | Workshop `candidate_continuation_test.exs`, `session_continuation_test.exs`, existing decision tests; PG acceptance tests | Workshop `bridge`, `alternatives`, `grouped_notes` | Group/range selection, overlap choice, joins, editing, resume and review forms are written. Full stale/rebase/foreign-source/report-lineage and note-selection cases need verification/hardening. |
+| F08 | Table read and optional speech | Workshop `table_read.ex`, `audition.ex`, `speech/espeak.ex` | Existing Workshop `table_read_test.exs`; audio path has no new runtime proof | Workshop `table`, new `alternatives`; CLI `fount.read --speech` | Real JSON/HTML, per-turn WAVs and shared dual timestamps. No mixed master audio file is implemented; no speech was run. |
+| F09 | Offline tests and real examples | All three `test/` trees; three `examples/live.exs`; `LiveExample` modules; `scripts/verify_handoff.sh` | Every authored test is unrun in this pass | See VERIFICATION mode matrix | Exactly one live entrypoint remains in each package. New modes use actual services/files, not mock fallback; historical modes retain their original narrower assertions. Complete required workflow evidence is not yet available. |
 
-| Responsibility | Source | Offline test source |
-|---|---|---|
-| UTF-8 byte spans, exact excerpt checks, unique pin relocation | `packages/fount/lib/fount/writing/utf8_span.ex` | `packages/fount/test/writing_contracts_test.exs` |
-| Sorted-key canonical JSON and SHA-256 | `packages/fount/lib/fount/writing/canonical_json.ex` | same |
-| Candidate-local declarations, single UUID allocation, unknown-reference errors | `packages/fount/lib/fount/writing/local_references.ex` | same |
-| Stable group ordering, missing-dependency selection, cycle rejection | `packages/fount_workshop/lib/fount_workshop/writing/change_groups.ex` | `packages/fount_workshop/test/writing_decisions_test.exs` |
-| Review content/base/report matching, hard failures versus explicit semantic acknowledgment | `packages/fount_workshop/lib/fount_workshop/writing/review_gate.ex` | same |
-| Noul/Choice/Score interpretation, negative intent, nonmonotonic crossings | `packages/fount_probe/lib/fount_probe/writing/decision_policy.ex` | `packages/fount_probe/test/writing_policies_test.exs` |
-| Exact revision-aware evidence/citation registry | `packages/fount_probe/lib/fount_probe/writing/evidence.ex` | same |
-| Public SDK batching and response/error batch-index joining | `packages/fount_probe/lib/fount_probe/writing/executor.ex` | same (deterministic joining only) |
-| Inference structured/text completion with mandatory local validator and decode repair | `packages/fount_workshop/lib/fount_workshop/writing/completion.ex` | additional Inference Mock coverage remains |
-| Six creative direction assets | `packages/fount_workshop/priv/writing_profiles/` | workflow integration remains |
+## Writer workflows W01-W09
 
-`Fount.Screenplay.Model` now supplies an authored-content projection for the
-canonical JSON encoder. `ReviewGate` remains a pure check; the separate
-PostgreSQL acceptance transaction is implemented in `Fount.Persistence`.
-The evidence resolver is caller-owned. SDK report serialization remains.
+| Case | Outcome | Source | Authored / existing tests | Real mode or command | Remaining acceptance work |
+| --- | --- | --- | --- | --- | --- |
+| W01 | Develop and bridge | Workshop `Session`, `Workflows.develop`, `Writing.{Context,Generation}`, candidate placement/edit/reopen | `develop_test.exs`, `session_continuation_test.exs`, candidate tests; existing development integration | `develop` (existing), `bridge` (new) | Bridge source enforces retained neighbor scene IDs/text and added pages. The new mode edits a generated action and reloads it. Local application, PDF inspection and explicit acceptance remain unrun. |
+| W02 | Alternatives and selective combination | `Candidate.{select,combine,edit}`, `CandidateAPI` generated joins, `Writing.Footprint`, `Audition` | `candidate_continuation_test.exs`; add full DB join/overlap acceptance matrix | `alternatives` | Real source/group/range attribution and a third candidate are implemented. Span-scope protection, cross-group reference edge cases and resolution interactions are known hardening work. |
+| W03 | Story change and consequence repairs | `Workflows.propagate`, `Writing.Preparation`, generated dependent groups; Probe dependencies/continuity/knowledge | Candidate constraints tests; dedicated full fixture acceptance remains to be authored/run | `propagate` | Mode requests reveal movement from fixture scene 3 to 6, pins the key transfer, and compares knowledge before/after. Behavior localization, full access/continuity completeness and fixture-specific repair correctness remain unproven. |
+| W04 | Contrasting five-to-three rebuilds | `Workflows.sequence`, distinct strategies, scene-count validation, `Writing.Layout` | Existing sequence tests; add two-route fixture integration and different-route assertion | `sequence_routes` | Two generated routes, preserved key/joke pins and actual identical-settings PDF comparisons are coded. Neither route nor any page saving was measured in this pass; earlier result was 6 to 6 pages. |
+| W05 | Character-wide rewriting | `Writing.Context.editable_selection`, character-specific preparation, partner-context generation, voice tool | Existing character tests; add requested-voice/outcome/partner-repair integrations | `character_workspace` | Scenes containing confirmed dialogue/mentions form a workspace. Physical choices and partners are requested in real generation. Requested-voice semantic conformance and strict intersection with the supplied selection need more work. |
+| W06 | Grouped local/sequence notes | Notes preparation, typed groups and dependencies, `Candidate.resolve_notes` | `candidate_continuation_test.exs`, existing note tests/integration | `grouped_notes` | Selected groups produce a new candidate and resolve covered notes. Cross-target semantic conflicts, repeated partial selections, and all external-note/Fountain-note cases are not complete. |
+| W07 | Six creative passes | `Writing.Preparation` per-profile inspections, generation, six `priv/writing_profiles/*.json` | Existing pass tests/integration; add complete per-profile story assertions | `pass_all` | Each profile performs actual inspections and creates a candidate, rather than dispatch alone. Unknown voice/knowledge/layout findings remain visible; real output and all profile-specific obligations remain unverified. |
+| W08 | Recovery/adaptation | Historical context/registry, `Writing.RecoveryCopy`, generated adaptation; candidate source lineage | `recovery_copy_continuation_test.exs`, existing recovery tests/integration | `recover_scene` | Exact deleted-scene copying avoids model generation; adaptation generates new edits with source/current distinctions. Foreign-project copy with new IDs/cast mapping and exact partial-scene recovery are not implemented. |
+| W09 | Investigation and written remedies | Probe `Investigation`; Workshop investigation preparation, strategy materialization, saved sessions | `catalog_continuation_test.exs`, session tests; add full hypothesis/follow-up fixture test | `investigate` | Plan/explain uses exact reports, revises hypotheses, presents three strategies and writes two remedies. Structured hypothesis records and the one-follow-up investigation cycle are incomplete. |
 
-## Foundations
+## Probe tools T01-T13
 
-| ID | Release status and remaining work |
-|---|---|
-| F01 | Original Fountain parser retained; real import/export and PDF paths were exercised. Full interchange matrix, title and spec projection remain. |
-| F02 | Typed edits, local references, stable scene/element IDs and slices implemented in part; complete operation contract and all callers remain. |
-| F03 | Fresh revision-scoped PostgreSQL migration and accepted/candidate/session transactions run in a new database. Legacy filesystem/SQLite stores, dependency and callers were removed. Full schema and concurrency cases remain. |
-| F04 | Authored item operations and note candidate responses exist; complete intent/constraint adoption and resolution remain. |
-| F05 | Exact slices, literal search and historical element recovery exist; full semantic/historical retrieval and collections remain. |
-| F06 | Typed decision and batch helpers plus partial inventory/knowledge paths exist; most T01–T13 work remains. |
-| F07 | Candidate persistence, review packets and atomic explicit acceptance exist; selective combination and three-way rebase remain. |
-| F08 | Real PDF layout and table-read JSON/HTML were checked. Optional eSpeak WAV path exists but was not run. |
-| F09 | Default offline suites pass in all three packages; exactly three real example entrypoints exist, but their complete mode coverage remains. |
+| Case | Outcome | Source | Authored / existing tests | Real mode or command | Remaining acceptance work |
+| --- | --- | --- | --- | --- | --- |
+| T01 | Inventory / extract_story | Probe `Inventory`, `Extraction`, `Projection` | inventory, projection and catalog tests | `tools` | Deterministic inventory and schema-validated per-scene extraction use exact registry IDs. Optional adjacent-scene extraction is not implemented and is marked partial. |
+| T02 | Search | `Retrieval`, existing `Search`, history reader | search tests, `retrieval_exact_continuation_test.exs` | `tools`; CLI history search | Exact phrase mode returns only matches; semantic mode evaluates actual states. Full branch discovery and all combined filter semantics need expansion. |
+| T03 | Constraints | `Constraints`, `Writing.DecisionPolicy`, typed observation-point resolver | `constraints_continuation_test.exs`, `constraint_contract_names_test.exs`, selection boundary tests | All writer modes, especially `propagate` | Canonical min/max/order/pin/semantic regions are supported. Scope-specific scene-count wiring, prohibited-fact invention checks and typed-identity edge cases remain incomplete. |
+| T04 | Access-aware knowledge | `Access`, `KnowledgeTrace`, `Projection` | projection, knowledge and policy tests | `knowledge_access`, `propagate` | Character cues do not grant whole-scene access. Reader, audience estimate and character access are distinct. Requested behavior localization and intended reveal comparison remain unimplemented options, explicitly partial. |
+| T05 | Reveal boundary | `KnowledgeTrace.locate`, legal `Projection.points`, policy boundary curve | projection and policy tests | `knowledge_access` | Uses exhaustive legal requested prefixes with joint dual-dialogue cutoff and supports nonmonotonic curves. Audience inference remains page-derived; real localization evidence has not been produced. |
+| T06 | Dependencies | `Dependencies`, extraction and graph interpretation | catalog/constraints tests; dedicated dependency fixtures still needed | `consequences`, `propagate`, `sequence_routes` | Setup/use and alternative-support evaluations are real. Same-scene event links and supplied record-report reuse are unfinished; report reuse is marked partial. |
+| T07 | Continuity | `Continuity`, extraction and transition assessment | catalog tests; dedicated chronology/ownership/pronoun tests still needed | `consequences`, `propagate` | Unshown transfers and unknown chronology are not automatically contradictions. Full story-order modeling, changed-target focus and supplied-record reuse remain incomplete. |
+| T08 | Scene mechanics | `SceneMechanics`, extraction and descriptive question vectors | catalog tests; add causal fixture assertions | `tools`, `sequence_routes`, `pass_all` | Real contextual scene-function and tactic observations exist. Candidate tactic specificity and complete character/objective restriction need validation. This is not a quality score. |
+| T09 | Dialogue | `Dialogue`, projections, actual contextual Jev questions | existing dialogue analyses; add selected-character/partner-context regression tests | `tools`, `character_workspace`, `pass_all` | Counts/repetition, rhythm, tactic, explicit intention, information and responsiveness are implemented. Knowledge and voice lens requests report partial and direct the caller to dedicated tools; automated listener-access interrogation is missing. |
+| T10 | Voice | `Voice`, held-out samples and blind SDK Choice | `voice_continuation_test.exs`, catalog/profile tests | `voice`, `character_workspace` | Anonymous 2-8-character training/test separation, global duplicate removal, min counts, missing denominators and disjoint comparison groups are written. Training-target variations and requested-new-voice conformance need completion. |
+| T11 | Action | `Action`, real descriptive checks and exact split coordinates | catalog/projection tests; dedicated layout action tests still needed | `tools`, `pass_all` | Visibility/spatial/camera/interior questions and sentence boundary sites are implemented. Printed line-density/line-region mapping is missing; a requested layout report is marked partial. |
+| T12 | Compare / lift / ablate | `Comparison`, Core immutable operations and constraint checks | candidate/edit/diff tests; dedicated virtual-change invariants still needed | `tools`, `consequences` | Counterfactual branches and before/after data are generated without advancing head. Full selective lifting, restoration provenance and semantic side effects need broader coverage; removal is not causal proof. |
+| T13 | Strategy contrast | `StrategyContrast`, pairwise Noul evaluation | catalog/profile tests; fixture-level strategy contrast assertions still needed | `alternatives`, `investigate`, `sequence_routes` | Real pairwise dramatic-mechanism checks are used. Failed/uncertain contrast does not autonomously rank, select, or certify a route; the writer still chooses. |
 
-## Creative workflows
+## New test inventory
 
-Several workflows now produce saved screenplay candidates. The acceptance
-cases below remain the release target; a partial workflow does not satisfy
-its whole case.
+These tests have source coverage only; no red/green execution was possible. Existing tests are retained unless their expectation conflicted with the specified new contract.
 
-| ID | Public workflow | Required acceptance case still to establish |
-|---|---|---|
-| W01 | develop | Empty-root generation, two distinct candidate drafts, reopen, real PDF and explicit acceptance were verified. Full bridge and subsequent candidate edit path remain. |
-| W02 | alternatives | Actual variants, source/range overlap choices, pinned combination with a generated join. |
-| W03 | propagate | Relocate fixture reveal from scene 3 to 6, repair the accusation and ferry motivation, retain the key setup. |
-| W04 | sequence | One real five-to-three route, exact key passage preservation and same-settings PDF comparison passed; it saved zero pages. A second contrasting route and stronger pin/dependency checks remain. |
-| W05 | character | Live Dan/Mara dialogue progression across three scenes passed; broader character workspace and checks remain. |
-| W06 | notes | A real local note response removed only its addressed note in a candidate. Sequence notes, grouped acceptance and accepted note resolution remain. |
-| W07 | pass | Six profiles are callable and dispatch to typed edits; live dialogue pass passed. Other live profiles and stronger craft checks remain. |
-| W08 | recover | Exact historical beat restore with original ID and source/current/proposed text passed offline, DB and live. Adaptation, deleted-scene recovery and merge remain. |
-| W09 | investigate | Known tool requests, exact evidence, competing hypotheses, three strategies, and two written remedies. |
+### fount
 
-## Probe tools
+`integration/continuation_concurrency_test.exs`, `test/cli_continuation_test.exs`, `test/continuation_contract_test.exs`, `test/interchange_continuation_test.exs`, `test/persistence_scope_test.exs`
 
-T01 inventory/extraction; T02 search; T03 constraints; T04 knowledge trace;
-T05 boundary localization; T06 dependencies; T07 continuity; T08 scene mechanics;
-T09 dialogue; T10 voice; T11 action; T12 compare/lift/ablate; T13 strategy contrast.
+### fount_probe
 
-The supplied support components serve these tools but **are not their complete
-implementations**. Follow `spec_draft_implementation/07_probe_features.md`,
-including parameter validators, perspective isolation, uncertainty, report
-provenance and SDK Test-client coverage. Do not publish a catalog entry without
-its executable implementation.
+`test/catalog_continuation_test.exs`, `test/constraint_contract_names_test.exs`, `test/continuation_constraints_test.exs`, `test/continuation_projection_test.exs`, `test/continuation_voice_test.exs`, `test/profile_continuation_test.exs`, `test/retrieval_exact_continuation_test.exs`, `test/selection_boundary_continuation_test.exs`
+
+### fount_workshop
+
+`test/candidate_continuation_test.exs`, `test/recovery_copy_continuation_test.exs`, `test/session_continuation_test.exs`

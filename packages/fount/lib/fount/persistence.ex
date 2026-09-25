@@ -51,11 +51,13 @@ defmodule Fount.Persistence do
 
         if row["id"] != candidate.id, do: rollback(repo, :wrong_screenplay)
         actual = row["head_revision_id"]
-        expected = Keyword.get(opts, :expected_revision, candidate.revision.parent_id)
+        expected = Keyword.get(opts, :expected_revision, if(candidate.revision.id == actual, do: actual, else: candidate.revision.parent_id))
         if actual != expected, do: rollback(repo, {:stale_revision, actual})
-        if candidate.revision.parent_id != actual, do: rollback(repo, :wrong_parent)
+        if candidate.revision.id != actual and candidate.revision.parent_id != actual, do: rollback(repo, :wrong_parent)
 
         if candidate.revision.id == actual do
+          # A repeated save is a no-op only for the exact persisted identity.
+          insert_revision(repo, candidate)
           candidate
         else
           insert_revision(repo, candidate)
@@ -196,7 +198,7 @@ defmodule Fount.Persistence do
           ]
         )
 
-        Map.put(session, :lock_version, next) |> Map.put(:id, id)
+        session |> Map.drop(["id", "lock_version"]) |> Map.put(:lock_version, next) |> Map.put(:id, id)
       else
         if !one(repo, "SELECT id FROM revisions WHERE screenplay_id=$1::uuid AND id=$2::uuid", [screenplay_id, base_id]),
            do: rollback(repo, :unknown_base)
@@ -217,7 +219,7 @@ defmodule Fount.Persistence do
           ]
         )
 
-        session |> Map.put(:id, id) |> Map.put(:lock_version, 1)
+        session |> Map.drop(["id", "lock_version"]) |> Map.put(:id, id) |> Map.put(:lock_version, 1)
       end
     end)
   end
@@ -236,13 +238,14 @@ defmodule Fount.Persistence do
           do: rollback(repo, :wrong_base)
 
         id = field(candidate, :id) || ID.v4()
-        previous = one(repo, "SELECT id,result_revision_id FROM writing_candidates WHERE id=$1::uuid", [id])
+        previous = one(repo, "SELECT * FROM writing_candidates WHERE id=$1::uuid", [id])
 
         if previous do
           existing = one(repo, "SELECT content_hash FROM revisions WHERE id=$1::uuid", [previous["result_revision_id"]])
 
           if previous["result_revision_id"] != model.revision.id or
-               existing["content_hash"] != model.revision.content_hash,
+               existing["content_hash"] != model.revision.content_hash or
+               candidate_payload(previous) != candidate_payload(candidate),
              do: rollback(repo, :candidate_identity_conflict)
 
           Map.put(candidate, :id, id)
@@ -267,6 +270,7 @@ defmodule Fount.Persistence do
             ]
           )
 
+          q(repo, "UPDATE writing_candidates SET payload_hash=$2 WHERE id=$1::uuid", [id, Fount.Writing.CanonicalJSON.hash(candidate_payload(candidate))])
           Map.put(candidate, :id, id)
         end
       end)
@@ -302,66 +306,42 @@ defmodule Fount.Persistence do
   end
 
   @doc "Accepts one reviewed candidate atomically when its base remains the head."
+
   def accept_candidate(repo, candidate_id, opts) when is_list(opts) do
     transaction(repo, fn ->
-      row =
-        one(
-          repo,
-          "SELECT c.*,r.content_hash FROM writing_candidates c JOIN revisions r ON r.id=c.result_revision_id WHERE c.id=$1::uuid FOR UPDATE OF c",
-          [candidate_id]
-        ) || rollback(repo, :not_found)
-
-      screenplay =
-        one(repo, "SELECT head_revision_id FROM screenplays WHERE id=$1::uuid FOR UPDATE", [row["screenplay_id"]])
-
+      identity = one(repo, "SELECT screenplay_id FROM writing_candidates WHERE id=$1::uuid", [candidate_id]) || rollback(repo, :not_found)
+      # All acceptances take the screenplay lock first, then the candidate lock.
+      screenplay = one(repo, "SELECT head_revision_id FROM screenplays WHERE id=$1::uuid FOR UPDATE", [identity["screenplay_id"]])
+      row = one(repo, "SELECT c.*,r.content_hash FROM writing_candidates c JOIN revisions r ON r.screenplay_id=c.screenplay_id AND r.id=c.result_revision_id WHERE c.id=$1::uuid FOR UPDATE OF c", [candidate_id])
       expected = Keyword.get(opts, :expected_revision)
       review = Keyword.get(opts, :review)
       actor = Keyword.get(opts, :actor)
-
+      unless is_map(review) and is_binary(actor) and String.trim(actor) != "", do: rollback(repo, :missing_review)
+      unless field(review, :actor) == actor, do: rollback(repo, :review_actor_mismatch)
+      review = Model.plain(review)
+      review_hash = Fount.Writing.CanonicalJSON.hash(review)
+      {:ok, model} = load_revision(repo, row["screenplay_id"], row["result_revision_id"])
+      stored = %{"id" => candidate_id, "base_revision_id" => row["base_revision_id"], "content_hash" => row["content_hash"],
+        "structural_errors" => Fount.Validate.screenplay(model),
+        "checks" => row["provenance"]["checks"] || [], "report_ids" => row["provenance"]["report_ids"] || []}
+      case Fount.Writing.ReviewGate.validate(stored, review, expected) do
+        :ok -> :ok
+        {:error, reason} -> rollback(repo, reason)
+      end
+      Enum.each(stored["report_ids"], fn id ->
+        report = one(repo, "SELECT id FROM analysis_reports WHERE id=$1::uuid AND screenplay_id=$2::uuid", [id, model.id])
+        unless report, do: rollback(repo, :missing_review_report)
+      end)
       cond do
-        row["decision"] == "rejected" ->
-          rollback(repo, :already_rejected)
-
-        row["decision"] == "accepted" ->
-          rollback(repo, :already_accepted)
-
-        is_nil(expected) or is_nil(actor) or !is_map(review) ->
-          rollback(repo, :missing_review)
-
-        screenplay["head_revision_id"] != expected or row["base_revision_id"] != expected ->
-          rollback(repo, {:stale_revision, screenplay["head_revision_id"]})
-
-        field(review, :candidate_id) != candidate_id or field(review, :content_hash) != row["content_hash"] ->
-          rollback(repo, :review_content_mismatch)
-
-        field(review, :actor) != actor ->
-          rollback(repo, :review_actor_mismatch)
-
-        field(review, :structural_errors) not in [nil, []] ->
-          rollback(repo, :unresolved_conflicts)
-
+        row["decision"] == "rejected" -> rollback(repo, :already_rejected)
+        row["decision"] == "accepted" and row["review_hash"] == review_hash and row["decision_actor"] == actor -> model
+        row["decision"] == "accepted" -> rollback(repo, :acceptance_identity_conflict)
+        screenplay["head_revision_id"] != expected -> rollback(repo, {:stale_revision, screenplay["head_revision_id"]})
         true ->
-          {:ok, model} = load_revision(repo, row["screenplay_id"], row["result_revision_id"])
-
-          acceptance(
-            repo,
-            model,
-            expected,
-            actor,
-            :generated_structural_edit,
-            field(review, :operations) || [],
-            field(review, :provenance) || %{},
-            review,
-            candidate_id
-          )
-
-          q(
-            repo,
-            "UPDATE writing_candidates SET decision='accepted',decision_actor=$2,decided_at=now() WHERE id=$1::uuid",
-            [candidate_id, actor]
-          )
-
-          set_head(repo, row["screenplay_id"], row["result_revision_id"])
+          operations = Enum.flat_map(row["change_groups"], & &1["operations"])
+          acceptance(repo, model, expected, actor, :mixed, operations, row["provenance"], review, candidate_id)
+          q(repo, "UPDATE writing_candidates SET decision='accepted',decision_actor=$2,decided_at=now(),review_hash=$3 WHERE id=$1::uuid", [candidate_id, actor, review_hash])
+          set_head(repo, model.id, model.revision.id)
           model
       end
     end)
@@ -382,7 +362,8 @@ defmodule Fount.Persistence do
           row
 
         _ ->
-          actor = Keyword.get(opts, :actor) || rollback(repo, :missing_actor)
+          actor = Keyword.get(opts, :actor)
+          unless is_binary(actor) and String.trim(actor) != "", do: rollback(repo, :missing_actor)
 
           q(
             repo,
@@ -481,9 +462,41 @@ defmodule Fount.Persistence do
     end)
   end
 
-  defp field(map, key), do: Map.get(map, key) || Map.get(map, to_string(key))
+
+  def report(repo, id) do
+    case one(repo, "SELECT * FROM analysis_reports WHERE id=$1::uuid", [id]) do
+      nil -> {:error, :not_found}
+      row -> {:ok, row}
+    end
+  end
+
+  def history_page(repo, screenplay_id, opts \\ []) do
+    cursor = Keyword.get(opts, :cursor)
+    limit = min(max(Keyword.get(opts, :limit, 50), 1), 499)
+    rows = history(repo, screenplay_id, limit: limit + 1, head: cursor)
+    {items, rest} = Enum.split(rows, limit)
+    %{items: items, next_cursor: case rest do [next | _] -> next.id; [] -> nil end}
+  end
+
+  defp candidate_payload(candidate) do
+    Map.new([:parent_candidate_id, :label, :strategy, :change_groups, :lineage, :provenance], fn key ->
+      default = case key do :label -> "Candidate"; :change_groups -> []; :lineage -> []; :parent_candidate_id -> nil; _ -> %{} end
+      {to_string(key), field(candidate, key) || default}
+    end) |> Model.plain()
+  end
+
+  defp field(map, key), do: Map.get(map, key, Map.get(map, to_string(key)))
 
   defp insert_revision(repo, model) do
+    case one(repo, "SELECT screenplay_id,content_hash,render_hash,model FROM revisions WHERE id=$1::uuid", [model.revision.id]) do
+      nil -> insert_new_revision(repo, model)
+      row ->
+        if row["screenplay_id"] != model.id or row["content_hash"] != model.revision.content_hash or row["render_hash"] != model.revision.render_hash or row["model"] != Codec.encode(model), do: rollback(repo, :revision_identity_conflict)
+        :ok
+    end
+  end
+
+  defp insert_new_revision(repo, model) do
     artifact_id = insert_artifact(repo, model)
     revision = model.revision
 

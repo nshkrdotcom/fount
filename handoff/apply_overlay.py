@@ -36,6 +36,8 @@ def relative_path(value: str) -> PurePosixPath:
         raise OverlayError(f"Unsafe path: {value!r}")
     if str(path) != value or value.endswith("/") or ":" in path.parts[0]:
         raise OverlayError(f"Noncanonical path: {value!r}")
+    if path.parts[0] in (".git", ".fount-overlay-backups") or path.parts[0].startswith(".fount-overlay-stage-"):
+        raise OverlayError(f"Reserved destination: {value!r}")
     return path
 
 
@@ -95,7 +97,7 @@ def validate_archive(archive: Path, manifest_path: Path | None):
             action = entry.get("action")
             if action not in ("add", "modify", "delete"):
                 raise OverlayError(f"Invalid action for {name}")
-            for key in ("original_sha256", "result_sha256"):
+            for key in ("original_sha256", "original_terminal_lf_sha256", "result_sha256"):
                 value = entry.get(key)
                 if value is not None and (
                     not isinstance(value, str) or len(value) != 64
@@ -122,13 +124,17 @@ def validate_archive(archive: Path, manifest_path: Path | None):
                 if action == "modify" and entry.get("original_sha256") is None:
                     raise OverlayError(f"Modification needs manual preimage review: {name}")
             entries_by_path[name] = entry
+        declared_deletions = manifest.get("deletions")
+        actual_deletions = sorted(name for name, entry in entries_by_path.items() if entry["action"] == "delete")
+        if declared_deletions != actual_deletions:
+            raise OverlayError("Explicit deletion list differs from manifest operations")
         admitted = set(blobs) | {manifest_name}
         if set(names) != admitted:
             raise OverlayError(f"Unlisted archive entries: {sorted(set(names) - admitted)}")
         return manifest, blobs
 
 
-def preflight(root: Path, entries: list[dict]):
+def preflight(root: Path, entries: list[dict], allow_terminal_newline: bool = False):
     conflicts = []
     plan = []
     for entry in entries:
@@ -138,11 +144,14 @@ def preflight(root: Path, entries: list[dict]):
             existing = read_regular(destination)
             current_hash = digest(existing) if existing is not None else None
             original = entry.get("original_sha256")
+            accepted_preimages = {original}
+            if allow_terminal_newline and entry.get("original_terminal_lf_sha256"):
+                accepted_preimages.add(entry["original_terminal_lf_sha256"])
             result = entry.get("result_sha256")
             if entry["action"] == "delete":
                 if existing is None:
                     operation = "unchanged"
-                elif current_hash == original:
+                elif current_hash in accepted_preimages:
                     operation = "delete"
                 else:
                     raise OverlayError("locally changed deletion target")
@@ -153,7 +162,7 @@ def preflight(root: Path, entries: list[dict]):
                 if existing is not None:
                     raise OverlayError("new-file collision")
                 operation = "write"
-            elif current_hash == original:
+            elif current_hash in accepted_preimages:
                 operation = "write"
             else:
                 raise OverlayError("missing or locally changed preimage")
@@ -291,6 +300,8 @@ def main(argv=None):
     parser.add_argument("--root", type=Path, required=True)
     parser.add_argument("--archive", type=Path, required=True)
     parser.add_argument("--manifest", type=Path)
+    parser.add_argument("--allow-terminal-newline", action="store_true",
+                        help="after review, also accept the computed XML body plus one terminal LF; no other normalization")
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--dry-run", action="store_true", help="preflight only (default)")
     mode.add_argument("--apply", action="store_true", help="apply after successful preflight")
@@ -301,7 +312,7 @@ def main(argv=None):
         if not root.is_dir():
             raise OverlayError("Target root is not a directory")
         manifest, blobs = validate_archive(args.archive, args.manifest)
-        plan = preflight(root, manifest["files"])
+        plan = preflight(root, manifest["files"], args.allow_terminal_newline)
         output = {
             "mode": "apply" if args.apply else "dry_run",
             "root": str(root),

@@ -1,0 +1,35 @@
+{
+  "id": "action",
+  "version": 1,
+  "tool": "action",
+  "questions": [
+    {
+      "key": "visibility",
+      "type": "score",
+      "instructions": "How much of this action passage communicates visible behavior or audible events? This describes prose, not artistic quality."
+    },
+    {
+      "key": "spatial",
+      "type": "noul",
+      "instructions": "Is the spatial relationship or sequence of physical actions unclear in this supplied passage?"
+    },
+    {
+      "key": "camera",
+      "type": "noul",
+      "instructions": "Does the passage explicitly instruct the camera or lens?"
+    },
+    {
+      "key": "interior",
+      "type": "noul",
+      "instructions": "Does the passage communicate private thought or explanation not shown by an observable action?"
+    }
+  ],
+  "thresholds": {
+    "support_probability": 0.8,
+    "unsupported_probability": 0.2,
+    "minimum_confidence": 0.7,
+    "minimum_margin": 0.15
+  },
+  "projection": "runtime_explicit",
+  "runtime_choices": "Effective criteria/levels are supplied by the inspected tool and hashed in question_profile_sha256."
+}

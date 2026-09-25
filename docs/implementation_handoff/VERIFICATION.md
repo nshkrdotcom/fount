@@ -1,62 +1,68 @@
-# Verification as of 2026-09-24
+# Verification provenance
 
-This is a partial implementation. `PACKAGING_VERIFICATION.json` applies only
-to the supplied overlay, not to subsequent source changes in this checkout.
+## This continuation pass: application execution NOT RUN
 
-## Passed
+No application/runtime check was executed. This includes:
 
-| Check | Result |
+| Check | Status in this pass |
 | --- | --- |
-| `mix deps.get` in all three Fount packages | Passed. Probe and Workshop resolve Inference 0.4.1 and Agent Session Manager 0.16.0 from Hex. |
-| `mix format --check-formatted` in all three packages | Passed after formatting the Probe live script. |
-| `MIX_ENV=test mix compile --warnings-as-errors` without provider and database variables | Passed in all three packages. |
-| Offline `MIX_ENV=test mix test` without provider and database variables | Core 56 passed; Probe 9 passed; Workshop 23 passed. |
-| Core PostgreSQL integration | Four tests passed against the new `fount_blitz_dev2` database, including immutable history, candidate acceptance, exact Fountain import and report evidence. |
-| Workshop PostgreSQL and PDF integration | Ten tests passed together across develop, note, pass, recover, sequence, targeted rewrite and PDF renderer files. |
-| Core real examples | `roundtrip` and `database` modes passed. |
-| Probe live `knowledge` mode | Passed through `/home/home/scripts/with_bash_secrets`; three real System One evaluations were saved in `.blitz/live-probe-secrets/knowledge.json`. No credential value was written to the report. |
-| Workshop live `develop` mode | Passed without acceptance. Two real Codex candidate scripts and actual PDFs were saved in `.blitz/live-workshop-retry/`; the accepted revision stayed at the empty root. One PDF was visually inspected and shows conventional script layout with embedded Courier Prime. |
-| Workshop live `develop --accept-demo` mode | Passed in a fresh project. Two distinct candidate scripts and six-page PDFs were saved in `.blitz/live-workshop-accept-retry/`. A direct PostgreSQL query confirmed the accepted head equals the chosen candidate revision. One page was visually inspected. |
-| Workshop live `rewrite` mode | Passed through Inference/Codex. An exact dialogue element changed from “We bill by the berth, not by altitude.” to “We bill for the berth. Floating's optional.” The candidate was reopened from PostgreSQL, Fountain and a six-page PDF were exported, and the accepted head stayed unchanged. Output: `.blitz/live-workshop-rewrite-retry/`. |
-| Sequence rebuilding in PostgreSQL | One integration test passed: selected scenes were replaced, surviving IDs were retained, the candidate reopened and the accepted head remained unchanged. |
-| Workshop live `sequence` mode | Passed through Inference/Codex. Five selected scenes became three, the exact service-gate key line survived, the candidate reopened, and the accepted head stayed at the base. Baseline and candidate PDFs were both six pages under the same settings, so measured page savings were **zero**. The candidate page was visually inspected. Output: `.blitz/live-workshop-sequence/`. |
-| Workshop live `notes` mode | Passed through Inference/Codex with a PostgreSQL-backed candidate and six-page PDF. The first run introduced a wrong accountant pronoun; after adding nearby scene context, the second run preserved “her,” made Dan's response cost him control of the original ledger, removed only the addressed note, and left the accepted head unchanged. Output: `.blitz/live-workshop-notes-context/`. |
-| Workshop live `pass` mode | Passed with the `dialogue_subtext` profile through Inference/Codex. The selected exchange became more responsive on the page, the candidate reopened from PostgreSQL, a six-page PDF rendered, and the accepted head stayed unchanged. Output: `.blitz/live-workshop-pass/`. |
-| Workshop live `character` mode | Passed through Inference/Codex. Dan's dialogue and Mara's immediate replies changed across three scenes, including the key handoff and ledger confession. The candidate reopened from PostgreSQL, a six-page PDF rendered, and the accepted head stayed unchanged. Output: `.blitz/live-workshop-character/`. |
-| Workshop live `table_read` mode | Passed with the real original fixture: 29 ordered speaking turns were exported to JSON and HTML, alongside a six-page screenplay PDF. Output: `.blitz/live-workshop-table-read/`. |
-| Workshop live `recover` mode | Passed with real revision history. A key-setup action beat was cut from the accepted draft, then restored into a separate saved candidate at its former position with its original element ID. The accepted cut draft stayed unchanged and the candidate PDF rendered. Output: `.blitz/live-workshop-recover/`. |
+| `mix deps.get` or dependency resolution | **not run** |
+| `mix format` / `mix format --check-formatted` | **not run** |
+| Elixir/Mix compilation, including warnings as errors | **not run** |
+| All existing and new ExUnit tests | **not run** |
+| PostgreSQL create/migrate/query/integration/concurrency | **not run** |
+| Codex/Inference/Agent Session Manager completions | **not run** |
+| Jev/System One requests | **not run** |
+| Afterwriting/Poppler PDF generation or visual inspection | **not run** |
+| eSpeak/audio generation or playback | **not run** |
+| Credo, Dialyzer, ExDoc, Hex build, CI | **not run** |
 
-The development database was newly created in an isolated local PostgreSQL
-cluster on port 55432. Existing databases were not dropped or reset.
+Source was inspected and authored using the provided APIs. Artifact inventory, byte hashes, JSON decoding and ZIP membership can be checked with Python without running the application. The separate delivered `fount-delivery-report.json` records exactly which packaging checks actually ran. A packaging pass does not establish Elixir syntax, SQL correctness, accepted workflow completion or screenplay quality. Review was a self-review; no independent reviewer/subagent ran.
 
-## Failed and corrected
+## Previously recorded local results (2026-09-24, BEFORE this overlay)
 
-- The first live Codex run timed out on its second completion. The completed
-  first candidate is now saved with a partial session, and the completion
-  stream timeout is set through the published Agent Session Manager option.
-- A later explicit acceptance demonstration produced an orphan dialogue line
-  in Codex's second candidate. Fount rejected that candidate, preserved the
-  first, and left the accepted head untouched. Dialogue cue coherence is now
-  checked by the local completion validator, allowing its single repair
-  attempt before materialization. A new live acceptance run then passed.
-- Repeated candidate acceptance returned a database row. It now returns
-  `{:error, :already_accepted}`; the PostgreSQL integration test passes.
-- The first targeted rewrite DB test failed because `targeted_rewrite` was not
-  one of the schema's workflow categories. The session now uses `pass` with
-  `kind: targeted_rewrite` in its request. The test and live retry pass.
-- A live note response called the accountant “him” although later scenes use
-  “her.” Nearby scene context was added to targeted rewrites; the second live
-  response uses “her.” This shows why a complete continuity check is still
-  required for arbitrary generated edits.
+The continuation input reports the following earlier local runs. These were not reproduced here and must not be relabeled as newly passed:
 
-## Still required
+| Package | Earlier recorded evidence |
+| --- | --- |
+| Core | 56 offline tests; four PostgreSQL integration tests; real roundtrip/database modes |
+| Probe | Nine offline tests; old knowledge mode with three real System One evaluations |
+| Workshop | 23 offline tests; ten PostgreSQL/PDF integration tests; real Codex modes for develop, rewrite, sequence, notes, pass, character, recover and table read |
 
-The full F01–F09, W01–W09 and T01–T13 acceptance cases are not complete.
-The legacy filesystem/SQLite store code and dependency have been removed.
-Most Probe tools and creative workflows, complete CLI coverage, speech
-verification, final overlay generation and the
-follow-on handoff are outstanding. No release-complete claim is made here.
+The earlier checkout reportedly resolved Hex Inference 0.4.1 and Hex Agent Session Manager 0.16.0. Its earlier sequence attempt rendered six pages before and six after: **zero page savings**. One generated note response had a wrong pronoun; additional nearby context corrected one retry, not the general continuity problem. Speech was not run because no eSpeak executable was installed. The old overlay manifest and packaging report do not certify this source.
 
-`FountWorkshop.Speech.Espeak` and the live `speech` mode have not been executed:
-neither `espeak-ng` nor `espeak` is installed in this environment. Requesting
-speech mode fails explicitly until a real executable is configured.
+## Exact next commands
+
+Inspect/apply using SETUP first. Then for each of `packages/fount`, `packages/fount_probe`, `packages/fount_workshop` execute and record separately:
+
+```bash
+env -u SYSTEM_ONE_API_KEY -u FOUNT_DATABASE_URL -u FOUNT_CODEX_MODEL mix deps.get
+env -u SYSTEM_ONE_API_KEY -u FOUNT_DATABASE_URL -u FOUNT_CODEX_MODEL mix format --check-formatted
+env -u SYSTEM_ONE_API_KEY -u FOUNT_DATABASE_URL -u FOUNT_CODEX_MODEL MIX_ENV=test mix compile --warnings-as-errors
+env -u SYSTEM_ONE_API_KEY -u FOUNT_DATABASE_URL -u FOUNT_CODEX_MODEL MIX_ENV=test mix test
+```
+
+The authored `scripts/verify_handoff.sh --offline` collects these commands and results; it was not itself run against the application here. A missing formatter/dependency or warning must be fixed rather than skipped. After corrections, rerun the full package tests and optionally Credo/Dialyzer/docs using the package's actual available aliases/dependencies.
+
+With the explicitly configured fresh `FOUNT_DATABASE_URL`, migrate as in SETUP and then:
+
+```bash
+(cd ~/p/g/n/fount/packages/fount && MIX_ENV=test mix test integration)
+(cd ~/p/g/n/fount/packages/fount_workshop && MIX_ENV=test mix test integration)
+```
+
+Install/confirm the PDF prerequisites before Workshop integration. These integrations may deliberately inject offline completion responses while exercising actual PostgreSQL/PDF; they are not live Codex proof. Add the missing acceptance tests identified in FEATURES and KNOWN_GAPS, especially the full W03/W04/W05 and selective acceptance cases.
+
+Real examples use exactly this invocation form, once from the owning package for every applicable mode:
+
+```bash
+MIX_ENV=dev mix run examples/live.exs -- --mode MODE --out /tmp/fount-live/MODE
+```
+
+Replace `MODE` with the literal mode from OPERATIONS, not a guessed alias. Run each new writer mode with authorized configuration. Read generated candidate pages and actual PDFs. Compare only measured PDF counts under identical settings and title-page treatment. Record the generated revision/session/candidate/report IDs and artifact hashes without secrets. Run speech only when installed and configured; otherwise mark it not run.
+
+## Acceptance evidence to collect
+
+For every F/W/T case, distinguish source implemented, test passed/failed, real example passed/failed/partial, not run, and remaining implementation. Require correct fixture outcomes, not merely successful process exits. In particular, preserve both bridge neighbor identities, demonstrate selection and third-candidate joins, prove repairs around the reveal movement, render both distinct sequence routes, inspect character partner responses and secrets, accept only selected note groups, compare exact/adapted recovery, and show three evidence-based strategies with two written remedies.
+
+Retain original failures and repaired reruns as separate records. Do not overwrite this source-only provenance with claims that this agent ran the local checks.

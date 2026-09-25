@@ -1,0 +1,40 @@
+{
+  "id": "dependencies",
+  "version": 1,
+  "tool": "dependencies",
+  "questions": [
+    {
+      "key": "establishes",
+      "type": "noul",
+      "instructions": "Does A establish the object, ability, information or rule used by B?"
+    },
+    {
+      "key": "enables",
+      "type": "noul",
+      "instructions": "Does the material in A make the event in B possible or motivate its choice?"
+    },
+    {
+      "key": "purpose",
+      "type": "noul",
+      "instructions": "Does A serve an immediate local dramatic purpose independent of B?"
+    },
+    {
+      "key": "relation",
+      "type": "choice",
+      "instructions": "What best describes the supported relation from A to B?"
+    },
+    {
+      "key": "other_support",
+      "type": "noul",
+      "instructions": "Does the remaining prior material establish sufficient independent support for the use? The removed setup is unavailable."
+    }
+  ],
+  "thresholds": {
+    "support_probability": 0.8,
+    "unsupported_probability": 0.2,
+    "minimum_confidence": 0.7,
+    "minimum_margin": 0.15
+  },
+  "projection": "runtime_explicit",
+  "runtime_choices": "Effective criteria/levels are supplied by the inspected tool and hashed in question_profile_sha256."
+}

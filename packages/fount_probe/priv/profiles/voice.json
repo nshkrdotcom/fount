@@ -1,0 +1,20 @@
+{
+  "id": "voice",
+  "version": 1,
+  "tool": "voice",
+  "questions": [
+    {
+      "key": "voice",
+      "type": "choice",
+      "instructions": "Which anonymous voice profile best matches the unlabelled utterance? Use voice, not story identity."
+    }
+  ],
+  "thresholds": {
+    "support_probability": 0.8,
+    "unsupported_probability": 0.2,
+    "minimum_confidence": 0.7,
+    "minimum_margin": 0.15
+  },
+  "projection": "runtime_explicit",
+  "runtime_choices": "Effective criteria/levels are supplied by the inspected tool and hashed in question_profile_sha256."
+}

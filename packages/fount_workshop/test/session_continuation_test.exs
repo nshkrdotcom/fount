@@ -66,6 +66,72 @@ defmodule FountWorkshop.SessionContinuationTest do
     assert ContinuationStore.head(store).revision.id == model.revision.id
   end
 
+  test "a failed optional repair records its source candidate and error" do
+    model = Fount.Screenplay.new()
+    {:ok, store} = ContinuationStore.start_link(model)
+
+    {:ok, script} =
+      Agent.start_link(fn ->
+        [
+          fn _ -> %{"strategies" => [hd(strategies()["strategies"])]} end,
+          fn _ -> proposal(model, "a", "Mara blocks the door.") end,
+          {:error, :repair_unavailable}
+        ]
+      end)
+
+    on_exit(fn ->
+      for pid <- [store, script] do
+        try do
+          Agent.stop(pid)
+        catch
+          :exit, {:noproc, _} -> :ok
+        end
+      end
+    end)
+
+    client = Inference.Client.new!(adapter: ScriptedCompletion, adapter_opts: [script: script])
+    services = %{store: %Store{repo: store, module: ContinuationStore}, inference: client}
+
+    request = %{
+      "version" => 1,
+      "workflow" => "develop",
+      "mode" => "revise",
+      "base_revision_id" => model.revision.id,
+      "instruction" => "Open with a physical choice.",
+      "selection" => %{"whole_screenplay" => true},
+      "constraints" => [
+        %{
+          "id" => Fount.ID.v4(),
+          "kind" => "word_limit",
+          "target" => %{"kind" => "screenplay", "id" => model.id},
+          "spec" => %{"max" => 0},
+          "severity" => "required",
+          "source" => "writer"
+        }
+      ],
+      "alternatives" => 1,
+      "options" => %{"placement" => %{"kind" => "start"}}
+    }
+
+    assert {:ok, session} = Session.start(model, request, services)
+    branch = session["progress"]["branches"]["a"]
+    assert branch["status"] == "saved"
+    assert branch["attempt_candidate_ids"] == [branch["candidate_id"]]
+
+    assert [
+             %{
+               "source_candidate_id" => id,
+               "round" => 1,
+               "error" => %{"code" => "Inference.Error", "reason" => reason}
+             }
+           ] =
+             branch["repair_failures"]
+
+    assert id == branch["candidate_id"]
+    assert is_binary(reason)
+    assert ContinuationStore.head(store).revision.id == model.revision.id
+  end
+
   defp strategies do
     %{
       "strategies" =>

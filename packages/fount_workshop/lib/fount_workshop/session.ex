@@ -291,15 +291,18 @@ defmodule FountWorkshop.Session do
 
   defp materialize_one(model, session, strategy, context, services, opts) do
     outcome = generate_save(model, session, strategy, context, services, opts)
-    outcome = repair_if_needed(outcome, model, session, strategy, context, services, opts, 0, [])
+
+    outcome =
+      repair_if_needed(outcome, model, session, strategy, context, services, opts, 0, [], [])
 
     case outcome do
-      {:ok, saved, report_ids, attempts} ->
+      {:ok, saved, report_ids, attempts, repair_failures} ->
         branch = %{
           "status" => "saved",
           "candidate_id" => saved["id"],
           "report_ids" => report_ids,
           "attempt_candidate_ids" => attempts,
+          "repair_failures" => repair_failures,
           "checks" => saved["provenance"]["checks"],
           "needs_writer_review" => true
         }
@@ -356,7 +359,8 @@ defmodule FountWorkshop.Session do
          services,
          opts,
          round,
-         attempts
+         attempts,
+         failures
        ) do
     attempts = attempts ++ [candidate["id"]]
 
@@ -393,21 +397,38 @@ defmodule FountWorkshop.Session do
             services,
             opts,
             round + 1,
-            attempts
+            attempts,
+            failures
           )
 
-        {:error, _} ->
-          {:ok, candidate, report_ids, attempts}
+        {:error, reason} ->
+          {:ok, candidate, report_ids, attempts,
+           failures ++
+             [
+               %{
+                 "source_candidate_id" => candidate["id"],
+                 "round" => round + 1,
+                 "error" => safe_error(reason)
+               }
+             ]}
 
-        {:error, _, _} ->
-          {:ok, candidate, report_ids, attempts}
+        {:error, reason, _} ->
+          {:ok, candidate, report_ids, attempts,
+           failures ++
+             [
+               %{
+                 "source_candidate_id" => candidate["id"],
+                 "round" => round + 1,
+                 "error" => safe_error(reason)
+               }
+             ]}
       end
     else
-      {:ok, candidate, report_ids, attempts}
+      {:ok, candidate, report_ids, attempts, failures}
     end
   end
 
-  defp repair_if_needed(error, _, _, _, _, _, _, _, _), do: error
+  defp repair_if_needed(error, _, _, _, _, _, _, _, _, _), do: error
 
   def save_reports(reports, session_id, services, sources \\ []) do
     Enum.reduce_while(reports, {:ok, []}, fn report, {:ok, ids} ->
@@ -476,6 +497,14 @@ defmodule FountWorkshop.Session do
   defp default_materialization(_, strategies), do: Enum.map(strategies, & &1["id"])
   defp services(%{store: %Store{}, inference: %Inference.Client{}}), do: :ok
   defp services(_), do: {:error, :explicit_store_and_inference_services_required}
+
+  defp safe_error(%Inference.Error{category: category, reason: reason}),
+    do: %{
+      "code" => "Inference.Error",
+      "category" => to_string(category),
+      "reason" => to_string(reason)
+    }
+
   defp safe_error(%{__struct__: type}), do: %{"code" => inspect(type)}
   defp safe_error(value), do: %{"code" => inspect(value, limit: 10, printable_limit: 2000)}
 

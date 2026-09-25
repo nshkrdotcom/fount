@@ -12,17 +12,18 @@ This is a local continuation after the committed overlay and the separate QA com
 - Search filters now validate nested list, flag, location and element-type shapes, and reject unknown scene, character and authored-collection IDs instead of silently returning empty results.
 - Action can measure printed PDF line regions from a verified layout report. Workshop PDF export honors A4 and title-page selection in the settings hash. A real A4 sample was rendered and visually inspected.
 - Exact recovery supports a same-screenplay fragment or contiguous range and cross-screenplay copy with new IDs and explicit cast mapping. Sessions can selectively retry cached failed inspections; repeated partial group selection retains the full note dependency set. Notes with overlapping scene/element targets are flagged as potential conflicts.
+- A failed optional semantic repair now leaves a branch record with the source candidate ID, repair round, and safe error category/reason while preserving the original reviewable candidate.
 - Investigation uses structured hypothesis records and one bounded follow-up batch. Its explanation must revise every initial hypothesis. Rebase rejects malformed resolution shapes before replay.
 
 ## Actual checks
 
-`bash scripts/verify_handoff.sh --offline` passed all 12 dependency, format, warning-free test compilation and default ExUnit checks. Local status file: `/tmp/fount-handoff-offline-20260924T184823-354143/status.tsv`.
+`bash scripts/verify_handoff.sh --offline` passed all 12 dependency, format, warning-free test compilation and default ExUnit checks. Local status file: `/tmp/fount-handoff-offline-20260924T185204-356722/status.tsv`.
 
 | Package | Default suite |
 | --- | ---: |
 | Core | 68 passed (67 tests, 1 property) |
 | Probe | 44 passed |
-| Workshop | 45 passed |
+| Workshop | 46 passed |
 
 Using the previously created local `fount_verify_20260924_qa` database on PostgreSQL 5433, Core integration passed 9 tests and Workshop integration passed 12 tests. A new concurrent candidate-acceptance test verifies that only one candidate can advance a shared head. The Workshop suite includes real Afterwriting/Poppler checks. This stage did not create a new fresh database or rerun migrations.
 
@@ -32,4 +33,4 @@ Standalone A4 PDF `/tmp/fount-stage2-a4.pdf` has SHA-256 `f6501b6f747106d1532c4b
 
 The full writer acceptance fixtures have not been run through live generation, review and explicit acceptance. `FOUNT_CODEX_MODEL` was not configured during this stage. In particular W03's ferry/key/reveal repair, W04's two distinct five-to-three routes and measured page savings, W05's chosen outcome/secret/partner repair, W07's six real pass outputs, and W09's end-to-end evidence/strategy/writing run remain unproven.
 
-Additional work remains on full PostgreSQL concurrency and interchange edge matrices; broader audience/access fixtures; chronology, pronouns and relationships; integrated dialogue knowledge/voice and requested voice conformance; broader retrieval/history filters; cross-scene semantic note conflicts; repair-failure artifacts; arbitrary PDF profiles; and mixed speech output. Action line mapping uses text matching against a real PDF and can report unavailable for ambiguous repeated text. Prohibited-fact checks cannot certify the absence of an undeclared invention. Review these as open acceptance work, not passes inferred from the smaller tests above.
+Additional work remains on full PostgreSQL concurrency and interchange edge matrices; broader audience/access fixtures; chronology, pronouns and relationships; integrated dialogue knowledge/voice and requested voice conformance; broader retrieval/history filters; cross-scene semantic note conflicts; richer repair-attempt traces, arbitrary PDF profiles; and mixed speech output. Action line mapping uses text matching against a real PDF and can report unavailable for ambiguous repeated text. Prohibited-fact checks cannot certify the absence of an undeclared invention. Review these as open acceptance work, not passes inferred from the smaller tests above.

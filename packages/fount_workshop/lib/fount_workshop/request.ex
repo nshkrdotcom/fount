@@ -11,7 +11,8 @@ defmodule FountWorkshop.Request do
     "character" => ~w(character_id direction exemplar_targets change_agency),
     "notes" => ~w(note_ids external_notes),
     "pass" => ~w(profile direction),
-    "recover" => ~w(source_revision_id source_targets destination adapt),
+    "recover" =>
+      ~w(source_revision_id source_screenplay_id source_targets destination cast_mapping adapt),
     "investigate" => ~w(concern write_fixes)
   }
   def validate(model, request) when is_map(request) do
@@ -50,10 +51,20 @@ defmodule FountWorkshop.Request do
   end
 
   defp options(model, "recover", opts) do
+    source_screenplay_id = Map.get(opts, "source_screenplay_id", model.id)
+    foreign? = source_screenplay_id != model.id
+    mapping = opts["cast_mapping"]
+
     with true <- is_binary(opts["source_revision_id"]) or {:error, :missing_source_revision},
+         true <- is_binary(source_screenplay_id) or {:error, :invalid_source_screenplay},
          true <-
            (is_list(opts["source_targets"]) and opts["source_targets"] != []) or
              {:error, :missing_source_targets},
+         true <- not foreign? or is_map(mapping) or {:error, :explicit_cast_mapping_required},
+         true <-
+           not foreign? or
+             Enum.all?(mapping, fn {_, id} -> Map.has_key?(model.cast, id) end) or
+             {:error, :unknown_cast_mapping_destination},
          :ok <- placement(model, opts["destination"]) do
       :ok
     end
@@ -142,6 +153,33 @@ defmodule FountWorkshop.Request do
       :ok
     else
       _ -> {:error, :unknown_fountain_note}
+    end
+  end
+
+  def placement(
+        model,
+        %{
+          "kind" => "replace_element_span",
+          "element_id" => id,
+          "span" => %{"byte_start" => first, "byte_end" => last}
+        } = p
+      ) do
+    with :ok <- only(p, ~w(kind element_id span)),
+         element when not is_nil(element) <- Fount.Query.node(model, id),
+         {:ok, _} <- Fount.Writing.UTF8Span.extract(element.text, {first, last}) do
+      :ok
+    else
+      _ -> {:error, :invalid_recovery_destination_span}
+    end
+  end
+
+  def placement(model, %{"kind" => "insert_after_element", "element_id" => id} = p) do
+    with :ok <- only(p, ~w(kind element_id)),
+         element when not is_nil(element) <- Fount.Query.node(model, id),
+         true <- element.type != :scene_heading and not is_nil(Fount.Query.scene_for(model, id)) do
+      :ok
+    else
+      _ -> {:error, :invalid_recovery_anchor}
     end
   end
 

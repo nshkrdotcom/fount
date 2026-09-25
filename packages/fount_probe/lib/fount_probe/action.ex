@@ -44,6 +44,35 @@ defmodule FountProbe.Action do
                qs,
                Keyword.put_new(opts, :profile_id, "action")
              ) do
+        {layout, layout_errors} =
+          case params["layout_report_id"] do
+            nil ->
+              {%{
+                 "printed_lines" => nil,
+                 "line_regions" => [],
+                 "layout_status" => "unavailable_without_measured_layout"
+               }, []}
+
+            id ->
+              case FountProbe.Action.Layout.measure(
+                     model,
+                     action,
+                     id,
+                     Keyword.get(opts, :report_reader)
+                   ) do
+                {:ok, measured} ->
+                  {measured, []}
+
+                {:error, reason} ->
+                  {%{
+                     "printed_lines" => nil,
+                     "line_regions" => [],
+                     "layout_status" => "unavailable"
+                   },
+                   [%{"code" => "layout_measurement_unavailable", "reason" => inspect(reason)}]}
+              end
+          end
+
         splits =
           Enum.flat_map(action, fn u ->
             Regex.scan(~r/[.!?]\s+/u, u["excerpt"], return: :index)
@@ -59,18 +88,21 @@ defmodule FountProbe.Action do
 
         {:ok,
          Report.new(model, "action", params, %{
-           status: result["status"],
-           data: %{
-             "paragraph_count" => length(Enum.uniq_by(action, & &1["target"]["id"])),
-             "words" => Enum.sum(Enum.map(action, &length(String.split(&1["text"])))),
-             "printed_lines" => nil,
-             "layout_status" => "unavailable_without_measured_layout",
-             "assessments" => result["entries"],
-             "split_sites" => splits
-           },
+           status: if(layout_errors == [], do: result["status"], else: "partial"),
+           data:
+             Map.merge(
+               %{
+                 "paragraph_count" => length(Enum.uniq_by(action, & &1["target"]["id"])),
+                 "words" => Enum.sum(Enum.map(action, &length(String.split(&1["text"])))),
+                 "assessments" => result["entries"],
+                 "split_sites" => splits
+               },
+               layout
+             ),
            evidence: Projection.evidence(action),
            provenance: result,
-           coverage: %{"element_ids" => Enum.map(action, & &1["target"]["id"])}
+           coverage: %{"element_ids" => Enum.map(action, & &1["target"]["id"])},
+           errors: layout_errors
          })}
       end
     end

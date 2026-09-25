@@ -98,4 +98,23 @@ defmodule FountWorkshop.PDFExportTest do
     refute String.contains?(text, "Omitted sentinel")
     assert String.contains?(text, "Visible sentinel")
   end
+
+  test "A4 output uses requested print settings and a distinct settings hash" do
+    doc = Fount.parse!("Title: Example\n\nINT. ROOM - DAY\n\nA line.")
+    root = Path.join(System.tmp_dir!(), "fount-a4-#{System.unique_integer([:positive])}")
+    File.mkdir_p!(root)
+    on_exit(fn -> File.rm_rf(root) end)
+
+    assert {:ok, letter} = PDF.export(doc, Path.join(root, "letter.pdf"))
+    assert {:ok, a4} =
+             PDF.export(doc, Path.join(root, "a4.pdf"),
+               print_profile: "a4",
+               print_title_page: false
+             )
+
+    assert a4.page_size == :a4
+    assert a4.settings_sha256 != letter.settings_sha256
+    assert a4.settings["print_profile"] == "a4"
+    assert a4.settings["print_title_page"] == false
+  end
 end

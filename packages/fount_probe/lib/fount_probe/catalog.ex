@@ -132,6 +132,8 @@ defmodule FountProbe.Catalog do
   defp ids(model, params) do
     scene_ids = Map.get(params, "scene_ids", []) ++ List.wrap(params["scene_id"])
     characters = Map.get(params, "character_ids", []) ++ List.wrap(params["character_id"])
+    behavior_ids = Map.get(params, "behavior_element_ids", [])
+    changed_targets = Map.get(params, "changed_targets", [])
 
     points =
       Map.get(params, "points", []) ++
@@ -143,6 +145,22 @@ defmodule FountProbe.Catalog do
 
       Enum.any?(characters, &(not Map.has_key?(model.cast, &1))) ->
         {:error, :unknown_character}
+
+      Enum.any?(behavior_ids, fn id ->
+        case Map.get(model.index.by_id, id) do
+          %Fount.IR.Element{type: type} when type in [:action, :dialogue, :parenthetical] -> false
+          _ -> true
+        end
+      end) ->
+        {:error, :unknown_behavior_element}
+
+      Enum.any?(changed_targets, fn
+        %{"kind" => "scene", "id" => id} -> is_nil(Fount.Query.scene(model, id))
+        %{"kind" => "element", "id" => id} -> is_nil(Map.get(model.index.by_id, id))
+        %{"kind" => "character", "id" => id} -> not Map.has_key?(model.cast, id)
+        _ -> true
+      end) ->
+        {:error, :unknown_changed_target}
 
       Enum.any?(points, &(not match?({:ok, _}, FountProbe.Projection.cutoff(model, &1)))) ->
         {:error, :illegal_point}
@@ -177,6 +195,21 @@ defmodule FountProbe.Catalog do
          Map.get(p, "access_mode", "evidence") in ~w(evidence writer_declared),
        do: :ok,
        else: {:error, :empty_or_invalid_trace}
+  end
+
+  defp domain("continuity", p) do
+    targets = Map.get(p, "changed_targets", [])
+
+    if Enum.all?(targets, fn
+         %{"kind" => kind, "id" => id}
+         when kind in ~w(scene element character) and is_binary(id) ->
+           true
+
+         _ ->
+           false
+       end),
+       do: :ok,
+       else: {:error, :invalid_changed_targets}
   end
 
   defp domain("dialogue", p) do

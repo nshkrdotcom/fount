@@ -82,6 +82,7 @@ defmodule Fount.Adapter.JSON do
     with {:ok, %{"schema" => "fount.screenplay.v2", "model" => data} = payload} <- Jason.decode(json),
          true <- Map.keys(payload) -- ~w(schema model import_artifact) == [] or {:error, :unknown_json_field},
          :ok <- validate_model_fields(data),
+         :ok <- validate_nested_fields(data),
          model = Fount.Persistence.Codec.decode(data),
          [] <- Fount.Validate.screenplay(model),
          true <- data["revision"]["content_hash"] == model.revision.content_hash or {:error, :content_hash_mismatch},
@@ -109,11 +110,63 @@ defmodule Fount.Adapter.JSON do
   end
 
   defp validate_model_fields(_), do: {:error, :invalid_canonical_fields}
+
+  defp validate_nested_fields(data) do
+    records = [
+      {data["revision"], Fount.Revision},
+      {data["elements"], Fount.IR.Element},
+      {data["scenes"], Fount.IR.Scene},
+      {data["turns"], Fount.IR.DialogueBlock},
+      {data["cast"], Fount.Cast.Character},
+      {data["mentions"], Fount.Cast.Mention},
+      {data["annotations"], Fount.Annotation}
+    ]
+
+    nested =
+      Enum.flat_map(data["elements"], fn e -> [e["source_span"], e["content_span"]] end) ++
+        Enum.map(data["scenes"], & &1["source_span"]) ++
+        Enum.map(data["turns"], & &1["source_span"])
+
+    annotations =
+      Enum.flat_map(data["annotations"], fn a ->
+        [{a["target"], Fount.Annotation.Target}, {a["provenance"], Fount.Annotation.Provenance}]
+      end)
+
+    valid =
+      Enum.all?(records ++ [{nested, Fount.Source.Span}] ++ annotations, fn
+        {list, module} when is_list(list) -> Enum.all?(list, &known_fields?(&1, module))
+        {value, module} -> known_fields?(value, module)
+      end) and
+        (is_nil(data["title"]) or
+           (is_list(data["title"]) and
+              Enum.all?(data["title"], &known_fields?(&1, Fount.IR.TitlePage.Entry)))) and
+        Enum.all?(data["cast"], fn c ->
+          is_list(c["aliases"]) and
+            Enum.all?(c["aliases"], fn a ->
+              is_map(a) and Map.keys(a) -- ~w(alias kind) == []
+            end)
+        end)
+
+    if valid, do: :ok, else: {:error, :unknown_nested_canonical_field}
+  end
+
+  defp known_fields?(nil, _), do: true
+
+  defp known_fields?(value, module) when is_map(value) do
+    allowed = module.__struct__() |> Map.keys() |> List.delete(:__struct__) |> Enum.map(&to_string/1)
+    Map.keys(value) -- allowed == []
+  end
+
+  defp known_fields?(_, _), do: false
+
   defp decode_artifact(nil), do: {:ok, nil}
 
   defp decode_artifact(%{"format" => format, "bytes_base64" => encoded, "sha256" => expected} = artifact)
        when format in ["fountain", "fdx"] do
-    with {:ok, bytes} <- Base.decode64(encoded),
+    with true <-
+           Map.keys(artifact) -- ~w(format bytes_base64 sha256 render_hash revision_id losses) == [] or
+             {:error, :unknown_artifact_field},
+         {:ok, bytes} <- Base.decode64(encoded),
          true <-
            :crypto.hash(:sha256, bytes) |> Base.encode16(case: :lower) == expected or {:error, :artifact_hash_mismatch},
          {:ok, decoded} <- artifact_model(bytes, format),

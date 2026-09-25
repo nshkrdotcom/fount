@@ -1,40 +1,22 @@
 defmodule FountProbe.Dependencies do
   @moduledoc "Tests proposed setup/use edges, including alternative support in an actually ablated context."
-  alias FountProbe.{Extraction, Projection, Jev, Report}
+  alias FountProbe.{SavedRecords, Projection, Jev, Report}
 
   def run(model, params, clients, opts \\ []) do
-    request = %{
-      "selection" => params["selection"],
-      "kinds" => ~w(events propositions props commitments),
-      "question" => "Identify setups and later uses that may depend on them."
-    }
-
-    with {:ok, extracted} <- Extraction.run(model, request, clients, opts),
+    with {:ok, extracted} <-
+           SavedRecords.resolve(
+             model,
+             params,
+             clients,
+             opts,
+             ~w(events propositions props commitments),
+             "Identify setups and later uses that may depend on them."
+           ),
          {:ok, units} <- Projection.select(model, params["selection"]) do
       registry = Map.new(units, &{&1["evidence_id"], &1})
       records = extracted.data["records"]
       order = Map.new(Enum.with_index(model.ir.scenes), fn {s, n} -> {s.id, n} end)
-      targets = params["targets"]
-
-      uses =
-        Enum.filter(records, fn r ->
-          targets == [] or
-            Enum.any?(targets, fn
-              t when is_binary(t) ->
-                t == r["id"]
-
-              t ->
-                t["id"] == r["scene_id"] or
-                  Enum.any?(r["evidence_ids"], &(registry[&1]["target"]["id"] == t["id"]))
-            end)
-        end)
-
-      pairs =
-        for a <- records,
-            b <- uses,
-            a["id"] != b["id"],
-            order[a["scene_id"]] < order[b["scene_id"]],
-            do: {a, b}
+      pairs = ordered_pairs(model, records, units, params["targets"])
 
       # Do not discard a semantic relationship merely for lacking common words.
       inputs =
@@ -81,7 +63,9 @@ defmodule FountProbe.Dependencies do
 
                 prior =
                   Enum.filter(units, fn u ->
-                    order[u["scene_id"]] < order[b["scene_id"]] and
+                    (order[u["scene_id"]] < order[b["scene_id"]] or
+                       (u["scene_id"] == b["scene_id"] and
+                          u["ordinal"] < earliest_ordinal(b, registry))) and
                       not MapSet.member?(removed, u["evidence_id"])
                   end)
 
@@ -165,6 +149,52 @@ defmodule FountProbe.Dependencies do
       end
     end
   end
+
+  @doc "Returns evidence-ordered setup/use candidates, including events in one scene."
+  def ordered_pairs(model, records, units, targets) do
+    registry = Map.new(units, &{&1["evidence_id"], &1})
+    order = Map.new(Enum.with_index(model.ir.scenes), fn {scene, n} -> {scene.id, n} end)
+
+    uses =
+      Enum.filter(records, fn record ->
+        targets == [] or
+          Enum.any?(targets, fn
+            id when is_binary(id) ->
+              id == record["id"]
+
+            %{"id" => id} ->
+              id == record["scene_id"] or
+                Enum.any?(record["evidence_ids"], fn evidence_id ->
+                  unit = registry[evidence_id]
+                  unit && unit["target"]["id"] == id
+                end)
+
+            _ ->
+              false
+          end)
+      end)
+
+    for setup <- records,
+        use <- uses,
+        setup["id"] != use["id"],
+        earlier?(setup, use, order, registry),
+        do: {setup, use}
+  end
+
+  defp earlier?(setup, use, order, registry) do
+    first = order[setup["scene_id"]]
+    second = order[use["scene_id"]]
+
+    is_integer(first) and is_integer(second) and
+      (first < second or
+         (first == second and latest_ordinal(setup, registry) < earliest_ordinal(use, registry)))
+  end
+
+  defp earliest_ordinal(record, registry),
+    do: record["evidence_ids"] |> Enum.map(&registry[&1]["ordinal"]) |> Enum.min()
+
+  defp latest_ordinal(record, registry),
+    do: record["evidence_ids"] |> Enum.map(&registry[&1]["ordinal"]) |> Enum.max()
 
   def affected(edges, starting_ids, limit \\ 500),
     do: walk(edges, starting_ids, MapSet.new(), limit) |> MapSet.to_list() |> Enum.sort()

@@ -20,8 +20,13 @@ defmodule FountWorkshop.SessionContinuationTest do
       end)
 
     on_exit(fn ->
-      if Process.alive?(store), do: Agent.stop(store)
-      if Process.alive?(script), do: Agent.stop(script)
+      Enum.each([store, script], fn pid ->
+        try do
+          Agent.stop(pid)
+        catch
+          :exit, {:noproc, _} -> :ok
+        end
+      end)
     end)
 
     client = Inference.Client.new!(adapter: ScriptedCompletion, adapter_opts: [script: script])

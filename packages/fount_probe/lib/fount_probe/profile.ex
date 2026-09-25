@@ -8,7 +8,8 @@ defmodule FountProbe.Profile do
       with {:ok, data} <- File.read(path),
            {:ok, profile} <- Jason.decode(data),
            %{"id" => ^id, "version" => version, "questions" => questions} <- profile,
-           true <- is_integer(version) and version > 0 and is_list(questions) do
+           true <- is_integer(version) and version > 0 and is_list(questions),
+           true <- valid_thresholds?(Map.get(profile, "thresholds", %{})) do
         {:ok, Map.put(profile, "sha256", Fount.Writing.CanonicalJSON.hash(profile))}
       else
         _ -> {:error, {:invalid_profile, id}}
@@ -19,6 +20,19 @@ defmodule FountProbe.Profile do
   end
 
   def load(_), do: {:error, :invalid_profile_id}
+
+  def valid_thresholds?(thresholds) when is_map(thresholds) do
+    allowed =
+      ~w(support_probability unsupported_probability minimum_confidence minimum_margin pass_mass fail_mass)
+
+    Map.keys(thresholds) -- allowed == [] and
+      Enum.all?(thresholds, fn {_, value} -> is_number(value) and value >= 0 and value <= 1 end) and
+      Map.get(thresholds, "support_probability", 0.8) >
+        Map.get(thresholds, "unsupported_probability", 0.2) and
+      Map.get(thresholds, "pass_mass", 0.8) > Map.get(thresholds, "fail_mass", 0.2)
+  end
+
+  def valid_thresholds?(_), do: false
 
   def compile(questions, nil), do: {:ok, questions, nil}
 

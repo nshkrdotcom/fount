@@ -10,6 +10,7 @@ defmodule FountWorkshop.CLI do
     revision: :string,
     id: :string,
     resume: :boolean,
+    reinspect: :boolean,
     session: :string,
     strategies: :string,
     candidate: :string,
@@ -295,7 +296,8 @@ defmodule FountWorkshop.CLI do
       render: opts[:pdf] || false,
       pdf: opts[:pdf] || false,
       speech: opts[:speech] || false,
-      actor: opts[:actor]
+      actor: opts[:actor],
+      reinspect: opts[:reinspect] || false
     ]
 
   defp help(command),

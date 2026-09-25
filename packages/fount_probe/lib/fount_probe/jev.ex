@@ -56,7 +56,11 @@ defmodule FountProbe.Jev do
         {:error, reason}
 
       {:ok, batch} ->
-        entries = Enum.map(batch["entries"], &decode_entry(&1, questions)) ++ rejected
+        policy_opts = threshold_options(profile)
+
+        entries =
+          Enum.map(batch["entries"], &decode_entry(&1, questions, policy_opts)) ++ rejected
+
         by_id = Map.new(entries, &{&1["input_id"], &1})
         ordered = Enum.map(inputs, &Map.get(by_id, &1["id"], error(&1["id"], "missing_response")))
 
@@ -87,13 +91,13 @@ defmodule FountProbe.Jev do
     end)
   end
 
-  defp decode_entry(%{"input_id" => id, "result" => {:ok, response}}, questions) do
+  defp decode_entry(%{"input_id" => id, "result" => {:ok, response}}, questions, policy_opts) do
     answers = Map.get(response, :answers) || %{}
 
     decoded =
       Map.new(questions, fn {key, _} ->
         answer = Map.get(answers, key, Map.get(answers, to_string(key)))
-        {to_string(key), answer(answer)}
+        {to_string(key), answer(answer, policy_opts)}
       end)
 
     valid = Enum.all?(decoded, fn {_, result} -> result["status"] != "error" end)
@@ -109,29 +113,31 @@ defmodule FountProbe.Jev do
     }
   end
 
-  defp decode_entry(%{"input_id" => id, "result" => {:error, reason}}, _),
+  defp decode_entry(%{"input_id" => id, "result" => {:error, reason}}, _, _),
     do: error(id, safe_reason(reason))
 
-  defp decode_entry(entry, _), do: error(entry["input_id"], "missing_response")
+  defp decode_entry(entry, _, _), do: error(entry["input_id"], "missing_response")
 
-  def answer(%SystemOneSDK.NoulAnswer{noul: p}) do
-    case DecisionPolicy.noul(p) do
+  def answer(value, opts \\ [])
+
+  def answer(%SystemOneSDK.NoulAnswer{noul: p}, opts) do
+    case DecisionPolicy.noul(p, opts) do
       {:ok, policy} -> Map.merge(policy, %{"type" => "noul"})
       _ -> %{"status" => "error", "reason" => "invalid_noul"}
     end
   end
 
-  def answer(%SystemOneSDK.ChoiceAnswer{} = a) do
+  def answer(%SystemOneSDK.ChoiceAnswer{} = a, opts) do
     probabilities = Map.new(a.probabilities, fn {key, p} -> {to_string(key), p} end)
     order = Enum.map(a.option_order, &to_string/1)
 
-    case DecisionPolicy.choice(probabilities, order, a.confidence) do
+    case DecisionPolicy.choice(probabilities, order, a.confidence, opts) do
       {:ok, policy} -> Map.merge(policy, %{"type" => "choice"})
       _ -> %{"status" => "error", "reason" => "invalid_choice"}
     end
   end
 
-  def answer(%SystemOneSDK.ScoreAnswer{} = a) do
+  def answer(%SystemOneSDK.ScoreAnswer{} = a, opts) do
     probabilities = Map.new(a.probabilities, fn {key, p} -> {to_string(key), p} end)
 
     with true <- is_number(a.score),
@@ -139,7 +145,8 @@ defmodule FountProbe.Jev do
            DecisionPolicy.semantic_distribution(
              probabilities,
              Map.keys(probabilities),
-             a.confidence
+             a.confidence,
+             opts
            ),
          true <- abs(Enum.sum(Map.values(probabilities)) - 1.0) <= 0.02 do
       %{
@@ -155,7 +162,23 @@ defmodule FountProbe.Jev do
     end
   end
 
-  def answer(_), do: %{"status" => "error", "reason" => "missing_or_unknown_answer"}
+  def answer(_, _), do: %{"status" => "error", "reason" => "missing_or_unknown_answer"}
+
+  def threshold_options(nil), do: []
+
+  def threshold_options(%{"thresholds" => thresholds}) when is_map(thresholds) do
+    [
+      supported: thresholds["support_probability"],
+      unsupported: thresholds["unsupported_probability"],
+      minimum_confidence: thresholds["minimum_confidence"],
+      minimum_margin: thresholds["minimum_margin"],
+      pass_mass: thresholds["pass_mass"],
+      fail_mass: thresholds["fail_mass"]
+    ]
+    |> Enum.reject(fn {_, value} -> is_nil(value) end)
+  end
+
+  def threshold_options(_), do: []
 
   defp error(id, reason),
     do: %{"input_id" => id, "status" => "error", "error" => reason, "answers" => %{}}

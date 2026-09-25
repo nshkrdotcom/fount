@@ -315,8 +315,9 @@ defmodule FountProbe.Projection do
         Enum.split_with(declared ++ inferred, fn entry ->
           entry["access"] == "writer_declared" or
             (entry["access"] == "text_supported" and is_number(entry["support_probability"]) and
-               entry["support_probability"] >= 0.8 and is_number(entry["confidence"]) and
-               entry["confidence"] >= 0.7)
+               entry["support_probability"] >= Map.get(entry, "access_support_threshold", 0.8) and
+               is_number(entry["confidence"]) and
+               entry["confidence"] >= Map.get(entry, "access_confidence_threshold", 0.7))
         end)
 
       units =

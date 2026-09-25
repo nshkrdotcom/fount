@@ -103,6 +103,8 @@ defmodule FountProbe.KnowledgeTrace do
                questions,
                Keyword.put_new(opts, :profile_id, "knowledge_trace")
              ) do
+        policy_opts = Jev.threshold_options(result["profile_asset"])
+        reveal_threshold = Keyword.get(policy_opts, :supported, 0.8)
         by_id = Map.new(result["entries"], &{&1["input_id"], &1})
 
         rows =
@@ -114,8 +116,13 @@ defmodule FountProbe.KnowledgeTrace do
                 value =
                   if value["type"] == "noul" and is_number(value["probability"]) do
                     {:ok, policy} =
-                      DecisionPolicy.noul(value["probability"],
-                        complete_context: entry["state"]["complete_context"]
+                      DecisionPolicy.noul(
+                        value["probability"],
+                        Keyword.put(
+                          policy_opts,
+                          :complete_context,
+                          entry["state"]["complete_context"]
+                        )
                       )
 
                     Map.merge(value, policy)
@@ -149,7 +156,7 @@ defmodule FountProbe.KnowledgeTrace do
                 }
               )
 
-            {:ok, boundary} = DecisionPolicy.boundary(curve, Map.get(params, "threshold", 0.8))
+            {:ok, boundary} = DecisionPolicy.boundary(curve, reveal_threshold)
             {subject_key(subject), boundary}
           end)
 
@@ -160,10 +167,42 @@ defmodule FountProbe.KnowledgeTrace do
               else: []
           end)
 
+        behavior =
+          case params["behavior_element_ids"] || [] do
+            [] ->
+              %{rows: [], evidence: [], errors: [], status: "complete", provenance: %{}}
+
+            ids ->
+              case FountProbe.KnowledgeTrace.Behavior.run(
+                     model,
+                     ids,
+                     params["subjects"],
+                     params["proposition"],
+                     clients,
+                     opts
+                   ) do
+                {:ok, result} ->
+                  result
+
+                {:error, reason} ->
+                  %{
+                    rows: [],
+                    evidence: [],
+                    errors: [
+                      %{"code" => "behavior_check_unavailable", "reason" => inspect(reason)}
+                    ],
+                    status: "partial",
+                    provenance: %{}
+                  }
+              end
+          end
+
         {:ok,
          Report.new(model, "knowledge_trace", params, %{
            status:
-             if(result["status"] == "complete" and access_errors == [],
+             if(
+               result["status"] == "complete" and access_errors == [] and
+                 behavior.status == "complete",
                do: "complete",
                else: "partial"
              ),
@@ -171,16 +210,24 @@ defmodule FountProbe.KnowledgeTrace do
              "rows" => rows,
              "curves" => curves,
              "knowledge_gaps" => gaps(rows),
+             "behavior_checks" => behavior.rows,
              "access_ledger" => Enum.flat_map(contexts, & &1.ledger),
-             "intended_reveal_point" => params["intended_reveal_point"]
+             "intended_reveal_point" => params["intended_reveal_point"],
+             "reveal_comparison" =>
+               if(params["intended_reveal_point"],
+                 do: assess_reveal(model, curves, params["intended_reveal_point"]),
+                 else: nil
+               )
            },
            evidence:
-             entries |> Enum.flat_map(& &1["evidence"]) |> Enum.uniq_by(& &1["evidence_id"]),
+             (Enum.flat_map(entries, & &1["evidence"]) ++ behavior.evidence)
+             |> Enum.uniq_by(& &1["evidence_id"]),
            coverage: %{"points" => params["points"], "subjects" => params["subjects"]},
-           errors: access_errors,
+           errors: access_errors ++ behavior.errors,
            provenance: %{
              "evaluation" => result,
-             "access" => Enum.map(contexts, & &1.access_trace)
+             "access" => Enum.map(contexts, & &1.access_trace),
+             "behavior" => behavior.provenance
            }
          })}
       end
@@ -217,6 +264,41 @@ defmodule FountProbe.KnowledgeTrace do
         {:ok, %{report | tool: "locate_boundary", request: params}}
       end
     end
+  end
+
+  @doc "Compares supported observation points with a writer-declared reveal point."
+  def assess_reveal(model, curves, intended_point) do
+    {:ok, intended_index} = Projection.cutoff(model, intended_point)
+
+    Map.new(curves, fn {subject, boundary} ->
+      first =
+        if boundary["status"] == "already_supported_at_entry",
+          do: get_in(boundary, ["curve", Elixir.Access.at(0), "point"]),
+          else: boundary["first_crossing"]
+
+      assessment =
+        cond do
+          boundary["status"] == "incomplete" ->
+            %{"status" => "unknown", "reason" => "incomplete_curve"}
+
+          is_nil(first) ->
+            %{"status" => "not_observed_in_checked_points"}
+
+          true ->
+            {:ok, observed_index} = Projection.cutoff(model, first)
+
+            status =
+              cond do
+                observed_index < intended_index -> "observed_before_intended"
+                observed_index == intended_index -> "at_intended"
+                true -> "observed_after_intended"
+              end
+
+            %{"status" => status, "observed_point" => first}
+        end
+
+      {subject, assessment}
+    end)
   end
 
   defp validate_points(model, points) when is_list(points) and points != [] do

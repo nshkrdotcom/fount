@@ -4,7 +4,8 @@ defmodule FountWorkshop.Rebase do
   alias FountWorkshop.Writing.{Footprint, ChangeGroups}
 
   def run(id, current, resolutions, services, opts \\ []) do
-    with {:ok, candidate} <- Store.call(services[:store], :candidate, [id]),
+    with :ok <- validate_resolutions(resolutions),
+         {:ok, candidate} <- Store.call(services[:store], :candidate, [id]),
          true <- current.id == candidate["screenplay_id"] or {:error, :different_screenplay},
          {:ok, base} <-
            Store.call(services[:store], :load_revision, [
@@ -15,20 +16,17 @@ defmodule FountWorkshop.Rebase do
       conflicts = conflicts(base, current, candidate, groups)
       choices = Map.get(resolutions, "choices", %{})
       unresolved = Enum.reject(conflicts, &Map.has_key?(choices, &1["group_id"]))
+      conflict_ids = MapSet.new(conflicts, & &1["group_id"])
 
       cond do
         resolutions["generate"] == true ->
           generate(current, candidate, conflicts, resolutions, services, opts)
 
+        Enum.any?(choices, fn {group, _} -> not MapSet.member?(conflict_ids, group) end) ->
+          {:error, :invalid_rebase_choice}
+
         unresolved != [] ->
           {:error, {:rebase_conflicts, unresolved}}
-
-        not is_map(choices) or
-            Enum.any?(choices, fn {group, choice} ->
-              group not in Enum.map(conflicts, & &1["group_id"]) or
-                  choice not in ["current", "candidate"]
-            end) ->
-          {:error, :invalid_rebase_choice}
 
         true ->
           ids = for g <- groups, choices[g["id"]] != "current", do: g["id"]
@@ -39,6 +37,24 @@ defmodule FountWorkshop.Rebase do
       end
     end
   end
+
+  def validate_resolutions(resolutions) when is_map(resolutions) do
+    choices = Map.get(resolutions, "choices", %{})
+    generate = Map.get(resolutions, "generate", false)
+
+    if Map.keys(resolutions) -- ~w(choices generate request) == [] and
+         is_map(choices) and
+         Enum.all?(choices, fn {id, choice} ->
+           is_binary(id) and id != "" and choice in ["current", "candidate"]
+         end) and
+         is_boolean(generate) and
+         (not generate or is_map(resolutions["request"])) and
+         (generate or is_nil(resolutions["request"])),
+       do: :ok,
+       else: {:error, :invalid_rebase_resolution}
+  end
+
+  def validate_resolutions(_), do: {:error, :invalid_rebase_resolution}
 
   def conflicts(base, current, candidate, groups) do
     Enum.flat_map(groups, fn g ->

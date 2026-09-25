@@ -1,0 +1,22 @@
+{
+  "id": "knowledge_behavior",
+  "version": 1,
+  "tool": "knowledge_trace",
+  "questions": [
+    {
+      "key": "requires_belief",
+      "type": "noul",
+      "instructions": "Does this selected behavior require the subject already to believe the proposition? Judge the behavior, not whether the proposition is true."
+    },
+    {
+      "key": "prior_belief",
+      "type": "noul",
+      "instructions": "Does the supplied prior accessible material support this subject already believing the proposition? Exclude the selected behavior itself and later text."
+    }
+  ],
+  "thresholds": {
+    "support_probability": 0.8,
+    "unsupported_probability": 0.2
+  },
+  "projection": "prior_accessible_material_plus_selected_behavior"
+}

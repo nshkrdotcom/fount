@@ -97,6 +97,9 @@ defmodule FountProbe.Access do
                  Keyword.put_new(opts, :profile_id, "access")
                ) do
           by_id = Map.new(result["entries"], &{&1["input_id"], &1})
+          thresholds = Jev.threshold_options(result["profile_asset"])
+          support_threshold = Keyword.get(thresholds, :supported, 0.8)
+          confidence_threshold = Keyword.get(thresholds, :minimum_confidence, 0.7)
 
           ledger =
             Enum.map(entries, fn entry ->
@@ -106,7 +109,8 @@ defmodule FountProbe.Access do
 
               status =
                 cond do
-                  is_number(p) and p >= 0.8 and is_number(confidence) and confidence >= 0.7 ->
+                  is_number(p) and p >= support_threshold and is_number(confidence) and
+                      confidence >= confidence_threshold ->
                     "text_supported"
 
                   answer["choice"] == "plausible" ->
@@ -122,7 +126,9 @@ defmodule FountProbe.Access do
               Map.merge(entry, %{
                 "access" => status,
                 "support_probability" => p,
-                "confidence" => confidence
+                "confidence" => confidence,
+                "access_support_threshold" => support_threshold,
+                "access_confidence_threshold" => confidence_threshold
               })
             end)
 

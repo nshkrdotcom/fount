@@ -24,13 +24,14 @@ defmodule FountWorkshop.Export.PDF do
     renderer = Keyword.get(opts, :renderer, @renderer)
     output_path = Path.expand(output_path)
 
-    with :ok <- ensure_renderer(renderer),
+    with {:ok, settings} <- settings(opts),
+         :ok <- ensure_renderer(renderer),
          :ok <- File.mkdir_p(Path.dirname(output_path)) do
       input_path = output_path <> ".source-#{System.unique_integer([:positive])}.fountain"
 
       try do
         with :ok <- File.write(input_path, doc.source.raw, [:binary]),
-             :ok <- run_renderer(renderer, input_path, output_path),
+             :ok <- run_renderer(renderer, input_path, output_path, settings),
              {:ok, pdf} <- File.read(output_path),
              :ok <- verify_pdf(pdf),
              {:ok, metadata} <- inspect_pdf(output_path) do
@@ -45,15 +46,11 @@ defmodule FountWorkshop.Export.PDF do
              sha256: Fount.ID.hash(pdf),
              source_revision: doc.revision.id,
              renderer: "afterwriting 1.17.3",
+             settings: settings,
              settings_sha256:
-               Fount.Writing.CanonicalJSON.hash(%{
-                 "renderer" => "afterwriting 1.17.3",
-                 "print_profile" => "usletter",
-                 "font_family" => "CourierPrime",
-                 "scene_numbers" => "none",
-                 "print_notes" => false,
-                 "dual_dialogue" => true
-               }),
+               Fount.Writing.CanonicalJSON.hash(
+                 Map.put(settings, "renderer", "afterwriting 1.17.3")
+               ),
              source_sha256: :crypto.hash(:sha256, doc.source.raw) |> Base.encode16(case: :lower)
            }}
         end
@@ -67,24 +64,15 @@ defmodule FountWorkshop.Export.PDF do
     if File.regular?(path), do: :ok, else: {:error, :renderer_not_installed}
   end
 
-  defp run_renderer(renderer, input_path, output_path) do
-    args = [
-      "--source",
-      input_path,
-      "--pdf",
-      output_path,
-      "--overwrite",
-      "--setting",
-      "print_profile=usletter",
-      "--setting",
-      "font_family=CourierPrime",
-      "--setting",
-      "scenes_numbers=none",
-      "--setting",
-      "print_notes=false",
-      "--setting",
-      "use_dual_dialogue=true"
-    ]
+  defp run_renderer(renderer, input_path, output_path, settings) do
+    args =
+      [
+        "--source",
+        input_path,
+        "--pdf",
+        output_path,
+        "--overwrite"
+      ] ++ Enum.flat_map(settings, fn {key, value} -> ["--setting", "#{key}=#{value}"] end)
 
     case System.cmd(renderer, args, stderr_to_stdout: true) do
       {_output, 0} -> :ok
@@ -105,7 +93,11 @@ defmodule FountWorkshop.Export.PDF do
          pages: pages,
          blank_pages: blank_pages(extracted, pages),
          page_size:
-           if(String.contains?(info, "612 x 792 pts (letter)"), do: :us_letter, else: :other),
+           cond do
+             String.contains?(info, "612 x 792 pts (letter)") -> :us_letter
+             String.contains?(info, "(A4)") -> :a4
+             true -> :other
+           end,
          courier_prime?: String.contains?(fonts, "CourierPrime")
        }}
     end
@@ -151,5 +143,31 @@ defmodule FountWorkshop.Export.PDF do
       [number] -> {:ok, String.to_integer(number)}
       _ -> {:error, :page_count_unavailable}
     end
+  end
+
+  defp settings(opts) do
+    allowed =
+      ~w(print_profile font_family scenes_numbers print_notes use_dual_dialogue print_title_page)
+
+    passed = Keyword.keys(opts) |> Enum.map(&to_string/1)
+    # Other keywords are used by the caller's renderer or output orchestration.
+    selected = Keyword.take(opts, Enum.map(allowed, &String.to_atom/1))
+
+    values = %{
+      "print_profile" => Keyword.get(selected, :print_profile, "usletter"),
+      "font_family" => Keyword.get(selected, :font_family, "CourierPrime"),
+      "scenes_numbers" => Keyword.get(selected, :scenes_numbers, "none"),
+      "print_notes" => Keyword.get(selected, :print_notes, false),
+      "use_dual_dialogue" => Keyword.get(selected, :use_dual_dialogue, true),
+      "print_title_page" => Keyword.get(selected, :print_title_page, true)
+    }
+
+    valid =
+      values["print_profile"] in ~w(usletter a4) and
+        values["font_family"] in ~w(Courier CourierPrime CourierPrimeCyrillic) and
+        values["scenes_numbers"] in ~w(none left right both) and
+        Enum.all?(~w(print_notes use_dual_dialogue print_title_page), &is_boolean(values[&1]))
+
+    if valid, do: {:ok, values}, else: {:error, {:invalid_pdf_settings, passed -- allowed}}
   end
 end

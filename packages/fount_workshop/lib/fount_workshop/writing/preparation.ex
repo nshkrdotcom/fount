@@ -8,7 +8,15 @@ defmodule FountWorkshop.Writing.Preparation do
          {:ok, context} <- historical(context, model, request, services) do
       {requests, extra} = inspections(model, request, context)
       clients = Store.clients(services)
-      {:ok, reports} = FountProbe.execute(model, requests, clients, opts)
+      report_reader = fn id -> Store.call(services[:store], :report, [id]) end
+
+      {:ok, reports} =
+        FountProbe.execute(
+          model,
+          requests,
+          clients,
+          Keyword.put_new(opts, :report_reader, report_reader)
+        )
 
       evidence =
         Enum.uniq_by(
@@ -29,6 +37,66 @@ defmodule FountWorkshop.Writing.Preparation do
       if request["workflow"] == "investigate",
         do: investigate(model, request, context, services, opts),
         else: {:ok, context}
+    end
+  end
+
+  @doc "Returns only inspections missing or incomplete in a saved preparation."
+  def retry_requests(model, request, context) do
+    {requests, _} = inspections(model, request, context)
+
+    previous =
+      (context.data["inspections"] || [])
+      |> Map.new(fn report -> {get_in(report, ["provenance", "request_id"]), report} end)
+
+    Enum.filter(requests, fn request ->
+      case previous[request["id"]] do
+        %{"status" => "complete"} -> false
+        _ -> true
+      end
+    end)
+  end
+
+  def retry_failed(model, request, context, services, opts) do
+    requests = retry_requests(model, request, context)
+
+    if requests == [] do
+      {:ok, context}
+    else
+      clients = Store.clients(services)
+      report_reader = fn id -> Store.call(services[:store], :report, [id]) end
+
+      with {:ok, reports} <-
+             FountProbe.execute(
+               model,
+               requests,
+               clients,
+               Keyword.put_new(opts, :report_reader, report_reader)
+             ) do
+        replacements = Map.new(reports, &{&1.provenance["request_id"], Report.to_map(&1)})
+        previous = context.data["inspections"] || []
+
+        updated =
+          Enum.map(previous, fn report ->
+            Map.get(replacements, get_in(report, ["provenance", "request_id"]), report)
+          end)
+
+        seen = MapSet.new(updated, &get_in(&1, ["provenance", "request_id"]))
+
+        updated =
+          updated ++ for({id, report} <- replacements, not MapSet.member?(seen, id), do: report)
+
+        {:ok,
+         %{
+           context
+           | reports: reports,
+             evidence:
+               Enum.uniq_by(
+                 context.evidence ++ Enum.flat_map(reports, & &1.evidence),
+                 & &1["evidence_id"]
+               ),
+             data: Map.put(context.data, "inspections", updated)
+         }}
+      end
     end
   end
 
@@ -164,16 +232,7 @@ defmodule FountWorkshop.Writing.Preparation do
         }
       end)
 
-    conflicts =
-      for {a, i} <- Enum.with_index(notes ++ external),
-          {b, j} <- Enum.with_index(notes ++ external),
-          i < j,
-          a["target"] && a["target"] == b["target"],
-          do: %{
-            "note_ids" => [a["id"], b["id"]],
-            "status" => "potential_conflict",
-            "instructions" => [a["value"], b["value"]]
-          }
+    conflicts = FountWorkshop.Writing.NoteConflicts.detect(model, notes ++ external)
 
     {[
        request("note-context", "scene_mechanics", %{
@@ -272,8 +331,13 @@ defmodule FountWorkshop.Writing.Preparation do
   defp request(id, tool, params), do: %{"id" => id, "tool" => tool, "params" => params}
 
   defp historical(context, model, %{"workflow" => "recover", "options" => opts}, services) do
+    source_screenplay_id = Map.get(opts, "source_screenplay_id", model.id)
+
     with {:ok, source} <-
-           Store.call(services[:store], :load_revision, [model.id, opts["source_revision_id"]]),
+           Store.call(services[:store], :load_revision, [
+             source_screenplay_id,
+             opts["source_revision_id"]
+           ]),
          {:ok, units} <-
            Projection.select(source, %{"targets" => opts["source_targets"]},
              include_omitted: true,
@@ -290,6 +354,7 @@ defmodule FountWorkshop.Writing.Preparation do
       data =
         context.data
         |> Map.put("historical_source", %{
+          "screenplay_id" => source.id,
           "revision_id" => source.revision.id,
           "targets" => opts["source_targets"],
           "pages" => units,
@@ -300,6 +365,11 @@ defmodule FountWorkshop.Writing.Preparation do
               end),
               &scene_spec(source, &1)
             ),
+          "speaker_links" =>
+            source.mentions
+            |> Map.values()
+            |> Enum.filter(&(&1.role == :speaker_cue and &1.status == :confirmed))
+            |> Map.new(&{&1.element_id, &1.character_id}),
           "cast" => Fount.Screenplay.Model.plain(Map.values(source.cast))
         })
 
@@ -307,7 +377,8 @@ defmodule FountWorkshop.Writing.Preparation do
        Map.merge(context, %{
          data: data,
          restore_registry: registry,
-         source_models: [model, source],
+         source_models: if(source.id == model.id, do: [model, source], else: [model]),
+         historical_models: [source],
          evidence:
            Enum.uniq_by(context.evidence ++ Projection.evidence(units), & &1["evidence_id"])
        })}
@@ -330,23 +401,47 @@ defmodule FountWorkshop.Writing.Preparation do
     concern = request["options"]["concern"] || request["instruction"]
     clients = Store.clients(services)
 
+    probe_opts =
+      Keyword.put_new(opts, :report_reader, fn id ->
+        Store.call(services[:store], :report, [id])
+      end)
+
+    followup_limit = max(0, Keyword.get(opts, :max_investigation_followups, 1))
+
     with {:ok, plan} <-
            FountProbe.plan(
              model,
              concern,
              clients,
-             Keyword.put(opts, :selection, context.selection)
+             Keyword.put(probe_opts, :selection, context.selection)
            ),
-         {:ok, reports} <- FountProbe.execute(model, plan.data["requests"], clients, opts),
-         {:ok, explanation} <-
+         {:ok, reports} <- FountProbe.execute(model, plan.data["requests"], clients, probe_opts),
+         {:ok, first_explanation} <-
            FountProbe.explain(
              model,
              concern,
              reports,
              clients,
-             Keyword.put(opts, :hypotheses, plan.data["hypotheses"])
+             probe_opts
+             |> Keyword.put(:hypotheses, plan.data["hypotheses"])
+             |> Keyword.put(:followups_remaining, if(followup_limit > 0, do: 3, else: 0))
+           ),
+         {:ok, followup_reports, explanation} <-
+           investigation_followup(
+             model,
+             concern,
+             plan,
+             reports,
+             first_explanation,
+             clients,
+             probe_opts,
+             followup_limit
            ) do
-      all = [plan | reports] ++ [explanation]
+      all =
+        [plan | reports] ++
+          [first_explanation] ++
+          followup_reports ++
+          if(explanation.id == first_explanation.id, do: [], else: [explanation])
 
       {:ok,
        %{
@@ -361,8 +456,43 @@ defmodule FountWorkshop.Writing.Preparation do
              context.data
              |> Map.put("investigation", explanation.data)
              |> Map.put("initial_hypotheses", plan.data["hypotheses"])
+             |> Map.put(
+               "investigation_followup_count",
+               if(followup_reports == [], do: 0, else: 1)
+             )
        }
        |> Map.put(:investigation_strategies, explanation.data["strategies"])}
+    end
+  end
+
+  defp investigation_followup(_, _, _, _, explanation, _, _, 0),
+    do: {:ok, [], explanation}
+
+  defp investigation_followup(model, concern, plan, reports, explanation, clients, opts, _) do
+    requests = explanation.data["follow_up_requests"] || []
+    initial_ids = MapSet.new(plan.data["requests"], & &1["id"])
+
+    cond do
+      requests == [] ->
+        {:ok, [], explanation}
+
+      Enum.any?(requests, &MapSet.member?(initial_ids, &1["id"])) ->
+        {:error, :duplicate_investigation_request_id}
+
+      true ->
+        with {:ok, followup_reports} <- FountProbe.execute(model, requests, clients, opts),
+             {:ok, revised} <-
+               FountProbe.explain(
+                 model,
+                 concern,
+                 reports ++ followup_reports,
+                 clients,
+                 opts
+                 |> Keyword.put(:hypotheses, explanation.data["revised_hypotheses"])
+                 |> Keyword.put(:followups_remaining, 0)
+               ) do
+          {:ok, followup_reports, revised}
+        end
     end
   end
 end

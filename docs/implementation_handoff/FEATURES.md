@@ -1,5 +1,7 @@
 # Acceptance coverage - source state, not runtime certification
 
+This is the original source-only coverage snapshot. Later local QA and stage 2 results are recorded in [LOCAL_QA_2026-09-24.md](LOCAL_QA_2026-09-24.md) and [STAGE2_STATUS_2026-09-24.md](STAGE2_STATUS_2026-09-24.md); the original acceptance cases below remain in force.
+
 Every row below is **unverified in this pass**. "Implemented" refers to actual source paths, not a claim that a tool or workflow meets every acceptance condition. File paths in Core/Probe/Workshop are relative to their corresponding package unless stated otherwise. Known gaps are part of the handoff, not waived requirements.
 
 ## Product foundations F01-F09

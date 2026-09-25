@@ -143,11 +143,26 @@ defmodule FountWorkshop.Session do
           end
         end)
 
-      with {:ok, sources} <- sources do
+      historical_keys = cached["historical_revisions"] || []
+
+      historical =
+        Enum.reduce_while(historical_keys, {:ok, []}, fn %{
+                                                           "screenplay_id" => sid,
+                                                           "revision_id" => rid
+                                                         },
+                                                         {:ok, acc} ->
+          case Store.call(services[:store], :load_revision, [sid, rid]) do
+            {:ok, source} -> {:cont, {:ok, acc ++ [source]}}
+            error -> {:halt, error}
+          end
+        end)
+
+      with {:ok, sources} <- sources,
+           {:ok, historical} <- historical do
         registry =
           if cached["historical"],
             do:
-              sources
+              (sources ++ historical)
               |> Enum.flat_map(
                 &(&1.ir.elements ++ &1.ir.scenes ++ &1.ir.dialogue_blocks ++ Map.values(&1.cast))
               )
@@ -160,6 +175,7 @@ defmodule FountWorkshop.Session do
           selection: cached["selection"],
           reports: [],
           source_models: sources,
+          historical_models: historical,
           restore_registry: registry
         }
 
@@ -168,10 +184,51 @@ defmodule FountWorkshop.Session do
             do: Map.put(context, :investigation_strategies, cached["investigation_strategies"]),
             else: context
 
-        {:ok, context, session}
+        if get_in(session, ["progress", "preparation", "status"]) == "partial" do
+          retry_cached(model, session, context, services, opts)
+        else
+          {:ok, context, session}
+        end
       end
     else
       prepare_fresh(model, session, services, opts)
+    end
+  end
+
+  defp retry_cached(model, session, context, services, opts) do
+    requests = Preparation.retry_requests(model, session["request"], context)
+
+    if requests == [] do
+      {:ok, context, session}
+    else
+      with {:ok, retried} <-
+             Preparation.retry_failed(model, session["request"], context, services, opts),
+           {:ok, report_ids} <-
+             save_reports(retried.reports, session["id"], services, retried.source_models) do
+        status =
+          if Enum.all?(retried.data["inspections"], &(&1["status"] == "complete")),
+            do: "complete",
+            else: "partial"
+
+        updated =
+          session
+          |> put_in(["progress", "preparation", "status"], status)
+          |> put_in(
+            ["progress", "preparation", "context_sha256"],
+            Fount.Writing.CanonicalJSON.hash(retried.data)
+          )
+          |> put_in(["progress", "preparation", "context", "data"], retried.data)
+          |> put_in(["progress", "preparation", "context", "evidence"], retried.evidence)
+          |> put_in(
+            ["progress", "report_ids"],
+            Enum.uniq((session["progress"]["report_ids"] || []) ++ report_ids)
+          )
+          |> put_in(["progress", "spent"], Budget.snapshot(opts[:budget]))
+
+        with {:ok, saved} <- Store.call(services[:store], :save_session, [updated]) do
+          {:ok, retried, saved}
+        end
+      end
     end
   end
 
@@ -197,6 +254,14 @@ defmodule FountWorkshop.Session do
             "evidence" => context.evidence,
             "selection" => context.selection,
             "source_revision_ids" => Enum.map(context.source_models, & &1.revision.id),
+            "historical_revisions" =>
+              Enum.map(
+                Map.get(context, :historical_models, []),
+                &%{
+                  "screenplay_id" => &1.id,
+                  "revision_id" => &1.revision.id
+                }
+              ),
             "historical" => Map.has_key?(context, :restore_registry),
             "investigation_strategies" => Map.get(context, :investigation_strategies)
           }

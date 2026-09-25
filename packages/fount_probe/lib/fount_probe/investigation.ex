@@ -9,7 +9,22 @@ defmodule FountProbe.Investigation do
       schema = %{
         "type" => "object",
         "properties" => %{
-          "hypotheses" => strings(),
+          "hypotheses" => %{
+            "type" => "array",
+            "minItems" => 1,
+            "maxItems" => 6,
+            "items" => %{
+              "type" => "object",
+              "properties" => %{
+                "id" => nonempty(),
+                "claim" => nonempty(),
+                "reason" => nonempty(),
+                "request_ids" => strings()
+              },
+              "required" => ~w(id claim reason request_ids),
+              "additionalProperties" => false
+            }
+          },
           "requests" => %{
             "type" => "array",
             "minItems" => 1,
@@ -32,16 +47,7 @@ defmodule FountProbe.Investigation do
 
       validate = fn object ->
         with :ok <- Fount.Writing.Schema.validate(schema, object),
-             true <-
-               length(Enum.uniq_by(object["requests"], & &1["id"])) == length(object["requests"]) or
-                 {:error, :duplicate_request_id} do
-          Enum.reduce_while(object["requests"], :ok, fn request, :ok ->
-            case Catalog.validate(model, request["tool"], request["params"]) do
-              :ok -> {:cont, :ok}
-              error -> {:halt, error}
-            end
-          end)
-        end
+             do: validate_plan(model, object)
       end
 
       prompt =
@@ -65,6 +71,34 @@ defmodule FountProbe.Investigation do
     end
   end
 
+  def validate_plan(model, %{"hypotheses" => hypotheses, "requests" => requests})
+      when is_list(hypotheses) and is_list(requests) do
+    request_ids = Enum.map(requests, &if(is_map(&1), do: &1["id"], else: nil))
+    hypothesis_ids = Enum.map(hypotheses, &if(is_map(&1), do: &1["id"], else: nil))
+
+    cond do
+      length(requests) < 1 or length(requests) > 6 or
+        length(hypotheses) < 1 or length(hypotheses) > 6 ->
+        {:error, :invalid_investigation_size}
+
+      not unique_nonempty?(request_ids) or not unique_nonempty?(hypothesis_ids) ->
+        {:error, :duplicate_or_invalid_investigation_id}
+
+      not Enum.all?(hypotheses, fn h ->
+        is_map(h) and is_binary(h["claim"]) and h["claim"] != "" and
+          is_binary(h["reason"]) and h["reason"] != "" and
+          is_list(h["request_ids"]) and h["request_ids"] != [] and
+            Enum.all?(h["request_ids"], &(&1 in request_ids))
+      end) ->
+        {:error, :invalid_hypothesis}
+
+      true ->
+        validate_requests(model, requests)
+    end
+  end
+
+  def validate_plan(_, _), do: {:error, :invalid_investigation_plan}
+
   def explain(model, concern, reports, clients, opts \\ []) do
     evidence = reports |> Enum.flat_map(& &1.evidence) |> Enum.uniq_by(& &1["evidence_id"])
     ids = Enum.map(evidence, & &1["evidence_id"])
@@ -73,9 +107,38 @@ defmodule FountProbe.Investigation do
       "type" => "object",
       "properties" => %{
         "answer" => %{"type" => "string"},
-        "revised_hypotheses" => strings(),
+        "revised_hypotheses" => %{
+          "type" => "array",
+          "items" => %{
+            "type" => "object",
+            "properties" => %{
+              "id" => nonempty(),
+              "claim" => nonempty(),
+              "reason" => nonempty(),
+              "status" => %{"enum" => ~w(supported contradicted unresolved)},
+              "evidence_ids" => strings()
+            },
+            "required" => ~w(id claim reason status evidence_ids),
+            "additionalProperties" => false
+          }
+        },
         "uncertainties" => strings(),
         "evidence_ids" => strings(),
+        "follow_up_requests" => %{
+          "type" => "array",
+          "maxItems" => 3,
+          "items" => %{
+            "type" => "object",
+            "properties" => %{
+              "id" => nonempty(),
+              "tool" => %{"enum" => Catalog.names()},
+              "params" => %{"type" => "object"},
+              "reason" => nonempty()
+            },
+            "required" => ~w(id tool params reason),
+            "additionalProperties" => false
+          }
+        },
         "strategies" => %{
           "type" => "array",
           "minItems" => 3,
@@ -98,28 +161,29 @@ defmodule FountProbe.Investigation do
       "additionalProperties" => false
     }
 
+    remaining = Keyword.get(opts, :followups_remaining, 0)
+
     validate = fn object ->
       with :ok <- Fount.Writing.Schema.validate(schema, object),
-           true <-
-             length(Enum.uniq_by(object["strategies"], & &1["id"])) == 3 or
-               {:error, :duplicate_strategy_id},
-           true <-
-             Enum.all?(
-               object["evidence_ids"] ++ Enum.flat_map(object["strategies"], & &1["evidence_ids"]),
-               &(&1 in ids)
-             ) or {:error, :uninspected_evidence} do
-        :ok
-      end
+           do:
+             validate_explanation(
+               model,
+               object,
+               ids,
+               remaining,
+               Enum.map(Keyword.get(opts, :hypotheses, []), & &1["id"])
+             )
     end
 
     payload = %{
       "concern" => concern,
       "initial_hypotheses" => Keyword.get(opts, :hypotheses, []),
-      "reports" => Enum.map(reports, &Report.to_map/1)
+      "reports" => Enum.map(reports, &Report.to_map/1),
+      "followups_remaining" => remaining
     }
 
     prompt =
-      "Answer the creative question using the actual reports. Revise hypotheses that the evidence contradicts. Missing results are unknown. Cite exact registry IDs; distinguish model interpretation from established text. Offer exactly three genuinely contrasting writing remedies with causal beats, no ranking or universal quality score. Do not claim any pages have been rewritten yet.\n" <>
+      "Answer the creative question using the actual reports. Return revised hypotheses as records with id, claim, reason, supported/contradicted/unresolved status, and evidence IDs. Missing results are unknown. Cite exact registry IDs; distinguish model interpretation from established text. Offer exactly three genuinely contrasting writing remedies with causal beats, no ranking or universal quality score. You may request one follow-up batch only when the provided remaining count permits it; otherwise return an empty follow_up_requests list. Do not claim any pages have been rewritten yet.\n" <>
         Jason.encode!(payload)
 
     with {:ok, value, traces} <-
@@ -128,13 +192,81 @@ defmodule FountProbe.Investigation do
        Report.new(model, "investigation_explanation", %{"concern" => concern}, %{
          status:
            if(Enum.all?(reports, &(&1.status == "complete")), do: "complete", else: "partial"),
-         data: value,
+         data: Map.put_new(value, "follow_up_requests", []),
          evidence: evidence,
          provenance: %{"completions" => traces},
          source_revision_ids: reports |> Enum.flat_map(& &1.source_revision_ids) |> Enum.uniq()
        })}
     end
   end
+
+  def validate_explanation(model, object, ids, remaining, initial_ids \\ [])
+
+  def validate_explanation(model, object, ids, remaining, initial_ids) when is_map(object) do
+    strategies = object["strategies"]
+    hypotheses = object["revised_hypotheses"]
+    followups = Map.get(object, "follow_up_requests", [])
+
+    cond do
+      not is_list(strategies) or length(strategies) != 3 or
+          not unique_nonempty?(Enum.map(strategies, &if(is_map(&1), do: &1["id"], else: nil))) ->
+        {:error, :invalid_strategy_ids}
+
+      not is_list(hypotheses) or hypotheses == [] or
+          not unique_nonempty?(Enum.map(hypotheses, &if(is_map(&1), do: &1["id"], else: nil))) ->
+        {:error, :invalid_hypothesis_ids}
+
+      initial_ids != [] and
+          MapSet.new(Enum.map(hypotheses, & &1["id"])) != MapSet.new(initial_ids) ->
+        {:error, :unrevised_hypotheses}
+
+      not Enum.all?(hypotheses, fn h ->
+        is_map(h) and is_binary(h["claim"]) and String.trim(h["claim"]) != "" and
+          is_binary(h["reason"]) and String.trim(h["reason"]) != "" and
+          h["status"] in ~w(supported contradicted unresolved) and is_list(h["evidence_ids"])
+      end) ->
+        {:error, :invalid_hypothesis}
+
+      not is_list(followups) or length(followups) > min(max(remaining, 0), 3) ->
+        {:error, :followup_limit_exceeded}
+
+      not unique_nonempty?(Enum.map(followups, &if(is_map(&1), do: &1["id"], else: nil))) ->
+        {:error, :duplicate_followup_id}
+
+      not Enum.all?(
+        List.wrap(object["evidence_ids"]) ++
+            Enum.flat_map(strategies ++ hypotheses, &List.wrap(&1["evidence_ids"])),
+        &(&1 in ids)
+      ) ->
+        {:error, :uninspected_evidence}
+
+      true ->
+        validate_requests(model, followups)
+    end
+  end
+
+  def validate_explanation(_, _, _, _, _), do: {:error, :invalid_investigation_explanation}
+
+  defp validate_requests(model, requests) do
+    Enum.reduce_while(requests, :ok, fn request, :ok ->
+      if is_map(request) and is_binary(request["id"]) and is_binary(request["tool"]) and
+           is_map(request["params"]) do
+        case Catalog.validate(model, request["tool"], request["params"]) do
+          :ok -> {:cont, :ok}
+          error -> {:halt, error}
+        end
+      else
+        {:halt, {:error, :invalid_investigation_request}}
+      end
+    end)
+  end
+
+  defp unique_nonempty?(ids),
+    do:
+      Enum.all?(ids, &(is_binary(&1) and String.trim(&1) != "")) and
+        length(ids) == length(Enum.uniq(ids))
+
+  defp nonempty, do: %{"type" => "string", "minLength" => 1}
 
   defp strings, do: %{"type" => "array", "items" => %{"type" => "string"}}
 end

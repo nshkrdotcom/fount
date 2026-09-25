@@ -358,11 +358,51 @@ defmodule Fount.Persistence do
         {:error, reason} -> rollback(repo, reason)
       end
 
+      session =
+        one(repo, "SELECT workflow,request FROM writing_sessions WHERE id=$1::uuid AND screenplay_id=$2::uuid", [
+          row["session_id"],
+          model.id
+        ]) || rollback(repo, :candidate_session_mismatch)
+
+      historical_source =
+        if session["workflow"] == "recover",
+          do: get_in(session["request"], ["options", "source_revision_id"]),
+          else: nil
+
+      historical_source =
+        if is_binary(historical_source) and
+             one(repo, "SELECT id FROM revisions WHERE screenplay_id=$1::uuid AND id=$2::uuid", [
+               model.id,
+               historical_source
+             ]),
+           do: [historical_source],
+           else: []
+
+      permitted_sources =
+        [row["base_revision_id"], row["result_revision_id"] | historical_source]
+        |> MapSet.new()
+
       Enum.each(stored["report_ids"], fn id ->
         report =
-          one(repo, "SELECT id FROM analysis_reports WHERE id=$1::uuid AND screenplay_id=$2::uuid", [id, model.id])
+          one(
+            repo,
+            "SELECT id,primary_revision_id,session_id FROM analysis_reports WHERE id=$1::uuid AND screenplay_id=$2::uuid",
+            [id, model.id]
+          )
 
         unless report, do: rollback(repo, :missing_review_report)
+
+        sources =
+          all(
+            repo,
+            "SELECT revision_id FROM analysis_report_sources WHERE screenplay_id=$1::uuid AND report_id=$2::uuid",
+            [model.id, id]
+          )
+
+        unless (is_nil(report["session_id"]) or report["session_id"] == row["session_id"]) and
+                 MapSet.member?(permitted_sources, report["primary_revision_id"]) and
+                 Enum.all?(sources, &MapSet.member?(permitted_sources, &1["revision_id"])),
+               do: rollback(repo, :report_lineage_mismatch)
       end)
 
       cond do
@@ -802,6 +842,8 @@ defmodule Fount.Persistence do
                "artifact_id",
                "base_revision_id",
                "result_revision_id",
+               "primary_revision_id",
+               "revision_id",
                "session_id"
              ] ->
           {:ok, id} = Ecto.UUID.load(value)

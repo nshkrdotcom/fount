@@ -56,6 +56,44 @@ defmodule FountWorkshop.CandidateContinuationTest do
     assert selected["lineage"] != []
   end
 
+  test "a note remains unresolved after selecting again from a partial candidate" do
+    original = base()
+    scene = hd(original.ir.scenes)
+
+    {:ok, m, changes} =
+      Fount.Screenplay.apply(original, [
+        %{
+          "kind" => "put_authored_item",
+          "value" => %{
+            "local_id" => "new:note",
+            "namespace" => "writer",
+            "kind" => "note",
+            "target" => %{"kind" => "scene", "id" => scene.id},
+            "value" => %{"instruction" => "Repair both beats"},
+            "dependencies" => [],
+            "status" => "active",
+            "provenance" => %{}
+          }
+        }
+      ])
+
+    note_id = changes.local_references["new:note"]
+    a = Enum.find(m.ir.elements, &(&1.type == :action))
+    d = Enum.find(m.ir.elements, &(&1.type == :dialogue))
+
+    groups = [
+      Map.put(group("first", replace(a, "Mara gives Dan the key.")), "addresses_notes", [note_id]),
+      Map.put(group("second", replace(d, "I'll take it.")), "addresses_notes", [note_id])
+    ]
+
+    assert {:ok, candidate} = Candidate.compile(m, proposal(m, groups))
+    assert candidate["screenplay"].authored_items[note_id]["status"] == "resolved"
+    assert {:ok, partial} = Candidate.select(m, candidate, ["first"])
+    assert partial["screenplay"].authored_items[note_id]["status"] == "active"
+    assert {:ok, again} = Candidate.select(m, partial, ["first"])
+    assert again["screenplay"].authored_items[note_id]["status"] == "active"
+  end
+
   test "two alternatives touching the same passage require a winner" do
     m = base()
     a = Enum.find(m.ir.elements, &(&1.type == :action))

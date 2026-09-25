@@ -1,6 +1,6 @@
 # Verification provenance
 
-For the later local QA execution, see [LOCAL_QA_2026-09-24.md](LOCAL_QA_2026-09-24.md). The historical source-only and earlier-run records below remain separate.
+For the later local QA execution, see [LOCAL_QA_2026-09-24.md](LOCAL_QA_2026-09-24.md). For subsequent feature implementation and its checks, see [STAGE2_STATUS_2026-09-24.md](STAGE2_STATUS_2026-09-24.md). The historical source-only and earlier-run records below remain separate.
 
 ## This continuation pass: application execution NOT RUN
 

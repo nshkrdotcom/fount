@@ -2,7 +2,7 @@ defmodule FountWorkshop.Candidate do
   @moduledoc "Actual screenplay branches compiled from typed change groups, with explicit selection and source attribution."
   alias Fount.{Screenplay, ID}
   alias Fount.Writing.{Schema, LocalReferences}
-  alias FountWorkshop.Writing.{ChangeGroups, Footprint}
+  alias FountWorkshop.Writing.{ChangeGroups, Footprint, Scope}
 
   def compile(base, proposal, opts \\ []) do
     with :ok <- Schema.validate("proposal.schema.json", proposal),
@@ -12,9 +12,16 @@ defmodule FountWorkshop.Candidate do
          {:ok, groups} <- ChangeGroups.order(proposal["groups"]),
          :ok <- citations(groups, Keyword.get(opts, :evidence, [])),
          {:ok, operations} <- ChangeGroups.operations(groups),
+         :ok <-
+           Scope.operations(
+             base,
+             operations,
+             Keyword.get(opts, :editable_selection),
+             Keyword.get(opts, :placement)
+           ),
          {:ok, draft, changes} <- Screenplay.apply(base, operations, opts),
          true <- draft.revision.id != base.revision.id or {:error, :proposal_contains_no_change},
-         :ok <- scope(base, draft, Keyword.get(opts, :editable_selection)),
+         :ok <- Scope.result(base, draft, Keyword.get(opts, :editable_selection)),
          :ok <- placement(base, draft, Keyword.get(opts, :placement)),
          :ok <- target_scene_count(base, draft, opts) do
       # Resolution is an authored result of accepted groups, never a model assertion.
@@ -45,6 +52,7 @@ defmodule FountWorkshop.Candidate do
         "checks" => checks,
         "report_ids" => [],
         "constraints" => constraints,
+        "all_change_groups" => all_groups,
         "unresolved_questions" => proposal["unresolved_questions"],
         "origin_by_group" => Map.new(groups, &{&1["id"], &1["origin"]})
       }
@@ -82,7 +90,10 @@ defmodule FountWorkshop.Candidate do
         base,
         next,
         inherited(candidate, opts)
-        |> Keyword.put(:all_groups, original["groups"])
+        |> Keyword.put(
+          :all_groups,
+          candidate["provenance"]["all_change_groups"] || original["groups"]
+        )
         |> Keyword.put(:lineage, [
           %{"candidate_id" => candidate["id"], "group_ids" => group_ids, "operation" => "select"}
         ])
@@ -363,6 +374,7 @@ defmodule FountWorkshop.Candidate do
       |> Keyword.put_new(:evidence, c["provenance"]["evidence"] || [])
       |> Keyword.put_new(:constraints, c["provenance"]["constraints"] || [])
       |> Keyword.put_new(:strategy, c["strategy"] || %{})
+      |> Keyword.put_new(:all_groups, c["provenance"]["all_change_groups"] || c["change_groups"])
 
   defp origins(groups, opts) do
     if Enum.any?(groups, &(&1["origin"] in ["writer_edit", "mixed"])) and
@@ -411,26 +423,6 @@ defmodule FountWorkshop.Candidate do
       end)
 
     %{draft | authored_items: items} |> Fount.Screenplay.Model.refresh()
-  end
-
-  defp scope(_, _, nil), do: :ok
-
-  defp scope(base, draft, selection) do
-    with {:ok, allowed} <- FountProbe.Projection.selected_ids(base, selection) do
-      changed =
-        Enum.filter(base.ir.elements, fn e ->
-          next = Fount.Query.node(draft, e.id)
-
-          is_nil(next) or
-            Map.take(next, [:text, :type, :attrs]) != Map.take(e, [:text, :type, :attrs])
-        end)
-
-      outside = Enum.reject(changed, &MapSet.member?(allowed, &1.id))
-
-      if outside == [],
-        do: :ok,
-        else: {:error, {:outside_editable_scope, Enum.map(outside, & &1.id)}}
-    end
   end
 
   defp placement(_, _, nil), do: :ok

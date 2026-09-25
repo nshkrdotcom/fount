@@ -1,5 +1,7 @@
 # Remaining work and review priorities
 
+For current local implementation and test results, read [STAGE2_STATUS_2026-09-24.md](STAGE2_STATUS_2026-09-24.md). The list below is the original source-only handoff snapshot; several specific gaps were addressed in stage 2, while the original acceptance requirements still apply.
+
 This list distinguishes **missing implementation** from **unrun verification**. All original acceptance cases remain requirements. The next agent should finish these in Fount and then produce actual evidence; do not merely downgrade the specification or relabel a partial result as complete.
 
 ## 1. First execution and source integration - release blocking

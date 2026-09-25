@@ -35,6 +35,7 @@ defmodule FountProbe.CLI do
                ),
              {:ok, reports} <-
                FountProbe.execute(model, requests, clients,
+                 report_reader: fn id -> Fount.Persistence.report(repo, id) end,
                  history_reader: fn sid, rid ->
                    Fount.Persistence.load_revision(repo, sid, rid)
                  end

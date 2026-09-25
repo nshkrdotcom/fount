@@ -70,7 +70,10 @@ defmodule FountWorkshop.Writing.Context do
     end
   end
 
-  def editable_selection(model, %{"workflow" => "character", "options" => %{"character_id" => id}}) do
+  def editable_selection(
+        model,
+        %{"workflow" => "character", "options" => %{"character_id" => id}} = request
+      ) do
     ids = Fount.Query.character_dialogue(model, id) |> Enum.flat_map(&[&1.cue_id | &1.body_ids])
     ids = ids ++ Enum.map(Fount.Query.character_mentions(model, id), & &1.element_id)
 
@@ -80,9 +83,46 @@ defmodule FountWorkshop.Writing.Context do
       |> Enum.reject(&is_nil/1)
       |> Enum.uniq_by(& &1.id)
 
-    if scenes == [],
-      do: %{"targets" => [%{"kind" => "character", "id" => id}]},
-      else: %{"targets" => Enum.map(scenes, &%{"kind" => "scene", "id" => &1.id})}
+    appearances = MapSet.new(scenes, & &1.id)
+
+    case request["selection"] do
+      %{"whole_screenplay" => true} ->
+        %{"targets" => Enum.map(scenes, &%{"kind" => "scene", "id" => &1.id})}
+
+      %{"targets" => targets} when is_list(targets) ->
+        %{
+          "targets" =>
+            targets
+            |> Enum.flat_map(fn target ->
+              case Projection.target_ids(model, target) do
+                {:ok, ids} ->
+                  selected = MapSet.new(ids)
+
+                  if target["kind"] == "screenplay" do
+                    Enum.flat_map(scenes, fn scene ->
+                      if Enum.any?(scene.element_ids, &MapSet.member?(selected, &1)),
+                        do: [%{"kind" => "scene", "id" => scene.id}],
+                        else: []
+                    end)
+                  else
+                    if Enum.any?(ids, fn element_id ->
+                         scene = Fount.Query.scene_for(model, element_id)
+                         scene && MapSet.member?(appearances, scene.id)
+                       end),
+                       do: [target],
+                       else: []
+                  end
+
+                _ ->
+                  []
+              end
+            end)
+            |> Enum.uniq()
+        }
+
+      _ ->
+        %{"targets" => []}
+    end
   end
 
   def editable_selection(_, %{

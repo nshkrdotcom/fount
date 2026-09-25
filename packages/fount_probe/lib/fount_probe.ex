@@ -3,51 +3,9 @@ defmodule FountProbe do
   alias FountProbe.{Catalog, Report}
   def tools, do: Catalog.tools()
 
-  defp option_coverage(report, tool, params) do
-    pending =
-      case tool do
-        "extract_story" ->
-          if Map.get(params, "adjacent_scenes", 0) > 0, do: ["adjacent_scenes"], else: []
-
-        "knowledge_trace" ->
-          Enum.filter(
-            ~w(behavior_element_ids intended_reveal_point),
-            &(params[&1] not in [nil, []])
-          )
-
-        "dependencies" ->
-          if params["record_report_ids"] not in [nil, []], do: ["record_report_ids"], else: []
-
-        "continuity" ->
-          Enum.filter(~w(record_report_ids changed_targets), &(params[&1] not in [nil, []]))
-
-        "action" ->
-          if params["layout_report_id"], do: ["layout_report_id"], else: []
-
-        _ ->
-          []
-      end
-
-    if pending == [] do
-      report
-    else
-      %{
-        report
-        | status: "partial",
-          coverage: Map.put(report.coverage, "unimplemented_options", pending),
-          errors:
-            report.errors ++
-              [%{"code" => "incomplete_option_implementation", "options" => pending}]
-      }
-    end
-  end
-
   def run(model, tool, params, clients \\ %{}, opts \\ []) do
     with :ok <- Catalog.validate(model, tool, params) do
-      case dispatch(model, tool, params, clients, opts) do
-        {:ok, report} -> {:ok, option_coverage(report, tool, params)}
-        error -> error
-      end
+      dispatch(model, tool, params, clients, opts)
     end
   rescue
     error in [ArgumentError, KeyError, FunctionClauseError, MatchError, BadMapError] ->
@@ -67,7 +25,8 @@ defmodule FountProbe do
               %{report | provenance: Map.put(report.provenance, "request_id", request["id"])}
 
             {:error, reason} ->
-              Report.failure(model, request["tool"], request["params"], reason)
+              report = Report.failure(model, request["tool"], request["params"], reason)
+              %{report | provenance: Map.put(report.provenance, "request_id", request["id"])}
           end
         end)
 

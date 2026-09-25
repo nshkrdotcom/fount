@@ -11,6 +11,17 @@ defmodule Fount.InterchangeContinuationTest do
     assert model.revision.content_hash == reopened.revision.content_hash
     bad = Jason.decode!(json.data) |> put_in(["model", "revision", "content_hash"], "forged") |> Jason.encode!()
     assert {:error, :content_hash_mismatch} = Fount.Adapter.JSON.decode_model(bad)
+
+    nested = Jason.decode!(json.data) |> put_in(["model", "revision", "unreviewed"], true) |> Jason.encode!()
+    assert {:error, :unknown_nested_canonical_field} = Fount.Adapter.JSON.decode_model(nested)
+
+    element =
+      Jason.decode!(json.data) |> put_in(["model", "elements", Access.at(0), "unreviewed"], true) |> Jason.encode!()
+
+    assert {:error, :unknown_nested_canonical_field} = Fount.Adapter.JSON.decode_model(element)
+
+    artifact = Jason.decode!(json.data) |> put_in(["import_artifact", "unreviewed"], true) |> Jason.encode!()
+    assert {:error, :unknown_artifact_field} = Fount.Adapter.JSON.decode_model(artifact)
   end
 
   test "a canonical scene split and merge retain body identities" do

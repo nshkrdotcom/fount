@@ -69,4 +69,167 @@ defmodule FountWorkshop.RecoveryCopyContinuationTest do
     assert Fount.Query.scene(candidate["screenplay"], source.id).element_ids == source.element_ids
     assert candidate["provenance"]["recovery"]["source_revision_id"] == base.revision.id
   end
+
+  test "a scene copied from another screenplay gets fresh scene and element IDs" do
+    source =
+      Fount.Screenplay.new(
+        scenes: [
+          %{
+            heading: "INT. FOREIGN ROOM - DAY",
+            elements: [%{type: :action, text: "The brass key falls."}]
+          }
+        ]
+      )
+
+    base =
+      Fount.Screenplay.new(
+        scenes: [%{heading: "EXT. ROAD - DAY", elements: [%{type: :action, text: "Mara waits."}]}]
+      )
+
+    [foreign] = source.ir.scenes
+    [existing] = base.ir.scenes
+
+    request = %{
+      "workflow" => "recover",
+      "base_revision_id" => base.revision.id,
+      "selection" => %{"whole_screenplay" => true},
+      "constraints" => [],
+      "options" => %{
+        "adapt" => false,
+        "source_revision_id" => source.revision.id,
+        "source_screenplay_id" => source.id,
+        "cast_mapping" => %{},
+        "source_targets" => [%{"kind" => "scene", "id" => foreign.id}],
+        "destination" => %{"kind" => "after_scene", "after_scene_id" => existing.id}
+      }
+    }
+
+    registry = Map.new(source.ir.elements ++ source.ir.scenes, &{&1.id, &1})
+
+    context = %{
+      selection: request["selection"],
+      evidence: [],
+      source_models: [base, source],
+      restore_registry: registry,
+      data: %{
+        "historical_source" => %{
+          "screenplay_id" => source.id,
+          "revision_id" => source.revision.id,
+          "scene_specs" => [
+            %{
+              "id" => foreign.id,
+              "heading" => "INT. FOREIGN ROOM - DAY",
+              "number" => nil,
+              "omitted" => false,
+              "elements" => Enum.map(tl(foreign.element_ids), &%{"keep" => &1})
+            }
+          ]
+        }
+      }
+    }
+
+    assert {:ok, candidate} =
+             FountWorkshop.Writing.RecoveryCopy.propose(
+               base,
+               request,
+               %{"id" => "copy", "title" => "Copy"},
+               context,
+               []
+             )
+
+    [_, copied] = candidate["screenplay"].ir.scenes
+    assert copied.id != foreign.id
+    assert Enum.all?(copied.element_ids, &(&1 not in foreign.element_ids))
+    assert Enum.any?(candidate["screenplay"].ir.elements, &(&1.text == "The brass key falls."))
+    assert candidate["provenance"]["recovery"]["source_screenplay_id"] == source.id
+  end
+
+  test "cross-screenplay cue links require and use explicit cast mapping" do
+    source =
+      Fount.Screenplay.new(
+        scenes: [
+          %{
+            heading: "INT. ROOM - DAY",
+            elements: [%{type: :character, text: "MARA"}, %{type: :dialogue, text: "Open it."}]
+          }
+        ]
+      )
+
+    {source, source_character} = Fount.Screenplay.add_character(source, "Mara")
+    cue = Enum.find(source.ir.elements, &(&1.type == :character))
+    {:ok, source} = Fount.Screenplay.link_cue(source, cue.id, source_character.id)
+
+    base =
+      Fount.Screenplay.new(
+        scenes: [%{heading: "EXT. ROAD - DAY", elements: [%{type: :action, text: "Waiting."}]}]
+      )
+
+    {base, destination_character} = Fount.Screenplay.add_character(base, "Mara")
+    scene = hd(source.ir.scenes)
+    registry = Map.new(source.ir.elements ++ source.ir.scenes, &{&1.id, &1})
+
+    req = %{
+      "workflow" => "recover",
+      "base_revision_id" => base.revision.id,
+      "selection" => %{"whole_screenplay" => true},
+      "constraints" => [],
+      "options" => %{
+        "adapt" => false,
+        "source_revision_id" => source.revision.id,
+        "source_screenplay_id" => source.id,
+        "source_targets" => [%{"kind" => "scene", "id" => scene.id}],
+        "cast_mapping" => %{source_character.id => destination_character.id},
+        "destination" => %{"kind" => "start"}
+      }
+    }
+
+    context = %{
+      selection: req["selection"],
+      evidence: [],
+      source_models: [base],
+      restore_registry: registry,
+      data: %{
+        "historical_source" => %{
+          "screenplay_id" => source.id,
+          "revision_id" => source.revision.id,
+          "speaker_links" => %{cue.id => source_character.id},
+          "scene_specs" => [
+            %{
+              "id" => scene.id,
+              "heading" => "INT. ROOM - DAY",
+              "number" => nil,
+              "omitted" => false,
+              "elements" => Enum.map(tl(scene.element_ids), &%{"keep" => &1})
+            }
+          ]
+        }
+      }
+    }
+
+    assert {:ok, candidate} =
+             FountWorkshop.Writing.RecoveryCopy.propose(
+               base,
+               req,
+               %{"id" => "copy", "title" => "Copy"},
+               context,
+               []
+             )
+
+    copied_cue = Enum.find(candidate["screenplay"].ir.elements, &(&1.type == :character))
+    assert copied_cue.id != cue.id
+
+    assert Enum.any?(
+             Map.values(candidate["screenplay"].mentions),
+             &(&1.element_id == copied_cue.id and &1.character_id == destination_character.id)
+           )
+
+    assert {:error, :missing_cast_mapping} =
+             FountWorkshop.Writing.RecoveryCopy.propose(
+               base,
+               put_in(req, ["options", "cast_mapping"], %{}),
+               %{"id" => "copy", "title" => "Copy"},
+               context,
+               []
+             )
+  end
 end

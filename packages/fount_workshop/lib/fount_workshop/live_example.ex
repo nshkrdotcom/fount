@@ -148,29 +148,26 @@ defmodule FountWorkshop.LiveExample do
     from_b =
       Enum.find(changed.(b), &(&1.id != (from_a && from_a.id)))
 
-    pick = fn candidate, changed_element ->
-      if changed_element do
-        %{
-          "candidate_id" => candidate["id"],
-          "ranges" => [
-            %{"source" => target(changed_element), "target" => target(changed_element)}
-          ]
-        }
-      else
-        group =
-          Enum.find(candidate["change_groups"], fn group ->
-            Enum.any?(group["operations"], &(&1["kind"] == "insert_elements"))
-          end) || raise("Alternative has no selectable passage")
+    picks = [alternative_pick(a, from_a), alternative_pick(b, from_b)]
 
-        %{"candidate_id" => candidate["id"], "group_ids" => [group["id"]]}
-      end
+    case Enum.find(picks, &match?({:error, _}, &1)) do
+      nil ->
+        :ok
+
+      error ->
+        FountWorkshop.Review.export(
+          session["id"],
+          Path.join(opts[:output_dir], session["id"]),
+          services,
+          pdf: true
+        )
+        |> A.require!()
+
+        A.require!(error)
     end
 
     selection = %{
-      "picks" => [
-        pick.(a, from_a),
-        pick.(b, from_b)
-      ],
+      "picks" => picks,
       "join" => %{
         "instruction" =>
           "Write connective action or replies so these writer-selected passages form one scene. Keep both selected passages byte-identical; add connective writing rather than replacing their words.",
@@ -451,6 +448,35 @@ defmodule FountWorkshop.LiveExample do
   end
 
   defp execute(_, _, _, _, _), do: raise(ArgumentError, "Unknown real Workshop mode")
+
+  @doc false
+  def alternative_pick(candidate, changed_element) do
+    if changed_element do
+      %{
+        "candidate_id" => candidate["id"],
+        "ranges" => [
+          %{"source" => target(changed_element), "target" => target(changed_element)}
+        ]
+      }
+    else
+      group =
+        Enum.find(candidate["change_groups"], fn group ->
+          Enum.any?(group["operations"], &(&1["kind"] == "insert_elements"))
+        end)
+
+      if group do
+        group_ids =
+          case FountWorkshop.Writing.ChangeGroups.select(candidate["change_groups"], [group["id"]]) do
+            {:ok, _} -> [group["id"]]
+            {:error, {:missing_required_groups, %{"proposed_selection" => ids}}} -> ids
+          end
+
+        %{"candidate_id" => candidate["id"], "group_ids" => group_ids}
+      else
+        {:error, :alternative_has_no_selectable_passage}
+      end
+    end
+  end
 
   defp start(model, request, services, opts) do
     case Session.start(model, request, services, opts) do

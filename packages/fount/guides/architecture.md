@@ -44,7 +44,7 @@ Screenplay construction, editing, analysis, and format projection work on immuta
 
 - `Fount.Analyzer` — add derived interpretation without changing screenplay truth.
 - `Fount.Persistence` — persist the canonical model in PostgreSQL and query its current typed rows.
-- `Fount.Store` — compatibility persistence for Fountain source and sidecar metadata.
+- `Fount.Persistence` — revision-scoped PostgreSQL storage for accepted drafts, candidates, sessions and reports.
 - `Fount.Adapter` — import/export foreign formats while reporting fidelity losses.
 - `Fount.Fragment` / `Fount.Builder` — generate valid screenplay source from structured values.
 

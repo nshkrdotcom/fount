@@ -30,10 +30,9 @@ writer features build on those values rather than replacing the parser.
 
 ## Remaining integration
 
-The legacy filesystem/SQLite store modules and their compatibility callers
-remain. They must be removed or migrated before claiming the PostgreSQL model
-is the only application store. Most T01–T13 tools and full W01–W09 acceptance
-cases also remain. Complete CLI coverage, selective candidate combination,
+The legacy filesystem/SQLite store modules, dependency and compatibility
+callers have been removed. Most T01–T13 tools and full W01–W09 acceptance
+cases still remain. Complete CLI coverage, selective candidate combination,
 semantic checking, story-change propagation, investigation that writes,
 optional speech verification, and a rebuilt final overlay are outstanding.
 

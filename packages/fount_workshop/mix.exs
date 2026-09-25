@@ -68,10 +68,16 @@ defmodule FountWorkshop.MixProject do
       groups_for_modules: [
         Workshop: [
           FountWorkshop,
-          FountWorkshop.Proposal,
-          FountWorkshop.Preview,
-          FountWorkshop.Acceptance,
-          FountWorkshop.TableRead
+          FountWorkshop.Develop,
+          FountWorkshop.Review,
+          FountWorkshop.SequenceRebuild,
+          FountWorkshop.TargetedRewrite,
+          FountWorkshop.NoteResponse,
+          FountWorkshop.Pass,
+          FountWorkshop.CharacterRewrite,
+          FountWorkshop.Recover,
+          FountWorkshop.TableRead,
+          FountWorkshop.Speech.Espeak
         ],
         Export: [
           FountWorkshop.Export.PDF,
@@ -89,7 +95,7 @@ defmodule FountWorkshop.MixProject do
       links: %{
         "GitHub" => @source_url
       },
-      files: ~w(lib guides assets mix.exs README.md CHANGELOG.md LICENSE)
+      files: ~w(lib priv guides assets mix.exs README.md CHANGELOG.md LICENSE)
     ]
   end
 end

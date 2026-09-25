@@ -1,112 +1,18 @@
-# Scene Revision Loop
+# Scene revision loop
 
-The core writing workflow in Fount Workshop is an agent-assisted, writer-reviewed loop. It allows an AI model to draft or refine screenplay scenes while ensuring that the writer maintains complete editorial authority.
+`FountWorkshop.TargetedRewrite.propose/4` takes an accepted screenplay value,
+exact action or dialogue element IDs, a writer direction, and an Inference
+client. It includes nearby scenes for continuity, asks for replacements keyed
+to those IDs, validates the response, and applies typed edits in memory.
 
-The loop consists of four explicit phases: `context → propose → preview → accept`.
+`FountWorkshop.TargetedRewrite.run/5` loads the accepted draft from PostgreSQL,
+saves a writing session and candidate revision, and returns the candidate ID.
+The accepted head stays where it was. Use `FountWorkshop.Review.packet/2` to
+inspect the exact source and structural differences; use
+`FountWorkshop.Review.accept/4` only after the writer makes a review decision.
 
----
-
-## 1. Extracting Scene Context
-
-Before calling a model, `FountWorkshop.context/3` extracts the target scene, its ordered elements, and stable element IDs:
-
-```elixir
-alias FountWorkshop, as: Workshop
-
-# 1. Load the canonical screenplay from PostgreSQL
-{:ok, script} = Fount.Persistence.load(Fount.Repo, "feature-draft")
-
-# 2. Select a scene
-scene = hd(script.ir.scenes)
-
-# 3. Extract the bounded context
-{:ok, context} = Workshop.context(script, scene.id)
-```
-
-The resulting `context` map includes:
-* `scene_id` — Stable UUID of the scene being revised.
-* `revision` — The screenplay's current model revision hash.
-* `elements` — List of element IDs, types, and raw text.
-* `characters` — The authored cast catalog for the script.
-
----
-
-## 2. Generating Proposals via Inference
-
-Proposals are generated using the `Inference` client library. In test or development environments, you can use deterministic mock adapters; in production, you can point to Anthropic, OpenAI, or local models:
-
-```elixir
-# Configure the client
-client = Inference.client!(
-  adapter: Inference.Adapters.OpenAI,
-  api_key: System.fetch_env!("OPENAI_API_KEY"),
-  model: "gpt-4o"
-)
-
-# Request a targeted scene revision
-instruction = "Make the dialogue snappier and intensify Sarah's urgency."
-{:ok, proposal} = Workshop.propose(context, instruction, client)
-```
-
-### Deterministic Testing with Mock Adapters
-For unit tests or offline CI, use `Inference.Adapters.Mock`:
-
-```elixir
-client = Inference.client!(
-  adapter: Inference.Adapters.Mock,
-  stub: fn _request ->
-    {:ok, %Inference.Response{
-      id: "mock_resp_1",
-      provider: :mock,
-      model: "mock-model",
-      text: Jason.encode!(%{
-        operations: [
-          %{"kind" => "replace_text", "target" => element_id, "value" => "Run."}
-        ]
-      })
-    }}
-  end
-)
-```
-
----
-
-## 3. Previewing the Diffs
-
-Before any change touches the database, `Workshop.preview/2` applies the proposed operations in memory and computes side-by-side diffs:
-
-```elixir
-{:ok, preview} = Workshop.preview(script, proposal)
-
-# Inspect the Myers text diff (additions and deletions)
-preview.source_diff
-
-# Inspect structural changes (modified element types, added beats)
-preview.semantic_diff
-
-# Review model provenance
-preview.inference # => %{provider: :openai, model: "gpt-4o", response_id: "..."}
-```
-
-### Writer Rejection
-If the proposal is unsatisfactory, the writer simply does nothing or discards the preview. Because previews are pure in-memory values:
-* **Zero database rows are written.**
-* **The screenplay's revision remains unchanged.**
-
----
-
-## 4. Atomic Acceptance
-
-If the writer accepts the proposed changes, `Workshop.accept/5` commits the new revision into PostgreSQL:
-
-```elixir
-:ok = Workshop.accept(
-  Fount.Repo, 
-  "feature-draft", 
-  preview, 
-  script.revision.id
-)
-```
-
-### Concurrency Protection
-If an external writer modified the script while the model was generating, `accept/5` catches the mismatch and returns `{:error, {:stale_revision, actual_id}}`, ensuring no edits are overwritten blindly.
+`NoteResponse` uses the same exact edit path but removes the addressed note
+from the candidate. Other notes remain. `SequenceRebuild` replaces a run of
+scenes and retains IDs for unchanged scenes and lines. `CharacterRewrite`
+selects one character's dialogue and immediate partner replies across chosen
+scenes.

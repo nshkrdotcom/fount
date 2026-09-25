@@ -1,39 +1,45 @@
 # Persistence
 
-Fount separates immutable screenplay transformations from effects, while keeping both the domain and its persistence interface in this package. `Fount.Screenplay` can be created, edited, queried, and exported in memory without starting a database. `Fount.Persistence` is the PostgreSQL transaction boundary around accepted canonical revisions. `Fount.Repo`, Ecto row schemas, migrations and composable queries all belong to Fount. The workshop configures and starts the Repo; it does not own the screenplay schema.
+`Fount.Screenplay` parses, edits, queries and exports a draft in memory.
+`Fount.Persistence` stores accepted revisions, historical values, writing
+sessions, candidates and reports in PostgreSQL. The Repo is started only by an
+application or an explicit integration command; importing a screenplay does
+not open a database connection.
 
-## Canonical relational store
+## Fresh database
 
-The Ecto migrations ship at `Fount.Persistence.migrations_path/0`. Configure `Fount.Repo` for a PostgreSQL database, start it in your supervision tree, and run the migrations during deployment. In an application, for example:
+The current schema is the single migration under `priv/repo/migrations/`.
+Select a new database explicitly with `FOUNT_DATABASE_URL`, then migrate it:
 
-```elixir
-config :fount, Fount.Repo,
-  database: "fount",
-  username: "fount",
-  password: System.fetch_env!("FOUNT_DATABASE_PASSWORD"),
-  hostname: "localhost"
+```sh
+cd packages/fount
+FOUNT_DATABASE_URL=postgres://user@localhost/fount_dev mix ecto.migrate
 ```
 
-```elixir
-children = [Fount.Repo]
-{:ok, _} = Supervisor.start_link(children, strategy: :one_for_one)
-Ecto.Migrator.run(Fount.Repo, Fount.Persistence.migrations_path(), :up, all: true)
+Do not run this migration over an old Fount schema. This greenfield version has
+no SQLite import adapter. Fountain and FDX files remain real import/export
+formats; `Fount.Screenplay.from_document/1` converts a parsed Fountain document
+into the canonical model.
 
-model = Fount.Screenplay.new(scenes: [%{heading: "INT. ROOM - DAY", elements: [%{type: :action, text: "Mara waits."}]}])
-:ok = Fount.Persistence.save(Fount.Repo, "feature", model, expected_revision: :new)
-{:ok, loaded} = Fount.Persistence.load(Fount.Repo, "feature")
+The application starts `Fount.Repo` with its configured URL before calling
+persistence. A minimal application flow is:
+
+```elixir
+root = Fount.Screenplay.new()
+{:ok, _} = Fount.Persistence.create(Fount.Repo, "draft", root)
+{:ok, accepted} = Fount.Persistence.load(Fount.Repo, "draft")
+{:ok, candidate, changes} = Fount.Screenplay.apply(accepted, operations)
+{:ok, _} = Fount.Persistence.save_edit(Fount.Repo, "draft", candidate,
+  expected_revision: accepted.revision.id)
 ```
 
-The current title, scenes, elements, dialogue turns, cast, aliases, mentions and mention candidates live in typed relational rows. Candidate links preserve ambiguous names across reloads without claiming they resolve to one character. `Fount.Persistence.Query.mention_candidates/2` finds mentions that propose a cast ID; `mentions/2` finds occurrences currently linked to that ID. Immutable `revisions.model` snapshots support history and undo; `load/2` rebuilds the live screenplay from current rows while holding a shared lock on its head, so a concurrent save cannot mix two revisions in one load. A save validates references and exact mention bytes, compares the expected head, then commits a new revision, current rows, import artifact and optional acceptance provenance in one transaction. Stale saves return `{:error, {:conflict, current_revision}}`. Use `Fount.Persistence.Query` with ordinary Ecto queries for joins and pipeline selection.
+Use `save_edit` for a direct writer edit. Generative work should save a writing
+session and candidate, then use `FountWorkshop.Review.accept/4` after an
+explicit review. Acceptance checks the current head and candidate base in one
+transaction. A stale base returns an error without changing the accepted head.
 
-The current implementation uses PostgreSQL. Ecto does not make the SQLite and PostgreSQL adapters interchangeable by configuration alone; their migrations and constraints differ. The pure screenplay API needs no running database process, but the relational workflow does.
-
-## Compatibility stores
-
-`Fount.Store.Filesystem` and `Fount.Store.SQLite` retain the earlier Fountain-document workflow. They persist original `.fountain` source with identity/annotation sidecar data or a v1 SQLite source/snapshot store. They do **not** expose the normalized current screenplay rows. Use them for existing documents and compatibility; import a `Fount.Document` with `Fount.Screenplay.from_document/1` to enter the canonical authoring path. An untouched imported Fountain artifact can be exported byte-for-byte with `Fount.Screenplay.to_fountain/1`; after canonical edits the exporter emits new Fountain.
-
-For a v1 SQLite database, `Fount.Persistence.import_legacy(Fount.Repo, legacy_store, source_key, target_key)` copies its revision history and current draft to PostgreSQL as one transaction. It retains the original bytes for every imported revision and leaves the SQLite file untouched. The target key must be new. `Fount.Store.SQLite.load_revision/3` exposes a historical source document for inspection.
-
-Filesystem writes use temporary files and renames, but the source and sidecar are not one atomic file. `expected_revision:` rejects a detected stale source before save; it is not a cross-process lock. SQLite v1 uses optional `:exqlite`; consumers of that compatibility store should add Exqlite to their own dependency list. A caller-owned Exqlite connection may be supplied with `Fount.Store.SQLite.new(conn: conn)` and must be closed by its owner.
-
-The compatibility stores and the canonical relational store have different authorities. Do not treat a v1 sidecar snapshot as a queryable substitute for canonical rows or silently synchronize both as independent heads.
+`load_revision/3` reconstructs a historical or candidate value using the same
+loader. `history/3` lists revisions. An imported, untouched Fountain artifact
+can be exported byte for byte; after edits Fount generates a new Fountain
+rendering. Relational rows are revision-scoped, and the revision also stores a
+canonical model snapshot used by the shared loader.

@@ -31,7 +31,6 @@ defmodule Fount.MixProject do
       {:saxy, "~> 1.6"},
       {:ecto_sql, "~> 3.13"},
       {:postgrex, "~> 0.20"},
-      {:exqlite, "~> 0.41", optional: true},
       {:stream_data, "~> 1.4", only: :test},
       {:ex_doc, "~> 0.40", only: :dev, runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
@@ -143,11 +142,7 @@ defmodule Fount.MixProject do
         Persistence: [
           Fount.Repo,
           Fount.Persistence,
-          Fount.Persistence.Query,
-          Fount.Store,
-          Fount.Store.Filesystem,
-          Fount.Store.SQLite,
-          Fount.Store.Snapshot
+          Fount.Persistence.Query
         ]
       ]
     ]

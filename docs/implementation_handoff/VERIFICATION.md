@@ -12,7 +12,7 @@ to the supplied overlay, not to subsequent source changes in this checkout.
 | `MIX_ENV=test mix compile --warnings-as-errors` without provider and database variables | Passed in all three packages. |
 | Offline `MIX_ENV=test mix test` without provider and database variables | Core 56 passed; Probe 9 passed; Workshop 23 passed. |
 | Core PostgreSQL integration | Four tests passed against the new `fount_blitz_dev2` database, including immutable history, candidate acceptance, exact Fountain import and report evidence. |
-| Workshop PostgreSQL and PDF integration | Two develop/database tests and three renderer tests passed. |
+| Workshop PostgreSQL and PDF integration | Ten tests passed together across develop, note, pass, recover, sequence, targeted rewrite and PDF renderer files. |
 | Core real examples | `roundtrip` and `database` modes passed. |
 | Probe live `knowledge` mode | Passed through `/home/home/scripts/with_bash_secrets`; three real System One evaluations were saved in `.blitz/live-probe-secrets/knowledge.json`. No credential value was written to the report. |
 | Workshop live `develop` mode | Passed without acceptance. Two real Codex candidate scripts and actual PDFs were saved in `.blitz/live-workshop-retry/`; the accepted revision stayed at the empty root. One PDF was visually inspected and shows conventional script layout with embedded Courier Prime. |
@@ -52,9 +52,9 @@ cluster on port 55432. Existing databases were not dropped or reset.
 ## Still required
 
 The full F01–F09, W01–W09 and T01–T13 acceptance cases are not complete.
-The legacy filesystem/SQLite stores remain in source and must be removed when
-their callers are migrated. Most Probe tools and creative workflows, complete
-CLI coverage, speech verification, final overlay generation and the
+The legacy filesystem/SQLite store code and dependency have been removed.
+Most Probe tools and creative workflows, complete CLI coverage, speech
+verification, final overlay generation and the
 follow-on handoff are outstanding. No release-complete claim is made here.
 
 `FountWorkshop.Speech.Espeak` and the live `speech` mode have not been executed:

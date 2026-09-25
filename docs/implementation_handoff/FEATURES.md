@@ -48,7 +48,7 @@ The evidence resolver is caller-owned. SDK report serialization remains.
 |---|---|
 | F01 | Original Fountain parser retained; real import/export and PDF paths were exercised. Full interchange matrix, title and spec projection remain. |
 | F02 | Typed edits, local references, stable scene/element IDs and slices implemented in part; complete operation contract and all callers remain. |
-| F03 | Fresh revision-scoped PostgreSQL migration and accepted/candidate/session transactions run in a new database. Legacy filesystem/SQLite stores and callers remain. |
+| F03 | Fresh revision-scoped PostgreSQL migration and accepted/candidate/session transactions run in a new database. Legacy filesystem/SQLite stores, dependency and callers were removed. Full schema and concurrency cases remain. |
 | F04 | Authored item operations and note candidate responses exist; complete intent/constraint adoption and resolution remain. |
 | F05 | Exact slices, literal search and historical element recovery exist; full semantic/historical retrieval and collections remain. |
 | F06 | Typed decision and batch helpers plus partial inventory/knowledge paths exist; most T01–T13 work remains. |

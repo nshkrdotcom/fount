@@ -55,13 +55,6 @@ defmodule FountWorkshop.Submission do
     }
   end
 
-  @doc "Checks a saved filesystem draft and includes recorded accepted model edits."
-  @spec check_saved(struct(), String.t(), Fount.Document.t(), map(), map()) :: map()
-  def check_saved(%Fount.Store.Filesystem{} = store, key, doc, pdf_report, profile) do
-    ai_origin = if FountWorkshop.Acceptance.any_for?(store, key), do: true, else: :unknown
-    check(doc, pdf_report, profile, ai_origin?: ai_origin)
-  end
-
   defp check_revision(problems, doc, %{source_revision: revision}) do
     if revision == doc.revision.id, do: problems, else: [:pdf_source_revision_mismatch | problems]
   end

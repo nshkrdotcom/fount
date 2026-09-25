@@ -56,7 +56,7 @@ The initial package intentionally keeps the dependency surface small:
 
 - `jason` — JSON sidecars/projections
 - `saxy` — streaming-oriented XML foundation used by the FDX adapter
-- `exqlite` — optional SQLite persistence
+- PostgreSQL through Ecto SQL and Postgrex is the application store.
 - `stream_data` — property testing for lossless source invariants
 - `ex_doc` — development documentation
 

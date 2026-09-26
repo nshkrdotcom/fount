@@ -60,7 +60,7 @@ defmodule FountWorkshop.MixProject do
         "guides/pdf-export-and-inspection.md",
         "guides/submission-checks.md",
         "guides/table-reads-and-audio.md",
-        "examples/README.md"
+        {"examples/README.md", filename: "examples", title: "Live Examples"}
       ],
       groups_for_extras: [
         Overview: ~r/(README|CHANGELOG|LICENSE)/,

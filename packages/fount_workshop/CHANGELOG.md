@@ -5,7 +5,7 @@
 Initial implementation of the Fount Workshop screenplay revision and handoff layer:
 
 - writer-controlled agentic scene revision loop (`context -> propose -> preview -> accept`)
-- bounded proposal decoding with structured operations
+- structured proposal decoding with schema operations
 - side-effect-free semantic and source diff previews
 - atomic revision acceptance with model and provenance tracking
 - PDF handoff export via Afterwriting with inspection reports

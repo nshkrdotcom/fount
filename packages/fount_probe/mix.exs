@@ -57,7 +57,7 @@ defmodule FountProbe.MixProject do
         "guides/tools-and-catalog.md",
         "guides/investigations-and-evidence.md",
         "guides/comparison-and-ablation.md",
-        "examples/README.md"
+        {"examples/README.md", filename: "examples", title: "Live Examples"}
       ],
       groups_for_extras: [
         Overview: ~r/(README|CHANGELOG|LICENSE)/,

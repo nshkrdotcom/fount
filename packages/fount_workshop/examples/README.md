@@ -1,6 +1,6 @@
 # Fount Workshop Examples
 
-This directory contains executable scripts demonstrating Fount Workshop's bounded scene revision loops, candidate generation, Myers text diffs, historical beat recovery, and PDF publication.
+This directory contains executable scripts demonstrating Fount Workshop's scoped scene revision loops, candidate generation, Myers text diffs, historical beat recovery, and PDF publication.
 
 ---
 

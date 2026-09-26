@@ -28,32 +28,34 @@ Asking a general-purpose conversational LLM to answer these questions often prod
 ## Architectural Guarantees
 
 ```text
-┌────────────────────────────────────────────────────────────────────────┐
-│                          CANONICAL SCREENPLAY                          │
-│          (Scenes, Elements, CST Byte Spans, Revision Hash)             │
-└───────────────────────────────────┬────────────────────────────────────┘
-                                    │
-                                    ▼
-┌────────────────────────────────────────────────────────────────────────┐
-│                           FOUNT PROBE ENGINE                           │
-│                                                                        │
-│  ┌───────────────────┐ ┌───────────────────┐ ┌──────────────────────┐  │
-│  │   Closed Catalog   │ │   Projection      │ │  Budget Controller   │  │
-│  │ (16 Finite Tools)  │ │ (Unit Selection)  │ │ (:atomics Quotas)    │  │
-│  └───────────────────┘ └───────────────────┘ └──────────────────────┘  │
-│  ┌───────────────────┐ ┌───────────────────┐ ┌──────────────────────┐  │
-│  │  Knowledge Trace  │ │    Continuity     │ │   Scene Mechanics    │  │
-│  └───────────────────┘ └───────────────────┘ └──────────────────────┘  │
-│  ┌───────────────────┐ ┌───────────────────┐ ┌──────────────────────┐  │
-│  │   Dependencies    │ │  Voice / Dialogue │ │ Revision Comparison  │  │
-│  └───────────────────┘ └───────────────────┘ └──────────────────────┘  │
-└───────────────────────────────────┬────────────────────────────────────┘
-                                    │
-                                    ▼
-┌────────────────────────────────────────────────────────────────────────┐
-│                      STRUCTURED EVIDENCE REPORT                        │
-│   Grounded Findings, Probabilities, Element IDs, CST Byte Provenance   │
-└────────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────┐
+│                          CANONICAL SCREENPLAY                           │
+│            (Scenes, Elements, CST Byte Spans, Revision Hash)            │
+└────────────────────────────────────┬────────────────────────────────────┘
+                                     │
+                                     ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                           FOUNT PROBE ENGINE                            │
+│                                                                         │
+│  ┌───────────────────┐   ┌───────────────────┐   ┌───────────────────┐  │
+│  │  Closed Catalog   │   │    Projection     │   │ Budget Controller │  │
+│  │ (16 Finite Tools) │   │ (Unit Selection)  │   │  (:atomics Quota) │  │
+│  └───────────────────┘   └───────────────────┘   └───────────────────┘  │
+│  ┌───────────────────┐   ┌───────────────────┐   ┌───────────────────┐  │
+│  │  Knowledge Trace  │   │    Continuity     │   │  Scene Mechanics  │  │
+│  │  (Audience/Cast)  │   │  (State & Props)  │   │ (7 Turn Dynamics) │  │
+│  └───────────────────┘   └───────────────────┘   └───────────────────┘  │
+│  ┌───────────────────┐   ┌───────────────────┐   ┌───────────────────┐  │
+│  │   Dependencies    │   │  Dialogue & Voice │   │ Revision Compare  │  │
+│  │  (Causal Ripple)  │   │ (Subtext/Attrib)  │   │ (Forensic Diffs)  │  │
+│  └───────────────────┘   └───────────────────┘   └───────────────────┘  │
+└────────────────────────────────────┬────────────────────────────────────┘
+                                     │
+                                     ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                       STRUCTURED EVIDENCE REPORT                        │
+│   Grounded Findings, Probabilities, Element IDs, CST Byte Provenance    │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
 
 1. **Strict Read-Only Execution (`writes_screenplay: false`):** Fount Probe cannot mutate screenplay text, alter element structures, or advance revision hashes. Probes are purely observational and idempotent.
@@ -61,9 +63,9 @@ Asking a general-purpose conversational LLM to answer these questions often prod
 3. **Closed Tool Catalog:** Operations run through 16 statically validated probe schemas defined in `FountProbe.Catalog`. Dynamic code execution, shell commands, or arbitrary prompts are architecturally impossible.
 4. **Structured Three-Phase Investigation Protocol:**
    - **`plan/4`:** Identify which specific probes are required to investigate a writer's question.
-   - **`execute/4`:** Dispatch bounded probe batches against the canonical screenplay model.
+   - **`execute/4`:** Dispatch targeted probe batches against the canonical screenplay model.
    - **`explain/5`:** Synthesize evidence-backed dramaturgical findings citing only the collected probe reports.
-5. **No Hallucinations via System One (Jev):** Rather than generating unpredictable conversational text, high-volume classification passes route through TypeSafe's Jev model via `system_one_sdk`, returning typed, mathematically bounded probability distributions (`Noul`, `Choice`, `Score`).
+5. **No Hallucinations via System One (Jev):** Rather than generating unpredictable conversational text, high-volume classification passes route through TypeSafe's Jev model via `system_one_sdk`, returning typed, mathematically constrained probability distributions (`Noul`, `Choice`, `Score`).
 
 ---
 
@@ -255,7 +257,7 @@ Fount Probe is the analytical middle tier of the Fount screenplay framework:
 
 1. **[Fount](https://hexdocs.pm/fount)**: The headless screenplay engine, lossless CST parser, and relational revision store.
 2. **[Fount Probe](https://hexdocs.pm/fount_probe)**: The dramaturgical auditor and diagnostic engine. 100% read-only inspection for character knowledge, continuity, scene mechanics, and voice attribution.
-3. **[Fount Workshop](https://hexdocs.pm/fount_workshop)**: The writer's studio. Bounded AI revision loops with Myers diffs, beat recovery, competition submission checks, and PDF publishing.
+3. **[Fount Workshop](https://hexdocs.pm/fount_workshop)**: The writer's studio. Scoped AI revision loops with Myers diffs, beat recovery, competition submission checks, and PDF publishing.
 
 ---
 

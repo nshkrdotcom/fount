@@ -16,37 +16,39 @@ Fount Probe provides a closed, deterministic inspection, comparison, and investi
    Probing operates through a finite, statically validated catalog of 16 tools defined in `FountProbe.Catalog`. AI models or automated workflows cannot execute arbitrary code or shell routes.
 4. **Structured Investigation Lifecycle**:
    Investigations flow through a three-phase protocol:
-   - **`plan/4`**: Determine which bounded probes are required to address a dramaturgical question or concern.
+   - **`plan/4`**: Determine which targeted probes are required to address a dramaturgical question or concern.
    - **`execute/4` or `run/5`**: Execute the planned probes against canonical models and gather structured `FountProbe.Report` records.
    - **`explain/5`**: Synthesize an evidence-backed dramaturgical finding, citing only the collected probe reports.
 
 ```text
-┌────────────────────────────────────────────────────────┐
-│                    SCREENPLAY MODEL                    │
-│   (Canonical Elements, Scenes, CST, Revision UUID)     │
-└───────────────────────────┬────────────────────────────┘
-                            │
-                            ▼
-┌────────────────────────────────────────────────────────┐
-│                   FOUNT PROBE ENGINE                   │
-│                                                        │
-│  ┌─────────────────┐ ┌─────────────────┐ ┌──────────┐  │
-│  │     Catalog     │ │   Projection    │ │  Report  │  │
-│  │ (16 Closed Tools)│ │(Unit Selection) │ │ (Evidence│ │
-│  └─────────────────┘ └─────────────────┘ └──────────┘  │
-│  ┌─────────────────┐ ┌─────────────────┐ ┌──────────┐  │
-│  │ Knowledge Trace │ │   Continuity    │ │  Voice   │  │
-│  └─────────────────┘ └─────────────────┘ └──────────┘  │
-│  ┌─────────────────┐ ┌─────────────────┐ ┌──────────┐  │
-│  │ Scene Mechanics │ │   Comparison    │ │  Ablate  │  │
-│  └─────────────────┘ └─────────────────┘ └──────────┘  │
-└───────────────────────────┬────────────────────────────┘
-                            │
-                            ▼
-┌────────────────────────────────────────────────────────┐
-│              EVIDENCE & PROVENANCE REPORT              │
-│  Observations, Confidence, Grounded Element/Scene IDs  │
-└────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────┐
+│                          CANONICAL SCREENPLAY                           │
+│            (Scenes, Elements, CST Byte Spans, Revision Hash)            │
+└────────────────────────────────────┬────────────────────────────────────┘
+                                     │
+                                     ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                           FOUNT PROBE ENGINE                            │
+│                                                                         │
+│  ┌───────────────────┐   ┌───────────────────┐   ┌───────────────────┐  │
+│  │  Closed Catalog   │   │    Projection     │   │ Budget Controller │  │
+│  │ (16 Finite Tools) │   │ (Unit Selection)  │   │  (:atomics Quota) │  │
+│  └───────────────────┘   └───────────────────┘   └───────────────────┘  │
+│  ┌───────────────────┐   ┌───────────────────┐   ┌───────────────────┐  │
+│  │  Knowledge Trace  │   │    Continuity     │   │  Scene Mechanics  │  │
+│  │  (Audience/Cast)  │   │  (State & Props)  │   │ (7 Turn Dynamics) │  │
+│  └───────────────────┘   └───────────────────┘   └───────────────────┘  │
+│  ┌───────────────────┐   ┌───────────────────┐   ┌───────────────────┐  │
+│  │   Dependencies    │   │  Dialogue & Voice │   │ Revision Compare  │  │
+│  │  (Causal Ripple)  │   │ (Subtext/Attrib)  │   │ (Forensic Diffs)  │  │
+│  └───────────────────┘   └───────────────────┘   └───────────────────┘  │
+└────────────────────────────────────┬────────────────────────────────────┘
+                                     │
+                                     ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                       STRUCTURED EVIDENCE REPORT                        │
+│   Grounded Findings, Probabilities, Element IDs, CST Byte Provenance    │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
 
 ## Report & Provenance Model

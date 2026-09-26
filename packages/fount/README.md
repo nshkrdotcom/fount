@@ -28,24 +28,24 @@ Screenplay systems break down when formatting quirks interfere with dramatic str
 ```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │  1. SOURCE TRUTH                                                        │
-│  Exact imported bytes, Concrete Syntax Tree (CST), trivia, comments,     │
+│  Exact imported bytes, Concrete Syntax Tree (CST), trivia, comments,    │
 │  boneyards, and line-ending preservation. Untouched files round-trip.   │
 └────────────────────────────────────┬────────────────────────────────────┘
-                                     │ import / project
+                                     │
                                      ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
 │  2. SCREENPLAY TRUTH                                                    │
 │  Format-independent canonical model. Scenes, elements, dialogue blocks, │
 │  and outline nodes anchored by durable UUIDs across revisions.          │
 └────────────────────────────────────┬────────────────────────────────────┘
-                                     │ analyses / resolution
+                                     │
                                      ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
 │  3. INTERPRETIVE TRUTH                                                  │
 │  Canonical cast rosters, character aliases, byte-anchored mentions,     │
 │  and evidence-backed dramaturgical assertions tied to revisions.        │
 └────────────────────────────────────┬────────────────────────────────────┘
-                                     │ render / layout
+                                     │
                                      ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
 │  4. PRESENTATION TRUTH                                                  │
@@ -239,7 +239,7 @@ Fount is the foundation of a modular three-tier screenplay framework:
 
 1. **[Fount](https://hexdocs.pm/fount)**: The headless screenplay engine, lossless CST parser, and relational revision store.
 2. **[Fount Probe](https://hexdocs.pm/fount_probe)**: The dramaturgical auditor and diagnostic engine. 100% read-only inspection for character knowledge, continuity, scene mechanics, and voice attribution.
-3. **[Fount Workshop](https://hexdocs.pm/fount_workshop)**: The writer's studio. Bounded AI revision loops with Myers diffs, beat recovery, competition submission checks, and PDF publishing.
+3. **[Fount Workshop](https://hexdocs.pm/fount_workshop)**: The writer's studio. Scoped AI revision loops with Myers diffs, beat recovery, competition submission checks, and PDF publishing.
 
 ---
 

@@ -62,7 +62,7 @@ defmodule Fount.MixProject do
         "guides/persistence.md",
         "guides/adapters.md",
         "guides/research.md",
-        "examples/README.md"
+        {"examples/README.md", filename: "examples", title: "Live Examples"}
       ],
       groups_for_extras: [
         Overview: ~r/(README|CHANGELOG|LICENSE)/,

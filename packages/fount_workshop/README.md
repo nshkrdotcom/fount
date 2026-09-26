@@ -17,7 +17,7 @@ Most AI writing tools fail working screenwriters. They overwrite text destructiv
 
 **Fount Workshop is built on the principle of absolute writer sovereignty.** Built on top of [Fount](https://hexdocs.pm/fount) and validated by [Fount Probe](https://hexdocs.pm/fount_probe), Fount Workshop provides an agentic revision loop where AI models propose structured changes, but the writer retains complete editorial authority:
 
-* **Bounded Scene Revision Loop (`context → propose → preview → accept`):** AI agents operate on localized scene context and generate structured edit proposals.
+* **Scoped Scene Revision Loop (`context → propose → preview → accept`):** AI agents operate on localized scene context and generate structured edit proposals.
 * **Side-Effect-Free Myers Diffs:** Preview exact line additions, deletions, and structural changes in memory before any edit touches the database.
 * **Historical Beat Recovery:** Surgically restore a cut dialogue line or action beat from 5 revisions ago into your current draft without rolling back intermediate progress.
 * **Forensic PDF Export:** Professional screenplay PDF generation via pinned Afterwriting 1.17.3, paired with automated Poppler inspection (US Letter geometry, Courier Prime font embedding, zero blank pages).
@@ -26,37 +26,37 @@ Most AI writing tools fail working screenwriters. They overwrite text destructiv
 
 ---
 
-## The Bounded Revision Workflow
+## The Scoped Revision Workflow
 
 Fount Workshop enforces a four-step revision cycle designed to eliminate accidental script corruption:
 
 ```text
-┌────────────────────────────────────────────────────────────────────────┐
-│  1. CONTEXT ISOLATION                                                  │
-│  Extract target scene elements, surrounding narrative boundaries, and  │
-│  stable element UUIDs. The AI never sees an unconstrained prompt.      │
-└───────────────────────────────────┬────────────────────────────────────┘
-                                    │
-                                    ▼
-┌────────────────────────────────────────────────────────────────────────┐
-│  2. STRUCTURED PROPOSAL                                                │
-│  AI generates atomic operations (replace_text, insert, delete) bounded │
-│  by a strict JSON schema. No freeform destructive rewrites.            │
-└───────────────────────────────────┬────────────────────────────────────┘
-                                    │
-                                    ▼
-┌────────────────────────────────────────────────────────────────────────┐
-│  3. IN-MEMORY PREVIEW & MYERS DIFFS                                    │
-│  Compute source text diffs, element changes, and run Fount Probe       │
-│  validation checks in pure memory. Zero database side effects.         │
-└───────────────────────────────────┬────────────────────────────────────┘
-                                    │
-                                    ▼
-┌────────────────────────────────────────────────────────────────────────┐
-│  4. WRITER ACCEPTANCE                                                  │
-│  - ACCEPT: Changes commit atomically to PostgreSQL advancing revision. │
-│  - REJECT: Drop preview—no database rows or revision hashes are moved. │
-└────────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────┐
+│  1. CONTEXT ISOLATION                                                   │
+│  Extract target scene elements, surrounding narrative boundaries, and   │
+│  stable element UUIDs. The model never receives unguided full scripts.  │
+└────────────────────────────────────┬────────────────────────────────────┘
+                                     │
+                                     ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│  2. STRUCTURED PROPOSAL                                                 │
+│  Model generates atomic operations (replace_text, insert, delete)       │
+│  governed by a strict JSON schema. No destructive unvetted rewrites.    │
+└────────────────────────────────────┬────────────────────────────────────┘
+                                     │
+                                     ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│  3. IN-MEMORY PREVIEW & MYERS DIFFS                                     │
+│  Compute source text diffs, element changes, and run Fount Probe        │
+│  validation checks in pure memory. Zero database side effects.          │
+└────────────────────────────────────┬────────────────────────────────────┘
+                                     │
+                                     ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│  4. WRITER ACCEPTANCE                                                   │
+│  - ACCEPT: Changes commit atomically to PostgreSQL advancing revision.  │
+│  - REJECT: Drop preview—no database rows or revision hashes are moved.  │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -100,7 +100,7 @@ alias FountWorkshop, as: Workshop
 {:ok, script} = Fount.Persistence.load(Fount.Repo, "my-feature-slug")
 scene = hd(script.ir.scenes)
 
-# 2. Extract bounded scene context
+# 2. Extract targeted scene context
 {:ok, context} = Workshop.context(script, scene.id)
 
 # 3. Request a revision proposal from an LLM
@@ -243,7 +243,7 @@ Fount Workshop is the top-tier creative application layer of the Fount screenpla
 
 1. **[Fount](https://hexdocs.pm/fount)**: The headless screenplay engine, lossless CST parser, and relational revision store.
 2. **[Fount Probe](https://hexdocs.pm/fount_probe)**: The dramaturgical auditor and diagnostic engine. 100% read-only inspection for character knowledge, continuity, scene mechanics, and voice attribution.
-3. **[Fount Workshop](https://hexdocs.pm/fount_workshop)**: The writer's studio. Bounded AI revision loops with Myers diffs, beat recovery, competition submission checks, and PDF publishing.
+3. **[Fount Workshop](https://hexdocs.pm/fount_workshop)**: The writer's studio. Scoped AI revision loops with Myers diffs, beat recovery, competition submission checks, and PDF publishing.
 
 ---
 

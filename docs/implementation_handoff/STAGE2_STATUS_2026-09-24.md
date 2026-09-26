@@ -91,3 +91,7 @@ The resumed stability pass used `gpt-5.6-sol` at low reasoning effort and a newl
 The story checks above are the checks emitted by the current implementation. They do not certify the screenplay's creative quality or every assertion in the original W01–W09 fixtures.
 
 The latest source passed all 12 offline dependency, format, compile and test checks under Elixir 1.20.3/OTP 29 at `/tmp/fount-handoff-offline-20260925T151230-848200/status.tsv`: Core 69, Probe 45, Workshop 53. This run followed the writer repairs above; it does not repeat the earlier Elixir 1.19.5 check or any provider call.
+
+## Per-turn speech QA — 2026-09-25
+
+`espeak-ng` 1.52 was installed locally for this optional check. `mix run examples/live.exs -- --mode speech` wrote four real WAV clips under `/tmp/fount-qa-speech-example/`. Using three configured voices and an existing disposable-database screenplay, `mix fount.read --key writer-sequence_routes-2053c361-9ac5-4dcc-8243-9794afaa905f --output /tmp/fount-qa-speech-cli --speech` wrote table-read JSON/HTML, 29 per-turn WAVs and `audio/audio.json`. A read-only validator confirmed 29 clips in the same order as the 29 table-read turns, matching SHA-256 for each file, nonempty PCM frames, manifest durations matching WAV frame counts, and a total timeline of 82.78 seconds. `file` and `soxi` identified 16-bit mono PCM at 22,050 Hz. The CLI exited successfully. No mixed master file, waveform listening test or voice-quality judgment is claimed. No source change was needed for this path.

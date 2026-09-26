@@ -335,7 +335,7 @@ It enforces absolute writer sovereignty through a scoped revision loop (`context
         ┌─────────────────┐         ┌─────────────────┐
         │   FOUNT PROBE   │         │ FOUNT WORKSHOP  │
         │                 │         │                 │
-        │ investigate     │────────▶│ strategies      │
+        │ investigate     │────────>│ strategies      │
         │ compare         │evidence │ alternate pages │
         │ trace           │         │ combine / edit  │
         │ diagnose        │         │ review / accept │

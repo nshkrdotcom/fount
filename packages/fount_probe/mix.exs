@@ -29,7 +29,7 @@ defmodule FountProbe.MixProject do
   defp deps do
     [
       {:fount, "~> 0.1.0", path: "../fount"},
-      {:system_one_sdk, path: "../../../system_one_sdk/packages/system_one_sdk"},
+      {:system_one_sdk, "~> 0.5.0"},
       {:inference, "~> 0.4.0"},
       {:agent_session_manager, "~> 0.16.0"},
       {:jason, "~> 1.4"},

@@ -507,3 +507,9 @@ Deferred enhancements and long-term roadmap items (such as a desktop GUI and mix
 ## License
 
 [MIT License](LICENSE) — Copyright (c) 2026 nshkrdotcom
+
+## Source handoff snapshots
+
+For the progressive screenplay-writing implementation workflow, generate a parsable XML snapshot with `repomix`, then use `python3 scripts/seal_handoff_snapshot.py --root . --input /absolute/path/fount.raw.xml --output /absolute/path/fount.xml`. The helper verifies included source against disk, preserves exact bytes, and embeds file hashes and Git identity for safe offline overlay construction. Run `python3 -m unittest discover -s scripts/tests -v` to verify the helper.
+
+Use four fresh inputs on each pass: `fount.xml`, `system_one_sdk.xml`, `inference.xml`, and the complete updated `docset.xml`. The source-writing environment returns ZIPs; the user applies and commits them; Codex verifies and repairs the applied phase before the next snapshots. The active 2026-09-25 v4 docset in the separate brainstorms repository defines the product phases. Historical implementation notes above are not a replacement for that current specification.

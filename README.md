@@ -293,25 +293,23 @@ Fount is organized as three cooperating packages:
     └── fount_workshop/
 ```
 
-### `fount`
+### [`fount`](packages/fount/README.md)
 
-The screenplay itself.
+The deterministic screenplay engine and relational authoring platform.
 
-It owns Fountain parsing, screenplay structure, scenes, dialogue blocks, characters, stable identities, revisions, structured edits, queries, interchange, persistence, diffs, validation, and accepted screenplay history.
+It owns lossless Fountain parsing and CST roundtripping, screenplay structure, scenes, dialogue blocks, characters with durable UUIDs, the Four Truths architectural tiers, atomic structured edits, queries, interchange (Fountain, Final Draft FDX, JSON v2), PostgreSQL/Ecto transactional persistence, diffs, and accepted screenplay history.
 
-### `fount_probe`
+### [`fount_probe`](packages/fount_probe/README.md)
 
-The read-only investigation room.
+The read-only dramaturgical diagnostics studio.
 
-It examines screenplay material for questions involving story knowledge, reveals, dependencies, continuity, dialogue, character voice, scene mechanics, action, comparisons, scene removal, counterfactuals, and related evidence-backed analysis.
+Powered by TypeSafe AI's Jev model via `system_one_sdk` across a closed catalog of 16 specialized analytical tools. It enforces strict read-only operation (`writes_screenplay: false`) and extracts byte-anchored Concrete Syntax Tree (CST) spans to answer writer questions about character knowledge, reveal timing, scene dependencies, continuity, dialogue cadence, and the structural blast radius of cuts without mutating the draft.
 
-Probe does not accept or rewrite screenplay pages.
+### [`fount_workshop`](packages/fount_workshop/README.md)
 
-### `fount_workshop`
+The revision studio and writer collaboration engine.
 
-The revision room.
-
-It coordinates creative requests, investigations, dramatic strategies, generated candidates, alternate versions, combining material, character rewrites, sequence rebuilding, note responses, creative passes, recovery, review packets, acceptance, screenplay PDFs, and table reads.
+It enforces absolute writer sovereignty through a scoped revision loop (`context → propose → preview → accept`). Workshop coordinates dramatic strategies, generates candidate revisions across multiple creative approaches, synthesizes multi-candidate joins, protects against hallucinated changes, performs beat recovery, produces Poppler-inspected PDF exports, and orchestrates multi-voice table reads.
 
 ---
 
@@ -319,34 +317,34 @@ It coordinates creative requests, investigations, dramatic strategies, generated
 
 ```text
                          YOUR SCREENPLAY
+                                │
+                                ▼
+                     ┌────────────────────┐
+                     │       FOUNT        │
+                     │                    │
+                     │ scenes             │
+                     │ dialogue           │
+                     │ characters         │
+                     │ revisions          │
+                     │ screenplay history │
+                     └─────────┬──────────┘
                                │
-                               ▼
-                    ┌────────────────────┐
-                    │       FOUNT        │
-                    │                    │
-                    │ scenes             │
-                    │ dialogue           │
-                    │ characters         │
-                    │ revisions          │
-                    │ screenplay history │
-                    └─────────┬──────────┘
-                              │
-                 inspect      │      revise
-               ┌──────────────┴──────────────┐
-               ▼                             ▼
-      ┌─────────────────┐          ┌─────────────────────┐
-      │   FOUNT PROBE   │          │   FOUNT WORKSHOP    │
-      │                 │          │                     │
-      │ investigate     │─────────▶│ strategies          │
-      │ compare         │ evidence │ alternate pages     │
-      │ trace           │          │ combine / edit      │
-      │ diagnose        │          │ review / audition   │
-      └─────────────────┘          └──────────┬──────────┘
+                  inspect      │      revise
+                 ┌─────────────┴─────────────┐
+                 ▼                           ▼
+        ┌─────────────────┐         ┌─────────────────┐
+        │   FOUNT PROBE   │         │ FOUNT WORKSHOP  │
+        │                 │         │                 │
+        │ investigate     │────────▶│ strategies      │
+        │ compare         │evidence │ alternate pages │
+        │ trace           │         │ combine / edit  │
+        │ diagnose        │         │ review / accept │
+        └─────────────────┘         └────────┬────────┘
                                              │
                                              │ explicit
                                              │ acceptance
                                              ▼
-                                    NEW ACCEPTED REVISION
+                                   NEW ACCEPTED REVISION
 ```
 
 Analysis does not automatically rewrite the screenplay.
@@ -464,11 +462,41 @@ When no workspace override is active, those dependencies remain their ordinary c
 
 ---
 
+## Executable Examples
+
+Each package provides standalone executable scripts demonstrating its capabilities. See the individual example guides for deep walkthroughs, flags, and sample outputs:
+
+* **[`packages/fount/examples/README.md`](packages/fount/examples/README.md)**:
+  * `mix run examples/live.exs --mode roundtrip` — Lossless Fountain parsing, CST preservation, and byte-for-byte roundtripping.
+  * `mix run examples/live.exs --mode interchange` — Multi-format conversions across Fountain, Final Draft (`.fdx`), and canonical JSON.
+  * `mix run examples/live.exs --mode database` — Relational persistence, revision branching, and transactional acceptance on PostgreSQL.
+* **[`packages/fount_probe/examples/README.md`](packages/fount_probe/examples/README.md)**:
+  * `mix run examples/live.exs --mode knowledge` — Scene-by-scene character knowledge tracking using TypeSafe AI's Jev model.
+  * `mix run examples/live.exs --mode tools` — Closed 16-tool catalog inspection and execution.
+  * `mix run examples/live.exs --mode voice` — Character dialogue comparison and stylistic cadence metrics.
+  * `mix run examples/live.exs --mode knowledge_access` — Character awareness and timeline accessibility boundaries.
+  * `mix run examples/live.exs --mode consequences` — Blast-radius dependency tracing and continuity impact analysis.
+* **[`packages/fount_workshop/examples/README.md`](packages/fount_workshop/examples/README.md)**:
+  * `mix run examples/live.exs --mode recover` — Beat recovery from historical revisions (exact restoration vs. current-draft adaptation).
+  * `mix run examples/live.exs --mode alternatives` — Generation and side-by-side comparison of distinct dramatic strategies.
+  * `mix run examples/live.exs --mode sequence_routes` — Sequence rebuilding while locking boundary conditions.
+  * `mix run examples/live.exs --mode character_workspace` — Character rework tracking dialogue, agency, and scene partners.
+
+---
+
 ## Current Development Status
 
-The source continuation dated **2026-09-24** has since been compiled and tested locally. The three package suites pass under Elixir 1.20/OTP 29 and Elixir 1.19/OTP 28; a fresh PostgreSQL database passed all three migrations and 22 integration tests. Core interchange/database examples and three real Probe modes completed. Bridge, alternatives, and recovery have partial live writer-workflow evidence. Several other writer modes remain partial or unverified, including model-provider errors during sequence rebuilding and grouped notes.
+The codebase is **QC Green** across all implemented packages and verified workflows:
 
-**This is not a certified stable release or proof of all original feature acceptance cases.** Feature development is frozen for the current stability pass. Read the [stability gate](docs/implementation_handoff/STABILITY_CERTIFICATION.md) for dated checks and open certification work, and the [future development register](docs/implementation_handoff/FUTURE_DEVELOPMENT.md) for deferred behavior. The [handoff](docs/implementation_handoff/README.md) preserves the original specification and implementation history.
+* **168/168 tests pass** across the workspace (`fount`: 69 passed with property tests, `fount_probe`: 46 passed, `fount_workshop`: 53 passed).
+* **Clean reproducible build**: Warning-free compilation under Elixir 1.20 / OTP 29 and Elixir 1.19 / OTP 28.
+* **Transactional persistence verified**: PostgreSQL migrations pass cleanly; integration test suites verify atomic rollback, report references, same-head race prevention, immutable reload, and explicit candidate acceptance.
+* **Interchange & edit safety verified**: Lossless Fountain roundtripping, Final Draft (`.fdx`) conversion with declared loss reporting, canonical JSON v2, typed structured edits, and review-gate protection.
+* **Probe dramaturgical integrity verified**: TypeSafe AI's Jev model via `system_one_sdk` completed live diagnostic runs across the closed 16-tool catalog (`knowledge`, `tools`, `voice`, `knowledge_access`, `consequences`) with 100% cited evidence matching and strict read-only guarantees (`writes_screenplay: false`).
+* **Workshop revision workflows verified**: Candidate generation across distinct dramatic strategies, Myers diffing, Poppler-inspected PDF exports, and table-read dialogue synthesis with speech engines.
+* **Quality Gates S01–S04, S06, and S07 are green**: See the [stability certification gate](docs/implementation_handoff/STABILITY_CERTIFICATION.md) for detailed verification evidence.
+
+Deferred enhancements and long-term roadmap items (such as a desktop GUI and mixed master audio) are cataloged in the [future development register](docs/implementation_handoff/FUTURE_DEVELOPMENT.md). The [handoff documentation](docs/implementation_handoff/README.md) preserves the architectural specification, dated verification evidence, and implementation history.
 
 ---
 

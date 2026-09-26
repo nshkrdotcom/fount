@@ -56,12 +56,14 @@ defmodule FountProbe.MixProject do
         "guides/architecture.md",
         "guides/tools-and-catalog.md",
         "guides/investigations-and-evidence.md",
-        "guides/comparison-and-ablation.md"
+        "guides/comparison-and-ablation.md",
+        "examples/README.md"
       ],
       groups_for_extras: [
         Overview: ~r/(README|CHANGELOG|LICENSE)/,
         Guides:
-          ~r/guides\/(architecture|tools-and-catalog|investigations-and-evidence|comparison-and-ablation)/
+          ~r/guides\/(architecture|tools-and-catalog|investigations-and-evidence|comparison-and-ablation)/,
+        "Live Examples": ~r/examples/
       ],
       groups_for_modules: [
         Probe: [
@@ -121,7 +123,7 @@ defmodule FountProbe.MixProject do
       links: %{
         "GitHub" => @source_url
       },
-      files: ~w(lib priv guides assets mix.exs README.md CHANGELOG.md LICENSE)
+      files: ~w(lib priv guides assets examples mix.exs README.md CHANGELOG.md LICENSE)
     ]
   end
 end

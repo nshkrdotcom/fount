@@ -61,13 +61,15 @@ defmodule Fount.MixProject do
         "guides/annotations-and-analysis.md",
         "guides/persistence.md",
         "guides/adapters.md",
-        "guides/research.md"
+        "guides/research.md",
+        "examples/README.md"
       ],
       groups_for_extras: [
         Overview: ~r/(README|CHANGELOG|LICENSE)/,
         "Design & Architecture": ~r/guides\/(architecture|lossless-fountain|ir|cast-and-mentions|editing)/,
         "Capabilities & Runtime": ~r/guides\/(annotations-and-analysis|persistence|adapters)/,
-        "Research & Precedents": ~r/guides\/research/
+        "Research & Precedents": ~r/guides\/research/,
+        "Live Examples": ~r/examples/
       ],
       groups_for_modules: [
         "Core & Document": [
@@ -157,7 +159,7 @@ defmodule Fount.MixProject do
       links: %{
         "GitHub" => @source_url
       },
-      files: ~w(lib priv guides assets mix.exs README.md CHANGELOG.md LICENSE)
+      files: ~w(lib priv guides assets examples mix.exs README.md CHANGELOG.md LICENSE)
     ]
   end
 end

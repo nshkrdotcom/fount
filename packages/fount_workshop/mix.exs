@@ -59,14 +59,16 @@ defmodule FountWorkshop.MixProject do
         "guides/proposals-and-diffs.md",
         "guides/pdf-export-and-inspection.md",
         "guides/submission-checks.md",
-        "guides/table-reads-and-audio.md"
+        "guides/table-reads-and-audio.md",
+        "examples/README.md"
       ],
       groups_for_extras: [
         Overview: ~r/(README|CHANGELOG|LICENSE)/,
         "Agent Workflows":
           ~r/guides\/(architecture|creative-workflows|scene-revision-loop|proposals-and-diffs)/,
         "Export & Inspection": ~r/guides\/(pdf-export-and-inspection|submission-checks)/,
-        "Rehearsal & Audio": ~r/guides\/table-reads-and-audio/
+        "Rehearsal & Audio": ~r/guides\/table-reads-and-audio/,
+        "Live Examples": ~r/examples/
       ],
       groups_for_modules: [
         Workshop: [
@@ -98,7 +100,7 @@ defmodule FountWorkshop.MixProject do
       links: %{
         "GitHub" => @source_url
       },
-      files: ~w(lib priv guides assets mix.exs README.md CHANGELOG.md LICENSE)
+      files: ~w(lib priv guides assets examples mix.exs README.md CHANGELOG.md LICENSE)
     ]
   end
 end

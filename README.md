@@ -464,23 +464,27 @@ When no workspace override is active, those dependencies remain their ordinary c
 
 ## Executable Examples
 
-Each package provides standalone executable scripts demonstrating its capabilities. See the individual example guides for deep walkthroughs, flags, and sample outputs:
+Run each example from its package directory. These commands work from the repository root after setup:
 
-* **[`packages/fount/examples/README.md`](packages/fount/examples/README.md)**:
-  * `mix run examples/live.exs --mode roundtrip` — Lossless Fountain parsing, CST preservation, and byte-for-byte roundtripping.
-  * `mix run examples/live.exs --mode interchange` — Multi-format conversions across Fountain, Final Draft (`.fdx`), and canonical JSON.
-  * `mix run examples/live.exs --mode database` — Relational persistence, revision branching, and transactional acceptance on PostgreSQL.
-* **[`packages/fount_probe/examples/README.md`](packages/fount_probe/examples/README.md)**:
-  * `mix run examples/live.exs --mode knowledge` — Scene-by-scene character knowledge tracking using TypeSafe AI's Jev model.
-  * `mix run examples/live.exs --mode tools` — Closed 16-tool catalog inspection and execution.
-  * `mix run examples/live.exs --mode voice` — Character dialogue comparison and stylistic cadence metrics.
-  * `mix run examples/live.exs --mode knowledge_access` — Character awareness and timeline accessibility boundaries.
-  * `mix run examples/live.exs --mode consequences` — Blast-radius dependency tracing and continuity impact analysis.
-* **[`packages/fount_workshop/examples/README.md`](packages/fount_workshop/examples/README.md)**:
-  * `mix run examples/live.exs --mode recover` — Beat recovery from historical revisions (exact restoration vs. current-draft adaptation).
-  * `mix run examples/live.exs --mode alternatives` — Generation and side-by-side comparison of distinct dramatic strategies.
-  * `mix run examples/live.exs --mode sequence_routes` — Sequence rebuilding while locking boundary conditions.
-  * `mix run examples/live.exs --mode character_workspace` — Character rework tracking dialogue, agency, and scene partners.
+```bash
+(cd packages/fount && mix run examples/live.exs --mode roundtrip)
+```
+
+This exports the bundled screenplay as Fountain, FDX, and JSON. The other Fount modes are `interchange` (format conversion checks) and `database` (revision persistence; requires PostgreSQL and `FOUNT_DATABASE_URL`). See the [Fount example guide](packages/fount/examples/README.md).
+
+```bash
+(cd packages/fount_probe && mix run examples/live.exs --mode knowledge)
+```
+
+Set `SYSTEM_ONE_API_KEY` first: `knowledge` calls the live Jev service. The `tools`, `voice`, `knowledge_access`, and `consequences` modes also need a configured PostgreSQL database and inference provider. See the [Probe example guide](packages/fount_probe/examples/README.md) for setup and mode details.
+
+```bash
+(cd packages/fount_workshop && mix run examples/live.exs --mode recover)
+```
+
+Set `FOUNT_DATABASE_URL` and install the PDF dependencies first. `recover` restores a historical beat as a reviewable candidate without changing the accepted revision. Other Workshop modes, including `alternatives`, `sequence_routes`, and `character_workspace`, also call AI services. See the [Workshop example guide](packages/fount_workshop/examples/README.md) for prerequisites and modes.
+
+By default, each script writes to `examples/output` within its package. Pass `--out` to choose another directory.
 
 ---
 

@@ -119,12 +119,8 @@ defmodule FountWorkshop.Writing.Preparation do
      ], %{"writer_approaches" => opts["approaches"] || []}}
   end
 
-  defp inspections(_, %{"workflow" => "propagate", "options" => opts}, context) do
-    targets =
-      case context.selection do
-        %{"targets" => targets} -> targets
-        _ -> []
-      end
+  defp inspections(_, %{"workflow" => "propagate", "options" => opts} = request, context) do
+    targets = propagation_targets(request)
 
     {[
        request("dependencies", "dependencies", %{
@@ -462,6 +458,23 @@ defmodule FountWorkshop.Writing.Preparation do
        }
        |> Map.put(:investigation_strategies, explanation.data["strategies"])}
     end
+  end
+
+  @doc false
+  def propagation_targets(request) do
+    constraint_targets =
+      Enum.flat_map(request["constraints"] || [], fn constraint ->
+        [constraint["target"], get_in(constraint, ["spec", "at"])]
+      end)
+
+    destination =
+      for id <- get_in(request, ["options", "destination", "scene_ids"]) || [],
+          do: %{"kind" => "scene", "id" => id}
+
+    (constraint_targets ++ destination)
+    |> Enum.filter(&is_map/1)
+    |> Enum.reject(&(&1["kind"] == "screenplay"))
+    |> Enum.uniq()
   end
 
   defp investigation_followup(_, _, _, _, explanation, _, _, 0),

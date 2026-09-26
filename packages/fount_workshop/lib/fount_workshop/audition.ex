@@ -24,7 +24,7 @@ defmodule FountWorkshop.Audition do
           &%{"kind" => "delete_scene", "target" => %{"kind" => "scene", "id" => &1}}
         )
 
-      with {:ok, view, _} <- Fount.Screenplay.apply(model, operations) do
+      with {:ok, view, _} <- Fount.Screenplay.apply(model, operations, []) do
         output = Keyword.get(opts, :output_dir)
 
         if is_binary(output) do

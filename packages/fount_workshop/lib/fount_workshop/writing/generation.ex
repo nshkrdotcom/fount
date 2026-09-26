@@ -35,7 +35,7 @@ defmodule FountWorkshop.Writing.Generation do
         "\n" <>
         Jason.encode!(%{
           "strategy" => strategy,
-          "context" => Context.prompt_data(context.data),
+          "context" => Context.prompt_data(context.data, inspection_sample_limit: 4),
           "repair_feedback" => Keyword.get(opts, :repair_feedback),
           "source_candidate" => Keyword.get(opts, :source_candidate)
         })

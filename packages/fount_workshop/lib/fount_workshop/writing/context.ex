@@ -3,7 +3,9 @@ defmodule FountWorkshop.Writing.Context do
   alias FountProbe.Projection
 
   @doc "Compacts duplicated projection metadata for provider prompts; saved evidence stays complete."
-  def prompt_data(data) when is_map(data) do
+  def prompt_data(data, opts \\ []) when is_map(data) do
+    sample_limit = Keyword.get(opts, :inspection_sample_limit, 8)
+
     data
     |> Map.delete("known_neighbor_pages")
     |> Map.update(
@@ -30,15 +32,19 @@ defmodule FountWorkshop.Writing.Context do
     |> Map.update(
       "dialogue_blocks",
       [],
-      &Enum.map(&1, fn block ->
-        Map.take(block, ~w(id cue_id body_ids dual_with side scene_id))
-      end)
+      &(&1
+        |> Enum.filter(fn block -> block["dual_with"] || block["side"] end)
+        |> Enum.map(fn block ->
+          Map.take(block, ~w(id cue_id body_ids dual_with side scene_id))
+        end))
     )
     |> Map.update(
       "confirmed_mentions",
       [],
       &Enum.map(&1, fn mention ->
-        Map.take(mention, ~w(id element_id character_id role status byte_start byte_end))
+        if mention["role"] == "speaker_cue",
+          do: Map.take(mention, ~w(element_id character_id)),
+          else: Map.take(mention, ~w(id element_id character_id role status byte_start byte_end))
       end)
     )
     |> Map.update(
@@ -47,17 +53,17 @@ defmodule FountWorkshop.Writing.Context do
       &Enum.map(&1, fn report ->
         report
         |> Map.take(~w(id tool status coverage))
-        |> Map.put("data", compact_inspection_data(report["data"] || %{}))
+        |> Map.put("data", compact_inspection_data(report["data"] || %{}, sample_limit))
         |> Map.put("error_count", length(report["errors"] || []))
         |> Map.put("finding_count", length(report["findings"] || []))
       end)
     )
   end
 
-  defp compact_inspection_data(data) when is_map(data) do
+  defp compact_inspection_data(data, sample_limit) when is_map(data) do
     Map.new(data, fn
       {key, values} when is_list(values) ->
-        {key, %{"total" => length(values), "sample" => Enum.take(values, 8)}}
+        {key, %{"total" => length(values), "sample" => Enum.take(values, sample_limit)}}
 
       pair ->
         pair

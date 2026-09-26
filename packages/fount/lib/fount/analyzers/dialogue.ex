@@ -1,9 +1,9 @@
 defmodule Fount.Analyzers.Dialogue do
   @moduledoc "Deterministic dialogue-turn metrics built from dialogue blocks."
-  @behaviour Fount.Analyzer
-
   alias Fount.Annotation
-  alias Fount.Annotation.{Provenance, Target}
+  alias Fount.Annotation.Provenance
+  alias Fount.Annotation.Target
+  @behaviour Fount.Analyzer
 
   @impl true
   def analyze(doc, _opts) do

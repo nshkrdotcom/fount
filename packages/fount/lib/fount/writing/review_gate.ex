@@ -9,6 +9,15 @@ defmodule Fount.Writing.ReviewGate do
   @spec validate(map(), map(), String.t()) :: :ok | {:error, term()}
   def validate(candidate, review, expected_revision)
       when is_map(candidate) and is_map(review) and is_binary(expected_revision) do
+    with :ok <- validate_identity(candidate, review, expected_revision),
+         :ok <- validate_review(candidate, review) do
+      validate_checks(Map.get(candidate, "checks", []), Map.get(review, "overrides", []))
+    end
+  end
+
+  def validate(_, _, _), do: {:error, :missing_review}
+
+  defp validate_identity(candidate, review, expected_revision) do
     cond do
       candidate["base_revision_id"] != expected_revision ->
         {:error, :candidate_base_mismatch}
@@ -19,6 +28,13 @@ defmodule Fount.Writing.ReviewGate do
       review["content_hash"] != candidate["content_hash"] ->
         {:error, :review_content_mismatch}
 
+      true ->
+        :ok
+    end
+  end
+
+  defp validate_review(candidate, review) do
+    cond do
       not is_binary(review["actor"]) or String.trim(review["actor"]) == "" ->
         {:error, :missing_actor}
 
@@ -37,11 +53,9 @@ defmodule Fount.Writing.ReviewGate do
         {:error, :review_reports_mismatch}
 
       true ->
-        validate_checks(Map.get(candidate, "checks", []), Map.get(review, "overrides", []))
+        :ok
     end
   end
-
-  def validate(_, _, _), do: {:error, :missing_review}
 
   defp valid_overrides?(overrides) when is_list(overrides) do
     Enum.all?(overrides, fn

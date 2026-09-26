@@ -1,7 +1,9 @@
 defmodule Fount.Semantics.Graph do
   @moduledoc "Persistent-style semantic graph for entities, mentions, relations, and events."
-
-  alias Fount.Semantics.{Entity, Event, Mention, Relation}
+  alias Fount.Semantics.Entity
+  alias Fount.Semantics.Event
+  alias Fount.Semantics.Mention
+  alias Fount.Semantics.Relation
 
   defstruct entities: %{}, mentions: %{}, relations: %{}, events: %{}
 

@@ -1,4 +1,5 @@
 defmodule FountWorkshop.RecoveryCopyContinuationTest do
+  alias FountWorkshop.Writing.RecoveryCopy
   use ExUnit.Case, async: true
 
   test "a deleted scene can be restored without an inference client or new scene identities" do
@@ -58,7 +59,7 @@ defmodule FountWorkshop.RecoveryCopyContinuationTest do
     }
 
     assert {:ok, candidate} =
-             FountWorkshop.Writing.RecoveryCopy.propose(
+             RecoveryCopy.propose(
                current,
                req,
                %{"id" => "copy", "title" => "Restore"},
@@ -129,7 +130,7 @@ defmodule FountWorkshop.RecoveryCopyContinuationTest do
     }
 
     assert {:ok, candidate} =
-             FountWorkshop.Writing.RecoveryCopy.propose(
+             RecoveryCopy.propose(
                current,
                request,
                %{"id" => "copy", "title" => "Restore"},
@@ -204,7 +205,7 @@ defmodule FountWorkshop.RecoveryCopyContinuationTest do
     }
 
     assert {:ok, candidate} =
-             FountWorkshop.Writing.RecoveryCopy.propose(
+             RecoveryCopy.propose(
                base,
                request,
                %{"id" => "copy", "title" => "Copy"},
@@ -282,7 +283,7 @@ defmodule FountWorkshop.RecoveryCopyContinuationTest do
     }
 
     assert {:ok, candidate} =
-             FountWorkshop.Writing.RecoveryCopy.propose(
+             RecoveryCopy.propose(
                base,
                req,
                %{"id" => "copy", "title" => "Copy"},
@@ -299,7 +300,7 @@ defmodule FountWorkshop.RecoveryCopyContinuationTest do
            )
 
     assert {:error, :missing_cast_mapping} =
-             FountWorkshop.Writing.RecoveryCopy.propose(
+             RecoveryCopy.propose(
                base,
                put_in(req, ["options", "cast_mapping"], %{}),
                %{"id" => "copy", "title" => "Copy"},

@@ -1,5 +1,6 @@
 defmodule FountWorkshop.TableRead do
   @moduledoc "Routes ordered screenplay dialogue to a caller-supplied speech engine."
+  alias FountWorkshop.Speech.Espeak
 
   @doc "Exports all active speaking turns as actual JSON or a readable HTML table read."
   def export(model, path, format) when format in [:json, :html] and is_binary(path) do
@@ -30,72 +31,66 @@ defmodule FountWorkshop.TableRead do
 
   @doc "Writes real per-turn WAV clips and a synchronization manifest; simultaneous pairs share a start time."
   def render_audio(model, directory, voices, opts \\ []) when is_map(voices) do
-    with {:ok, turns} <- all_turns(model), :ok <- File.mkdir_p(directory) do
-      Enum.reduce_while(turns, {:ok, [], 0.0, %{}}, fn turn, {:ok, clips, clock, starts} ->
-        voice = voices[turn.character_id] || voices[turn.cue]
+    with {:ok, turns} <- all_turns(model),
+         :ok <- File.mkdir_p(directory),
+         {:ok, clips, duration, _} <-
+           Enum.reduce_while(
+             turns,
+             {:ok, [], 0.0, %{}},
+             &render_turn(&1, &2, directory, voices, opts)
+           ) do
+      manifest = %{
+        "screenplay_id" => model.id,
+        "revision_id" => model.revision.id,
+        "duration_seconds" => duration,
+        "clips" => clips,
+        "playback" =>
+          "Per-turn WAV clips; dual partners share timestamps. No mixed master file is claimed."
+      }
 
-        if is_nil(voice) do
-          {:halt, {:error, {:voice_not_configured, turn.cue}}}
-        else
-          path = Path.join(directory, turn.id <> ".wav")
+      File.write!(Path.join(directory, "audio.json"), Jason.encode!(manifest, pretty: true))
+      {:ok, manifest}
+    end
+  end
 
-          case FountWorkshop.Speech.Espeak.render(turn.dialogue, voice, path, opts) do
-            {:ok, audio} ->
-              case wav_duration(path) do
-                {:ok, duration} ->
-                  partner = Map.get(turn, :dual_with)
+  defp render_turn(turn, {:ok, clips, clock, starts}, directory, voices, opts) do
+    voice = voices[turn.character_id] || voices[turn.cue]
 
-                  start =
-                    if partner && Map.has_key?(starts, partner), do: starts[partner], else: clock
+    if is_nil(voice) do
+      {:halt, {:error, {:voice_not_configured, turn.cue}}}
+    else
+      path = Path.join(directory, turn.id <> ".wav")
 
-                  clip = %{
-                    "block_id" => turn.id,
-                    "scene_id" => turn.scene_id,
-                    "character_id" => turn.character_id,
-                    "path" => path,
-                    "sha256" => audio.sha256,
-                    "start_seconds" => start,
-                    "duration_seconds" => duration,
-                    "dual_with" => partner
-                  }
-
-                  {:cont,
-                   {:ok, clips ++ [clip], max(clock, start + duration),
-                    Map.put(starts, turn.id, start)}}
-
-                error ->
-                  {:halt, error}
-              end
-
-            error ->
-              {:halt, error}
-          end
-        end
-      end)
-      |> case do
-        {:ok, clips, duration, _} ->
-          manifest = %{
-            "screenplay_id" => model.id,
-            "revision_id" => model.revision.id,
-            "duration_seconds" => duration,
-            "clips" => clips,
-            "playback" =>
-              "Per-turn WAV clips; dual partners share timestamps. No mixed master file is claimed."
-          }
-
-          File.write!(Path.join(directory, "audio.json"), Jason.encode!(manifest, pretty: true))
-          {:ok, manifest}
-
-        error ->
-          error
+      with {:ok, audio} <- Espeak.render(turn.dialogue, voice, path, opts),
+           {:ok, duration} <- wav_duration(path) do
+        append_clip(turn, audio, path, duration, clips, clock, starts)
+      else
+        error -> {:halt, error}
       end
     end
   end
 
+  defp append_clip(turn, audio, path, duration, clips, clock, starts) do
+    partner = Map.get(turn, :dual_with)
+    start = if partner && Map.has_key?(starts, partner), do: starts[partner], else: clock
+
+    clip = %{
+      "block_id" => turn.id,
+      "scene_id" => turn.scene_id,
+      "character_id" => turn.character_id,
+      "path" => path,
+      "sha256" => audio.sha256,
+      "start_seconds" => start,
+      "duration_seconds" => duration,
+      "dual_with" => partner
+    }
+
+    {:cont, {:ok, clips ++ [clip], max(clock, start + duration), Map.put(starts, turn.id, start)}}
+  end
+
   defp wav_duration(path) do
-    with {:ok, <<"RIFF", _::little-32, "WAVE", rest::binary>>} <- File.read(path) do
-      chunks(rest, nil, nil)
-    else
+    case File.read(path) do
+      {:ok, <<"RIFF", _::little-32, "WAVE", rest::binary>>} -> chunks(rest, nil, nil)
       _ -> {:error, :invalid_wav_header}
     end
   end
@@ -143,11 +138,11 @@ defmodule FountWorkshop.TableRead do
   defp html(model, turns) do
     rows =
       Enum.map_join(turns, "\n", fn turn ->
-        "<article data-scene-id=\"#{escape(turn.scene_id)}\" data-block-id=\"#{escape(turn.id)}\">" <>
+        ~s(<article data-scene-id="#{escape(turn.scene_id)}" data-block-id="#{escape(turn.id)}">) <>
           "<h2>#{escape(turn.cue)}</h2><p>#{escape(turn.dialogue) |> String.replace("\n", "<br>")}</p></article>"
       end)
 
-    "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><title>Table Read</title>" <>
+    ~s(<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Table Read</title>) <>
       "<style>body{max-width:48rem;margin:3rem auto;padding:0 1rem;font:18px/1.5 Georgia,serif}" <>
       "article{border-bottom:1px solid #ddd;padding:1rem 0}h2{font:700 1rem sans-serif;margin:0 0 .4rem}" <>
       "p{margin:0;white-space:normal}</style></head><body><main data-revision-id=\"" <>

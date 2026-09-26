@@ -1,7 +1,8 @@
 defmodule FountWorkshop.SequenceRebuild do
   @moduledoc "Rebuilds a selected run of scenes as a reviewable candidate."
-
-  alias Fount.{Persistence, Query, Screenplay}
+  alias Fount.Persistence
+  alias Fount.Query
+  alias Fount.Screenplay
   alias FountWorkshop.Writing.Completion
 
   @types ~w(action character dialogue parenthetical transition centered lyric note blank)
@@ -89,39 +90,43 @@ defmodule FountWorkshop.SequenceRebuild do
                "target_scene_count" => Keyword.get(opts, :target_scene_count)
              }
            }) do
-      case propose(base, scene_ids, direction, client, opts) do
-        {:ok, proposal} ->
-          candidate =
-            Map.merge(proposal, %{
-              label: "Sequence route: #{proposal.approach}",
-              strategy: %{"approach" => proposal.approach},
-              change_groups: [%{"id" => "sequence", "operations" => proposal.changes.operations}],
-              lineage: proposal.changes.lineage,
-              provenance: %{"completion" => proposal.completion_trace}
-            })
+      run_sequence(repo, base, session, scene_ids, direction, client, opts)
+    end
+  end
 
-          case Persistence.save_candidate(repo, session.id, candidate) do
-            {:ok, saved} ->
-              {:ok, updated} =
-                Persistence.save_session(
-                  repo,
-                  Map.merge(session, %{
-                    status: "ready",
-                    progress: %{"candidate_ids" => [saved.id]}
-                  })
-                )
+  defp run_sequence(repo, base, session, scene_ids, direction, client, opts) do
+    case propose(base, scene_ids, direction, client, opts) do
+      {:ok, proposal} ->
+        candidate =
+          Map.merge(proposal, %{
+            label: "Sequence route: #{proposal.approach}",
+            strategy: %{"approach" => proposal.approach},
+            change_groups: [%{"id" => "sequence", "operations" => proposal.changes.operations}],
+            lineage: proposal.changes.lineage,
+            provenance: %{"completion" => proposal.completion_trace}
+          })
 
-              {:ok, %{session: updated, candidate: saved, accepted_revision_id: base.revision.id}}
+        case Persistence.save_candidate(repo, session.id, candidate) do
+          {:ok, saved} ->
+            {:ok, updated} =
+              Persistence.save_session(
+                repo,
+                Map.merge(session, %{
+                  status: "ready",
+                  progress: %{"candidate_ids" => [saved.id]}
+                })
+              )
 
-            error ->
-              mark_failed(repo, session, error)
-              error
-          end
+            {:ok, %{session: updated, candidate: saved, accepted_revision_id: base.revision.id}}
 
-        {:error, reason} ->
-          mark_failed(repo, session, reason)
-          {:error, reason}
-      end
+          error ->
+            mark_failed(repo, session, error)
+            error
+        end
+
+      {:error, reason} ->
+        mark_failed(repo, session, reason)
+        {:error, reason}
     end
   end
 
@@ -157,16 +162,22 @@ defmodule FountWorkshop.SequenceRebuild do
       not is_binary(direction) or String.trim(direction) == "" ->
         {:error, :empty_direction}
 
-      not is_list(required) or Enum.any?(required, &(not is_binary(&1) or &1 == "")) ->
+      invalid_required_texts?(required) ->
         {:error, :invalid_required_texts}
 
-      count != nil and (not is_integer(count) or count < 1) ->
+      invalid_count?(count) ->
         {:error, :invalid_target_scene_count}
 
       true ->
         :ok
     end
   end
+
+  defp invalid_required_texts?(required),
+    do: not is_list(required) or Enum.any?(required, &(not is_binary(&1) or &1 == ""))
+
+  defp invalid_count?(nil), do: false
+  defp invalid_count?(count), do: not is_integer(count) or count < 1
 
   defp prompt(base, ids, direction, required, count) do
     selected = Enum.map(ids, &Query.scene(base, &1))
@@ -292,13 +303,7 @@ defmodule FountWorkshop.SequenceRebuild do
               |> List.wrap()
               |> Enum.find(&(not MapSet.member?(used, &1.id)))
 
-            if matching_element do
-              {%{"keep" => matching_element.id}, MapSet.put(used, matching_element.id)}
-            else
-              {element
-               |> Map.put_new("attrs", %{})
-               |> Map.put("local_id", "new:element_#{index}_#{ordinal}"), used}
-            end
+            reuse_or_create_element(matching_element, element, used, index, ordinal)
           end)
 
         {[Map.put(scene_spec, "elements", elements) | acc], used_s, used_e}
@@ -314,5 +319,15 @@ defmodule FountWorkshop.SequenceRebuild do
       ],
       []
     )
+  end
+
+  defp reuse_or_create_element(nil, element, used, index, ordinal) do
+    {element
+     |> Map.put_new("attrs", %{})
+     |> Map.put("local_id", "new:element_#{index}_#{ordinal}"), used}
+  end
+
+  defp reuse_or_create_element(matching, _element, used, _index, _ordinal) do
+    {%{"keep" => matching.id}, MapSet.put(used, matching.id)}
   end
 end

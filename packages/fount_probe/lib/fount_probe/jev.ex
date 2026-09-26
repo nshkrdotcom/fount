@@ -1,7 +1,9 @@
 defmodule FountProbe.Jev do
   @moduledoc "Typed public SDK execution with exact association and explicit missing answers."
-  alias FountProbe.Writing.{Executor, DecisionPolicy}
+  alias Fount.Screenplay.Model
   alias Fount.Writing.CanonicalJSON
+  alias FountProbe.Writing.DecisionPolicy
+  alias FountProbe.Writing.Executor
 
   def evaluate(client, inputs, questions, opts \\ []) do
     with {:ok, questions, profile} <-
@@ -87,7 +89,7 @@ defmodule FountProbe.Jev do
 
   def question_profile(questions) do
     Enum.map(questions, fn {key, question} ->
-      %{"key" => to_string(key), "definition" => Fount.Screenplay.Model.plain(question)}
+      %{"key" => to_string(key), "definition" => Model.plain(question)}
     end)
   end
 
@@ -107,9 +109,7 @@ defmodule FountProbe.Jev do
       "status" => if(valid, do: "complete", else: "partial"),
       "answers" => decoded,
       "provenance" =>
-        Fount.Screenplay.Model.plain(
-          Map.take(response, [:model, :usage, :request_id, :prepared_fingerprint])
-        )
+        Model.plain(Map.take(response, [:model, :usage, :request_id, :prepared_fingerprint]))
     }
   end
 
@@ -155,7 +155,7 @@ defmodule FountProbe.Jev do
         "probabilities" => probabilities,
         "confidence" => a.confidence,
         "status" => "complete",
-        "rubric" => Fount.Screenplay.Model.plain(a.rubric)
+        "rubric" => Model.plain(a.rubric)
       }
     else
       _ -> %{"status" => "error", "reason" => "invalid_score_distribution"}

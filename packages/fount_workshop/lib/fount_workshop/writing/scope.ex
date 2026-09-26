@@ -1,6 +1,5 @@
 defmodule FountWorkshop.Writing.Scope do
   @moduledoc "Checks the writer's exact edit authority before replay and against the result."
-
   alias Fount.Query
   alias FountProbe.Projection
 
@@ -13,24 +12,9 @@ defmodule FountWorkshop.Writing.Scope do
       full = full_ids(base, targets)
 
       violations =
-        Enum.flat_map(edits, fn edit ->
-          if authorized?(base, edit, allowed, full, targets, placement),
-            do: [],
-            else: [edit_identity(edit)]
-        end)
+        Enum.flat_map(edits, &unauthorized_edit(base, &1, allowed, full, targets, placement))
 
-      repeated_spans =
-        edits
-        |> Enum.flat_map(fn
-          %{"kind" => "replace_text", "target" => %{"id" => id, "span" => span}}
-          when not is_nil(span) ->
-            if MapSet.member?(full, id), do: [], else: [id]
-
-          _ ->
-            []
-        end)
-        |> Enum.frequencies()
-        |> Enum.flat_map(fn {id, count} -> if count > 1, do: [id], else: [] end)
+      repeated_spans = duplicate_span_ids(edits, full)
 
       violations = violations ++ repeated_spans
 
@@ -53,19 +37,7 @@ defmodule FountWorkshop.Writing.Scope do
 
       outside = Enum.reject(changed, &MapSet.member?(allowed, &1.id)) |> Enum.map(& &1.id)
 
-      moved =
-        Enum.flat_map(base.ir.elements, fn element ->
-          if MapSet.member?(allowed, element.id) or is_nil(Query.node(draft, element.id)) do
-            []
-          else
-            before_owner = Query.scene_for(base, element.id)
-            after_owner = Query.scene_for(draft, element.id)
-
-            if (before_owner && before_owner.id) != (after_owner && after_owner.id),
-              do: [element.id],
-              else: []
-          end
-        end)
+      moved = Enum.flat_map(base.ir.elements, &moved_outside_scope(base, draft, allowed, &1))
 
       outside_scene_ids =
         base.ir.scenes
@@ -84,20 +56,56 @@ defmodule FountWorkshop.Writing.Scope do
   end
 
   defp full_ids(base, targets) do
-    Enum.reduce(targets, MapSet.new(), fn target, acc ->
-      if target["kind"] == "element" and not is_nil(target["span"]) do
-        acc
-      else
-        case Projection.target_ids(base, target) do
-          {:ok, ids} ->
-            acc = Enum.reduce(ids, acc, &MapSet.put(&2, &1))
-            if target["kind"] == "scene", do: MapSet.put(acc, target["id"]), else: acc
+    Enum.reduce(targets, MapSet.new(), &add_full_target(base, &1, &2))
+  end
 
-          _ ->
-            acc
-        end
-      end
-    end)
+  defp duplicate_span_ids(edits, full) do
+    edits
+    |> Enum.flat_map(&partial_span_id(&1, full))
+    |> Enum.frequencies()
+    |> Enum.flat_map(fn {id, count} -> if count > 1, do: [id], else: [] end)
+  end
+
+  defp unauthorized_edit(base, edit, allowed, full, targets, placement) do
+    if authorized?(base, edit, allowed, full, targets, placement),
+      do: [],
+      else: [edit_identity(edit)]
+  end
+
+  defp partial_span_id(
+         %{"kind" => "replace_text", "target" => %{"id" => id, "span" => span}},
+         full
+       )
+       when not is_nil(span),
+       do: if(MapSet.member?(full, id), do: [], else: [id])
+
+  defp partial_span_id(_, _), do: []
+
+  defp moved_outside_scope(base, draft, allowed, element) do
+    if MapSet.member?(allowed, element.id) or is_nil(Query.node(draft, element.id)) do
+      []
+    else
+      before_owner = Query.scene_for(base, element.id)
+      after_owner = Query.scene_for(draft, element.id)
+
+      if (before_owner && before_owner.id) != (after_owner && after_owner.id),
+        do: [element.id],
+        else: []
+    end
+  end
+
+  defp add_full_target(_, %{"kind" => "element", "span" => span}, ids) when not is_nil(span),
+    do: ids
+
+  defp add_full_target(base, target, ids) do
+    case Projection.target_ids(base, target) do
+      {:ok, found} ->
+        ids = Enum.reduce(found, ids, &MapSet.put(&2, &1))
+        if target["kind"] == "scene", do: MapSet.put(ids, target["id"]), else: ids
+
+      _ ->
+        ids
+    end
   end
 
   defp authorized?(

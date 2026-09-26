@@ -1,6 +1,8 @@
 defmodule Fount.PersistenceScopeTest do
+  alias Fount.Persistence.Query
+  alias Fount.Persistence.Schema
+  alias Fount.Writing.ReviewGate
   use ExUnit.Case, async: true
-  alias Fount.Persistence.{Schema, Query}
 
   test "all projection schemas carry the immutable revision key" do
     for module <- [
@@ -18,7 +20,7 @@ defmodule Fount.PersistenceScopeTest do
 
   test "public relational queries require an explicit revision" do
     query = Query.scenes(Fount.ID.v4(), Fount.ID.v4())
-    assert length(query.wheres) > 0
+    assert [%Ecto.Query.BooleanExpr{} | _] = query.wheres
     assert Schema.Screenplay.__schema__(:fields) |> Enum.member?(:head_revision_id)
   end
 
@@ -44,6 +46,6 @@ defmodule Fount.PersistenceScopeTest do
       "overrides" => [%{"constraint_id" => "pin", "reason" => "please"}]
     }
 
-    assert {:error, _} = Fount.Writing.ReviewGate.validate(candidate, review, base)
+    assert {:error, _} = ReviewGate.validate(candidate, review, base)
   end
 end

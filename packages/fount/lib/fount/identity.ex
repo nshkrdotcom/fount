@@ -6,9 +6,10 @@ defmodule Fount.Identity do
   Reconciliation matches semantic signatures and uses neighboring signatures plus
   old ordinal as deterministic tie-breakers for repeated identical elements.
   """
-
   alias Fount.IR
-  alias Fount.IR.{Element, Script, TitlePage}
+  alias Fount.IR.Element
+  alias Fount.IR.Script
+  alias Fount.IR.TitlePage
 
   @known_types ~w(scene_heading action character dialogue parenthetical transition centered lyric section synopsis page_break note boneyard blank)
                |> Map.new(&{&1, String.to_atom(&1)})

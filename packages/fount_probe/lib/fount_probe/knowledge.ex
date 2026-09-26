@@ -1,6 +1,5 @@
 defmodule FountProbe.Knowledge do
   @moduledoc "Jev assisted reveal checks over exact, isolated screenplay perspectives."
-
   alias FountProbe.State
 
   @question SystemOneSDK.noul(

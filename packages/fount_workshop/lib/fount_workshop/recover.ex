@@ -1,7 +1,8 @@
 defmodule FountWorkshop.Recover do
   @moduledoc "Restores or adapts exact historical screenplay material as a candidate."
-
-  alias Fount.{Persistence, Query, Screenplay}
+  alias Fount.Persistence
+  alias Fount.Query
+  alias Fount.Screenplay
 
   @doc "Restores one historical element by ID, preserving its identity when possible."
   def propose(%Screenplay{} = current, %Screenplay{} = source, element_id)
@@ -50,46 +51,50 @@ defmodule FountWorkshop.Recover do
              status: "running",
              request: %{"source_revision_id" => source_revision_id, "element_id" => element_id}
            }) do
-      case propose(current, source, element_id) do
-        {:ok, proposal} ->
-          candidate =
-            Map.merge(proposal, %{
-              label: "Restore from revision #{source_revision_id}",
-              change_groups: [
-                %{"id" => "restore_#{element_id}", "operations" => proposal.changes.operations}
-              ],
-              lineage: proposal.changes.lineage,
-              provenance: %{
-                "source_revision_id" => source_revision_id,
-                "source_element_id" => element_id,
-                "source_excerpt" => proposal.source_text,
-                "current_excerpt" => proposal.current_text
-              }
-            })
+      run_recovery(repo, current, source, session, source_revision_id, element_id)
+    end
+  end
 
-          case Persistence.save_candidate(repo, session.id, candidate) do
-            {:ok, saved} ->
-              {:ok, updated} =
-                Persistence.save_session(
-                  repo,
-                  Map.merge(session, %{
-                    status: "ready",
-                    progress: %{"candidate_ids" => [saved.id]}
-                  })
-                )
+  defp run_recovery(repo, current, source, session, source_revision_id, element_id) do
+    case propose(current, source, element_id) do
+      {:ok, proposal} ->
+        candidate =
+          Map.merge(proposal, %{
+            label: "Restore from revision #{source_revision_id}",
+            change_groups: [
+              %{"id" => "restore_#{element_id}", "operations" => proposal.changes.operations}
+            ],
+            lineage: proposal.changes.lineage,
+            provenance: %{
+              "source_revision_id" => source_revision_id,
+              "source_element_id" => element_id,
+              "source_excerpt" => proposal.source_text,
+              "current_excerpt" => proposal.current_text
+            }
+          })
 
-              {:ok,
-               %{session: updated, candidate: saved, accepted_revision_id: current.revision.id}}
+        case Persistence.save_candidate(repo, session.id, candidate) do
+          {:ok, saved} ->
+            {:ok, updated} =
+              Persistence.save_session(
+                repo,
+                Map.merge(session, %{
+                  status: "ready",
+                  progress: %{"candidate_ids" => [saved.id]}
+                })
+              )
 
-            error ->
-              mark_failed(repo, session, error)
-              error
-          end
+            {:ok,
+             %{session: updated, candidate: saved, accepted_revision_id: current.revision.id}}
 
-        {:error, reason} ->
-          mark_failed(repo, session, reason)
-          {:error, reason}
-      end
+          error ->
+            mark_failed(repo, session, error)
+            error
+        end
+
+      {:error, reason} ->
+        mark_failed(repo, session, reason)
+        {:error, reason}
     end
   end
 

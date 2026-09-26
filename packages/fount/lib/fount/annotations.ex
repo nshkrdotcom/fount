@@ -1,6 +1,5 @@
 defmodule Fount.Annotations do
   @moduledoc "Immutable annotation-set helpers."
-
   alias Fount.Annotation
 
   @type t :: %{optional(String.t()) => Annotation.t()}

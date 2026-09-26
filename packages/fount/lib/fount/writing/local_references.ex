@@ -6,35 +6,34 @@ defmodule Fount.Writing.LocalReferences do
   @uuid ~r/\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/i
 
   def compile(value, opts \\ []) do
-    try do
-      declarations = declarations(value)
-      labels = Enum.map(declarations, & &1["local_id"])
-      duplicates = labels -- Enum.uniq(labels)
-      if duplicates != [], do: fail({:duplicate_local_ids, Enum.uniq(duplicates)})
-      given = Keyword.get(opts, :reference_map, %{})
-      generator = Keyword.get(opts, :uuid_generator, Keyword.get(opts, :uuid, &Fount.ID.v4/0))
-      ids = Map.new(labels, fn label -> {label, Map.get_lazy(given, label, generator)} end)
+    declarations = declarations(value)
+    labels = Enum.map(declarations, & &1["local_id"])
+    duplicates = labels -- Enum.uniq(labels)
+    if duplicates != [], do: fail({:duplicate_local_ids, Enum.uniq(duplicates)})
+    given = Keyword.get(opts, :reference_map, %{})
+    generator = Keyword.get(opts, :uuid_generator, Keyword.get(opts, :uuid, &Fount.ID.v4/0))
+    ids = Map.new(labels, fn label -> {label, Map.get_lazy(given, label, generator)} end)
 
-      if Enum.any?(ids, fn {_, id} -> not is_binary(id) or not Regex.match?(@uuid, id) end),
-        do: fail(:invalid_allocated_uuid)
+    if Enum.any?(ids, fn {_, id} -> not is_binary(id) or not Regex.match?(@uuid, id) end),
+      do: fail(:invalid_allocated_uuid)
 
-      if length(Enum.uniq(Map.values(ids))) != map_size(ids), do: fail(:duplicate_allocated_uuid)
+    if length(Enum.uniq(Map.values(ids))) != map_size(ids), do: fail(:duplicate_allocated_uuid)
 
-      ids =
-        Enum.reduce(declarations, ids, fn d, acc ->
-          if d["type"] == "character" and Keyword.get(opts, :screenplay_id) do
-            "new:" <> label = d["local_id"]
-            block = "new:block-" <> label
-            if Map.has_key?(acc, block), do: fail(:reserved_block_local_id)
-            Map.put(acc, block, Fount.ID.v5(opts[:screenplay_id], ["dialogue-block:", acc[d["local_id"]]]))
-          else
-            acc
-          end
-        end)
+    ids = Enum.reduce(declarations, ids, &reserve_character_block(&1, &2, opts))
 
-      {:ok, rewrite(value, ids), ids}
-    catch
-      {:local_reference, reason} -> {:error, reason}
+    {:ok, rewrite(value, ids), ids}
+  catch
+    {:local_reference, reason} -> {:error, reason}
+  end
+
+  defp reserve_character_block(declaration, ids, opts) do
+    if declaration["type"] == "character" and Keyword.get(opts, :screenplay_id) do
+      "new:" <> label = declaration["local_id"]
+      block = "new:block-" <> label
+      if Map.has_key?(ids, block), do: fail(:reserved_block_local_id)
+      Map.put(ids, block, Fount.ID.v5(opts[:screenplay_id], ["dialogue-block:", ids[declaration["local_id"]]]))
+    else
+      ids
     end
   end
 

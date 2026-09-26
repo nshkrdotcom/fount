@@ -1,10 +1,11 @@
 defmodule FountProbe.LiveExample do
   @moduledoc false
+  alias Fount.CLI.Support
   alias Fount.LiveArtifacts, as: A
 
   def run(mode, output) do
     A.run(mode, output, fn directory ->
-      repo = Fount.CLI.Support.connect() |> A.require!()
+      repo = Support.connect() |> A.require!()
       {model, _} = A.fixture()
       key = "probe-#{mode}-#{Fount.ID.v4()}"
       Fount.Persistence.create(repo, key, model) |> A.require!()

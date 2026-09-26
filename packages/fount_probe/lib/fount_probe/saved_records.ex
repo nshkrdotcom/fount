@@ -1,6 +1,8 @@
 defmodule FountProbe.SavedRecords do
   @moduledoc "Loads exact, complete extraction records from persisted reports when requested."
-  alias FountProbe.{Extraction, Projection, Report}
+  alias FountProbe.Extraction
+  alias FountProbe.Projection
+  alias FountProbe.Report
 
   def resolve(model, params, clients, opts, kinds, question \\ nil) do
     case Map.get(params, "record_report_ids", []) do
@@ -50,20 +52,24 @@ defmodule FountProbe.SavedRecords do
 
   defp read_all(ids, reader) do
     Enum.reduce_while(ids, {:ok, []}, fn id, {:ok, reports} ->
-      case reader.(id) do
-        {:ok, %{"payload" => %{} = payload} = row} ->
-          if payload["id"] == id and row["id"] in [nil, id] and
-               row["primary_revision_id"] in [nil, payload["primary_revision_id"]],
-             do: {:cont, {:ok, reports ++ [payload]}},
-             else: {:halt, {:error, :invalid_report_row}}
-
-        {:ok, %Report{} = report} when report.id == id ->
-          {:cont, {:ok, reports ++ [Report.to_map(report)]}}
-
-        _ ->
-          {:halt, {:error, :report_not_found}}
-      end
+      read_one(reader.(id), id, reports)
     end)
+  end
+
+  defp read_one({:ok, %{"payload" => %{} = payload} = row}, id, reports) do
+    if valid_row?(id, row, payload),
+      do: {:cont, {:ok, reports ++ [payload]}},
+      else: {:halt, {:error, :invalid_report_row}}
+  end
+
+  defp read_one({:ok, %Report{} = report}, id, reports) when report.id == id,
+    do: {:cont, {:ok, reports ++ [Report.to_map(report)]}}
+
+  defp read_one(_, _, _), do: {:halt, {:error, :report_not_found}}
+
+  defp valid_row?(id, row, payload) do
+    payload["id"] == id and row["id"] in [nil, id] and
+      row["primary_revision_id"] in [nil, payload["primary_revision_id"]]
   end
 
   defp validate_all(model, payloads, units, kinds) do
@@ -71,25 +77,7 @@ defmodule FountProbe.SavedRecords do
     evidence = Map.new(Projection.evidence(units), &{&1["evidence_id"], &1})
     unit_registry = Map.new(units, &{&1["evidence_id"], &1})
 
-    valid =
-      Enum.all?(payloads, fn report ->
-        records = get_in(report, ["data", "records"])
-        inspected = get_in(report, ["coverage", "inspected_scene_ids"])
-        supplied = report["evidence"]
-        source_kinds = get_in(report, ["request", "kinds"])
-
-        report["tool"] == "extract_story" and report["status"] == "complete" and
-          report["screenplay_id"] == model.id and
-          report["primary_revision_id"] == model.revision.id and
-          is_list(report["source_revision_ids"]) and
-          model.revision.id in report["source_revision_ids"] and
-          is_list(inspected) and is_list(records) and is_list(supplied) and
-          is_list(source_kinds) and Enum.all?(kinds, &(&1 in source_kinds)) and
-          Enum.all?(supplied, fn item -> evidence[item["evidence_id"]] == item end) and
-          Enum.all?(records, fn record ->
-            valid_record?(record, kinds, scenes, unit_registry, supplied)
-          end)
-      end)
+    valid = Enum.all?(payloads, &valid_report?(&1, model, kinds, evidence, scenes, unit_registry))
 
     covered =
       Enum.reduce(payloads, MapSet.new(), fn report, acc ->
@@ -108,23 +96,48 @@ defmodule FountProbe.SavedRecords do
       else: {:error, :incompatible_saved_extraction}
   end
 
+  defp valid_report?(report, model, kinds, evidence, scenes, units) do
+    records = get_in(report, ["data", "records"])
+    inspected = get_in(report, ["coverage", "inspected_scene_ids"])
+    supplied = report["evidence"]
+    source_kinds = get_in(report, ["request", "kinds"])
+
+    valid_report_identity?(report, model) and
+      is_list(inspected) and is_list(records) and is_list(supplied) and
+      is_list(source_kinds) and Enum.all?(kinds, &(&1 in source_kinds)) and
+      Enum.all?(supplied, fn item -> evidence[item["evidence_id"]] == item end) and
+      Enum.all?(records, &valid_record?(&1, kinds, scenes, units, supplied))
+  end
+
+  defp valid_report_identity?(report, model) do
+    report["tool"] == "extract_story" and report["status"] == "complete" and
+      report["screenplay_id"] == model.id and
+      report["primary_revision_id"] == model.revision.id and
+      is_list(report["source_revision_ids"]) and
+      model.revision.id in report["source_revision_ids"]
+  end
+
   defp valid_record?(r, kinds, scenes, units, supplied) when is_map(r) do
     supplied_ids = MapSet.new(supplied, & &1["evidence_id"])
 
-    is_binary(r["id"]) and r["kind"] in kinds and
-      MapSet.member?(scenes, r["scene_id"]) and
+    valid_record_identity?(r, kinds, scenes) and
       is_list(r["evidence_ids"]) and r["evidence_ids"] != [] and
-      Enum.all?(r["evidence_ids"], fn id ->
-        case units[id] do
-          %{"revision_id" => revision_id, "scene_id" => scene_id} ->
-            revision_id == r["revision_id"] and scene_id == r["scene_id"] and
-              MapSet.member?(supplied_ids, id)
-
-          _ ->
-            false
-        end
-      end)
+      Enum.all?(r["evidence_ids"], &valid_record_evidence?(&1, r, units, supplied_ids))
   end
 
   defp valid_record?(_, _, _, _, _), do: false
+
+  defp valid_record_identity?(r, kinds, scenes),
+    do: is_binary(r["id"]) and r["kind"] in kinds and MapSet.member?(scenes, r["scene_id"])
+
+  defp valid_record_evidence?(id, record, units, supplied_ids) do
+    case units[id] do
+      %{"revision_id" => revision_id, "scene_id" => scene_id} ->
+        revision_id == record["revision_id"] and scene_id == record["scene_id"] and
+          MapSet.member?(supplied_ids, id)
+
+      _ ->
+        false
+    end
+  end
 end

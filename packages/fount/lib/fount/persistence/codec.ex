@@ -1,11 +1,18 @@
 defmodule Fount.Persistence.Codec do
   @moduledoc false
-
   alias Fount.Annotation
-  alias Fount.Annotation.{Provenance, Target}
-  alias Fount.Cast.{Character, Mention}
-  alias Fount.IR.{DialogueBlock, Element, Scene, Script, TitlePage}
-  alias Fount.{Revision, Screenplay}
+  alias Fount.Annotation.Provenance
+  alias Fount.Annotation.Target
+  alias Fount.Cast.Character
+  alias Fount.Cast.Mention
+  alias Fount.IR.DialogueBlock
+  alias Fount.IR.Element
+  alias Fount.IR.Scene
+  alias Fount.IR.Script
+  alias Fount.IR.TitlePage
+  alias Fount.Revision
+  alias Fount.Screenplay
+  alias Fount.Screenplay.Model
 
   @element_types Map.new(
                    ~w(scene_heading action character dialogue parenthetical transition centered lyric section synopsis page_break note boneyard blank unknown),
@@ -112,7 +119,7 @@ defmodule Fount.Persistence.Codec do
       annotations: annotations,
       authored_items: data["authored_items"] || %{}
     }
-    |> Fount.Screenplay.Model.refresh()
+    |> Model.refresh()
   end
 
   defp decode_annotation(value) do

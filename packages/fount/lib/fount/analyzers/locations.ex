@@ -1,9 +1,9 @@
 defmodule Fount.Analyzers.Locations do
   @moduledoc "Scene-heading location/time decomposition with source provenance."
-  @behaviour Fount.Analyzer
-
   alias Fount.Annotation
-  alias Fount.Annotation.{Provenance, Target}
+  alias Fount.Annotation.Provenance
+  alias Fount.Annotation.Target
+  @behaviour Fount.Analyzer
 
   @impl true
   def analyze(doc, opts) do

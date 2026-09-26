@@ -1,6 +1,5 @@
 defmodule Fount.Writer do
   @moduledoc "Pure writer-facing projections over a canonical screenplay."
-
   alias Fount.Screenplay
 
   @doc "Groups visible scenes by the first parsed location component, preserving scene order."

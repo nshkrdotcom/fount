@@ -9,11 +9,9 @@ defmodule Fount.Writing.CanonicalJSON do
 
   @spec encode(term()) :: {:ok, binary()} | {:error, term()}
   def encode(value) do
-    try do
-      {:ok, value |> encode_value() |> IO.iodata_to_binary()}
-    catch
-      {:invalid_canonical_json, reason} -> {:error, reason}
-    end
+    {:ok, value |> encode_value() |> IO.iodata_to_binary()}
+  catch
+    {:invalid_canonical_json, reason} -> {:error, reason}
   end
 
   @spec encode!(term()) :: binary()

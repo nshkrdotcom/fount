@@ -1,7 +1,13 @@
 defmodule FountWorkshop.CLI do
   @moduledoc "Writer commands. Review and acceptance are distinct operations; no generation command advances the accepted draft."
   alias Fount.CLI.Support, as: S
-  alias FountWorkshop.{Store, Session, Candidate, Strategy, Acceptance}
+  alias Fount.Screenplay.Model
+  alias FountWorkshop.Acceptance
+  alias FountWorkshop.Candidate
+  alias FountWorkshop.Export.PDF
+  alias FountWorkshop.Session
+  alias FountWorkshop.Store
+  alias FountWorkshop.Strategy
 
   @flags [
     key: :string,
@@ -42,15 +48,19 @@ defmodule FountWorkshop.CLI do
       if opts[:help] do
         {:ok, %{"usage" => help(command), "required" => @required[command]}}
       else
-        with :ok <- S.required(opts, @required[command]),
-             {:ok, repo} <- S.connect(),
-             {:ok, services} <- services(command, opts, repo) do
-          dispatch(command, opts, services)
-        end
+        run_command(command, opts)
       end
     else
       {:ok, _, _} -> {:error, :unexpected_positional_arguments}
       error -> error
+    end
+  end
+
+  defp run_command(command, opts) do
+    with :ok <- S.required(opts, @required[command]),
+         {:ok, repo} <- S.connect(),
+         {:ok, services} <- services(command, opts, repo) do
+      dispatch(command, opts, services)
     end
   end
 
@@ -65,7 +75,7 @@ defmodule FountWorkshop.CLI do
          store: Store.new(repo),
          inference: clients.inference,
          jev: clients.system_one,
-         renderer: FountWorkshop.Export.PDF,
+         renderer: PDF,
          voices: voices
        }}
     end
@@ -165,7 +175,7 @@ defmodule FountWorkshop.CLI do
 
   defp dispatch("render", opts, services) do
     with {:ok, model} <- S.load(services.store.repo, opts) do
-      FountWorkshop.Export.PDF.export(model, opts[:output])
+      PDF.export(model, opts[:output])
     end
   end
 
@@ -183,18 +193,22 @@ defmodule FountWorkshop.CLI do
              Path.join(opts[:output], "table-read.html"),
              :html
            ) do
-      if opts[:speech] do
-        with {:ok, audio} <-
-               FountWorkshop.TableRead.render_audio(
-                 model,
-                 Path.join(opts[:output], "audio"),
-                 services.voices
-               ) do
-          {:ok, %{json: json, html: html, audio: audio}}
-        end
-      else
-        {:ok, %{json: json, html: html}}
+      read_result(model, opts, services, json, html)
+    end
+  end
+
+  defp read_result(model, opts, services, json, html) do
+    if opts[:speech] do
+      with {:ok, audio} <-
+             FountWorkshop.TableRead.render_audio(
+               model,
+               Path.join(opts[:output], "audio"),
+               services.voices
+             ) do
+        {:ok, %{json: json, html: html, audio: audio}}
       end
+    else
+      {:ok, %{json: json, html: html}}
     end
   end
 
@@ -209,43 +223,45 @@ defmodule FountWorkshop.CLI do
         root = Fount.Screenplay.new()
         brief = get_in(request, ["options", "brief"])
 
-        root =
-          if is_map(brief) do
-            id = Fount.ID.v4()
-
-            item = %{
-              "id" => id,
-              "kind" => "brief",
-              "target" => %{"kind" => "screenplay", "id" => root.id},
-              "namespace" => "writer",
-              "value" => brief,
-              "dependencies" => [],
-              "status" => "active",
-              "provenance" => %{"source" => "writer"}
-            }
-
-            Fount.Screenplay.Model.refresh(%{
-              root
-              | authored_items: Map.put(root.authored_items, id, item)
-            })
-          else
-            root
-          end
+        root = add_brief(root, brief)
 
         anchored = Map.put(request, "base_revision_id", root.revision.id)
 
-        with {:ok, validated} <- FountWorkshop.Request.validate(root, anchored),
-             {:ok, saved} <-
-               Store.call(services.store, :create, [
-                 opts[:key],
-                 root,
-                 [actor: opts[:actor] || "writer"]
-               ]) do
-          {:ok, saved, validated}
-        end
+        create_base(root, anchored, opts, services)
       end
     else
       with {:ok, model} <- S.load(services.store.repo, opts), do: {:ok, model, request}
+    end
+  end
+
+  defp add_brief(root, brief) when is_map(brief) do
+    id = Fount.ID.v4()
+
+    item = %{
+      "id" => id,
+      "kind" => "brief",
+      "target" => %{"kind" => "screenplay", "id" => root.id},
+      "namespace" => "writer",
+      "value" => brief,
+      "dependencies" => [],
+      "status" => "active",
+      "provenance" => %{"source" => "writer"}
+    }
+
+    Model.refresh(%{root | authored_items: Map.put(root.authored_items, id, item)})
+  end
+
+  defp add_brief(root, _), do: root
+
+  defp create_base(root, request, opts, services) do
+    with {:ok, validated} <- FountWorkshop.Request.validate(root, request),
+         {:ok, saved} <-
+           Store.call(services.store, :create, [
+             opts[:key],
+             root,
+             [actor: opts[:actor] || "writer"]
+           ]) do
+      {:ok, saved, validated}
     end
   end
 

@@ -1,5 +1,8 @@
 defmodule FountProbe.Report do
   @moduledoc "Revision-scoped observations; completion describes scheduled coverage, not screenplay quality."
+  alias Fount.Screenplay.Model
+  alias Fount.Writing.CanonicalJSON
+
   defstruct [
     :id,
     :tool,
@@ -29,7 +32,7 @@ defmodule FountProbe.Report do
     profile = %{
       "id" => to_string(tool || "invalid_request") <> ":v1",
       "version" => 1,
-      "sha256" => Fount.Writing.CanonicalJSON.hash(definition),
+      "sha256" => CanonicalJSON.hash(definition),
       "definition" => definition,
       "identity_scope" =>
         if(hashes == [],
@@ -60,7 +63,7 @@ defmodule FountProbe.Report do
       report
       |> Map.from_struct()
       |> Map.delete(:transient_models)
-      |> Fount.Screenplay.Model.plain()
+      |> Model.plain()
 
   def persistence(report, session_id \\ nil) do
     payload = to_map(report)
@@ -81,7 +84,7 @@ defmodule FountProbe.Report do
       tool: report.tool,
       status: report.status,
       fingerprint:
-        Fount.Writing.CanonicalJSON.hash(%{
+        CanonicalJSON.hash(%{
           "request" => report.request,
           "profile" => report.profile
         }),

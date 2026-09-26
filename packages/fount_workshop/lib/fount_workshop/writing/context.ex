@@ -1,5 +1,6 @@
 defmodule FountWorkshop.Writing.Context do
   @moduledoc false
+  alias Fount.Screenplay.Model
   alias FountProbe.Projection
 
   @doc "Compacts duplicated projection metadata for provider prompts; saved evidence stays complete."
@@ -82,10 +83,7 @@ defmodule FountWorkshop.Writing.Context do
 
       context_ids =
         selected_scenes
-        |> Enum.flat_map(fn id ->
-          i = Enum.find_index(scene_ids, &(&1 == id))
-          Enum.slice(scene_ids, max(i - 1, 0), if(i == 0, do: 2, else: 3))
-        end)
+        |> Enum.flat_map(&neighbor_scene_ids(scene_ids, &1))
         |> Enum.uniq()
 
       context = Enum.filter(all, &(&1["scene_id"] in context_ids))
@@ -112,12 +110,10 @@ defmodule FountWorkshop.Writing.Context do
               "omitted" => s.omitted?
             }
           end),
-        "dialogue_blocks" => Fount.Screenplay.Model.plain(model.ir.dialogue_blocks),
-        "confirmed_cast" => Fount.Screenplay.Model.plain(Map.values(model.cast)),
+        "dialogue_blocks" => Model.plain(model.ir.dialogue_blocks),
+        "confirmed_cast" => Model.plain(Map.values(model.cast)),
         "confirmed_mentions" =>
-          Fount.Screenplay.Model.plain(
-            Enum.filter(Map.values(model.mentions), &(&1.status == :confirmed))
-          ),
+          Model.plain(Enum.filter(Map.values(model.mentions), &(&1.status == :confirmed))),
         "writer_authored_items" => Map.values(model.authored_items),
         "rebase_context" => Keyword.get(opts, :rebase_context),
         "scope_notice" =>
@@ -173,12 +169,9 @@ defmodule FountWorkshop.Writing.Context do
                         else: []
                     end)
                   else
-                    if Enum.any?(ids, fn element_id ->
-                         scene = Fount.Query.scene_for(model, element_id)
-                         scene && MapSet.member?(appearances, scene.id)
-                       end),
-                       do: [target],
-                       else: []
+                    if Enum.any?(ids, &in_appearance_scene?(model, &1, appearances)),
+                      do: [target],
+                      else: []
                   end
 
                 _ ->
@@ -227,5 +220,15 @@ defmodule FountWorkshop.Writing.Context do
     else
       result
     end
+  end
+
+  defp in_appearance_scene?(model, element_id, appearances) do
+    scene = Fount.Query.scene_for(model, element_id)
+    scene && MapSet.member?(appearances, scene.id)
+  end
+
+  defp neighbor_scene_ids(scene_ids, id) do
+    index = Enum.find_index(scene_ids, &(&1 == id))
+    Enum.slice(scene_ids, max(index - 1, 0), if(index == 0, do: 2, else: 3))
   end
 end

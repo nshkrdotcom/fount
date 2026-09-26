@@ -1,7 +1,7 @@
 defmodule FountWorkshop.Export.PDF do
   @moduledoc "Renders an exact Fountain draft to a screenplay PDF using pinned Afterwriting."
-
   alias Fount.Document
+  alias Fount.Writing.CanonicalJSON
 
   @renderer Path.expand("../../../node_modules/.bin/afterwriting", __DIR__)
 
@@ -48,9 +48,7 @@ defmodule FountWorkshop.Export.PDF do
              renderer: "afterwriting 1.17.3",
              settings: settings,
              settings_sha256:
-               Fount.Writing.CanonicalJSON.hash(
-                 Map.put(settings, "renderer", "afterwriting 1.17.3")
-               ),
+               CanonicalJSON.hash(Map.put(settings, "renderer", "afterwriting 1.17.3")),
              source_sha256: :crypto.hash(:sha256, doc.source.raw) |> Base.encode16(case: :lower)
            }}
         end

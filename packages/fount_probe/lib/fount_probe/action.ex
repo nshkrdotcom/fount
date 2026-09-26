@@ -1,6 +1,9 @@
 defmodule FountProbe.Action do
   @moduledoc "Action visibility and spatial description, with actual byte split sites and no invented printed density."
-  alias FountProbe.{Projection, Jev, Report}
+  alias FountProbe.Action.Layout
+  alias FountProbe.Jev
+  alias FountProbe.Projection
+  alias FountProbe.Report
 
   def run(model, params, clients, opts \\ []) do
     with {:ok, units} <- Projection.select(model, params["selection"]) do
@@ -44,67 +47,71 @@ defmodule FountProbe.Action do
                qs,
                Keyword.put_new(opts, :profile_id, "action")
              ) do
-        {layout, layout_errors} =
-          case params["layout_report_id"] do
-            nil ->
+        build_report(model, params, opts, action, result)
+      end
+    end
+  end
+
+  defp build_report(model, params, opts, action, result) do
+    {layout, layout_errors} =
+      case params["layout_report_id"] do
+        nil ->
+          {%{
+             "printed_lines" => nil,
+             "line_regions" => [],
+             "layout_status" => "unavailable_without_measured_layout"
+           }, []}
+
+        id ->
+          case Layout.measure(
+                 model,
+                 action,
+                 id,
+                 Keyword.get(opts, :report_reader)
+               ) do
+            {:ok, measured} ->
+              {measured, []}
+
+            {:error, reason} ->
               {%{
                  "printed_lines" => nil,
                  "line_regions" => [],
-                 "layout_status" => "unavailable_without_measured_layout"
-               }, []}
-
-            id ->
-              case FountProbe.Action.Layout.measure(
-                     model,
-                     action,
-                     id,
-                     Keyword.get(opts, :report_reader)
-                   ) do
-                {:ok, measured} ->
-                  {measured, []}
-
-                {:error, reason} ->
-                  {%{
-                     "printed_lines" => nil,
-                     "line_regions" => [],
-                     "layout_status" => "unavailable"
-                   },
-                   [%{"code" => "layout_measurement_unavailable", "reason" => inspect(reason)}]}
-              end
+                 "layout_status" => "unavailable"
+               }, [%{"code" => "layout_measurement_unavailable", "reason" => inspect(reason)}]}
           end
-
-        splits =
-          Enum.flat_map(action, fn u ->
-            Regex.scan(~r/[.!?]\s+/u, u["excerpt"], return: :index)
-            |> Enum.map(fn [{first, size}] ->
-              %{
-                "target" => u["target"],
-                "after_byte" => u["target"]["span"]["byte_start"] + first + size,
-                "evidence_ids" => [u["evidence_id"]],
-                "status" => "possible_sentence_boundary_not_recommendation"
-              }
-            end)
-          end)
-
-        {:ok,
-         Report.new(model, "action", params, %{
-           status: if(layout_errors == [], do: result["status"], else: "partial"),
-           data:
-             Map.merge(
-               %{
-                 "paragraph_count" => length(Enum.uniq_by(action, & &1["target"]["id"])),
-                 "words" => Enum.sum(Enum.map(action, &length(String.split(&1["text"])))),
-                 "assessments" => result["entries"],
-                 "split_sites" => splits
-               },
-               layout
-             ),
-           evidence: Projection.evidence(action),
-           provenance: result,
-           coverage: %{"element_ids" => Enum.map(action, & &1["target"]["id"])},
-           errors: layout_errors
-         })}
       end
-    end
+
+    splits = Enum.flat_map(action, &sentence_splits/1)
+
+    {:ok,
+     Report.new(model, "action", params, %{
+       status: if(layout_errors == [], do: result["status"], else: "partial"),
+       data:
+         Map.merge(
+           %{
+             "paragraph_count" => length(Enum.uniq_by(action, & &1["target"]["id"])),
+             "words" => Enum.sum(Enum.map(action, &length(String.split(&1["text"])))),
+             "assessments" => result["entries"],
+             "split_sites" => splits
+           },
+           layout
+         ),
+       evidence: Projection.evidence(action),
+       provenance: result,
+       coverage: %{"element_ids" => Enum.map(action, & &1["target"]["id"])},
+       errors: layout_errors
+     })}
+  end
+
+  defp sentence_splits(unit) do
+    Regex.scan(~r/[.!?]\s+/u, unit["excerpt"], return: :index)
+    |> Enum.map(fn [{first, size}] ->
+      %{
+        "target" => unit["target"],
+        "after_byte" => unit["target"]["span"]["byte_start"] + first + size,
+        "evidence_ids" => [unit["evidence_id"]],
+        "status" => "possible_sentence_boundary_not_recommendation"
+      }
+    end)
   end
 end

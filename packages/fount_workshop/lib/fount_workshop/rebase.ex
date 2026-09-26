@@ -1,7 +1,11 @@
 defmodule FountWorkshop.Rebase do
   @moduledoc "Explicit three-way rebase. Disjoint edits replay; conflicts expose concrete source/current/candidate passages."
-  alias FountWorkshop.{Store, Candidate, CandidateAPI}
-  alias FountWorkshop.Writing.{Footprint, ChangeGroups}
+  alias Fount.Screenplay.Model
+  alias FountWorkshop.Candidate
+  alias FountWorkshop.CandidateAPI
+  alias FountWorkshop.Store
+  alias FountWorkshop.Writing.ChangeGroups
+  alias FountWorkshop.Writing.Footprint
 
   def run(id, current, resolutions, services, opts \\ []) do
     with :ok <- validate_resolutions(resolutions),
@@ -29,32 +33,45 @@ defmodule FountWorkshop.Rebase do
           {:error, {:rebase_conflicts, unresolved}}
 
         true ->
-          ids = for g <- groups, choices[g["id"]] != "current", do: g["id"]
-
-          if ids == [],
-            do: {:ok, %{"status" => "no_change", "kept_revision_id" => current.revision.id}},
-            else: deterministic(current, candidate, ids, services, opts)
+          deterministic_or_unchanged(current, candidate, groups, choices, services, opts)
       end
     end
+  end
+
+  defp deterministic_or_unchanged(current, candidate, groups, choices, services, opts) do
+    ids = for group <- groups, choices[group["id"]] != "current", do: group["id"]
+
+    if ids == [],
+      do: {:ok, %{"status" => "no_change", "kept_revision_id" => current.revision.id}},
+      else: deterministic(current, candidate, ids, services, opts)
   end
 
   def validate_resolutions(resolutions) when is_map(resolutions) do
     choices = Map.get(resolutions, "choices", %{})
     generate = Map.get(resolutions, "generate", false)
 
-    if Map.keys(resolutions) -- ~w(choices generate request) == [] and
-         is_map(choices) and
-         Enum.all?(choices, fn {id, choice} ->
-           is_binary(id) and id != "" and choice in ["current", "candidate"]
-         end) and
-         is_boolean(generate) and
-         (not generate or is_map(resolutions["request"])) and
-         (generate or is_nil(resolutions["request"])),
+    if valid_resolution_keys?(resolutions) and valid_choices?(choices) and
+         valid_generation_request?(generate, resolutions["request"]),
        do: :ok,
        else: {:error, :invalid_rebase_resolution}
   end
 
   def validate_resolutions(_), do: {:error, :invalid_rebase_resolution}
+
+  defp valid_resolution_keys?(resolutions),
+    do: Map.keys(resolutions) -- ~w(choices generate request) == []
+
+  defp valid_choices?(choices) when is_map(choices) do
+    Enum.all?(choices, fn {id, choice} ->
+      is_binary(id) and id != "" and choice in ["current", "candidate"]
+    end)
+  end
+
+  defp valid_choices?(_), do: false
+
+  defp valid_generation_request?(generate, request) do
+    is_boolean(generate) and (not generate or is_map(request)) and (generate or is_nil(request))
+  end
 
   def conflicts(base, current, candidate, groups) do
     Enum.flat_map(groups, fn g ->
@@ -74,7 +91,7 @@ defmodule FountWorkshop.Rebase do
               Enum.map(changed, fn {kind, id, span} ->
                 %{
                   "kind" => kind,
-                  "id" => Fount.Screenplay.Model.plain(id),
+                  "id" => Model.plain(id),
                   "span" => span,
                   "base" => surface(base, kind, id),
                   "current" => surface(current, kind, id),
@@ -160,7 +177,7 @@ defmodule FountWorkshop.Rebase do
   defp surface(model, "element", id) do
     case Fount.Query.node(model, id) do
       nil -> nil
-      e -> Fount.Screenplay.Model.plain(Map.take(e, [:id, :type, :text, :attrs]))
+      e -> Model.plain(Map.take(e, [:id, :type, :text, :attrs]))
     end
   end
 
@@ -189,14 +206,14 @@ defmodule FountWorkshop.Rebase do
       "scene" => surface(model, "scene", owner)
     }
 
-  defp surface(model, "character", id), do: Fount.Screenplay.Model.plain(model.cast[id])
-  defp surface(model, "title", _), do: Fount.Screenplay.Model.plain(model.ir.title_page)
-  defp surface(model, "put_character", id), do: Fount.Screenplay.Model.plain(model.cast[id])
+  defp surface(model, "character", id), do: Model.plain(model.cast[id])
+  defp surface(model, "title", _), do: Model.plain(model.ir.title_page)
+  defp surface(model, "put_character", id), do: Model.plain(model.cast[id])
   defp surface(model, "put_authored_item", id), do: model.authored_items[id]
 
   defp surface(model, kind, id) do
     case Fount.Target.resolve(model, %{"kind" => kind, "id" => id}) do
-      {:ok, value} -> Fount.Screenplay.Model.plain(value)
+      {:ok, value} -> Model.plain(value)
       _ -> nil
     end
   end

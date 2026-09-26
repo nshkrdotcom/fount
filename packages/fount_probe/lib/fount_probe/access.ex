@@ -1,6 +1,10 @@
 defmodule FountProbe.Access do
   @moduledoc "Proposes exact character-access fragments from a prefix, then evaluates each access relation."
-  alias FountProbe.{Projection, Completion, Jev}
+  alias Fount.Writing.Schema
+  alias Fount.Writing.UTF8Span
+  alias FountProbe.Completion
+  alias FountProbe.Jev
+  alias FountProbe.Projection
 
   @schema %{
     "type" => "object",
@@ -44,96 +48,13 @@ defmodule FountProbe.Access do
                &validate(&1, evidence, character_ids),
                opts
              ) do
-        registry = Map.new(evidence, &{&1["evidence_id"], &1})
-
-        entries =
-          Enum.with_index(object["entries"], fn entry, index ->
-            source = registry[entry["evidence_id"]]
-
-            {:ok, {first, last}} =
-              Fount.Writing.UTF8Span.relocate(source["excerpt"], entry["excerpt"])
-
-            offset = source["target"]["span"]["byte_start"]
-
-            target =
-              put_in(source["target"], ["span"], %{
-                "byte_start" => offset + first,
-                "byte_end" => offset + last
-              })
-
-            Map.merge(entry, %{
-              "id" => "access_#{index}",
-              "target" => target,
-              "revision_id" => model.revision.id,
-              "as_of" => point
-            })
-          end)
-
-        inputs =
-          Enum.map(entries, fn entry ->
-            %{
-              "id" => entry["id"],
-              "state" => %{
-                "character" => names[entry["character_id"]],
-                "proposed_access" => Map.take(entry, ~w(excerpt channel reason)),
-                "prefix" => state
-              }
-            }
-          end)
-
-        question =
-          SystemOneSDK.choice(
-            "Does the supplied prefix support this character receiving this specific fragment through this channel? Presence alone is insufficient.",
-            supported: "Explicitly supported access.",
-            plausible: "Plausible but not established.",
-            unsupported: "Unsupported or denied access."
-          )
-
-        with {:ok, result} <-
-               Jev.evaluate(
-                 clients[:system_one],
-                 inputs,
-                 [access: question],
-                 Keyword.put_new(opts, :profile_id, "access")
-               ) do
-          by_id = Map.new(result["entries"], &{&1["input_id"], &1})
-          thresholds = Jev.threshold_options(result["profile_asset"])
-          support_threshold = Keyword.get(thresholds, :supported, 0.8)
-          confidence_threshold = Keyword.get(thresholds, :minimum_confidence, 0.7)
-
-          ledger =
-            Enum.map(entries, fn entry ->
-              answer = get_in(by_id, [entry["id"], "answers", "access"]) || %{}
-              p = get_in(answer, ["probabilities", "supported"])
-              confidence = answer["confidence"]
-
-              status =
-                cond do
-                  is_number(p) and p >= support_threshold and is_number(confidence) and
-                      confidence >= confidence_threshold ->
-                    "text_supported"
-
-                  answer["choice"] == "plausible" ->
-                    "plausible"
-
-                  answer["choice"] == "unsupported" and answer["status"] == "supported" ->
-                    "denied"
-
-                  true ->
-                    "unknown"
-                end
-
-              Map.merge(entry, %{
-                "access" => status,
-                "support_probability" => p,
-                "confidence" => confidence,
-                "access_support_threshold" => support_threshold,
-                "access_confidence_threshold" => confidence_threshold
-              })
-            end)
-
-          {:ok, ledger, %{"completion" => trace, "evaluation" => result}}
-        end
+        evaluate_proposal(model, point, clients, opts, %{
+          state: state,
+          evidence: evidence,
+          names: names,
+          object: object,
+          trace: trace
+        })
       end
     else
       false -> {:error, :missing_inference_client}
@@ -141,10 +62,117 @@ defmodule FountProbe.Access do
     end
   end
 
+  defp evaluate_proposal(model, point, clients, opts, %{
+         state: state,
+         evidence: evidence,
+         names: names,
+         object: object,
+         trace: trace
+       }) do
+    entries =
+      Enum.with_index(object["entries"], fn entry, index ->
+        locate_entry(entry, index, evidence, model, point)
+      end)
+
+    inputs = Enum.map(entries, &evaluation_input(&1, names, state))
+
+    question =
+      SystemOneSDK.choice(
+        "Does the supplied prefix support this character receiving this specific fragment through this channel? Presence alone is insufficient.",
+        supported: "Explicitly supported access.",
+        plausible: "Plausible but not established.",
+        unsupported: "Unsupported or denied access."
+      )
+
+    evaluate_entries(clients, opts, entries, inputs, trace, question)
+  end
+
+  defp locate_entry(entry, index, evidence, model, point) do
+    registry = Map.new(evidence, &{&1["evidence_id"], &1})
+    source = registry[entry["evidence_id"]]
+    {:ok, {first, last}} = UTF8Span.relocate(source["excerpt"], entry["excerpt"])
+    offset = source["target"]["span"]["byte_start"]
+
+    target =
+      put_in(source["target"], ["span"], %{
+        "byte_start" => offset + first,
+        "byte_end" => offset + last
+      })
+
+    Map.merge(entry, %{
+      "id" => "access_#{index}",
+      "target" => target,
+      "revision_id" => model.revision.id,
+      "as_of" => point
+    })
+  end
+
+  defp evaluation_input(entry, names, state) do
+    %{
+      "id" => entry["id"],
+      "state" => %{
+        "character" => names[entry["character_id"]],
+        "proposed_access" => Map.take(entry, ~w(excerpt channel reason)),
+        "prefix" => state
+      }
+    }
+  end
+
+  defp evaluate_entries(clients, opts, entries, inputs, trace, question) do
+    with {:ok, result} <-
+           Jev.evaluate(
+             clients[:system_one],
+             inputs,
+             [access: question],
+             Keyword.put_new(opts, :profile_id, "access")
+           ) do
+      by_id = Map.new(result["entries"], &{&1["input_id"], &1})
+      thresholds = Jev.threshold_options(result["profile_asset"])
+      support_threshold = Keyword.get(thresholds, :supported, 0.8)
+      confidence_threshold = Keyword.get(thresholds, :minimum_confidence, 0.7)
+
+      ledger =
+        Enum.map(entries, &ledger_entry(&1, by_id, support_threshold, confidence_threshold))
+
+      {:ok, ledger, %{"completion" => trace, "evaluation" => result}}
+    end
+  end
+
+  defp ledger_entry(entry, by_id, support_threshold, confidence_threshold) do
+    answer = get_in(by_id, [entry["id"], "answers", "access"]) || %{}
+    p = get_in(answer, ["probabilities", "supported"])
+    confidence = answer["confidence"]
+
+    Map.merge(entry, %{
+      "access" => access_status(answer, p, confidence, support_threshold, confidence_threshold),
+      "support_probability" => p,
+      "confidence" => confidence,
+      "access_support_threshold" => support_threshold,
+      "access_confidence_threshold" => confidence_threshold
+    })
+  end
+
+  defp access_status(answer, p, confidence, support_threshold, confidence_threshold) do
+    cond do
+      is_number(p) and p >= support_threshold and is_number(confidence) and
+          confidence >= confidence_threshold ->
+        "text_supported"
+
+      answer["choice"] == "plausible" ->
+        "plausible"
+
+      answer["choice"] == "unsupported" and answer["status"] == "supported" ->
+        "denied"
+
+      true ->
+        "unknown"
+    end
+  end
+
   defp validate(object, evidence, ids) do
     registry = Map.new(evidence, &{&1["evidence_id"], &1})
 
-    with :ok <- Fount.Writing.Schema.validate(@schema, object),
+    with :ok <- Schema.validate(@schema, object),
          true <-
            Enum.all?(object["entries"], fn entry ->
              source = registry[entry["evidence_id"]]
@@ -152,7 +180,7 @@ defmodule FountProbe.Access do
              (entry["character_id"] in ids and source) &&
                match?(
                  {:ok, _},
-                 Fount.Writing.UTF8Span.relocate(source["excerpt"], entry["excerpt"])
+                 UTF8Span.relocate(source["excerpt"], entry["excerpt"])
                )
            end) do
       :ok

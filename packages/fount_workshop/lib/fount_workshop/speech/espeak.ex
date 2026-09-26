@@ -18,16 +18,20 @@ defmodule FountWorkshop.Speech.Espeak do
         {:error, :espeak_not_installed}
 
       true ->
-        with :ok <- File.mkdir_p(Path.dirname(path)) do
-          case System.cmd(executable, ["-v", voice, "-w", path, text], stderr_to_stdout: true) do
-            {_, 0} -> verify_wav(path)
-            {output, code} -> {:error, {:espeak_failed, code, String.slice(output, 0, 500)}}
-          end
-        end
+        run_espeak(executable, text, voice, path)
     end
   end
 
   def render(_, _, _, _), do: {:error, :invalid_speech_request}
+
+  defp run_espeak(executable, text, voice, path) do
+    with :ok <- File.mkdir_p(Path.dirname(path)) do
+      case System.cmd(executable, ["-v", voice, "-w", path, text], stderr_to_stdout: true) do
+        {_, 0} -> verify_wav(path)
+        {output, code} -> {:error, {:espeak_failed, code, String.slice(output, 0, 500)}}
+      end
+    end
+  end
 
   defp verify_wav(path) do
     case File.read(path) do

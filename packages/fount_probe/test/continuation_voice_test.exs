@@ -1,4 +1,5 @@
 defmodule FountProbe.ContinuationVoiceTest do
+  alias Fount.Screenplay.Model
   use ExUnit.Case, async: true
 
   test "blind preparation removes names and keeps training and test text disjoint" do
@@ -14,8 +15,8 @@ defmodule FountProbe.ContinuationVoiceTest do
 
     model =
       Fount.Screenplay.new(scenes: scenes)
-      |> Fount.Screenplay.Model.resolve_cast(:literal_cues)
-      |> Fount.Screenplay.Model.refresh()
+      |> Model.resolve_cast(:literal_cues)
+      |> Model.refresh()
 
     ids = Enum.map(Fount.Query.characters(model), & &1.id)
 

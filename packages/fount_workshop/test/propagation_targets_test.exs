@@ -1,4 +1,5 @@
 defmodule FountWorkshop.PropagationTargetsTest do
+  alias FountWorkshop.Writing.Preparation
   use ExUnit.Case, async: true
 
   test "dependency inspection follows the changed scene and pinned setup" do
@@ -14,7 +15,7 @@ defmodule FountWorkshop.PropagationTargetsTest do
       "options" => %{"destination" => %{"kind" => "replace_range", "scene_ids" => ["queue"]}}
     }
 
-    assert FountWorkshop.Writing.Preparation.propagation_targets(request) == [
+    assert Preparation.propagation_targets(request) == [
              %{"kind" => "element", "id" => "key"},
              %{"kind" => "scene", "id" => "records"},
              %{"kind" => "scene", "id" => "queue"}

@@ -9,13 +9,20 @@ defmodule Fount.Screenplay do
   is retained only for exact, unchanged export. No Fountain text is required
   to create or edit a screenplay.
   """
-
-  alias Fount.Adapter.{ExportResult, FDX}
-  alias Fount.Cast.{Character, Mention}
+  alias Fount.Adapter.ExportResult
+  alias Fount.Adapter.FDX
+  alias Fount.Cast.Character
+  alias Fount.Cast.Mention
   alias Fount.Fountain.Serializer
   alias Fount.ID
-  alias Fount.IR.{DialogueBlock, Element, Scene, Script, TitlePage}
+  alias Fount.IR.DialogueBlock
+  alias Fount.IR.Element
+  alias Fount.IR.Scene
+  alias Fount.IR.Script
+  alias Fount.IR.TitlePage
   alias Fount.Revision
+  alias Fount.Screenplay.Editor
+  alias Fount.Screenplay.Model
 
   @enforce_keys [:id, :revision, :ir]
   defstruct [:id, :revision, :ir, :import, cast: %{}, mentions: %{}, annotations: %{}, authored_items: %{}, index: nil]
@@ -61,7 +68,7 @@ defmodule Fount.Screenplay do
       cast: Keyword.get(opts, :cast, %{}),
       authored_items: Keyword.get(opts, :authored_items, %{})
     }
-    |> Fount.Screenplay.Model.refresh()
+    |> Model.refresh()
   end
 
   @doc "Adopts a parsed Fountain document without making its source the edit authority."
@@ -74,8 +81,8 @@ defmodule Fount.Screenplay do
       annotations: doc.annotations,
       import: %{format: :fountain, bytes: doc.source.raw, revision_id: nil}
     }
-    |> Fount.Screenplay.Model.resolve_cast(Keyword.get(opts, :cast_resolution, :manual))
-    |> Fount.Screenplay.Model.refresh()
+    |> Model.resolve_cast(Keyword.get(opts, :cast_resolution, :manual))
+    |> Model.refresh()
     |> bind_import_revision()
   end
 
@@ -102,7 +109,7 @@ defmodule Fount.Screenplay do
   @spec to_fdx(t()) :: {:ok, ExportResult.t()} | {:error, term()}
 
   def to_fdx(%__MODULE__{import: %{format: :fdx, bytes: bytes, render_hash: hash}} = model) do
-    if hash == Fount.Screenplay.Model.refresh(model).revision.render_hash,
+    if hash == Model.refresh(model).revision.render_hash,
       do: {:ok, %ExportResult{data: bytes}},
       else: regenerate_fdx(model)
   end
@@ -123,11 +130,11 @@ defmodule Fount.Screenplay do
 
   def to_fountain(%__MODULE__{} = model, opts) do
     if model.import && model.import[:format] == :fountain &&
-         model.import[:render_hash] == Fount.Screenplay.Model.refresh(model).revision.render_hash &&
+         model.import[:render_hash] == Model.refresh(model).revision.render_hash &&
          Keyword.get(opts, :mode, :archival) == :archival do
       model.import.bytes
     else
-      ir = if Keyword.get(opts, :mode) == :spec, do: Fount.Screenplay.Editor.spec_ir(model), else: model.ir
+      ir = if Keyword.get(opts, :mode) == :spec, do: Editor.spec_ir(model), else: model.ir
       Serializer.serialize(ir, Keyword.put(opts, :canonical_spacing, true))
     end
   end
@@ -135,7 +142,7 @@ defmodule Fount.Screenplay do
   @doc "Returns Fountain bytes with an explicit fidelity report for regenerated imports."
   @spec export_fountain(t(), keyword()) :: {:ok, ExportResult.t()}
   def export_fountain(%__MODULE__{} = model, opts \\ []) do
-    current_render_hash = Fount.Screenplay.Model.refresh(model).revision.render_hash
+    current_render_hash = Model.refresh(model).revision.render_hash
 
     losses =
       case model.import do
@@ -149,7 +156,8 @@ defmodule Fount.Screenplay do
   end
 
   @doc "Applies typed operations to the model and advances its revision once."
-  @spec apply(t(), Fount.Edit.Op.t() | [Fount.Edit.Op.t()]) :: {:ok, t()} | {:error, term()}
+  @spec apply(t(), Fount.Edit.Op.t() | map() | [Fount.Edit.Op.t() | map()]) ::
+          {:ok, t()} | {:ok, t(), Fount.Edit.ChangeSet.t()} | {:error, term()}
   def apply(%__MODULE__{} = screenplay, operations) do
     case apply(screenplay, List.wrap(operations), []) do
       {:ok, model, _changes} = result ->
@@ -161,7 +169,7 @@ defmodule Fount.Screenplay do
   end
 
   def apply(%__MODULE__{} = screenplay, operations, opts),
-    do: Fount.Screenplay.Editor.apply(screenplay, operations, opts)
+    do: Editor.apply(screenplay, operations, opts)
 
   @doc "Creates a new head with a prior model's content and identities."
   @spec undo(t(), t()) :: {:ok, t()} | {:error, :different_screenplay}
@@ -214,7 +222,7 @@ defmodule Fount.Screenplay do
 
     {:ok,
      %{target | revision: next_revision, mentions: rebind_mentions(target, next_revision.id)}
-     |> Fount.Screenplay.Model.refresh()}
+     |> Model.refresh()}
   end
 
   defp restore_model(%__MODULE__{}, %__MODULE__{}, _message), do: {:error, :different_screenplay}
@@ -234,7 +242,7 @@ defmodule Fount.Screenplay do
     next_revision = revision(screenplay.revision.id)
 
     {%{updated | revision: next_revision, mentions: rebind_mentions(updated, next_revision.id)}
-     |> Fount.Screenplay.Model.refresh(), character}
+     |> Model.refresh(), character}
   end
 
   @doc "Confirms that one literal character cue refers to an authored cast entry."
@@ -263,7 +271,7 @@ defmodule Fount.Screenplay do
         |> Map.reject(fn {_id, item} -> item.element_id == cue_id and item.role == :speaker_cue end)
         |> Map.put(mention.id, mention)
 
-      {:ok, %{screenplay | mentions: mentions, revision: next_revision} |> Fount.Screenplay.Model.refresh()}
+      {:ok, %{screenplay | mentions: mentions, revision: next_revision} |> Model.refresh()}
     else
       nil -> {:error, {:unknown_character_or_cue, character_id, cue_id}}
       _ -> {:error, {:not_a_character_cue, cue_id}}
@@ -331,7 +339,7 @@ defmodule Fount.Screenplay do
       with {:ok, renamed} <- __MODULE__.apply(screenplay, plan.cue_operations),
            %Character{} = character <- Map.get(renamed.cast, plan.character_id) do
         cast = Map.put(renamed.cast, character.id, %{character | display_name: plan.new_name})
-        {:ok, %{renamed | cast: cast} |> Fount.Screenplay.Model.refresh()}
+        {:ok, %{renamed | cast: cast} |> Model.refresh()}
       else
         nil -> {:error, {:unknown_character, plan.character_id}}
         error -> error

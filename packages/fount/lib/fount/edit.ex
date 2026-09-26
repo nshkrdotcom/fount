@@ -1,8 +1,13 @@
 defmodule Fount.Edit do
   @moduledoc "Source-backed edit algebra for screenplay refactoring, structured generation, and agent operations."
-
-  alias Fount.{Annotations, Document, Fragment, Index}
-  alias Fount.Edit.{ChangeSet, Op, Patch, Step}
+  alias Fount.Annotations
+  alias Fount.Document
+  alias Fount.Edit.ChangeSet
+  alias Fount.Edit.Op
+  alias Fount.Edit.Patch
+  alias Fount.Edit.Step
+  alias Fount.Fragment
+  alias Fount.Index
   alias Fount.Source.Span
 
   @spec replace_text(String.t(), binary()) :: Op.t()

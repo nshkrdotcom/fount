@@ -1,6 +1,9 @@
 defmodule FountProbe.SceneMechanics do
   @moduledoc "Descriptive scene functions and choices, not a universal score for a good scene."
-  alias FountProbe.{Projection, Extraction, Jev, Report}
+  alias FountProbe.Extraction
+  alias FountProbe.Jev
+  alias FountProbe.Projection
+  alias FountProbe.Report
 
   @dimensions [
     problem: "Does a new problem become active?",
@@ -52,29 +55,7 @@ defmodule FountProbe.SceneMechanics do
            )}
         end)
 
-      questions =
-        if params["include_tactics"] == true do
-          options =
-            extraction.data["records"]
-            |> Enum.filter(&(&1["kind"] == "goals"))
-            |> Enum.take(12)
-            |> Enum.with_index()
-            |> Enum.map(fn {r, i} -> {"tactic_#{i}", r["claim"]} end)
-
-          if options == [],
-            do: questions,
-            else:
-              questions ++
-                [
-                  tactic:
-                    SystemOneSDK.choice(
-                      "Which proposed objective or tactic most clearly organizes this scene?",
-                      options ++ [{"other", "Other or unclear"}]
-                    )
-                ]
-        else
-          questions
-        end
+      questions = maybe_tactic_questions(questions, params, extraction)
 
       with {:ok, result} <- Jev.evaluate(clients[:system_one], inputs, questions, opts) do
         {:ok,
@@ -93,4 +74,28 @@ defmodule FountProbe.SceneMechanics do
       end
     end
   end
+
+  defp maybe_tactic_questions(questions, %{"include_tactics" => true}, extraction) do
+    options =
+      extraction.data["records"]
+      |> Enum.filter(&(&1["kind"] == "goals"))
+      |> Enum.take(12)
+      |> Enum.with_index()
+      |> Enum.map(fn {record, index} -> {"tactic_#{index}", record["claim"]} end)
+
+    if options == [] do
+      questions
+    else
+      questions ++
+        [
+          tactic:
+            SystemOneSDK.choice(
+              "Which proposed objective or tactic most clearly organizes this scene?",
+              options ++ [{"other", "Other or unclear"}]
+            )
+        ]
+    end
+  end
+
+  defp maybe_tactic_questions(questions, _, _), do: questions
 end

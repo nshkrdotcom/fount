@@ -1,9 +1,9 @@
 defmodule Fount.Adapter.FDX do
   @moduledoc "Practical Final Draft XML adapter for import/export at Fount's model boundary."
+  alias Fount.Adapter.ExportResult
+  alias Fount.Adapter.ImportResult
 
   import Saxy.XML
-
-  alias Fount.Adapter.{ExportResult, ImportResult}
 
   @supported_styles MapSet.new(["Bold", "Italic", "Underline"])
 

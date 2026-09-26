@@ -1,10 +1,12 @@
-Code.require_file("support/continuation_store.exs", __DIR__)
-Code.require_file("support/scripted_completion.exs", __DIR__)
+Code.require_file("../support/continuation_store.ex", __DIR__)
+alias FountWorkshop.Session
+alias FountWorkshop.Store
+alias FountWorkshop.TestSupport.ContinuationStore
+alias FountWorkshop.TestSupport.ScriptedCompletion
+Code.require_file("../support/scripted_completion.ex", __DIR__)
 
 defmodule FountWorkshop.SessionContinuationTest do
   use ExUnit.Case, async: true
-  alias FountWorkshop.TestSupport.{ContinuationStore, ScriptedCompletion}
-  alias FountWorkshop.{Session, Store}
 
   test "partial materialization retains pages; resume skips saved branches and reuses inspected preparation" do
     model = Fount.Screenplay.new()

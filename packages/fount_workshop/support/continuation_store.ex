@@ -24,22 +24,20 @@ defmodule FountWorkshop.TestSupport.ContinuationStore do
   end
 
   def save_session(agent, session) do
-    Agent.get_and_update(agent, fn state ->
-      previous = state.sessions[session["id"]]
+    Agent.get_and_update(agent, &save_session_state(&1, session))
+  end
 
-      if previous && previous["lock_version"] != session["lock_version"] do
-        {{:error, :stale_session}, state}
-      else
-        saved =
-          Map.put(
-            session,
-            "lock_version",
-            if(previous, do: previous["lock_version"] + 1, else: 1)
-          )
+  defp save_session_state(state, session) do
+    previous = state.sessions[session["id"]]
 
-        {{:ok, saved}, put_in(state, [:sessions, saved["id"]], saved)}
-      end
-    end)
+    if previous && previous["lock_version"] != session["lock_version"] do
+      {{:error, :stale_session}, state}
+    else
+      saved =
+        Map.put(session, "lock_version", if(previous, do: previous["lock_version"] + 1, else: 1))
+
+      {{:ok, saved}, put_in(state, [:sessions, saved["id"]], saved)}
+    end
   end
 
   def session(agent, id),

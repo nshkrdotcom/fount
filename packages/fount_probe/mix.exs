@@ -16,6 +16,7 @@ defmodule FountProbe.MixProject do
       source_url: @source_url,
       homepage_url: @source_url,
       deps: deps(),
+      dialyzer: [plt_add_apps: [:mix]],
       docs: docs(),
       package: package()
     ]

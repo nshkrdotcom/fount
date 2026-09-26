@@ -1,6 +1,11 @@
 defmodule FountWorkshop.Writing.Generation do
   @moduledoc false
-  alias FountWorkshop.{Candidate, Writing.Context}
+  alias Fount.Writing.CanonicalJSON
+  alias Fount.Writing.Schema
+  alias FountWorkshop.Candidate
+  alias FountWorkshop.Writing.Context
+  alias FountWorkshop.Writing.ProposalGuide
+  alias FountWorkshop.Writing.RecoveryCopy
   def propose(base, request, strategy, context, services, opts \\ [])
 
   def propose(
@@ -11,10 +16,10 @@ defmodule FountWorkshop.Writing.Generation do
         _services,
         opts
       ),
-      do: FountWorkshop.Writing.RecoveryCopy.propose(base, request, strategy, context, opts)
+      do: RecoveryCopy.propose(base, request, strategy, context, opts)
 
   def propose(base, request, strategy, context, services, opts) do
-    schema = Fount.Writing.Schema.inline("proposal.schema.json")
+    schema = Schema.inline("proposal.schema.json")
 
     compile_opts =
       Context.compile_options(base, request, context, opts)
@@ -50,13 +55,13 @@ defmodule FountWorkshop.Writing.Generation do
              |> Keyword.put(:name, "fount_candidate")
              |> Keyword.put(:force_json_text, true)
              |> Keyword.put_new(:decode_repairs, 2)
-             |> Keyword.put(:schema_prompt, FountWorkshop.Writing.ProposalGuide.text())
+             |> Keyword.put(:schema_prompt, ProposalGuide.text())
            ),
          {:ok, candidate} <- Candidate.compile(base, proposal, compile_opts) do
       provenance =
         candidate["provenance"]
         |> Map.put("completions", traces)
-        |> Map.put("context_sha256", Fount.Writing.CanonicalJSON.hash(context.data))
+        |> Map.put("context_sha256", CanonicalJSON.hash(context.data))
 
       {:ok, Map.put(candidate, "provenance", provenance)}
     end

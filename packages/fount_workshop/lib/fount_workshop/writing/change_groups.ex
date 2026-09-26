@@ -12,7 +12,7 @@ defmodule FountWorkshop.Writing.ChangeGroups do
     with :ok <- shapes(groups),
          :ok <- identities(groups),
          :ok <- references(groups) do
-      topological(groups, [], MapSet.new())
+      topological(groups, [], %{})
     end
   end
 
@@ -57,17 +57,21 @@ defmodule FountWorkshop.Writing.ChangeGroups do
   end
 
   defp shapes(groups) do
-    case Enum.find(groups, fn group ->
-           not is_map(group) or not is_binary(group["id"]) or group["id"] == "" or
-             not is_list(group["operations"]) or group["operations"] == [] or
-             not Enum.all?(group["operations"], &is_map/1) or
-             not is_list(Map.get(group, "depends_on", [])) or
-             not Enum.all?(Map.get(group, "depends_on", []), &is_binary/1) or
-             not is_list(Map.get(group, "addresses_notes", []))
-         end) do
+    case Enum.find(groups, &invalid_shape?/1) do
       nil -> :ok
       group -> {:error, {:invalid_change_group, group}}
     end
+  end
+
+  defp invalid_shape?(group) when not is_map(group), do: true
+
+  defp invalid_shape?(group) do
+    not is_binary(group["id"]) or group["id"] == "" or
+      not is_list(group["operations"]) or group["operations"] == [] or
+      not Enum.all?(group["operations"], &is_map/1) or
+      not is_list(Map.get(group, "depends_on", [])) or
+      not Enum.all?(Map.get(group, "depends_on", []), &is_binary/1) or
+      not is_list(Map.get(group, "addresses_notes", []))
   end
 
   defp identities(groups) do
@@ -91,14 +95,14 @@ defmodule FountWorkshop.Writing.ChangeGroups do
 
   defp topological(pending, ordered, done) do
     case Enum.find(pending, fn group ->
-           Enum.all?(Map.get(group, "depends_on", []), &MapSet.member?(done, &1))
+           Enum.all?(Map.get(group, "depends_on", []), &Map.has_key?(done, &1))
          end) do
       nil ->
         {:error, {:cyclic_group_dependencies, Enum.map(pending, & &1["id"])}}
 
       next ->
         remaining = Enum.reject(pending, &(&1["id"] == next["id"]))
-        topological(remaining, [next | ordered], MapSet.put(done, next["id"]))
+        topological(remaining, [next | ordered], Map.put(done, next["id"], true))
     end
   end
 

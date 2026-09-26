@@ -1,4 +1,5 @@
 defmodule FountWorkshop.StrategyPromptSizeTest do
+  alias FountWorkshop.Writing.Context
   use ExUnit.Case, async: true
 
   test "duplicate dialogue metadata cannot exhaust the strategy prompt" do
@@ -58,7 +59,7 @@ defmodule FountWorkshop.StrategyPromptSizeTest do
       evidence: []
     }
 
-    prompt_data = FountWorkshop.Writing.Context.prompt_data(context.data)
+    prompt_data = Context.prompt_data(context.data)
     assert Enum.map(prompt_data["dialogue_blocks"], & &1["id"]) == ["dual-block"]
 
     assert prompt_data["confirmed_mentions"] == [
@@ -66,7 +67,7 @@ defmodule FountWorkshop.StrategyPromptSizeTest do
            ]
 
     assert get_in(
-             FountWorkshop.Writing.Context.prompt_data(context.data,
+             Context.prompt_data(context.data,
                inspection_sample_limit: 4
              ),
              ["inspections", Access.at(0), "data", "records"]

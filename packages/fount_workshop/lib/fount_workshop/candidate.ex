@@ -1,8 +1,16 @@
 defmodule FountWorkshop.Candidate do
   @moduledoc "Actual screenplay branches compiled from typed change groups, with explicit selection and source attribution."
-  alias Fount.{Screenplay, ID}
-  alias Fount.Writing.{Schema, LocalReferences}
-  alias FountWorkshop.Writing.{ChangeGroups, Footprint, Scope}
+  alias Fount.ID
+  alias Fount.Screenplay
+  alias Fount.Screenplay.Model
+  alias Fount.Writing.LocalReferences
+  alias Fount.Writing.Schema
+  alias Fount.Writing.UTF8Span
+  alias FountProbe.Writing.Evidence
+  alias FountWorkshop.Writing.ChangeGroups
+  alias FountWorkshop.Writing.Footprint
+  alias FountWorkshop.Writing.Layout
+  alias FountWorkshop.Writing.Scope
 
   def compile(base, proposal, opts \\ []) do
     with :ok <- Schema.validate("proposal.schema.json", proposal),
@@ -189,45 +197,53 @@ defmodule FountWorkshop.Candidate do
   end
 
   defp combine_picks(base, by_id, picks) do
-    Enum.reduce_while(Enum.with_index(picks), {:ok, [], []}, fn {pick, n}, {:ok, acc, lineage} ->
-      case Map.fetch(by_id, pick["candidate_id"]) do
-        :error ->
-          {:halt, {:error, :unknown_combination_candidate}}
+    Enum.reduce_while(Enum.with_index(picks), {:ok, [], []}, fn {pick, index},
+                                                                {:ok, acc, lineage} ->
+      combine_pick(base, by_id, pick, index, acc, lineage)
+    end)
+  end
 
-        {:ok, source} ->
-          result =
-            if pick["ranges"],
-              do: range_groups(base, source, pick["ranges"]),
-              else: ChangeGroups.select(proposal(source)["groups"], pick["group_ids"])
+  defp combine_pick(base, by_id, pick, n, acc, lineage) do
+    case Map.fetch(by_id, pick["candidate_id"]) do
+      :error ->
+        {:halt, {:error, :unknown_combination_candidate}}
 
-          case result do
-            {:ok, selected} ->
-              prefix = "source" <> Integer.to_string(n + 1)
-              names = Map.new(selected, &{&1["id"], prefix <> ":" <> &1["id"]})
+      {:ok, source} ->
+        result =
+          if pick["ranges"],
+            do: range_groups(base, source, pick["ranges"]),
+            else: ChangeGroups.select(proposal(source)["groups"], pick["group_ids"])
 
-              selected =
-                LocalReferences.namespace(selected, prefix)
-                |> Enum.map(fn g ->
-                  g
-                  |> Map.put("id", names[g["id"]])
-                  |> Map.update!("depends_on", &Enum.map(&1, fn id -> names[id] end))
-                end)
+        case result do
+          {:ok, selected} ->
+            prefix = "source" <> Integer.to_string(n + 1)
+            names = Map.new(selected, &{&1["id"], prefix <> ":" <> &1["id"]})
 
-              link = %{
-                "candidate_id" => source["id"],
-                "revision_id" => source["screenplay"].revision.id,
-                "operation" => "combine",
-                "source_group_ids" => pick["group_ids"] || [],
-                "source_ranges" => pick["ranges"] || [],
-                "result_group_ids" => Enum.map(selected, & &1["id"])
-              }
+            selected = rename_combined_groups(selected, prefix, names)
 
-              {:cont, {:ok, acc ++ selected, lineage ++ [link]}}
+            link = %{
+              "candidate_id" => source["id"],
+              "revision_id" => source["screenplay"].revision.id,
+              "operation" => "combine",
+              "source_group_ids" => pick["group_ids"] || [],
+              "source_ranges" => pick["ranges"] || [],
+              "result_group_ids" => Enum.map(selected, & &1["id"])
+            }
 
-            error ->
-              {:halt, error}
-          end
-      end
+            {:cont, {:ok, acc ++ selected, lineage ++ [link]}}
+
+          error ->
+            {:halt, error}
+        end
+    end
+  end
+
+  defp rename_combined_groups(selected, prefix, names) do
+    LocalReferences.namespace(selected, prefix)
+    |> Enum.map(fn group ->
+      group
+      |> Map.put("id", names[group["id"]])
+      |> Map.update!("depends_on", &Enum.map(&1, fn id -> names[id] end))
     end)
   end
 
@@ -260,7 +276,7 @@ defmodule FountWorkshop.Candidate do
 
   defp range_groups(_, _, _), do: {:error, :empty_ranges}
   defp extract(text, nil), do: {:ok, text}
-  defp extract(text, span), do: Fount.Writing.UTF8Span.extract(text, span)
+  defp extract(text, span), do: UTF8Span.extract(text, span)
 
   defp choose_overlaps(base, groups, choices) do
     overlaps = Footprint.overlaps(base, groups)
@@ -292,7 +308,7 @@ defmodule FountWorkshop.Candidate do
     constraints = candidate["provenance"]["constraints"] || []
 
     {layout, layout_reports, layout_errors} =
-      case FountWorkshop.Writing.Layout.compare(base, candidate, services, opts) do
+      case Layout.compare(base, candidate, services, opts) do
         {:ok, nil, nil} ->
           {nil, [], []}
 
@@ -385,7 +401,7 @@ defmodule FountWorkshop.Candidate do
 
   defp citations(groups, evidence) do
     registry = Map.new(evidence, &{&1["evidence_id"], &1})
-    FountProbe.Writing.Evidence.citations(Enum.flat_map(groups, & &1["evidence_ids"]), registry)
+    Evidence.citations(Enum.flat_map(groups, & &1["evidence_ids"]), registry)
   end
 
   defp resolve_notes(draft, selected, all) do
@@ -393,36 +409,31 @@ defmodule FountWorkshop.Candidate do
     addressed = ChangeGroups.notes_addressed(selected)
 
     items =
-      Enum.reduce(addressed, draft.authored_items, fn id, acc ->
-        required = for g <- all, id in g["addresses_notes"], do: g["id"]
+      Enum.reduce(
+        addressed,
+        draft.authored_items,
+        &resolve_note_item(&1, &2, selected_ids, all, draft.revision.id)
+      )
 
-        case acc[id] do
-          %{"kind" => "note"} = note ->
-            if Enum.all?(required, &MapSet.member?(selected_ids, &1)) do
-              Map.put(
-                acc,
-                id,
-                note
-                |> Map.put("status", "resolved")
-                |> Map.update(
-                  "value",
-                  %{},
-                  &Map.put(&1, "resolution", %{
-                    "group_ids" => required,
-                    "candidate_revision_id" => draft.revision.id
-                  })
-                )
-              )
-            else
-              acc
-            end
+    %{draft | authored_items: items} |> Model.refresh()
+  end
 
-          _ ->
-            acc
+  defp resolve_note_item(id, items, selected_ids, groups, revision_id) do
+    required = for group <- groups, id in group["addresses_notes"], do: group["id"]
+
+    case items[id] do
+      %{"kind" => "note"} = note ->
+        if Enum.all?(required, &MapSet.member?(selected_ids, &1)) do
+          resolution = %{"group_ids" => required, "candidate_revision_id" => revision_id}
+          value = Map.put(note["value"] || %{}, "resolution", resolution)
+          Map.put(items, id, note |> Map.put("status", "resolved") |> Map.put("value", value))
+        else
+          items
         end
-      end)
 
-    %{draft | authored_items: items} |> Fount.Screenplay.Model.refresh()
+      _ ->
+        items
+    end
   end
 
   defp placement(_, _, nil), do: :ok

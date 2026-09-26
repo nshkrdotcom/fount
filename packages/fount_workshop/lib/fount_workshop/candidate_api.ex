@@ -1,6 +1,13 @@
 defmodule FountWorkshop.CandidateAPI do
   @moduledoc false
-  alias FountWorkshop.{Store, Candidate, Session}
+  alias Fount.Screenplay.Model
+  alias Fount.Writing.LocalReferences
+  alias Fount.Writing.Schema
+  alias FountWorkshop.Candidate
+  alias FountWorkshop.Session
+  alias FountWorkshop.Store
+  alias FountWorkshop.Writing.ChangeGroups
+  alias FountWorkshop.Writing.ProposalGuide
 
   def select(id, group_ids, services, opts \\ []) do
     with {:ok, c} <- Store.call(services[:store], :candidate, [id]),
@@ -118,31 +125,9 @@ defmodule FountWorkshop.CandidateAPI do
       end)
 
     pins = Enum.map(changed, &%{"id" => &1.id, "text" => &1.text})
-    schema = Fount.Writing.Schema.inline("proposal.schema.json")
+    schema = Schema.inline("proposal.schema.json")
 
-    validator = fn p ->
-      with :ok <- Fount.Writing.Schema.validate(schema, p),
-           true <- p["base_revision_id"] == draft.revision.id or {:error, :wrong_join_base},
-           true <-
-             Enum.all?(
-               p["groups"],
-               &(&1["origin"] in ["generated_text", "generated_structural_edit"])
-             ) or {:error, :invalid_join_origin},
-           {:ok, ops} <- FountWorkshop.Writing.ChangeGroups.operations(p["groups"]),
-           {:ok, next, _} <- Fount.Screenplay.apply(draft, ops),
-           true <-
-             Enum.all?(pins, fn pin ->
-               e = Fount.Query.node(next, pin["id"])
-               e && e.text == pin["text"]
-             end) or {:error, :selected_passage_changed},
-           true <-
-             Enum.all?(draft.ir.elements, fn e ->
-               next_e = Fount.Query.node(next, e.id)
-               (next_e && next_e.text == e.text) or MapSet.member?(allowed, e.id)
-             end) or {:error, :join_outside_scope} do
-        :ok
-      end
-    end
+    validator = &validate_join_proposal(&1, schema, draft, pins, allowed)
 
     prompt =
       "Write new connective screenplay material that makes this selected combination play continuously. The pinned selected passages must remain byte-identical, with their IDs retained. Do not 'smooth' them by rewriting them. Only the explicit join selection is editable; insertion of new connecting action/dialogue is permitted there. Output a typed proposal against this intermediate revision, no prose summary.\n" <>
@@ -152,7 +137,7 @@ defmodule FountWorkshop.CandidateAPI do
           "selection" => selection,
           "pins" => pins,
           "pages" => units,
-          "confirmed_cast" => Fount.Screenplay.Model.plain(Map.values(draft.cast))
+          "confirmed_cast" => Model.plain(Map.values(draft.cast))
         })
 
     with {:ok, joins, traces} <-
@@ -164,75 +149,109 @@ defmodule FountWorkshop.CandidateAPI do
              opts
              |> Keyword.put(:force_json_text, true)
              |> Keyword.put_new(:decode_repairs, 2)
-             |> Keyword.put(:schema_prompt, FountWorkshop.Writing.ProposalGuide.text())
+             |> Keyword.put(:schema_prompt, ProposalGuide.text())
            ) do
-      existing = Candidate.proposal(combined)
-      namespaced = Fount.Writing.LocalReferences.namespace(joins["groups"], "join")
-      names = Map.new(namespaced, &{&1["id"], "join:" <> &1["id"]})
-
-      groups =
-        Enum.map(namespaced, fn g ->
-          g
-          |> Map.put("id", names[g["id"]])
-          |> Map.put(
-            "depends_on",
-            Enum.map(existing["groups"], & &1["id"]) ++ Enum.map(g["depends_on"], &names[&1])
-          )
-          |> Map.update!(
-            "operations",
-            &Fount.Writing.LocalReferences.localize(&1, combined["provenance"]["allocated_ids"])
-          )
-        end)
-
-      proposal =
-        existing
-        |> Map.update!("groups", &(&1 ++ groups))
-        |> Map.update!("inventions", &(&1 ++ joins["inventions"]))
-
-      with {:ok, final} <-
-             Candidate.compile(
-               base,
-               proposal,
-               opts
-               |> Keyword.put(:writer_edit, true)
-               |> Keyword.put(:reference_map, combined["provenance"]["allocated_ids"])
-               |> Keyword.put(
-                 :evidence,
-                 Enum.uniq_by(
-                   combined["provenance"]["evidence"] ++ FountProbe.Projection.evidence(units),
-                   & &1["evidence_id"]
-                 )
-               )
-               |> Keyword.put(:constraints, combined["provenance"]["constraints"])
-               |> Keyword.put(:lineage, combined["lineage"])
-             ) do
-        preserved =
-          Enum.all?(pins, fn pin ->
-            e = Fount.Query.node(final["screenplay"], pin["id"])
-            e && e.text == pin["text"]
-          end)
-
-        if preserved do
-          check = %{
-            "constraint_id" => "selected-passages",
-            "kind" => "selected_pin",
-            "severity" => "required",
-            "evaluation" => "deterministic",
-            "status" => "pass"
-          }
-
-          {:ok,
-           final
-           |> put_in(["provenance", "application_checks"], [check])
-           |> put_in(["provenance", "join_completions"], traces)
-           |> put_in(["provenance", "selected_pins"], pins)
-           |> put_in(["provenance", "join_source_revision_id"], draft.revision.id)}
-        else
-          {:error, :join_failed_selected_pin_replay}
-        end
-      end
+      compile_join_result(base, combined, joins, traces, units, pins, draft, opts)
     end
   end
 
   defp joins(_, _, _, _, _), do: {:error, :join_requires_instruction_and_selection}
+
+  defp validate_join_proposal(proposal, schema, draft, pins, allowed) do
+    with :ok <- Schema.validate(schema, proposal),
+         true <- proposal["base_revision_id"] == draft.revision.id or {:error, :wrong_join_base},
+         true <-
+           Enum.all?(
+             proposal["groups"],
+             &(&1["origin"] in ["generated_text", "generated_structural_edit"])
+           ) or {:error, :invalid_join_origin},
+         {:ok, ops} <- ChangeGroups.operations(proposal["groups"]),
+         {:ok, next, _} <- Fount.Screenplay.apply(draft, ops, []),
+         true <- pins_preserved?(next, pins) or {:error, :selected_passage_changed},
+         true <- within_join_scope?(draft, next, allowed) or {:error, :join_outside_scope} do
+      :ok
+    end
+  end
+
+  defp pins_preserved?(model, pins) do
+    Enum.all?(pins, fn pin ->
+      element = Fount.Query.node(model, pin["id"])
+      element && element.text == pin["text"]
+    end)
+  end
+
+  defp within_join_scope?(draft, next, allowed) do
+    Enum.all?(draft.ir.elements, fn element ->
+      next_element = Fount.Query.node(next, element.id)
+      (next_element && next_element.text == element.text) or MapSet.member?(allowed, element.id)
+    end)
+  end
+
+  defp compile_join_result(base, combined, joins, traces, units, pins, draft, opts) do
+    existing = Candidate.proposal(combined)
+    namespaced = LocalReferences.namespace(joins["groups"], "join")
+    names = Map.new(namespaced, &{&1["id"], "join:" <> &1["id"]})
+
+    groups =
+      Enum.map(namespaced, fn g ->
+        g
+        |> Map.put("id", names[g["id"]])
+        |> Map.put(
+          "depends_on",
+          Enum.map(existing["groups"], & &1["id"]) ++ Enum.map(g["depends_on"], &names[&1])
+        )
+        |> Map.update!(
+          "operations",
+          &LocalReferences.localize(&1, combined["provenance"]["allocated_ids"])
+        )
+      end)
+
+    proposal =
+      existing
+      |> Map.update!("groups", &(&1 ++ groups))
+      |> Map.update!("inventions", &(&1 ++ joins["inventions"]))
+
+    with {:ok, final} <-
+           Candidate.compile(
+             base,
+             proposal,
+             opts
+             |> Keyword.put(:writer_edit, true)
+             |> Keyword.put(:reference_map, combined["provenance"]["allocated_ids"])
+             |> Keyword.put(
+               :evidence,
+               Enum.uniq_by(
+                 combined["provenance"]["evidence"] ++ FountProbe.Projection.evidence(units),
+                 & &1["evidence_id"]
+               )
+             )
+             |> Keyword.put(:constraints, combined["provenance"]["constraints"])
+             |> Keyword.put(:lineage, combined["lineage"])
+           ) do
+      preserved =
+        Enum.all?(pins, fn pin ->
+          e = Fount.Query.node(final["screenplay"], pin["id"])
+          e && e.text == pin["text"]
+        end)
+
+      if preserved do
+        check = %{
+          "constraint_id" => "selected-passages",
+          "kind" => "selected_pin",
+          "severity" => "required",
+          "evaluation" => "deterministic",
+          "status" => "pass"
+        }
+
+        {:ok,
+         final
+         |> put_in(["provenance", "application_checks"], [check])
+         |> put_in(["provenance", "join_completions"], traces)
+         |> put_in(["provenance", "selected_pins"], pins)
+         |> put_in(["provenance", "join_source_revision_id"], draft.revision.id)}
+      else
+        {:error, :join_failed_selected_pin_replay}
+      end
+    end
+  end
 end

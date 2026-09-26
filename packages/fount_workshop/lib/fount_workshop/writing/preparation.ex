@@ -1,7 +1,11 @@
 defmodule FountWorkshop.Writing.Preparation do
   @moduledoc false
-  alias FountWorkshop.{Store, Writing.Context}
-  alias FountProbe.{Projection, Report}
+  alias Fount.Screenplay.Model
+  alias FountProbe.Projection
+  alias FountProbe.Report
+  alias FountWorkshop.Store
+  alias FountWorkshop.Writing.Context
+  alias FountWorkshop.Writing.NoteConflicts
 
   def run(model, request, services, opts \\ []) do
     with {:ok, context} <- Context.build(model, request, opts),
@@ -57,46 +61,47 @@ defmodule FountWorkshop.Writing.Preparation do
   end
 
   def retry_failed(model, request, context, services, opts) do
-    requests = retry_requests(model, request, context)
+    case retry_requests(model, request, context) do
+      [] -> {:ok, context}
+      requests -> retry_failed_requests(model, context, services, opts, requests)
+    end
+  end
 
-    if requests == [] do
-      {:ok, context}
-    else
-      clients = Store.clients(services)
-      report_reader = fn id -> Store.call(services[:store], :report, [id]) end
+  defp retry_failed_requests(model, context, services, opts, requests) do
+    clients = Store.clients(services)
+    report_reader = fn id -> Store.call(services[:store], :report, [id]) end
 
-      with {:ok, reports} <-
-             FountProbe.execute(
-               model,
-               requests,
-               clients,
-               Keyword.put_new(opts, :report_reader, report_reader)
-             ) do
-        replacements = Map.new(reports, &{&1.provenance["request_id"], Report.to_map(&1)})
-        previous = context.data["inspections"] || []
+    with {:ok, reports} <-
+           FountProbe.execute(
+             model,
+             requests,
+             clients,
+             Keyword.put_new(opts, :report_reader, report_reader)
+           ) do
+      replacements = Map.new(reports, &{&1.provenance["request_id"], Report.to_map(&1)})
+      previous = context.data["inspections"] || []
 
-        updated =
-          Enum.map(previous, fn report ->
-            Map.get(replacements, get_in(report, ["provenance", "request_id"]), report)
-          end)
+      updated =
+        Enum.map(previous, fn report ->
+          Map.get(replacements, get_in(report, ["provenance", "request_id"]), report)
+        end)
 
-        seen = MapSet.new(updated, &get_in(&1, ["provenance", "request_id"]))
+      seen = MapSet.new(updated, &get_in(&1, ["provenance", "request_id"]))
 
-        updated =
-          updated ++ for({id, report} <- replacements, not MapSet.member?(seen, id), do: report)
+      updated =
+        updated ++ for({id, report} <- replacements, not MapSet.member?(seen, id), do: report)
 
-        {:ok,
-         %{
-           context
-           | reports: reports,
-             evidence:
-               Enum.uniq_by(
-                 context.evidence ++ Enum.flat_map(reports, & &1.evidence),
-                 & &1["evidence_id"]
-               ),
-             data: Map.put(context.data, "inspections", updated)
-         }}
-      end
+      {:ok,
+       %{
+         context
+         | reports: reports,
+           evidence:
+             Enum.uniq_by(
+               context.evidence ++ Enum.flat_map(reports, & &1.evidence),
+               & &1["evidence_id"]
+             ),
+           data: Map.put(context.data, "inspections", updated)
+       }}
     end
   end
 
@@ -227,7 +232,7 @@ defmodule FountWorkshop.Writing.Preparation do
         }
       end)
 
-    conflicts = FountWorkshop.Writing.NoteConflicts.detect(model, notes ++ external)
+    conflicts = NoteConflicts.detect(model, notes ++ external)
 
     {[
        request("note-context", "scene_mechanics", %{
@@ -365,7 +370,7 @@ defmodule FountWorkshop.Writing.Preparation do
             |> Map.values()
             |> Enum.filter(&(&1.role == :speaker_cue and &1.status == :confirmed))
             |> Map.new(&{&1.element_id, &1.character_id}),
-          "cast" => Fount.Screenplay.Model.plain(Map.values(source.cast))
+          "cast" => Model.plain(Map.values(source.cast))
         })
 
       {:ok,

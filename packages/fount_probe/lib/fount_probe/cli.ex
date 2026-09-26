@@ -3,53 +3,64 @@ defmodule FountProbe.CLI do
   alias Fount.CLI.Support, as: S
 
   def run(command, argv) do
-    with {:ok, opts, []} <-
-           S.parse(argv,
-             key: :string,
-             request: :string,
-             output: :string,
-             query: :string,
-             history: :boolean,
-             revision: :string
-           ) do
-      if opts[:help] do
-        {:ok,
-         %{
-           "usage" =>
-             "mix fount.#{command} --key KEY #{if command == "search", do: "--query TEXT [--history]", else: "--request requests.json"} --output DIRECTORY"
-         }}
-      else
-        with :ok <-
-               S.required(
-                 opts,
-                 [:key, :output] ++ if(command == "search", do: [:query], else: [:request])
-               ),
-             {:ok, repo} <- S.connect(),
-             {:ok, model} <- S.load(repo, opts),
-             {:ok, requests} <- requests(command, model, repo, opts),
-             :ok <- validate_requests(model, requests),
-             {:ok, clients} <-
-               FountProbe.Launcher.clients(
-                 inference: command != "search",
-                 jev: command != "search"
-               ),
-             {:ok, reports} <-
-               FountProbe.execute(model, requests, clients,
-                 report_reader: fn id -> Fount.Persistence.report(repo, id) end,
-                 history_reader: fn sid, rid ->
-                   Fount.Persistence.load_revision(repo, sid, rid)
-                 end
-               ),
-             {:ok, saved} <- save(reports, repo, opts[:output]) do
-          if Enum.all?(reports, &(&1.status == "complete")),
-            do: {:ok, saved},
-            else: {:error, :partial_probe_report}
+    case S.parse(argv,
+           key: :string,
+           request: :string,
+           output: :string,
+           query: :string,
+           history: :boolean,
+           revision: :string
+         ) do
+      {:ok, opts, []} ->
+        if opts[:help] do
+          {:ok,
+           %{
+             "usage" =>
+               "mix fount.#{command} --key KEY #{if command == "search", do: "--query TEXT [--history]", else: "--request requests.json"} --output DIRECTORY"
+           }}
+        else
+          execute_command(command, opts)
         end
-      end
-    else
-      {:ok, _, _} -> {:error, :unexpected_positional_arguments}
-      error -> error
+
+      {:ok, _, _} ->
+        {:error, :unexpected_positional_arguments}
+
+      error ->
+        error
     end
+  end
+
+  defp execute_command(command, opts) do
+    with :ok <-
+           S.required(
+             opts,
+             [:key, :output] ++ if(command == "search", do: [:query], else: [:request])
+           ),
+         {:ok, repo} <- S.connect(),
+         {:ok, model} <- S.load(repo, opts),
+         {:ok, requests} <- requests(command, model, repo, opts),
+         :ok <- validate_requests(model, requests),
+         {:ok, clients} <-
+           FountProbe.Launcher.clients(
+             inference: command != "search",
+             jev: command != "search"
+           ),
+         {:ok, reports} <-
+           FountProbe.execute(model, requests, clients,
+             report_reader: fn id -> Fount.Persistence.report(repo, id) end,
+             history_reader: fn sid, rid ->
+               Fount.Persistence.load_revision(repo, sid, rid)
+             end
+           ),
+         {:ok, saved} <- save(reports, repo, opts[:output]) do
+      complete_result(reports, saved)
+    end
+  end
+
+  defp complete_result(reports, saved) do
+    if Enum.all?(reports, &(&1.status == "complete")),
+      do: {:ok, saved},
+      else: {:error, :partial_probe_report}
   end
 
   defp requests("probe", _, _, opts), do: S.json_file(opts[:request])

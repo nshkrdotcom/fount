@@ -6,16 +6,20 @@ defmodule FountProbe.Launcher do
         {:ok, %{}}
 
       path ->
-        with {:ok, bytes} <- File.read(path),
-             {:ok, voices} when is_map(voices) <- Jason.decode(bytes),
-             true <-
-               Enum.all?(voices, fn {key, voice} ->
-                 is_binary(key) and is_binary(voice) and String.trim(voice) != ""
-               end) do
-          {:ok, voices}
-        else
-          _ -> {:error, :invalid_voice_configuration}
-        end
+        load_voices(path)
+    end
+  end
+
+  defp load_voices(path) do
+    with {:ok, bytes} <- File.read(path),
+         {:ok, voices} when is_map(voices) <- Jason.decode(bytes),
+         true <-
+           Enum.all?(voices, fn {key, voice} ->
+             is_binary(key) and is_binary(voice) and String.trim(voice) != ""
+           end) do
+      {:ok, voices}
+    else
+      _ -> {:error, :invalid_voice_configuration}
     end
   end
 

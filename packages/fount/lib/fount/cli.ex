@@ -1,6 +1,7 @@
 defmodule Fount.CLI do
   @moduledoc "Core import, exact revision inspection, export and history commands."
   alias Fount.CLI.Support, as: S
+  alias Fount.Screenplay.Model
   @flags [key: :string, format: :string, output: :string, revision: :string]
 
   def run(command, argv) do
@@ -8,10 +9,14 @@ defmodule Fount.CLI do
       if opts[:help] do
         {:ok, %{"usage" => help(command)}}
       else
-        with :ok <- S.required(opts, [:key]), :ok <- arguments(command, args, opts), {:ok, repo} <- S.connect() do
-          dispatch(command, args, opts, repo)
-        end
+        run_command(command, args, opts)
       end
+    end
+  end
+
+  defp run_command(command, args, opts) do
+    with :ok <- S.required(opts, [:key]), :ok <- arguments(command, args, opts), {:ok, repo} <- S.connect() do
+      dispatch(command, args, opts, repo)
     end
   end
 
@@ -22,7 +27,7 @@ defmodule Fount.CLI do
            Fount.Persistence.create(repo, opts[:key], model,
              provenance: %{
                "import_file" => Path.basename(path),
-               "diagnostics" => Fount.Screenplay.Model.plain(diagnostics)
+               "diagnostics" => Model.plain(diagnostics)
              }
            ) do
       {:ok, summary(root)}
@@ -33,11 +38,11 @@ defmodule Fount.CLI do
     with {:ok, model} <- S.load(repo, opts) do
       {:ok,
        Map.merge(summary(model), %{
-         "scenes" => Fount.Screenplay.Model.plain(model.ir.scenes),
-         "elements" => Fount.Screenplay.Model.plain(model.ir.elements),
-         "characters" => Fount.Screenplay.Model.plain(Map.values(model.cast)),
+         "scenes" => Model.plain(model.ir.scenes),
+         "elements" => Model.plain(model.ir.elements),
+         "characters" => Model.plain(Map.values(model.cast)),
          "authored_items" => model.authored_items,
-         "dialogue_blocks" => Fount.Screenplay.Model.plain(model.ir.dialogue_blocks)
+         "dialogue_blocks" => Model.plain(model.ir.dialogue_blocks)
        })}
     end
   end
@@ -54,10 +59,8 @@ defmodule Fount.CLI do
 
   defp dispatch("history", [], opts, repo) do
     with {:ok, model} <- S.load(repo, opts) do
-      case Fount.Persistence.history(repo, model.id) do
-        {:error, _} = error -> error
-        rows -> {:ok, %{"screenplay_id" => model.id, "accepted_head" => model.revision.id, "revisions" => rows}}
-      end
+      rows = Fount.Persistence.history(repo, model.id)
+      {:ok, %{"screenplay_id" => model.id, "accepted_head" => model.revision.id, "revisions" => rows}}
     end
   end
 
@@ -75,7 +78,7 @@ defmodule Fount.CLI do
   defp arguments("import", [_], opts), do: format(opts)
 
   defp arguments("export", [], opts) do
-    with :ok <- S.required(opts, [:output]), :ok <- format(opts), do: :ok
+    with :ok <- S.required(opts, [:output]), do: format(opts)
   end
 
   defp arguments(command, [], _) when command in ["inspect", "history"], do: :ok

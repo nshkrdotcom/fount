@@ -1,6 +1,7 @@
 defmodule Fount.CanonicalEditTest do
+  alias Fount.Query
+  alias Fount.Screenplay
   use ExUnit.Case, async: true
-  alias Fount.{Screenplay, Query}
 
   defp fixture do
     {:ok, doc} =

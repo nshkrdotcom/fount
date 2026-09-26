@@ -1,6 +1,5 @@
 defmodule Fount.Source.Line do
   @moduledoc "Exact source line, including its original line terminator."
-
   alias Fount.Source.Span
 
   @enforce_keys [:number, :content, :eol, :span, :content_span]

@@ -1,4 +1,4 @@
-Code.require_file("support/continuation_store.exs", __DIR__)
+Code.require_file("../support/continuation_store.ex", __DIR__)
 
 defmodule FountWorkshop.AuditionContinuationTest do
   use ExUnit.Case, async: true

@@ -28,19 +28,18 @@ defmodule FountProbe.Completion do
          max_bytes do
       {:error, :context_limit, []}
     else
-      attempt(
-        client,
-        original,
-        original,
-        schema,
-        schema_prompt,
-        name,
-        validator,
-        mode,
-        repairs,
-        [],
-        opts
-      )
+      attempt(client, %{
+        original: original,
+        prompt: original,
+        schema: schema,
+        schema_prompt: schema_prompt,
+        name: name,
+        validator: validator,
+        mode: mode,
+        repairs: repairs,
+        trace: [],
+        opts: opts
+      })
     end
   end
 
@@ -62,19 +61,20 @@ defmodule FountProbe.Completion do
 
   def decode(_), do: {:error, :missing_response_text}
 
-  defp attempt(
-         client,
-         original,
-         prompt,
-         schema,
-         schema_prompt,
-         name,
-         validator,
-         mode,
-         repairs,
-         trace,
-         opts
-       ) do
+  defp attempt(client, state) do
+    %{
+      original: original,
+      prompt: prompt,
+      schema: schema,
+      schema_prompt: schema_prompt,
+      name: name,
+      validator: validator,
+      mode: mode,
+      repairs: repairs,
+      trace: trace,
+      opts: opts
+    } = state
+
     options =
       if mode == "json_schema" do
         [response_format: {:json_schema, %{name: name, strict: true, schema: schema}}]
@@ -91,19 +91,7 @@ defmodule FountProbe.Completion do
         prompt
       end
 
-    result =
-      cond do
-        byte_size(request) +
-          if(mode == "json_schema", do: byte_size(Jason.encode!(schema)), else: 0) >
-            Keyword.get(opts, :max_context_bytes, 100_000) ->
-          {:error, :context_limit}
-
-        FountProbe.Budget.take(Keyword.get(opts, :budget), :inference, 1) == 0 ->
-          {:error, :session_inference_limit}
-
-        true ->
-          Inference.complete(client, request, options)
-      end
+    result = request_completion(client, request, options, state)
 
     case result do
       {:error, error} ->
@@ -126,15 +114,7 @@ defmodule FountProbe.Completion do
           "usage" => Map.get(response, :usage)
         }
 
-        decoded =
-          if mode == "json_schema" do
-            case Map.get(response, :object) do
-              object when is_map(object) -> {:ok, object}
-              _ -> {:error, :missing_structured_object}
-            end
-          else
-            decode(Map.get(response, :text))
-          end
+        decoded = decode_response(mode, response)
 
         validated =
           with {:ok, object} <- decoded,
@@ -154,37 +134,14 @@ defmodule FountProbe.Completion do
                 inspect(errors, limit: 100, printable_limit: 8_000)
 
             repair_prompt =
-              case {mode, errors, Map.get(response, :text)} do
-                {"json_text", :invalid_json_response, previous} when is_binary(previous) ->
-                  syntax_prompt =
-                    "Repair the JSON syntax in the following previous response. Preserve its " <>
-                      "screenplay text, IDs, operations, and writer choices exactly. Return only " <>
-                      "one complete JSON object; do not explain the changes.\n" <> previous
+              choose_repair_prompt(mode, errors, response, schema_prompt, opts, repair_prompt)
 
-                  if byte_size(syntax_prompt) + byte_size(schema_prompt) <=
-                       Keyword.get(opts, :max_context_bytes, 100_000),
-                     do: syntax_prompt,
-                     else: repair_prompt
-
-                _ ->
-                  repair_prompt
-              end
-
-            attempt(
-              client,
-              original,
-              repair_prompt,
-              schema,
-              schema_prompt,
-              name,
-              validator,
-              mode,
-              repairs - 1,
-              [
-                Map.put(entry, "validation", "failed") | trace
-              ],
-              opts
-            )
+            attempt(client, %{
+              state
+              | prompt: repair_prompt,
+                repairs: repairs - 1,
+                trace: [Map.put(entry, "validation", "failed") | trace]
+            })
 
           {:error, errors} ->
             {:error, {:invalid_completion, errors},
@@ -193,6 +150,58 @@ defmodule FountProbe.Completion do
           other ->
             {:error, {:invalid_validator_result, other}, Enum.reverse([entry | trace])}
         end
+    end
+  end
+
+  defp decode_response("json_schema", response) do
+    case Map.get(response, :object) do
+      object when is_map(object) -> {:ok, object}
+      _ -> {:error, :missing_structured_object}
+    end
+  end
+
+  defp decode_response(_, response), do: decode(Map.get(response, :text))
+
+  defp choose_repair_prompt(
+         "json_text",
+         :invalid_json_response,
+         response,
+         schema_prompt,
+         opts,
+         fallback
+       ) do
+    case Map.get(response, :text) do
+      previous when is_binary(previous) ->
+        syntax_prompt =
+          "Repair the JSON syntax in the following previous response. Preserve its " <>
+            "screenplay text, IDs, operations, and writer choices exactly. Return only " <>
+            "one complete JSON object; do not explain the changes.\n" <> previous
+
+        if byte_size(syntax_prompt) + byte_size(schema_prompt) <=
+             Keyword.get(opts, :max_context_bytes, 100_000),
+           do: syntax_prompt,
+           else: fallback
+
+      _ ->
+        fallback
+    end
+  end
+
+  defp choose_repair_prompt(_, _, _, _, _, fallback), do: fallback
+
+  defp request_completion(client, request, options, state) do
+    schema_bytes =
+      if state.mode == "json_schema", do: byte_size(Jason.encode!(state.schema)), else: 0
+
+    cond do
+      byte_size(request) + schema_bytes > Keyword.get(state.opts, :max_context_bytes, 100_000) ->
+        {:error, :context_limit}
+
+      FountProbe.Budget.take(Keyword.get(state.opts, :budget), :inference, 1) == 0 ->
+        {:error, :session_inference_limit}
+
+      true ->
+        Inference.complete(client, request, options)
     end
   end
 

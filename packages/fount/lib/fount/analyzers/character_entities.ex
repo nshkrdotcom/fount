@@ -1,9 +1,9 @@
 defmodule Fount.Analyzers.CharacterEntities do
   @moduledoc "Cue-to-entity resolver with explicit alias groups; makes no speculative alias merges."
-  @behaviour Fount.Analyzer
-
   alias Fount.Annotation
-  alias Fount.Annotation.{Provenance, Target}
+  alias Fount.Annotation.Provenance
+  alias Fount.Annotation.Target
+  @behaviour Fount.Analyzer
 
   @impl true
   def analyze(doc, opts) do

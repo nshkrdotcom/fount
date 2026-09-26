@@ -6,8 +6,9 @@ defmodule Fount.Adapter.JSON do
   includes stable IDs, source coordinates, inline marks, structural views, and
   annotation provenance. Exact source bytes are opt-in.
   """
-
   alias Fount.Adapter.ExportResult
+  alias Fount.Persistence.Codec
+  alias Fount.Screenplay.Model
 
   @spec export(Fount.Document.t() | Fount.Screenplay.t(), keyword()) :: {:ok, ExportResult.t()}
   def export(doc, opts \\ [])
@@ -19,7 +20,7 @@ defmodule Fount.Adapter.JSON do
   def export(doc, opts), do: export_projection(doc, opts)
 
   defp export_canonical(model, opts) do
-    model = Fount.Screenplay.Model.refresh(model)
+    model = Model.refresh(model)
 
     artifact =
       if Keyword.get(opts, :include_source, false) and model.import do
@@ -35,7 +36,7 @@ defmodule Fount.Adapter.JSON do
 
     payload = %{
       "schema" => "fount.screenplay.v2",
-      "model" => Fount.Persistence.Codec.encode(model),
+      "model" => Codec.encode(model),
       "import_artifact" => artifact
     }
 
@@ -83,7 +84,7 @@ defmodule Fount.Adapter.JSON do
          true <- Map.keys(payload) -- ~w(schema model import_artifact) == [] or {:error, :unknown_json_field},
          :ok <- validate_model_fields(data),
          :ok <- validate_nested_fields(data),
-         model = Fount.Persistence.Codec.decode(data),
+         model = Codec.decode(data),
          [] <- Fount.Validate.screenplay(model),
          true <- data["revision"]["content_hash"] == model.revision.content_hash or {:error, :content_hash_mismatch},
          true <- data["revision"]["render_hash"] == model.revision.render_hash or {:error, :render_hash_mismatch},

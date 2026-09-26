@@ -192,7 +192,7 @@ defmodule Fount.WritingPersistenceIntegrationTest do
                  "target" => %{"kind" => "element", "id" => line.id},
                  "value" => "Mara leaves."
                }
-             ])
+             ], [])
 
     assert_raise Postgrex.Error, fn ->
       Persistence.save_candidate(Repo, session.id, %{
@@ -285,8 +285,8 @@ defmodule Fount.WritingPersistenceIntegrationTest do
       %{"kind" => "replace_text", "target" => %{"kind" => "element", "id" => line.id}, "value" => text}
     end
 
-    assert {:ok, chosen, _} = Screenplay.apply(root, [op.("Mara leaves.")])
-    assert {:ok, sibling, _} = Screenplay.apply(root, [op.("Mara hides.")])
+    assert {:ok, chosen, _} = Screenplay.apply(root, [op.("Mara leaves.")], [])
+    assert {:ok, sibling, _} = Screenplay.apply(root, [op.("Mara hides.")], [])
     assert {:ok, _} = Persistence.save_candidate(Repo, session.id, %{screenplay: sibling})
 
     assert {:ok, report} =
@@ -346,7 +346,7 @@ defmodule Fount.WritingPersistenceIntegrationTest do
       "value" => "Mara leaves."
     }
 
-    assert {:ok, result, _} = Screenplay.apply(root, [operation])
+    assert {:ok, result, _} = Screenplay.apply(root, [operation], [])
 
     assert {:ok, report} =
              Persistence.save_report(

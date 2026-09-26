@@ -1,8 +1,10 @@
 defmodule FountWorkshop.Pass do
   @moduledoc "Runs one writer-directed creative pass as an editable candidate."
-
-  alias Fount.{Persistence, Query, Screenplay}
-  alias FountWorkshop.{SequenceRebuild, TargetedRewrite}
+  alias Fount.Persistence
+  alias Fount.Query
+  alias Fount.Screenplay
+  alias FountWorkshop.SequenceRebuild
+  alias FountWorkshop.TargetedRewrite
 
   @profiles ~w(action_visual brevity custom dialogue_subtext dry_comedy tension)
 
@@ -12,7 +14,7 @@ defmodule FountWorkshop.Pass do
   @doc "Loads a shipped writing direction, without treating its craft advice as a rule."
   def profile(id) when id in @profiles do
     path = Application.app_dir(:fount_workshop, "priv/writing_profiles/#{id}.json")
-    with {:ok, text} <- File.read(path), {:ok, value} <- Jason.decode(text), do: {:ok, value}
+    with {:ok, text} <- File.read(path), do: Jason.decode(text)
   end
 
   def profile(_), do: {:error, :unknown_profile}
@@ -25,26 +27,7 @@ defmodule FountWorkshop.Pass do
       instruction =
         "#{profile["goal"]}\n#{profile["creative_prompt"]}\nWriter direction: #{direction}"
 
-      case id do
-        "dialogue_subtext" ->
-          rewrite_type(base, scene_ids, :dialogue, instruction, client)
-
-        "action_visual" ->
-          rewrite_type(base, scene_ids, :action, instruction, client)
-
-        "custom" ->
-          ids = Keyword.get(opts, :element_ids, [])
-
-          if Enum.all?(ids, &(scene_id_for(base, &1) in scene_ids)),
-            do: TargetedRewrite.propose(base, ids, instruction, client),
-            else: {:error, :target_outside_selection}
-
-        _ ->
-          SequenceRebuild.propose(base, scene_ids, instruction, client,
-            required_texts: Keyword.get(opts, :required_texts, []),
-            target_scene_count: Keyword.get(opts, :target_scene_count)
-          )
-      end
+      propose_profile(base, id, scene_ids, instruction, client, opts)
       |> case do
         {:ok, result} ->
           {:ok, Map.merge(result, %{profile_id: id, profile_version: profile["version"]})}
@@ -55,6 +38,29 @@ defmodule FountWorkshop.Pass do
     else
       false -> {:error, :empty_direction}
       error -> error
+    end
+  end
+
+  defp propose_profile(base, id, scene_ids, instruction, client, opts) do
+    case id do
+      "dialogue_subtext" ->
+        rewrite_type(base, scene_ids, :dialogue, instruction, client)
+
+      "action_visual" ->
+        rewrite_type(base, scene_ids, :action, instruction, client)
+
+      "custom" ->
+        ids = Keyword.get(opts, :element_ids, [])
+
+        if Enum.all?(ids, &(scene_id_for(base, &1) in scene_ids)),
+          do: TargetedRewrite.propose(base, ids, instruction, client),
+          else: {:error, :target_outside_selection}
+
+      _ ->
+        SequenceRebuild.propose(base, scene_ids, instruction, client,
+          required_texts: Keyword.get(opts, :required_texts, []),
+          target_scene_count: Keyword.get(opts, :target_scene_count)
+        )
     end
   end
 
@@ -76,43 +82,47 @@ defmodule FountWorkshop.Pass do
                "direction" => direction
              }
            }) do
-      case propose(base, id, scene_ids, direction, client, opts) do
-        {:ok, proposal} ->
-          candidate =
-            Map.merge(proposal, %{
-              label: "#{id} pass",
-              strategy: %{"profile_id" => id, "profile_version" => profile["version"]},
-              change_groups: [%{"id" => id, "operations" => proposal.changes.operations}],
-              lineage: proposal.changes.lineage,
-              provenance: %{
-                "completion" => proposal.completion_trace,
-                "profile_id" => id,
-                "profile_version" => profile["version"]
-              }
-            })
+      run_pass(repo, base, session, id, scene_ids, direction, client, opts)
+    end
+  end
 
-          case Persistence.save_candidate(repo, session.id, candidate) do
-            {:ok, saved} ->
-              {:ok, updated} =
-                Persistence.save_session(
-                  repo,
-                  Map.merge(session, %{
-                    status: "ready",
-                    progress: %{"candidate_ids" => [saved.id]}
-                  })
-                )
+  defp run_pass(repo, base, session, id, scene_ids, direction, client, opts) do
+    case propose(base, id, scene_ids, direction, client, opts) do
+      {:ok, proposal} ->
+        candidate =
+          Map.merge(proposal, %{
+            label: "#{id} pass",
+            strategy: %{"profile_id" => id, "profile_version" => proposal.profile_version},
+            change_groups: [%{"id" => id, "operations" => proposal.changes.operations}],
+            lineage: proposal.changes.lineage,
+            provenance: %{
+              "completion" => proposal.completion_trace,
+              "profile_id" => id,
+              "profile_version" => proposal.profile_version
+            }
+          })
 
-              {:ok, %{session: updated, candidate: saved, accepted_revision_id: base.revision.id}}
+        case Persistence.save_candidate(repo, session.id, candidate) do
+          {:ok, saved} ->
+            {:ok, updated} =
+              Persistence.save_session(
+                repo,
+                Map.merge(session, %{
+                  status: "ready",
+                  progress: %{"candidate_ids" => [saved.id]}
+                })
+              )
 
-            error ->
-              mark_failed(repo, session, error)
-              error
-          end
+            {:ok, %{session: updated, candidate: saved, accepted_revision_id: base.revision.id}}
 
-        {:error, reason} ->
-          mark_failed(repo, session, reason)
-          {:error, reason}
-      end
+          error ->
+            mark_failed(repo, session, error)
+            error
+        end
+
+      {:error, reason} ->
+        mark_failed(repo, session, reason)
+        {:error, reason}
     end
   end
 

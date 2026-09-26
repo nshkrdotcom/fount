@@ -1,6 +1,8 @@
 defmodule FountProbe do
   @moduledoc "Screenplay-specific inspection, comparison and investigation. All observations retain exact source identity."
-  alias FountProbe.{Catalog, Report}
+  alias Fount.Screenplay.Model
+  alias FountProbe.Catalog
+  alias FountProbe.Report
   def tools, do: Catalog.tools()
 
   def run(model, tool, params, clients \\ %{}, opts \\ []) do
@@ -18,20 +20,20 @@ defmodule FountProbe do
     if Enum.any?(ids, &(not is_binary(&1) or &1 == "")) or length(ids) != length(Enum.uniq(ids)) do
       {:error, :invalid_or_duplicate_request_id}
     else
-      reports =
-        Enum.map(requests, fn request ->
-          case run(model, request["tool"], request["params"], clients, opts) do
-            {:ok, report} ->
-              %{report | provenance: Map.put(report.provenance, "request_id", request["id"])}
-
-            {:error, reason} ->
-              report = Report.failure(model, request["tool"], request["params"], reason)
-              %{report | provenance: Map.put(report.provenance, "request_id", request["id"])}
-          end
-        end)
+      reports = Enum.map(requests, &run_request(model, &1, clients, opts))
 
       {:ok, reports}
     end
+  end
+
+  defp run_request(model, request, clients, opts) do
+    report =
+      case run(model, request["tool"], request["params"], clients, opts) do
+        {:ok, result} -> result
+        {:error, reason} -> Report.failure(model, request["tool"], request["params"], reason)
+      end
+
+    %{report | provenance: Map.put(report.provenance, "request_id", request["id"])}
   end
 
   def compare(before, after_model, constraints, clients, opts \\ []) do
@@ -60,29 +62,7 @@ defmodule FountProbe do
              scene_ids:
                units |> Enum.map(& &1["scene_id"]) |> Enum.reject(&is_nil/1) |> Enum.uniq()
            ) do
-      if Map.get(p, "include_summaries", true) do
-        with {:ok, extracted} <-
-               FountProbe.Extraction.run(
-                 m,
-                 %{"selection" => p["selection"], "kinds" => ["events"]},
-                 c,
-                 o
-               ) do
-          {:ok,
-           %{
-             extracted
-             | tool: "inventory",
-               request: p,
-               data: Map.put(extracted.data, "inventory", Fount.Screenplay.Model.plain(inventory))
-           }}
-        end
-      else
-        {:ok,
-         Report.new(m, "inventory", p, %{
-           data: Fount.Screenplay.Model.plain(inventory),
-           evidence: FountProbe.Projection.evidence(units)
-         })}
-      end
+      inventory_result(m, p, c, o, units, inventory)
     end
   end
 
@@ -101,4 +81,30 @@ defmodule FountProbe do
   defp dispatch(m, "scene_lift", p, c, o), do: FountProbe.Comparison.scene_lift(m, p, c, o)
   defp dispatch(m, "ablate", p, c, o), do: FountProbe.Comparison.ablate(m, p, c, o)
   defp dispatch(m, "strategy_contrast", p, c, o), do: FountProbe.StrategyContrast.run(m, p, c, o)
+
+  defp inventory_result(model, params, clients, opts, units, inventory) do
+    if Map.get(params, "include_summaries", true) do
+      with {:ok, extracted} <-
+             FountProbe.Extraction.run(
+               model,
+               %{"selection" => params["selection"], "kinds" => ["events"]},
+               clients,
+               opts
+             ) do
+        {:ok,
+         %{
+           extracted
+           | tool: "inventory",
+             request: params,
+             data: Map.put(extracted.data, "inventory", Model.plain(inventory))
+         }}
+      end
+    else
+      {:ok,
+       Report.new(model, "inventory", params, %{
+         data: Model.plain(inventory),
+         evidence: FountProbe.Projection.evidence(units)
+       })}
+    end
+  end
 end

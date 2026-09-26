@@ -10,7 +10,7 @@ defmodule Fount.ContinuationConcurrencyIntegrationTest do
     key = "identity-#{Fount.ID.v4()}"
     assert {:ok, _} = Persistence.create(Repo, key, root)
     e = Enum.find(root.ir.elements, &(&1.type == :action))
-    assert {:ok, changed, _} = Screenplay.apply(root, [%{"kind" => "replace_text", "target" => %{"kind" => "element", "id" => e.id}, "value" => "Mara leaves."}])
+    assert {:ok, changed, _} = Screenplay.apply(root, [%{"kind" => "replace_text", "target" => %{"kind" => "element", "id" => e.id}, "value" => "Mara leaves."}], [])
     forged = %{changed | revision: %{changed.revision | id: root.revision.id, parent_id: nil}}
     assert {:error, :revision_identity_conflict} = Persistence.save_edit(Repo, key, forged, expected_revision: root.revision.id)
     assert {:ok, head} = Persistence.load(Repo, key)
@@ -22,7 +22,7 @@ defmodule Fount.ContinuationConcurrencyIntegrationTest do
     assert {:ok, _} = Persistence.create(Repo, key, root)
     e = Enum.find(root.ir.elements, &(&1.type == :action))
     results = ["Mara leaves.", "Mara locks the door."] |> Task.async_stream(fn text ->
-      {:ok, candidate, _} = Screenplay.apply(root, [%{"kind" => "replace_text", "target" => %{"kind" => "element", "id" => e.id}, "value" => text}])
+      {:ok, candidate, _} = Screenplay.apply(root, [%{"kind" => "replace_text", "target" => %{"kind" => "element", "id" => e.id}, "value" => text}], [])
       Persistence.save_edit(Repo, key, candidate, expected_revision: root.revision.id, actor: "integration-writer")
     end, max_concurrency: 2, timeout: 15_000) |> Enum.map(fn {:ok, result} -> result end)
     assert Enum.count(results, &match?({:ok, _}, &1)) == 1
@@ -53,7 +53,7 @@ defmodule Fount.ContinuationConcurrencyIntegrationTest do
           "value" => text
         }
 
-        {:ok, draft, _} = Screenplay.apply(root, [operation])
+        {:ok, draft, _} = Screenplay.apply(root, [operation], [])
         {:ok, candidate} = Persistence.save_candidate(Repo, session.id, %{screenplay: draft})
         candidate
       end)

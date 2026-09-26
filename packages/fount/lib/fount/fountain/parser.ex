@@ -1,12 +1,15 @@
 defmodule Fount.Fountain.Parser do
   @moduledoc "Context-aware Fountain parser producing a lossless CST and canonical IR."
-
-  alias Fount.{Diagnostic, ID}
-  alias Fount.Fountain.{Classifier, CST, Inline}
+  alias Fount.Diagnostic
+  alias Fount.Fountain.Classifier
+  alias Fount.Fountain.CST
   alias Fount.Fountain.CST.Node
+  alias Fount.Fountain.Inline
+  alias Fount.ID
   alias Fount.IR
   alias Fount.Source
-  alias Fount.Source.{Line, Span}
+  alias Fount.Source.Line
+  alias Fount.Source.Span
 
   @spec parse(Source.t(), String.t(), keyword()) :: {CST.t(), Fount.IR.Script.t(), [Diagnostic.t()]}
   def parse(%Source{} = source, document_id, _opts \\ []) do

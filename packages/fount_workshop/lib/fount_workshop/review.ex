@@ -1,7 +1,7 @@
 defmodule FountWorkshop.Review do
   @moduledoc "Builds a writer review packet and applies an explicit candidate decision."
-
-  alias Fount.{Persistence, Screenplay}
+  alias Fount.Persistence
+  alias Fount.Screenplay
   alias FountWorkshop.Writing.ReviewGate
 
   def export(session_id, directory, services, opts \\ []),

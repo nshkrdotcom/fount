@@ -1,7 +1,7 @@
 defmodule FountWorkshop do
   @moduledoc "Writer-controlled screenplay candidates and explicit review decisions."
-
-  alias FountWorkshop.{Develop, Review}
+  alias FountWorkshop.Develop
+  alias FountWorkshop.Review
 
   def develop(repo, key, brief, client, opts \\ []),
     do: Develop.run(repo, key, brief, client, opts)

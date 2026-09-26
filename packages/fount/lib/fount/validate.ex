@@ -1,7 +1,7 @@
 defmodule Fount.Validate do
   @moduledoc "Structural validation of CST coverage, source spans, identities, and IR references."
-
-  alias Fount.{Diagnostic, Document}
+  alias Fount.Diagnostic
+  alias Fount.Document
   alias Fount.Fountain.CST
   alias Fount.Source.Span
 
@@ -21,54 +21,69 @@ defmodule Fount.Validate do
 
   @doc "Checks canonical structure independently of source parsing."
   def screenplay(model) do
+    []
+    |> validate_screenplay_ids(model)
+    |> validate_screenplay_elements(model)
+    |> validate_screenplay_blocks(model)
+    |> Enum.reverse()
+  end
+
+  defp validate_screenplay_ids(errors, model) do
     ids = Enum.map(model.ir.elements, & &1.id)
     membership = Enum.flat_map(model.ir.scenes, & &1.element_ids)
-    blocks = model.ir.dialogue_blocks
-    body_ids = Enum.flat_map(blocks, & &1.body_ids)
-    errors = []
 
     errors =
       if length(ids) != length(Enum.uniq(ids)),
         do: [error(:duplicate_element_id, "Duplicate element identity") | errors],
         else: errors
 
-    errors =
-      if length(membership) != length(Enum.uniq(membership)),
-        do: [error(:duplicate_membership, "Element belongs to multiple scenes") | errors],
-        else: errors
+    if length(membership) != length(Enum.uniq(membership)),
+      do: [error(:duplicate_membership, "Element belongs to multiple scenes") | errors],
+      else: errors
+  end
 
-    errors =
-      Enum.reduce(model.ir.elements, errors, fn e, acc ->
-        cond do
-          e.type in [:dialogue, :parenthetical] and e.id not in body_ids ->
-            [error(:orphan_dialogue, "Dialogue has no cue", e.id) | acc]
+  defp validate_screenplay_elements(errors, model) do
+    body_ids = Enum.flat_map(model.ir.dialogue_blocks, & &1.body_ids)
 
-          not is_binary(e.text) or not String.valid?(e.text) ->
-            [error(:invalid_text, "Invalid UTF-8 text", e.id) | acc]
+    Enum.reduce(model.ir.elements, errors, fn element, acc ->
+      cond do
+        element.type in [:dialogue, :parenthetical] and element.id not in body_ids ->
+          [error(:orphan_dialogue, "Dialogue has no cue", element.id) | acc]
 
-          true ->
-            acc
-        end
-      end)
+        not is_binary(element.text) or not String.valid?(element.text) ->
+          [error(:invalid_text, "Invalid UTF-8 text", element.id) | acc]
 
-    errors =
-      Enum.reduce(blocks, errors, fn b, acc ->
-        partner = Enum.find(blocks, &(&1.id == b.dual_with))
-        cue = Fount.Query.node(model, b.cue_id)
-        scene = Fount.Query.scene_for(model, b.cue_id)
+        true ->
+          acc
+      end
+    end)
+  end
 
-        invalid =
-          b.body_ids == [] or
-            (not is_nil(b.dual_with) and
-               (is_nil(partner) or partner.dual_with != b.id or partner.side == b.side or
-                  Fount.Query.scene_for(model, partner.cue_id) != scene)) or
-            (Map.get(cue.attrs || %{}, :dual?, false) and is_nil(b.dual_with)) or
-            Enum.any?(b.body_ids, &(Fount.Query.scene_for(model, &1) != scene))
+  defp validate_screenplay_blocks(errors, model) do
+    Enum.reduce(model.ir.dialogue_blocks, errors, fn block, acc ->
+      if invalid_dialogue_group?(model, block),
+        do: [error(:invalid_dialogue_group, "Invalid dialogue or dual group", block.id) | acc],
+        else: acc
+    end)
+  end
 
-        if invalid, do: [error(:invalid_dialogue_group, "Invalid dialogue or dual group", b.id) | acc], else: acc
-      end)
+  defp invalid_dialogue_group?(model, block) do
+    cue = Fount.Query.node(model, block.cue_id)
+    scene = Fount.Query.scene_for(model, block.cue_id)
 
-    Enum.reverse(errors)
+    block.body_ids == [] or
+      invalid_dual_group?(model, block, scene) or
+      (Map.get(cue.attrs || %{}, :dual?, false) and is_nil(block.dual_with)) or
+      Enum.any?(block.body_ids, &(Fount.Query.scene_for(model, &1) != scene))
+  end
+
+  defp invalid_dual_group?(_, %{dual_with: nil}, _), do: false
+
+  defp invalid_dual_group?(model, block, scene) do
+    partner = Enum.find(model.ir.dialogue_blocks, &(&1.id == block.dual_with))
+
+    is_nil(partner) or partner.dual_with != block.id or partner.side == block.side or
+      Fount.Query.scene_for(model, partner.cue_id) != scene
   end
 
   defp validate_cst_exactness(diags, doc) do

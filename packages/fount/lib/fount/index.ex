@@ -1,6 +1,5 @@
 defmodule Fount.Index do
   @moduledoc "Fast derived indexes over immutable screenplay IR."
-
   alias Fount.IR.Script
 
   defstruct by_id: %{},

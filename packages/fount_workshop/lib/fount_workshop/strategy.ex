@@ -1,7 +1,10 @@
 defmodule FountWorkshop.Strategy do
   @moduledoc "Dramatic alternatives are stored separately from pages and can be materialized after writer selection."
+  alias Fount.Writing.Schema
   alias FountProbe.Completion
-  alias FountWorkshop.{Store, Session}
+  alias FountWorkshop.Session
+  alias FountWorkshop.Store
+  alias FountWorkshop.Writing.Context
   @strings ~w(id title premise_of_change dramatic_mechanism entry_state exit_state)
   @arrays ~w(beats preserves changes inventions consequences evidence_ids open_questions)
   def generate(_model, request, context, services, opts \\ []) do
@@ -25,25 +28,11 @@ defmodule FountWorkshop.Strategy do
         "additionalProperties" => false
       }
 
-      validator = fn value ->
-        with :ok <- Fount.Writing.Schema.validate(schema, value),
-             true <-
-               length(Enum.uniq_by(value["strategies"], & &1["id"])) == count or
-                 {:error, :duplicate_strategy_id},
-             true <-
-               Enum.all?(
-                 Enum.flat_map(value["strategies"], & &1["evidence_ids"]),
-                 &(&1 in Enum.map(context.evidence, fn e -> e["evidence_id"] end))
-               ) or {:error, :uninspected_evidence} do
-          :ok
-        end
-      end
+      validator = &validate_strategies(&1, schema, count, context.evidence)
 
       prompt =
         "You are developing choices for a professional spec screenplay. Create exactly #{count} genuinely different dramatic approaches to the writer's request. Change causal route, character choice, resistance, or disclosure, not merely adjectives. No universal act formula, quality score, winner, or invented PDF savings. Describe actionable screenplay beats and concrete consequences. Disclose inventions. Nothing is accepted yet.\n" <>
-          Jason.encode!(
-            FountWorkshop.Writing.Context.prompt_data(context.data, inspection_sample_limit: 4)
-          )
+          Jason.encode!(Context.prompt_data(context.data, inspection_sample_limit: 4))
 
       with {:ok, value, traces} <-
              Completion.complete(
@@ -56,6 +45,25 @@ defmodule FountWorkshop.Strategy do
         {:ok, value["strategies"], traces}
       end
     end
+  end
+
+  defp validate_strategies(value, schema, count, evidence) do
+    with :ok <- Schema.validate(schema, value),
+         true <-
+           length(Enum.uniq_by(value["strategies"], & &1["id"])) == count or
+             {:error, :duplicate_strategy_id},
+         true <- valid_strategy_evidence?(value, evidence) or {:error, :uninspected_evidence} do
+      :ok
+    end
+  end
+
+  defp valid_strategy_evidence?(value, evidence) do
+    inspected = MapSet.new(evidence, & &1["evidence_id"])
+
+    Enum.all?(
+      Enum.flat_map(value["strategies"], & &1["evidence_ids"]),
+      &MapSet.member?(inspected, &1)
+    )
   end
 
   def schema do

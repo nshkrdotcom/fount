@@ -1,6 +1,7 @@
 defmodule FountWorkshop.Request do
   @moduledoc "Closed writer request validation before persistence or paid calls."
   alias Fount.Writing.Schema
+  alias Fount.Writing.UTF8Span
 
   @options %{
     "develop" =>
@@ -64,9 +65,8 @@ defmodule FountWorkshop.Request do
          true <-
            not foreign? or
              Enum.all?(mapping, fn {_, id} -> Map.has_key?(model.cast, id) end) or
-             {:error, :unknown_cast_mapping_destination},
-         :ok <- placement(model, opts["destination"]) do
-      :ok
+             {:error, :unknown_cast_mapping_destination} do
+      placement(model, opts["destination"])
     end
   end
 
@@ -166,7 +166,7 @@ defmodule FountWorkshop.Request do
       ) do
     with :ok <- only(p, ~w(kind element_id span)),
          element when not is_nil(element) <- Fount.Query.node(model, id),
-         {:ok, _} <- Fount.Writing.UTF8Span.extract(element.text, {first, last}) do
+         {:ok, _} <- UTF8Span.extract(element.text, {first, last}) do
       :ok
     else
       _ -> {:error, :invalid_recovery_destination_span}

@@ -1,6 +1,9 @@
 defmodule Fount.ContinuationContractTest do
+  alias Fount.Screenplay.Model
+  alias Fount.Writing.LocalReferences
+  alias Fount.Writing.Schema
+  alias Fount.Writing.UTF8Span
   use ExUnit.Case, async: true
-  alias Fount.Writing.{Schema, LocalReferences, UTF8Span}
 
   test "the complete shipped operation union rejects unknown keys and foreign shapes" do
     op = %{
@@ -57,7 +60,7 @@ defmodule Fount.ContinuationContractTest do
         if e.id == cue.id, do: %{e | attrs: Map.put(e.attrs || %{}, "character_id", Fount.ID.v4())}, else: e
       end)
 
-    changed = Fount.Screenplay.Model.refresh(%{model | ir: %{model.ir | elements: elements}})
+    changed = Model.refresh(%{model | ir: %{model.ir | elements: elements}})
     assert changed.revision.render_hash == model.revision.render_hash
   end
 end

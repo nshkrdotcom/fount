@@ -1,4 +1,5 @@
 defmodule FountWorkshop.WritingContextPromptTest do
+  alias FountWorkshop.Writing.Context
   use ExUnit.Case, async: true
 
   test "large saved inspections fit a writing prompt without losing report identity" do
@@ -21,7 +22,7 @@ defmodule FountWorkshop.WritingContextPromptTest do
     }
 
     full = %{"selected_pages" => [%{"text" => "Mara takes the key."}], "inspections" => [report]}
-    compact = FountWorkshop.Writing.Context.prompt_data(full)
+    compact = Context.prompt_data(full)
 
     assert byte_size(Jason.encode!(full)) > 100_000
     assert byte_size(Jason.encode!(compact)) < 50_000

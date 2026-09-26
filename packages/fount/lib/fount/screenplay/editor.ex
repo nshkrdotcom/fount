@@ -1,84 +1,94 @@
 defmodule Fount.Screenplay.Editor do
   @moduledoc false
-  alias Fount.{ID, Query, Screenplay}
+  alias Fount.ID
+  alias Fount.IR.Element
+  alias Fount.IR.Scene
+  alias Fount.IR.TitlePage
+  alias Fount.Query
+  alias Fount.Screenplay
   alias Fount.Screenplay.Model
-  alias Fount.IR.{Element, Scene, TitlePage}
-  alias Fount.Writing.{LocalReferences, UTF8Span}
+  alias Fount.Writing.LocalReferences
+  alias Fount.Writing.Schema
+  alias Fount.Writing.UTF8Span
 
   @types ~w(action character dialogue parenthetical transition centered lyric section synopsis page_break note boneyard blank)
+  @type_atoms Map.new(@types, &{&1, String.to_atom(&1)})
+  @attr_keys %{"forced" => :forced?, "level" => :level, "dual_side" => :dual_side, "dual_with_cue" => :dual_with_cue}
 
   def apply(base, operations, opts) when is_list(operations) do
-    try do
-      normalized = Enum.map(operations, &normalize/1)
+    normalized = Enum.map(operations, &normalize/1)
 
-      Enum.each(normalized, fn operation ->
-        if operation["kind"] != "set_character_cue" do
-          case Fount.Writing.Schema.validate("operations.json", operation) do
-            :ok -> :ok
-            {:error, errors} -> fail({:operation_contract, errors})
-          end
-        end
-      end)
+    Enum.each(normalized, &validate_operation/1)
 
-      {:ok, compiled, mapping} = unwrap(LocalReferences.compile(normalized, Keyword.put(opts, :screenplay_id, base.id)))
-      allowed_new = MapSet.new(Map.values(mapping))
-      context = %{new: allowed_new, restore: Keyword.get(opts, :restore_registry, %{})}
+    {:ok, compiled, mapping} = unwrap(LocalReferences.compile(normalized, Keyword.put(opts, :screenplay_id, base.id)))
+    allowed_new = MapSet.new(Map.values(mapping))
+    context = %{new: allowed_new, restore: Keyword.get(opts, :restore_registry, %{})}
 
-      updated =
-        Enum.reduce(compiled, Model.refresh(base), fn op, model -> step(model, op, context) |> Model.refresh() end)
+    updated =
+      Enum.reduce(compiled, Model.refresh(base), fn op, model -> step(model, op, context) |> Model.refresh() end)
 
-      updated = updated |> link_explicit_cues() |> Model.refresh()
-      diagnostics = Fount.Validate.screenplay(updated)
-      if diagnostics != [], do: fail({:invalid_model, diagnostics})
-      changed = Model.content(updated) != Model.content(base)
+    updated = updated |> link_explicit_cues() |> Model.refresh()
+    diagnostics = Fount.Validate.screenplay(updated)
+    if diagnostics != [], do: fail({:invalid_model, diagnostics})
+    model = advance_revision(base, updated, opts)
 
-      model =
-        if changed do
-          revision = %Fount.Revision{
-            id: ID.v4(),
-            parent_id: base.revision.id,
-            created_at: DateTime.utc_now(),
-            actor: Keyword.get(opts, :actor)
-          }
+    impact = Fount.ChangeImpact.between(base, model)
 
-          %{updated | revision: revision} |> Model.refresh()
-        else
-          base
-        end
+    annotations = Map.reject(model.annotations, &stale_annotation?(model, impact, &1))
 
-      impact = Fount.ChangeImpact.between(base, model)
+    model = %{model | annotations: annotations}
 
-      annotations =
-        Map.reject(model.annotations, fn {_, a} ->
-          id = a.target.node_id
+    changes =
+      Map.merge(impact, %{
+        base_revision: base.revision.id,
+        result_revision: model.revision.id,
+        operations: compiled,
+        local_references: mapping,
+        lineage: lineage(base, model),
+        origin_by_group: %{},
+        diagnostics: []
+      })
 
-          (is_nil(Query.node(model, id)) and is_nil(Query.scene(model, id)) and id != model.id) or
-            (a.provenance.producer != "writer" and Enum.any?(impact.changed_targets, &(&1.id == id)))
-        end)
-
-      model = %{model | annotations: annotations}
-
-      changes =
-        Map.merge(impact, %{
-          base_revision: base.revision.id,
-          result_revision: model.revision.id,
-          operations: compiled,
-          local_references: mapping,
-          lineage: lineage(base, model),
-          origin_by_group: %{},
-          diagnostics: []
-        })
-
-      {:ok, model, changes}
-    rescue
-      e in [KeyError, ArgumentError, MatchError, BadMapError, FunctionClauseError] ->
-        {:error, {:invalid_operation, Exception.message(e)}}
-    catch
-      {:edit_error, reason} -> {:error, reason}
-    end
+    {:ok, model, changes}
+  rescue
+    e in [KeyError, ArgumentError, MatchError, BadMapError, FunctionClauseError] ->
+      {:error, {:invalid_operation, Exception.message(e)}}
+  catch
+    {:edit_error, reason} -> {:error, reason}
   end
 
   def apply(_, _, _), do: {:error, :operations_must_be_a_list}
+
+  defp validate_operation(%{"kind" => "set_character_cue"}), do: :ok
+
+  defp validate_operation(operation) do
+    case Schema.validate("operations.json", operation) do
+      :ok -> :ok
+      {:error, errors} -> fail({:operation_contract, errors})
+    end
+  end
+
+  defp advance_revision(base, updated, opts) do
+    if Model.content(updated) == Model.content(base) do
+      base
+    else
+      revision = %Fount.Revision{
+        id: ID.v4(),
+        parent_id: base.revision.id,
+        created_at: DateTime.utc_now(),
+        actor: Keyword.get(opts, :actor)
+      }
+
+      %{updated | revision: revision} |> Model.refresh()
+    end
+  end
+
+  defp stale_annotation?(model, impact, {_, annotation}) do
+    id = annotation.target.node_id
+
+    (is_nil(Query.node(model, id)) and is_nil(Query.scene(model, id)) and id != model.id) or
+      (annotation.provenance.producer != "writer" and Enum.any?(impact.changed_targets, &(&1.id == id)))
+  end
 
   defp normalize(%Fount.Edit.Op{kind: :set_character_cue, target: id, value: text}),
     do: %{"kind" => "set_character_cue", "target" => target("element", id), "value" => text}
@@ -118,31 +128,12 @@ defmodule Fount.Screenplay.Editor do
   defp step(model, %{"kind" => kind, "target" => target, "value" => text}, _)
        when kind in ["replace_text", "set_character_cue"] and is_binary(text) do
     element = resolve!(model, target, :element)
-
-    if kind == "replace_text" and
-         element.type not in [:action, :dialogue, :parenthetical, :lyric, :note, :centered, :transition],
-       do: fail(:invalid_text_target)
-
-    if kind == "set_character_cue" and element.type != :character, do: fail(:not_a_character_cue)
-
-    text =
-      case target["span"] do
-        nil ->
-          text
-
-        %{"byte_start" => first, "byte_end" => last} ->
-          unwrap(UTF8Span.extract(element.text, {first, last}))
-          binary_part(element.text, 0, first) <> text <> binary_part(element.text, last, byte_size(element.text) - last)
-      end
+    validate_text_target(kind, element.type)
+    text = replace_span(element.text, target["span"], text)
 
     model = update_element(model, element.id, text)
 
-    model =
-      if kind == "set_character_cue",
-        do: update_attrs(model, element.id, %{forced?: text != String.upcase(text)}),
-        else: model
-
-    if kind == "set_character_cue", do: refresh_cue_mentions(model, element.id, text), else: model
+    maybe_update_cue(model, kind, element.id, text)
   end
 
   defp step(model, %{"kind" => "set_scene_heading", "target" => target, "value" => text}, _) when is_binary(text) do
@@ -189,7 +180,7 @@ defmodule Fount.Screenplay.Editor do
 
   defp step(model, %{"kind" => "insert_scene", "value" => %{"after_scene_id" => after_id, "scene" => spec}}, context) do
     if after_id && !Query.scene(model, after_id), do: fail(:unknown_destination)
-    {scene, elements} = scene_spec(model, spec, MapSet.new(), context)
+    {scene, elements} = scene_spec(model, spec, %{}, context)
     index = insert_index(model, model.ir.elements, after_id)
 
     %{
@@ -206,11 +197,11 @@ defmodule Fount.Screenplay.Editor do
     if positions != Enum.to_list(hd(positions)..List.last(positions)) or length(Enum.uniq(ids)) != length(ids),
       do: fail(:noncontiguous_sequence)
 
-    available = MapSet.new(Enum.flat_map(scenes, & &1.element_ids) ++ ids)
+    available = Map.new(Enum.flat_map(scenes, & &1.element_ids) ++ ids, &{&1, true})
     pairs = Enum.map(specs, &scene_spec(model, &1, available, context))
     replacements = Enum.flat_map(pairs, &elem(&1, 1))
     first = Enum.find_index(model.ir.elements, &(&1.id == hd(scenes).heading_id))
-    remaining = Enum.reject(model.ir.elements, &MapSet.member?(available, &1.id))
+    remaining = Enum.reject(model.ir.elements, &Map.has_key?(available, &1.id))
     kept_scenes = Enum.reject(model.ir.scenes, &(&1.id in ids))
 
     %{
@@ -251,40 +242,13 @@ defmodule Fount.Screenplay.Editor do
   defp step(model, %{"kind" => "insert_elements", "target" => target, "value" => value}, context) do
     owner = resolve!(model, target, [:scene, :screenplay])
 
-    scope =
-      if target["kind"] == "scene",
-        do: tl(owner.element_ids),
-        else: Enum.filter(model.ir.elements, &is_nil(Query.scene_for(model, &1.id))) |> Enum.map(& &1.id)
+    scope = insertion_scope(model, target["kind"], owner)
 
     anchor = value["anchor_id"]
     position = value["position"]
     if position in ["before", "after"] and anchor not in scope, do: fail(:invalid_anchor)
 
-    index =
-      case position do
-        "before" ->
-          Enum.find_index(model.ir.elements, &(&1.id == anchor))
-
-        "after" ->
-          Enum.find_index(model.ir.elements, &(&1.id == anchor)) + 1
-
-        "start" ->
-          if target["kind"] == "scene",
-            do: Enum.find_index(model.ir.elements, &(&1.id == owner.heading_id)) + 1,
-            else: 0
-
-        "end" ->
-          if scope == [],
-            do:
-              if(target["kind"] == "scene",
-                do: Enum.find_index(model.ir.elements, &(&1.id == owner.heading_id)) + 1,
-                else: 0
-              ),
-            else: Enum.find_index(model.ir.elements, &(&1.id == List.last(scope))) + 1
-
-        _ ->
-          fail(:invalid_position)
-      end
+    index = insertion_index(model, owner, target["kind"], scope, position, anchor)
 
     elements = Enum.map(value["elements"], &element_spec(model, &1, MapSet.new(), context))
     %{model | ir: %{model.ir | elements: insert(model.ir.elements, index, elements)}}
@@ -300,7 +264,7 @@ defmodule Fount.Screenplay.Editor do
   end
 
   defp step(model, %{"kind" => "put_character", "value" => value}, context) do
-    ensure_id(value["id"], MapSet.new(Map.keys(model.cast)), context)
+    ensure_id(value["id"], model.cast, context)
     aliases = Enum.map(value["aliases"] || [], fn a -> %{alias: a["alias"], kind: a["kind"]} end)
 
     c = %Fount.Cast.Character{
@@ -331,31 +295,17 @@ defmodule Fount.Screenplay.Editor do
     mentions =
       model.mentions
       |> Map.values()
-      |> Enum.filter(
-        &(&1.character_id == c.id and &1.status == :confirmed and (&1.role == :speaker_cue or &1.id in chosen))
-      )
+      |> Enum.filter(&renameable_mention?(&1, c.id, chosen))
 
     if Enum.any?(chosen, fn id -> not Enum.any?(mentions, &(&1.id == id)) end), do: fail(:unconfirmed_mention)
 
-    model =
-      Enum.reduce(Enum.sort_by(mentions, &{-&1.byte_start}), model, fn m, acc ->
-        element = Query.node(acc, m.element_id)
-        suffix = if m.role == :speaker_cue, do: (Regex.run(~r/\s+\([^)]*\)$/, element.text) || [""]) |> hd(), else: ""
-
-        text =
-          binary_part(element.text, 0, m.byte_start) <>
-            name <> suffix <> binary_part(element.text, m.byte_end, byte_size(element.text) - m.byte_end)
-
-        acc = update_element(acc, element.id, text)
-        updated = %{m | surface: name <> suffix, byte_end: m.byte_start + byte_size(name <> suffix)}
-        %{acc | mentions: Map.put(acc.mentions, m.id, updated)}
-      end)
+    model = Enum.reduce(Enum.sort_by(mentions, &{-&1.byte_start}), model, &rename_mention(&1, &2, name))
 
     %{model | cast: Map.put(model.cast, c.id, %{c | display_name: name})}
   end
 
   defp step(model, %{"kind" => "put_authored_item", "value" => value}, context) do
-    ensure_id(value["id"], MapSet.new(Map.keys(model.authored_items)), context)
+    ensure_id(value["id"], model.authored_items, context)
 
     if value["kind"] not in ~w(brief story_plan note constraint fact voice_direction sequence storyline story_time perspective_access),
       do: fail(:invalid_authored_kind)
@@ -373,7 +323,7 @@ defmodule Fount.Screenplay.Editor do
   end
 
   defp step(model, %{"kind" => "set_title", "value" => entries}, context) when is_list(entries) do
-    available = MapSet.new(Enum.map((model.ir.title_page && model.ir.title_page.entries) || [], & &1.id))
+    available = Map.new((model.ir.title_page && model.ir.title_page.entries) || [], &{&1.id, true})
 
     entries =
       Enum.map(entries, fn e ->
@@ -385,6 +335,62 @@ defmodule Fount.Screenplay.Editor do
   end
 
   defp step(_, op, _), do: fail({:invalid_operation, op["kind"]})
+
+  defp validate_text_target("replace_text", type)
+       when type not in [:action, :dialogue, :parenthetical, :lyric, :note, :centered, :transition],
+       do: fail(:invalid_text_target)
+
+  defp validate_text_target("set_character_cue", type) when type != :character,
+    do: fail(:not_a_character_cue)
+
+  defp validate_text_target(_, _), do: :ok
+  defp replace_span(_, nil, text), do: text
+
+  defp replace_span(original, %{"byte_start" => first, "byte_end" => last}, text) do
+    unwrap(UTF8Span.extract(original, {first, last}))
+    binary_part(original, 0, first) <> text <> binary_part(original, last, byte_size(original) - last)
+  end
+
+  defp maybe_update_cue(model, "set_character_cue", id, text) do
+    model
+    |> update_attrs(id, %{forced?: text != String.upcase(text)})
+    |> refresh_cue_mentions(id, text)
+  end
+
+  defp maybe_update_cue(model, _, _, _), do: model
+
+  defp insertion_scope(_, "scene", owner), do: tl(owner.element_ids)
+
+  defp insertion_scope(model, _, _) do
+    model.ir.elements |> Enum.filter(&is_nil(Query.scene_for(model, &1.id))) |> Enum.map(& &1.id)
+  end
+
+  defp insertion_index(model, _, _, _, "before", anchor), do: element_index(model, anchor)
+  defp insertion_index(model, _, _, _, "after", anchor), do: element_index(model, anchor) + 1
+  defp insertion_index(model, owner, "scene", _, "start", _), do: element_index(model, owner.heading_id) + 1
+  defp insertion_index(_, _, _, _, "start", _), do: 0
+  defp insertion_index(model, owner, kind, [], "end", _), do: insertion_index(model, owner, kind, [], "start", nil)
+  defp insertion_index(model, _, _, scope, "end", _), do: element_index(model, List.last(scope)) + 1
+  defp insertion_index(_, _, _, _, _, _), do: fail(:invalid_position)
+  defp element_index(model, id), do: Enum.find_index(model.ir.elements, &(&1.id == id))
+
+  defp renameable_mention?(mention, character_id, chosen) do
+    mention.character_id == character_id and mention.status == :confirmed and
+      (mention.role == :speaker_cue or mention.id in chosen)
+  end
+
+  defp rename_mention(mention, model, name) do
+    element = Query.node(model, mention.element_id)
+    suffix = if mention.role == :speaker_cue, do: (Regex.run(~r/\s+\([^)]*\)$/, element.text) || [""]) |> hd(), else: ""
+
+    text =
+      binary_part(element.text, 0, mention.byte_start) <>
+        name <> suffix <> binary_part(element.text, mention.byte_end, byte_size(element.text) - mention.byte_end)
+
+    model = update_element(model, element.id, text)
+    updated = %{mention | surface: name <> suffix, byte_end: mention.byte_start + byte_size(name <> suffix)}
+    %{model | mentions: Map.put(model.mentions, mention.id, updated)}
+  end
 
   defp scene_spec(model, spec, available, context) do
     id = spec["id"]
@@ -425,63 +431,33 @@ defmodule Fount.Screenplay.Editor do
 
     old = Query.node(model, id)
 
-    type =
-      Enum.find(
-        [
-          :action,
-          :character,
-          :dialogue,
-          :parenthetical,
-          :transition,
-          :centered,
-          :lyric,
-          :section,
-          :synopsis,
-          :page_break,
-          :note,
-          :boneyard,
-          :blank
-        ],
-        &(to_string(&1) == spec["type"])
-      )
-
-    attrs =
-      Map.new(spec["attrs"] || %{}, fn {key, value} ->
-        key =
-          case key do
-            "forced" -> :forced?
-            "level" -> :level
-            "dual_side" -> :dual_side
-            "dual_with_cue" -> :dual_with_cue
-            _ -> key
-          end
-
-        {key, value}
-      end)
-
-    if type == :character and attrs[:dual_side] == "right", do: :ok
+    type = Map.fetch!(@type_atoms, spec["type"])
+    attrs = Map.new(spec["attrs"] || %{}, fn {key, value} -> {Map.get(@attr_keys, key, key), value} end)
     attrs = if attrs[:dual_side] == "right", do: Map.put(attrs, :dual?, true), else: attrs
     %Element{id: id, type: type, text: spec["text"], attrs: attrs, origin: (old && old.origin) || :generated}
   end
 
   defp link_explicit_cues(model) do
-    Enum.reduce(model.ir.elements, model, fn element, acc ->
-      id = (element.attrs || %{})["character_id"]
-
-      if element.type == :character and id do
-        case Screenplay.link_cue(acc, element.id, id) do
-          {:ok, linked} -> %{linked | revision: acc.revision}
-          {:error, reason} -> fail(reason)
-        end
-      else
-        acc
-      end
-    end)
+    Enum.reduce(model.ir.elements, model, &link_element_cue/2)
   end
 
+  defp link_element_cue(element, model) do
+    id = (element.attrs || %{})["character_id"]
+
+    if element.type == :character and id do
+      case Screenplay.link_cue(model, element.id, id) do
+        {:ok, linked} -> %{linked | revision: model.revision}
+        {:error, reason} -> fail(reason)
+      end
+    else
+      model
+    end
+  end
+
+  @spec ensure_id(term(), map(), map()) :: nil
   defp ensure_id(id, available, context) do
     if !is_binary(id) or
-         !(MapSet.member?(available, id) or MapSet.member?(context.new, id) or Map.has_key?(context.restore, id)),
+         !(Map.has_key?(available, id) or MapSet.member?(context.new, id) or Map.has_key?(context.restore, id)),
        do: fail({:unknown_or_foreign_id, id})
   end
 

@@ -1,64 +1,20 @@
 defmodule FountProbe.KnowledgeTrace do
   @moduledoc "Exhaustive requested prefix checks with distinct establishment, inference, belief and suspicion questions."
-  alias FountProbe.{Access, Projection, Jev, Report}
+  alias FountProbe.Access
+  alias FountProbe.Jev
+  alias FountProbe.KnowledgeTrace.Behavior
+  alias FountProbe.Projection
+  alias FountProbe.Report
   alias FountProbe.Writing.DecisionPolicy
 
   def run(model, params, clients, opts \\ []) do
     with :ok <- validate_points(model, params["points"]),
          :ok <- validate_subjects(model, params["subjects"]) do
-      character_ids =
-        for %{"kind" => "character", "character_id" => id} <- params["subjects"], do: id
-
       contexts =
-        Enum.with_index(params["points"], fn point, index ->
-          access =
-            if character_ids != [] and Map.get(params, "access_mode", "evidence") == "evidence" do
-              Access.build(model, point, character_ids, clients, opts)
-            else
-              {:ok, [], %{}}
-            end
-
-          {ledger, access_trace, access_error} =
-            case access do
-              {:ok, ledger, trace} -> {ledger, trace, nil}
-              {:error, reason, _} -> {[], %{}, inspect(reason)}
-              {:error, reason} -> {[], %{}, inspect(reason)}
-            end
-
-          entries =
-            Enum.map(params["subjects"], fn subject ->
-              projection =
-                case subject["kind"] do
-                  "audience" -> "audience_estimate"
-                  "reader" -> "page_reader"
-                  "character" -> "character_access"
-                end
-
-              view_opts =
-                opts
-                |> Keyword.put(:character_id, subject["character_id"])
-                |> Keyword.put(:access_ledger, ledger)
-                |> Keyword.put(:access_mode, Map.get(params, "access_mode", "evidence"))
-
-              {:ok, state, evidence} = Projection.at(model, point, projection, view_opts)
-              id = subject_key(subject) <> ":#{index}"
-
-              %{
-                "id" => id,
-                "subject" => subject,
-                "point" => point,
-                "state" => Map.put(state, "proposition", params["proposition"]),
-                "evidence" => evidence
-              }
-            end)
-
-          %{
-            entries: entries,
-            ledger: ledger,
-            access_trace: access_trace,
-            access_error: access_error
-          }
-        end)
+        Enum.with_index(
+          params["points"],
+          &point_context(model, &1, &2, params, clients, opts)
+        )
 
       entries = Enum.flat_map(contexts, & &1.entries)
 
@@ -96,142 +52,193 @@ defmodule FountProbe.KnowledgeTrace do
               ],
           else: questions
 
-      with {:ok, result} <-
-             Jev.evaluate(
-               clients[:system_one],
-               Enum.map(entries, &Map.take(&1, ~w(id state))),
-               questions,
-               Keyword.put_new(opts, :profile_id, "knowledge_trace")
-             ) do
-        policy_opts = Jev.threshold_options(result["profile_asset"])
-        reveal_threshold = Keyword.get(policy_opts, :supported, 0.8)
-        by_id = Map.new(result["entries"], &{&1["input_id"], &1})
-
-        rows =
-          Enum.map(entries, fn entry ->
-            answer = by_id[entry["id"]]
-
-            answers =
-              Map.new(answer["answers"], fn {key, value} ->
-                value =
-                  if value["type"] == "noul" and is_number(value["probability"]) do
-                    {:ok, policy} =
-                      DecisionPolicy.noul(
-                        value["probability"],
-                        Keyword.put(
-                          policy_opts,
-                          :complete_context,
-                          entry["state"]["complete_context"]
-                        )
-                      )
-
-                    Map.merge(value, policy)
-                  else
-                    value
-                  end
-
-                {key, value}
-              end)
-
-            %{
-              "subject" => entry["subject"],
-              "point" => entry["point"],
-              "status" => answer["status"],
-              "answers" => answers,
-              "evidence_ids" => Enum.map(entry["evidence"], & &1["evidence_id"]),
-              "coverage" =>
-                Map.take(entry["state"], ~w(complete_context access_coverage projection_gaps))
-            }
-          end)
-
-        curves =
-          Map.new(params["subjects"], fn subject ->
-            curve =
-              rows
-              |> Enum.filter(&(&1["subject"] == subject))
-              |> Enum.map(
-                &%{
-                  "point" => &1["point"],
-                  "probability" => get_in(&1, ["answers", "established", "probability"])
-                }
-              )
-
-            {:ok, boundary} = DecisionPolicy.boundary(curve, reveal_threshold)
-            {subject_key(subject), boundary}
-          end)
-
-        access_errors =
-          Enum.flat_map(contexts, fn c ->
-            if c.access_error,
-              do: [%{"code" => "access_incomplete", "message" => c.access_error}],
-              else: []
-          end)
-
-        behavior =
-          case params["behavior_element_ids"] || [] do
-            [] ->
-              %{rows: [], evidence: [], errors: [], status: "complete", provenance: %{}}
-
-            ids ->
-              case FountProbe.KnowledgeTrace.Behavior.run(
-                     model,
-                     ids,
-                     params["subjects"],
-                     params["proposition"],
-                     clients,
-                     opts
-                   ) do
-                {:ok, result} ->
-                  result
-
-                {:error, reason} ->
-                  %{
-                    rows: [],
-                    evidence: [],
-                    errors: [
-                      %{"code" => "behavior_check_unavailable", "reason" => inspect(reason)}
-                    ],
-                    status: "partial",
-                    provenance: %{}
-                  }
-              end
-          end
-
-        {:ok,
-         Report.new(model, "knowledge_trace", params, %{
-           status:
-             if(
-               result["status"] == "complete" and access_errors == [] and
-                 behavior.status == "complete",
-               do: "complete",
-               else: "partial"
-             ),
-           data: %{
-             "rows" => rows,
-             "curves" => curves,
-             "knowledge_gaps" => gaps(rows),
-             "behavior_checks" => behavior.rows,
-             "access_ledger" => Enum.flat_map(contexts, & &1.ledger),
-             "intended_reveal_point" => params["intended_reveal_point"],
-             "reveal_comparison" =>
-               if(params["intended_reveal_point"],
-                 do: assess_reveal(model, curves, params["intended_reveal_point"]),
-                 else: nil
-               )
-           },
-           evidence:
-             (Enum.flat_map(entries, & &1["evidence"]) ++ behavior.evidence)
-             |> Enum.uniq_by(& &1["evidence_id"]),
-           coverage: %{"points" => params["points"], "subjects" => params["subjects"]},
-           errors: access_errors ++ behavior.errors,
-           provenance: %{
-             "evaluation" => result,
-             "access" => Enum.map(contexts, & &1.access_trace),
-             "behavior" => behavior.provenance
-           }
-         })}
-      end
+      evaluate_trace(model, params, clients, opts, contexts, entries, questions)
     end
+  end
+
+  defp evaluate_trace(model, params, clients, opts, contexts, entries, questions) do
+    with {:ok, result} <-
+           Jev.evaluate(
+             clients[:system_one],
+             Enum.map(entries, &Map.take(&1, ~w(id state))),
+             questions,
+             Keyword.put_new(opts, :profile_id, "knowledge_trace")
+           ) do
+      policy_opts = Jev.threshold_options(result["profile_asset"])
+      reveal_threshold = Keyword.get(policy_opts, :supported, 0.8)
+      by_id = Map.new(result["entries"], &{&1["input_id"], &1})
+
+      rows = Enum.map(entries, &evaluation_row(&1, by_id, policy_opts))
+
+      curves =
+        Map.new(params["subjects"], fn subject ->
+          curve =
+            rows
+            |> Enum.filter(&(&1["subject"] == subject))
+            |> Enum.map(
+              &%{
+                "point" => &1["point"],
+                "probability" => get_in(&1, ["answers", "established", "probability"])
+              }
+            )
+
+          {:ok, boundary} = DecisionPolicy.boundary(curve, reveal_threshold)
+          {subject_key(subject), boundary}
+        end)
+
+      access_errors =
+        Enum.flat_map(contexts, &access_error/1)
+
+      behavior = behavior_result(model, params, clients, opts)
+
+      {:ok,
+       Report.new(model, "knowledge_trace", params, %{
+         status:
+           if(
+             result["status"] == "complete" and access_errors == [] and
+               behavior.status == "complete",
+             do: "complete",
+             else: "partial"
+           ),
+         data: %{
+           "rows" => rows,
+           "curves" => curves,
+           "knowledge_gaps" => gaps(rows),
+           "behavior_checks" => behavior.rows,
+           "access_ledger" => Enum.flat_map(contexts, & &1.ledger),
+           "intended_reveal_point" => params["intended_reveal_point"],
+           "reveal_comparison" =>
+             if(params["intended_reveal_point"],
+               do: assess_reveal(model, curves, params["intended_reveal_point"]),
+               else: nil
+             )
+         },
+         evidence:
+           (Enum.flat_map(entries, & &1["evidence"]) ++ behavior.evidence)
+           |> Enum.uniq_by(& &1["evidence_id"]),
+         coverage: %{"points" => params["points"], "subjects" => params["subjects"]},
+         errors: access_errors ++ behavior.errors,
+         provenance: %{
+           "evaluation" => result,
+           "access" => Enum.map(contexts, & &1.access_trace),
+           "behavior" => behavior.provenance
+         }
+       })}
+    end
+  end
+
+  defp access_error(context) do
+    if context.access_error,
+      do: [%{"code" => "access_incomplete", "message" => context.access_error}],
+      else: []
+  end
+
+  defp behavior_result(model, params, clients, opts) do
+    case params["behavior_element_ids"] || [] do
+      [] ->
+        %{rows: [], evidence: [], errors: [], status: "complete", provenance: %{}}
+
+      ids ->
+        case Behavior.run(model, ids, params["subjects"], params["proposition"], clients, opts) do
+          {:ok, result} ->
+            result
+
+          {:error, reason} ->
+            %{
+              rows: [],
+              evidence: [],
+              errors: [%{"code" => "behavior_check_unavailable", "reason" => inspect(reason)}],
+              status: "partial",
+              provenance: %{}
+            }
+        end
+    end
+  end
+
+  defp evaluation_row(entry, by_id, policy_opts) do
+    answer = by_id[entry["id"]]
+
+    answers =
+      Map.new(answer["answers"], fn {key, value} ->
+        {key, policy_answer(value, entry, policy_opts)}
+      end)
+
+    %{
+      "subject" => entry["subject"],
+      "point" => entry["point"],
+      "status" => answer["status"],
+      "answers" => answers,
+      "evidence_ids" => Enum.map(entry["evidence"], & &1["evidence_id"]),
+      "coverage" =>
+        Map.take(
+          entry["state"],
+          ~w(complete_context access_coverage projection_gaps)
+        )
+    }
+  end
+
+  defp policy_answer(value, entry, opts) do
+    if value["type"] == "noul" and is_number(value["probability"]) do
+      {:ok, policy} =
+        DecisionPolicy.noul(
+          value["probability"],
+          Keyword.put(opts, :complete_context, entry["state"]["complete_context"])
+        )
+
+      Map.merge(value, policy)
+    else
+      value
+    end
+  end
+
+  defp point_context(model, point, index, params, clients, opts) do
+    character_ids =
+      for %{"kind" => "character", "character_id" => id} <- params["subjects"], do: id
+
+    access =
+      if character_ids != [] and Map.get(params, "access_mode", "evidence") == "evidence",
+        do: Access.build(model, point, character_ids, clients, opts),
+        else: {:ok, [], %{}}
+
+    {ledger, access_trace, access_error} =
+      case access do
+        {:ok, ledger, trace} -> {ledger, trace, nil}
+        {:error, reason, _} -> {[], %{}, inspect(reason)}
+        {:error, reason} -> {[], %{}, inspect(reason)}
+      end
+
+    entries =
+      Enum.map(
+        params["subjects"],
+        &point_entry(model, point, index, &1, ledger, params, opts)
+      )
+
+    %{entries: entries, ledger: ledger, access_trace: access_trace, access_error: access_error}
+  end
+
+  defp point_entry(model, point, index, subject, ledger, params, opts) do
+    projection =
+      case subject["kind"] do
+        "audience" -> "audience_estimate"
+        "reader" -> "page_reader"
+        "character" -> "character_access"
+      end
+
+    view_opts =
+      opts
+      |> Keyword.put(:character_id, subject["character_id"])
+      |> Keyword.put(:access_ledger, ledger)
+      |> Keyword.put(:access_mode, Map.get(params, "access_mode", "evidence"))
+
+    {:ok, state, evidence} = Projection.at(model, point, projection, view_opts)
+
+    %{
+      "id" => subject_key(subject) <> ":#{index}",
+      "subject" => subject,
+      "point" => point,
+      "state" => Map.put(state, "proposition", params["proposition"]),
+      "evidence" => evidence
+    }
   end
 
   def locate(model, params, clients, opts \\ []) do
@@ -287,18 +294,21 @@ defmodule FountProbe.KnowledgeTrace do
           true ->
             {:ok, observed_index} = Projection.cutoff(model, first)
 
-            status =
-              cond do
-                observed_index < intended_index -> "observed_before_intended"
-                observed_index == intended_index -> "at_intended"
-                true -> "observed_after_intended"
-              end
+            status = reveal_order(observed_index, intended_index)
 
             %{"status" => status, "observed_point" => first}
         end
 
       {subject, assessment}
     end)
+  end
+
+  defp reveal_order(observed, intended) do
+    cond do
+      observed < intended -> "observed_before_intended"
+      observed == intended -> "at_intended"
+      true -> "observed_after_intended"
+    end
   end
 
   defp validate_points(model, points) when is_list(points) and points != [] do

@@ -1,5 +1,6 @@
 defmodule Fount.Interchange do
   @moduledoc "Explicit interchange fidelity. Only Fount canonical JSON carries revision-scoped authoring identity."
+  alias Fount.Adapter.JSON
   def read(bytes, format, opts \\ [])
 
   def read(bytes, "fountain", opts) do
@@ -11,12 +12,12 @@ defmodule Fount.Interchange do
   def read(bytes, "fdx", opts), do: Fount.Screenplay.from_fdx(bytes, opts)
 
   def read(bytes, "json", _opts) do
-    with {:ok, model} <- Fount.Adapter.JSON.decode_model(bytes), do: {:ok, model, []}
+    with {:ok, model} <- JSON.decode_model(bytes), do: {:ok, model, []}
   end
 
   def read(_, _, _), do: {:error, :unsupported_import_format}
   def write(model, format, opts \\ [])
-  def write(model, "json", opts), do: Fount.Adapter.JSON.export(model, opts)
+  def write(model, "json", opts), do: JSON.export(model, opts)
 
   def write(model, "fountain", opts) do
     with {:ok, result} <- Fount.Screenplay.export_fountain(model, opts) do

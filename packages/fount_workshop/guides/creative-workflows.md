@@ -21,7 +21,7 @@ services = %{
 }
 ```
 
-Clients are supplied by the application; environment access is confined to launchers. The optional `voices` service map is for audition/table reads. The application store is PostgreSQL. The test store under `test/support/` is an explicitly injected test seam, not a production fallback.
+Clients are supplied by the application; environment access is confined to launchers. The optional `voices` service map is for audition/table reads. The application store is PostgreSQL. The test store under `support/` is an explicitly injected test seam, not a production fallback.
 
 Provider boundaries use the supplied source APIs: `Inference.Client.agent_session!`, `Inference.capabilities`, `Inference.Request`/response formats and `Inference.generate`; public System One Noul/Choice/Score constructors and prepared stream execution. The existing `FountProbe.Writing.Executor` owns association with SDK results. No dependency internals are copied into Fount and no dependency repository is modified.
 

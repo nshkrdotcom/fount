@@ -90,28 +90,37 @@ defmodule FountProbe.Writing.DecisionPolicy do
   def score_keys(distribution, level_count)
       when is_map(distribution) and is_integer(level_count) and level_count >= 2 do
     Enum.reduce_while(distribution, {:ok, %{}}, fn {key, value}, {:ok, normalized} ->
-      parsed =
-        cond do
-          is_integer(key) -> {key, ""}
-          is_binary(key) -> Integer.parse(key)
-          true -> :error
-        end
+      case score_index(key, level_count) do
+        {:ok, index} ->
+          add_score(normalized, index, value)
 
-      case parsed do
-        {index, ""} when index >= 0 and index < level_count ->
-          if Map.has_key?(normalized, index) do
-            {:halt, {:error, :duplicate_score_level}}
-          else
-            {:cont, {:ok, Map.put(normalized, index, value)}}
-          end
-
-        _ ->
-          {:halt, {:error, {:invalid_score_level, key}}}
+        error ->
+          {:halt, error}
       end
     end)
   end
 
   def score_keys(_, _), do: {:error, :invalid_score_distribution}
+
+  defp add_score(normalized, index, value) do
+    if Map.has_key?(normalized, index),
+      do: {:halt, {:error, :duplicate_score_level}},
+      else: {:cont, {:ok, Map.put(normalized, index, value)}}
+  end
+
+  defp score_index(key, count) do
+    parsed =
+      cond do
+        is_integer(key) -> {key, ""}
+        is_binary(key) -> Integer.parse(key)
+        true -> :error
+      end
+
+    case parsed do
+      {index, ""} when index >= 0 and index < count -> {:ok, index}
+      _ -> {:error, {:invalid_score_level, key}}
+    end
+  end
 
   def boundary(curve, threshold \\ 0.8) when is_list(curve) do
     cond do

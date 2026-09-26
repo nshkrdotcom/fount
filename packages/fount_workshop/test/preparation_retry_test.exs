@@ -1,4 +1,5 @@
 defmodule FountWorkshop.PreparationRetryTest do
+  alias FountWorkshop.Writing.Preparation
   use ExUnit.Case, async: true
 
   test "only incomplete inspections are scheduled from cached preparation" do
@@ -31,6 +32,6 @@ defmodule FountWorkshop.PreparationRetryTest do
     }
 
     assert [%{"id" => "continuity"}] =
-             FountWorkshop.Writing.Preparation.retry_requests(model, request, context)
+             Preparation.retry_requests(model, request, context)
   end
 end

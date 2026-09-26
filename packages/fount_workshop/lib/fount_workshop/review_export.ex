@@ -1,6 +1,12 @@
 defmodule FountWorkshop.ReviewExport do
   @moduledoc false
-  alias FountWorkshop.{Session, Store, TableRead}
+  alias Fount.Fountain.Inline
+  alias Fount.Screenplay.Editor
+  alias Fount.Screenplay.Model
+  alias FountWorkshop.Session
+  alias FountWorkshop.Store
+  alias FountWorkshop.TableRead
+  alias FountWorkshop.Writing.Layout
 
   def export(session_id, directory, services, opts \\ []) do
     with {:ok, session} <- Session.get(session_id, services),
@@ -90,7 +96,7 @@ defmodule FountWorkshop.ReviewExport do
     pdf =
       if Keyword.get(opts, :pdf, false),
         do:
-          FountWorkshop.Writing.Layout.render(
+          Layout.render(
             services[:renderer],
             model,
             Path.join(directory, id <> ".pdf"),
@@ -111,7 +117,7 @@ defmodule FountWorkshop.ReviewExport do
       "lineage" => candidate["lineage"],
       "provenance" => candidate["provenance"],
       "reports" => reports,
-      "structural_diff" => Fount.Screenplay.Model.plain(Fount.Screenplay.diff(base, model)),
+      "structural_diff" => Model.plain(Fount.Screenplay.diff(base, model)),
       "source_diff" =>
         Enum.map(
           String.myers_difference(
@@ -121,8 +127,8 @@ defmodule FountWorkshop.ReviewExport do
           fn {kind, text} -> %{"kind" => to_string(kind), "text" => text} end
         ),
       "pdf" => result(pdf),
-      "table_read" => Fount.Screenplay.Model.plain(table),
-      "html" => Fount.Screenplay.Model.plain(html)
+      "table_read" => Model.plain(table),
+      "html" => Model.plain(html)
     }
 
     write!(directory, review, packet)
@@ -154,14 +160,14 @@ defmodule FountWorkshop.ReviewExport do
 
   def words(model) do
     model
-    |> Fount.Screenplay.Editor.spec_ir()
+    |> Editor.spec_ir()
     |> Map.fetch!(:elements)
     |> Enum.filter(&(&1.type in [:action, :dialogue, :parenthetical, :lyric]))
     |> Enum.map(
       &length(
         Regex.scan(
           ~r/[\p{L}\p{N}]+(?:['\x{2019}-][\p{L}\p{N}]+)*/u,
-          Fount.Fountain.Inline.plain(&1.text)
+          Inline.plain(&1.text)
         )
       )
     )
@@ -169,7 +175,7 @@ defmodule FountWorkshop.ReviewExport do
   end
 
   defp result({:ok, value}),
-    do: %{"status" => "complete", "result" => Fount.Screenplay.Model.plain(value)}
+    do: %{"status" => "complete", "result" => Model.plain(value)}
 
   defp result({:error, :not_requested}), do: %{"status" => "not_requested"}
 
@@ -180,7 +186,7 @@ defmodule FountWorkshop.ReviewExport do
     do:
       File.write!(
         Path.join(dir, name),
-        Jason.encode!(Fount.Screenplay.Model.plain(value), pretty: true)
+        Jason.encode!(Model.plain(value), pretty: true)
       )
 
   defp hash(bytes), do: :crypto.hash(:sha256, bytes) |> Base.encode16(case: :lower)

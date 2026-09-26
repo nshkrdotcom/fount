@@ -1,5 +1,7 @@
 defmodule FountProbe.Catalog do
   @moduledoc "Closed screenplay tool catalog. No model-selected module, function, shell, or storage route."
+  alias Fount.Writing.Schema
+
   @catalog %{
     "inventory" => {~w(selection), ~w(include_summaries)},
     "extract_story" => {~w(selection kinds), ~w(question adjacent_scenes)},
@@ -83,12 +85,11 @@ defmodule FountProbe.Catalog do
 
   def validate(model, name, params) when is_map(params) do
     if Map.has_key?(@catalog, name) do
-      with :ok <- Fount.Writing.Schema.validate(schema(name), params),
+      with :ok <- Schema.validate(schema(name), params),
            :ok <- selection(model, params),
            :ok <- groups(model, params),
-           :ok <- ids(model, params),
-           :ok <- domain(name, params) do
-        :ok
+           :ok <- ids(model, params) do
+        domain(name, params)
       end
     else
       {:error, :unknown_probe_tool}
@@ -143,42 +144,36 @@ defmodule FountProbe.Catalog do
       Map.get(params, "points", []) ++
         List.wrap(params["point"]) ++ List.wrap(params["intended_reveal_point"])
 
+    validate_ids(model, %{
+      scene_ids: scene_ids,
+      characters: characters,
+      searched_scenes: searched_scenes,
+      searched_characters: searched_characters,
+      collections: collections,
+      behavior_ids: behavior_ids,
+      changed_targets: changed_targets,
+      points: points
+    })
+  end
+
+  defp validate_ids(model, c) do
     cond do
-      Enum.any?(scene_ids, &is_nil(Fount.Query.scene(model, &1))) ->
+      unknown_scene?(model, c) ->
         {:error, :unknown_scene}
 
-      Enum.any?(characters, &(not Map.has_key?(model.cast, &1))) ->
+      unknown_character?(model, c) ->
         {:error, :unknown_character}
 
-      is_list(searched_scenes) and
-          Enum.any?(searched_scenes, &is_nil(Fount.Query.scene(model, &1))) ->
-        {:error, :unknown_scene}
-
-      is_list(searched_characters) and
-          Enum.any?(searched_characters, &(not Map.has_key?(model.cast, &1))) ->
-        {:error, :unknown_character}
-
-      is_list(collections) and
-          Enum.any?(collections, &(not Map.has_key?(model.authored_items, &1))) ->
+      invalid_collections?(model, c.collections) ->
         {:error, :unknown_authored_collection}
 
-      Enum.any?(behavior_ids, fn id ->
-        case Map.get(model.index.by_id, id) do
-          %Fount.IR.Element{type: type} when type in [:action, :dialogue, :parenthetical] -> false
-          _ -> true
-        end
-      end) ->
+      invalid_behavior?(model, c.behavior_ids) ->
         {:error, :unknown_behavior_element}
 
-      Enum.any?(changed_targets, fn
-        %{"kind" => "scene", "id" => id} -> is_nil(Fount.Query.scene(model, id))
-        %{"kind" => "element", "id" => id} -> is_nil(Map.get(model.index.by_id, id))
-        %{"kind" => "character", "id" => id} -> not Map.has_key?(model.cast, id)
-        _ -> true
-      end) ->
+      invalid_changed_targets?(model, c.changed_targets) ->
         {:error, :unknown_changed_target}
 
-      Enum.any?(points, &(not match?({:ok, _}, FountProbe.Projection.cutoff(model, &1)))) ->
+      invalid_points?(model, c.points) ->
         {:error, :illegal_point}
 
       true ->
@@ -186,28 +181,53 @@ defmodule FountProbe.Catalog do
     end
   end
 
+  defp unknown_scene?(model, c),
+    do:
+      invalid_scenes?(model, c.scene_ids) or
+        (is_list(c.searched_scenes) and invalid_scenes?(model, c.searched_scenes))
+
+  defp unknown_character?(model, c),
+    do:
+      invalid_characters?(model, c.characters) or
+        (is_list(c.searched_characters) and invalid_characters?(model, c.searched_characters))
+
+  defp invalid_scenes?(model, ids),
+    do: Enum.any?(ids, &is_nil(Fount.Query.scene(model, &1)))
+
+  defp invalid_characters?(model, ids),
+    do: Enum.any?(ids, &(not Map.has_key?(model.cast, &1)))
+
+  defp invalid_collections?(model, ids),
+    do: is_list(ids) and Enum.any?(ids, &(not Map.has_key?(model.authored_items, &1)))
+
+  defp invalid_behavior?(model, ids) do
+    Enum.any?(ids, fn id ->
+      case Map.get(model.index.by_id, id) do
+        %Fount.IR.Element{type: type} when type in [:action, :dialogue, :parenthetical] -> false
+        _ -> true
+      end
+    end)
+  end
+
+  defp invalid_changed_targets?(model, targets) do
+    Enum.any?(targets, fn
+      %{"kind" => "scene", "id" => id} -> is_nil(Fount.Query.scene(model, id))
+      %{"kind" => "element", "id" => id} -> is_nil(Map.get(model.index.by_id, id))
+      %{"kind" => "character", "id" => id} -> not Map.has_key?(model.cast, id)
+      _ -> true
+    end)
+  end
+
+  defp invalid_points?(model, points),
+    do: Enum.any?(points, &(not match?({:ok, _}, FountProbe.Projection.cutoff(model, &1))))
+
   defp domain("search", p) do
     filters = Map.get(p, "filters", %{})
 
     valid =
-      Map.keys(filters) --
-        ~w(scene_ids character_ids character_role element_types location authored_collection_ids include_omitted include_notes include_boneyards) ==
-        [] and
-        Map.get(p, "mode", "retrieve") in ~w(retrieve inspect_all) and
-        Map.get(filters, "character_role", "speaker") in ~w(speaker reference declared_present) and
-        Enum.all?(~w(scene_ids character_ids element_types authored_collection_ids), fn key ->
-          is_nil(filters[key]) or
-            (is_list(filters[key]) and Enum.all?(filters[key], &(is_binary(&1) and &1 != "")))
-        end) and
-        Enum.all?(~w(include_omitted include_notes include_boneyards), fn key ->
-          is_nil(filters[key]) or is_boolean(filters[key])
-        end) and
-        (is_nil(filters["location"]) or
-           (is_binary(filters["location"]) and String.trim(filters["location"]) != "")) and
-        Enum.all?(
-          filters["element_types"] || [],
-          &(&1 in ~w(scene_heading action character dialogue parenthetical transition centered lyric note boneyard))
-        )
+      valid_search_keys?(p, filters) and valid_search_lists?(filters) and
+        valid_search_flags?(filters) and valid_search_location?(filters) and
+        valid_search_types?(filters)
 
     if valid, do: :ok, else: {:error, :invalid_search_filter}
   end
@@ -260,4 +280,37 @@ defmodule FountProbe.Catalog do
     do: if(p["scene_ids"] != [], do: :ok, else: {:error, :empty_scene_lift})
 
   defp domain(_, _), do: :ok
+
+  defp valid_search_keys?(p, filters) do
+    Map.keys(filters) --
+      ~w(scene_ids character_ids character_role element_types location authored_collection_ids include_omitted include_notes include_boneyards) ==
+      [] and
+      Map.get(p, "mode", "retrieve") in ~w(retrieve inspect_all) and
+      Map.get(filters, "character_role", "speaker") in ~w(speaker reference declared_present)
+  end
+
+  defp valid_search_lists?(filters) do
+    Enum.all?(~w(scene_ids character_ids element_types authored_collection_ids), fn key ->
+      is_nil(filters[key]) or
+        (is_list(filters[key]) and Enum.all?(filters[key], &(is_binary(&1) and &1 != "")))
+    end)
+  end
+
+  defp valid_search_flags?(filters) do
+    Enum.all?(~w(include_omitted include_notes include_boneyards), fn key ->
+      is_nil(filters[key]) or is_boolean(filters[key])
+    end)
+  end
+
+  defp valid_search_location?(filters) do
+    is_nil(filters["location"]) or
+      (is_binary(filters["location"]) and String.trim(filters["location"]) != "")
+  end
+
+  defp valid_search_types?(filters) do
+    Enum.all?(
+      filters["element_types"] || [],
+      &(&1 in ~w(scene_heading action character dialogue parenthetical transition centered lyric note boneyard))
+    )
+  end
 end

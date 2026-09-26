@@ -21,10 +21,10 @@ defmodule Fount.Writing.UTF8Span do
       not String.valid?(text) ->
         {:error, :invalid_utf8}
 
-      first < 0 or last <= first or last > byte_size(text) ->
+      invalid_bounds?(text, first, last) ->
         {:error, :invalid_span}
 
-      not boundary?(text, first) or not boundary?(text, last) ->
+      split_boundary?(text, first, last) ->
         {:error, :split_utf8_codepoint}
 
       true ->
@@ -33,6 +33,12 @@ defmodule Fount.Writing.UTF8Span do
   end
 
   def extract(_, _), do: {:error, :invalid_span}
+
+  defp invalid_bounds?(text, first, last),
+    do: first < 0 or last <= first or last > byte_size(text)
+
+  defp split_boundary?(text, first, last),
+    do: not boundary?(text, first) or not boundary?(text, last)
 
   @spec verify(String.t(), span() | [integer()], String.t()) ::
           :ok | {:error, atom()}
@@ -50,16 +56,14 @@ defmodule Fount.Writing.UTF8Span do
           {:ok, span()} | {:error, atom()}
   def relocate(text, pin)
       when is_binary(text) and is_binary(pin) and byte_size(pin) > 0 do
-    cond do
-      not String.valid?(text) or not String.valid?(pin) ->
-        {:error, :invalid_utf8}
-
-      true ->
-        case occurrences(text, pin, 0, []) do
-          [{first, size}] -> {:ok, {first, first + size}}
-          [] -> {:error, :protected_text_changed}
-          _ -> {:error, :ambiguous_protected_text}
-        end
+    if String.valid?(text) and String.valid?(pin) do
+      case occurrences(text, pin, 0, []) do
+        [{first, size}] -> {:ok, {first, first + size}}
+        [] -> {:error, :protected_text_changed}
+        _ -> {:error, :ambiguous_protected_text}
+      end
+    else
+      {:error, :invalid_utf8}
     end
   end
 

@@ -1,6 +1,9 @@
 defmodule FountWorkshop.Writing.RecoveryCopy do
   @moduledoc false
-  alias FountWorkshop.{Candidate, Writing.Context}
+  alias Fount.Screenplay.Model
+  alias Fount.Writing.UTF8Span
+  alias FountWorkshop.Candidate
+  alias FountWorkshop.Writing.Context
 
   def propose(base, request, strategy, context, opts) do
     source = context.data["historical_source"]
@@ -48,21 +51,25 @@ defmodule FountWorkshop.Writing.RecoveryCopy do
           }
         ])
 
-      with {:ok, candidate} <- Candidate.compile(base, proposal, options) do
-        allocated = candidate["provenance"]["allocated_ids"] || %{}
+      compile_candidate(base, proposal, options, copied_from, recovery_mode, source)
+    end
+  end
 
-        copied_from =
-          Map.new(copied_from, fn {source_id, local_id} -> {source_id, allocated[local_id]} end)
+  defp compile_candidate(base, proposal, options, copied_from, recovery_mode, source) do
+    with {:ok, candidate} <- Candidate.compile(base, proposal, options) do
+      allocated = candidate["provenance"]["allocated_ids"] || %{}
 
-        {:ok,
-         put_in(candidate, ["provenance", "recovery"], %{
-           "mode" => recovery_mode,
-           "source_screenplay_id" => source["screenplay_id"] || base.id,
-           "source_revision_id" => source["revision_id"],
-           "copied_from" => copied_from,
-           "generated_text" => false
-         })}
-      end
+      copied_from =
+        Map.new(copied_from, fn {source_id, local_id} -> {source_id, allocated[local_id]} end)
+
+      {:ok,
+       put_in(candidate, ["provenance", "recovery"], %{
+         "mode" => recovery_mode,
+         "source_screenplay_id" => source["screenplay_id"] || base.id,
+         "source_revision_id" => source["revision_id"],
+         "copied_from" => copied_from,
+         "generated_text" => false
+       })}
     end
   end
 
@@ -75,26 +82,9 @@ defmodule FountWorkshop.Writing.RecoveryCopy do
          true <-
            foreign? or Enum.all?(specs, &is_nil(Fount.Query.scene(base, &1["id"]))) or
              {:error, :historical_identity_already_present},
-         {:ok, placed, copied} <-
-           if(foreign?,
-             do:
-               copied_scenes(
-                 base,
-                 specs,
-                 opts[:registry],
-                 opts[:cast_mapping],
-                 opts[:speaker_links]
-               ),
-             else: {:ok, specs, %{}}
-           ),
+         {:ok, placed, copied} <- scenes_for_copy(base, specs, opts),
          {:ok, operations} <- place(placed, destination) do
-      links =
-        if foreign? do
-          []
-        else
-          ids = for scene <- specs, %{"keep" => id} <- scene["elements"], do: id
-          cue_link_operations(base, ids, opts[:speaker_links])
-        end
+      links = scene_links(base, specs, opts)
 
       {:ok, operations ++ links, copied,
        if(foreign?, do: "cross_screenplay_copy", else: "exact_copy")}
@@ -131,7 +121,7 @@ defmodule FountWorkshop.Writing.RecoveryCopy do
            ] or
              {:error, :unsupported_recovery_fragment},
          {:ok, excerpt} <- extract_source(source.text, target["span"]),
-         {:ok, _} <- Fount.Writing.UTF8Span.extract(current.text, span_tuple(destination_span)) do
+         {:ok, _} <- UTF8Span.extract(current.text, span_tuple(destination_span)) do
       {:ok,
        [
          %{
@@ -175,34 +165,20 @@ defmodule FountWorkshop.Writing.RecoveryCopy do
     local = Map.new(Enum.with_index(ids), fn {id, n} -> {id, "new:copy_range_#{n}"} end)
     mapping = opts[:cast_mapping] || %{}
 
-    with true <-
-           (destination_scene && anchor.type != :scene_heading) or
-             {:error, :invalid_recovery_anchor},
-         true <-
-           (length(ids) == length(Enum.uniq(ids)) and source_order == ids and contiguous) or
-             {:error, :noncontiguous_historical_range},
-         true <-
-           Enum.all?(targets, &(&1["kind"] == "element" and registry[&1["id"]])) or
-             {:error, :invalid_historical_elements},
-         true <-
-           Enum.all?(targets, fn t ->
-             is_nil(t["span"]) or
-               registry[t["id"]].type in [:action, :note, :centered, :lyric, :transition]
-           end) or {:error, :unsupported_recovery_fragment},
-         true <-
-           Enum.all?(targets, fn t ->
-             case attribute(registry[t["id"]], "character_id") || opts[:speaker_links][t["id"]] do
-               nil -> true
-               id -> not opts[:foreign?] or Map.has_key?(base.cast, mapping[id])
-             end
-           end) or {:error, :missing_cast_mapping},
-         true <-
-           Enum.all?(targets, fn t ->
-             case attribute(registry[t["id"]], "dual_with_cue") do
-               nil -> true
-               id -> id in ids
-             end
-           end) or {:error, :incomplete_dual_dialogue_copy},
+    checks = %{
+      base: base,
+      targets: targets,
+      ids: ids,
+      registry: registry,
+      mapping: mapping,
+      opts: opts,
+      anchor: anchor,
+      destination_scene: destination_scene,
+      source_order: source_order,
+      contiguous: contiguous
+    }
+
+    with :ok <- validate_range(checks),
          {:ok, specs, copied} <-
            range_specs(
              base,
@@ -219,11 +195,7 @@ defmodule FountWorkshop.Writing.RecoveryCopy do
         "value" => %{"position" => "after", "anchor_id" => anchor_id, "elements" => specs}
       }
 
-      links =
-        if opts[:foreign?],
-          do: [],
-          else:
-            cue_link_operations(base, for(%{"keep" => id} <- specs, do: id), opts[:speaker_links])
+      links = range_links(base, specs, opts)
 
       {:ok, [op] ++ links, copied,
        if(opts[:foreign?], do: "cross_screenplay_range_copy", else: "exact_range_recovery")}
@@ -232,53 +204,143 @@ defmodule FountWorkshop.Writing.RecoveryCopy do
 
   defp recovery_operations(_, [], _, _, _), do: {:error, :unsupported_exact_recovery_targets}
 
-  defp range_specs(base, targets, registry, local, mapping, foreign?, speaker_links) do
-    Enum.reduce_while(targets, {:ok, [], %{}}, fn target, {:ok, specs, copied} ->
-      id = target["id"]
-      element = registry[id]
+  defp scenes_for_copy(base, specs, opts) do
+    if opts[:foreign?] do
+      copied_scenes(base, specs, opts[:registry], opts[:cast_mapping], opts[:speaker_links])
+    else
+      {:ok, specs, %{}}
+    end
+  end
 
-      if not foreign? and is_nil(target["span"]) and is_nil(Fount.Query.node(base, id)) do
-        {:cont, {:ok, specs ++ [%{"keep" => id}], copied}}
-      else
-        case extract_source(element.text, target["span"]) do
-          {:ok, text} ->
-            attrs = Fount.Screenplay.Model.plain(element.attrs || %{})
-            character_id = attrs["character_id"] || speaker_links[id]
-            partner = attrs["dual_with_cue"]
+  defp scene_links(base, specs, opts) do
+    if opts[:foreign?] do
+      []
+    else
+      ids = for scene <- specs, %{"keep" => id} <- scene["elements"], do: id
+      cue_link_operations(base, ids, opts[:speaker_links])
+    end
+  end
 
-            attrs =
-              if character_id,
-                do:
-                  Map.put(
-                    attrs,
-                    "character_id",
-                    if(foreign?, do: mapping[character_id], else: character_id)
-                  ),
-                else: attrs
+  defp validate_range(c) do
+    with true <- valid_anchor?(c) or {:error, :invalid_recovery_anchor},
+         true <- contiguous_range?(c) or {:error, :noncontiguous_historical_range},
+         true <- valid_range_targets?(c) or {:error, :invalid_historical_elements},
+         true <- valid_range_spans?(c) or {:error, :unsupported_recovery_fragment},
+         true <- mapped_speakers?(c) or {:error, :missing_cast_mapping},
+         true <- complete_dual_links?(c) or {:error, :incomplete_dual_dialogue_copy} do
+      :ok
+    end
+  end
 
-            partner_reference =
-              if partner && not foreign? && is_nil(Fount.Query.node(base, partner)) &&
-                   Enum.any?(targets, &(&1["id"] == partner and is_nil(&1["span"]))),
-                 do: partner,
-                 else: local[partner]
+  defp valid_anchor?(c), do: c.destination_scene && c.anchor.type != :scene_heading
 
-            attrs =
-              if partner, do: Map.put(attrs, "dual_with_cue", partner_reference), else: attrs
+  defp contiguous_range?(c),
+    do: length(c.ids) == length(Enum.uniq(c.ids)) and c.source_order == c.ids and c.contiguous
 
-            spec = %{
-              "local_id" => local[id],
-              "type" => to_string(element.type),
-              "text" => text,
-              "attrs" => attrs
-            }
+  defp valid_range_targets?(c),
+    do: Enum.all?(c.targets, &(&1["kind"] == "element" and c.registry[&1["id"]]))
 
-            {:cont, {:ok, specs ++ [spec], Map.put(copied, id, local[id])}}
+  defp valid_range_spans?(c) do
+    Enum.all?(c.targets, fn t ->
+      is_nil(t["span"]) or
+        c.registry[t["id"]].type in [:action, :note, :centered, :lyric, :transition]
+    end)
+  end
 
-          error ->
-            {:halt, error}
-        end
+  defp mapped_speakers?(c) do
+    Enum.all?(c.targets, fn t ->
+      case attribute(c.registry[t["id"]], "character_id") || c.opts[:speaker_links][t["id"]] do
+        nil -> true
+        id -> not c.opts[:foreign?] or Map.has_key?(c.base.cast, c.mapping[id])
       end
     end)
+  end
+
+  defp complete_dual_links?(c) do
+    Enum.all?(c.targets, fn t ->
+      case attribute(c.registry[t["id"]], "dual_with_cue") do
+        nil -> true
+        id -> id in c.ids
+      end
+    end)
+  end
+
+  defp range_links(base, specs, opts) do
+    if opts[:foreign?],
+      do: [],
+      else: cue_link_operations(base, for(%{"keep" => id} <- specs, do: id), opts[:speaker_links])
+  end
+
+  defp range_specs(base, targets, registry, local, mapping, foreign?, speaker_links) do
+    context = %{
+      base: base,
+      targets: targets,
+      registry: registry,
+      local: local,
+      mapping: mapping,
+      foreign?: foreign?,
+      speaker_links: speaker_links
+    }
+
+    Enum.reduce_while(targets, {:ok, [], %{}}, fn target, {:ok, specs, copied} ->
+      case range_spec(target, context) do
+        {:ok, spec, nil} ->
+          {:cont, {:ok, specs ++ [spec], copied}}
+
+        {:ok, spec, source_id} ->
+          {:cont, {:ok, specs ++ [spec], Map.put(copied, source_id, local[source_id])}}
+
+        error ->
+          {:halt, error}
+      end
+    end)
+  end
+
+  defp range_spec(target, c) do
+    id = target["id"]
+
+    if not c.foreign? and is_nil(target["span"]) and is_nil(Fount.Query.node(c.base, id)) do
+      {:ok, %{"keep" => id}, nil}
+    else
+      element = c.registry[id]
+
+      with {:ok, text} <- extract_source(element.text, target["span"]) do
+        attrs = Model.plain(element.attrs || %{})
+        attrs = copy_attrs(attrs, id, c)
+
+        {:ok,
+         %{
+           "local_id" => c.local[id],
+           "type" => to_string(element.type),
+           "text" => text,
+           "attrs" => attrs
+         }, id}
+      end
+    end
+  end
+
+  defp copy_attrs(attrs, id, c) do
+    character_id = attrs["character_id"] || c.speaker_links[id]
+    partner = attrs["dual_with_cue"]
+
+    attrs =
+      if character_id,
+        do: Map.put(attrs, "character_id", copied_character(character_id, c)),
+        else: attrs
+
+    if partner, do: Map.put(attrs, "dual_with_cue", partner_reference(partner, c)), else: attrs
+  end
+
+  defp copied_character(id, %{foreign?: true} = c), do: c.mapping[id]
+  defp copied_character(id, _), do: id
+
+  defp partner_reference(partner, c) do
+    if partner && not c.foreign? && is_nil(Fount.Query.node(c.base, partner)) &&
+         Enum.any?(c.targets, &(&1["id"] == partner and is_nil(&1["span"]))) do
+      partner
+    else
+      c.local[partner]
+    end
   end
 
   defp cue_link_operations(base, ids, speaker_links) do
@@ -297,17 +359,13 @@ defmodule FountWorkshop.Writing.RecoveryCopy do
   end
 
   defp extract_source(text, nil), do: {:ok, text}
-  defp extract_source(text, span), do: Fount.Writing.UTF8Span.extract(text, span_tuple(span))
+  defp extract_source(text, span), do: UTF8Span.extract(text, span_tuple(span))
   defp span_tuple(%{"byte_start" => first, "byte_end" => last}), do: {first, last}
   defp span_tuple(_), do: {-1, -1}
 
   defp copied_scenes(base, specs, registry, cast_mapping, speaker_links)
        when is_map(cast_mapping) do
-    with true <-
-           Enum.all?(cast_mapping, fn {source_id, destination_id} ->
-             is_binary(source_id) and is_binary(destination_id) and
-               Map.has_key?(base.cast, destination_id)
-           end) or {:error, :invalid_cast_mapping} do
+    with true <- valid_cast_mapping?(base, cast_mapping) or {:error, :invalid_cast_mapping} do
       source_ids =
         Enum.flat_map(specs, fn spec ->
           [spec["id"] | Enum.map(spec["elements"], & &1["keep"])]
@@ -319,41 +377,7 @@ defmodule FountWorkshop.Writing.RecoveryCopy do
         |> Map.new(fn {id, n} -> {id, "new:copy_#{n}"} end)
 
       converted =
-        Enum.map(specs, fn scene ->
-          body =
-            Enum.map(scene["elements"], fn %{"keep" => id} ->
-              element = registry[id]
-              attrs = Fount.Screenplay.Model.plain(element.attrs || %{})
-              character_id = attrs["character_id"] || speaker_links[id]
-              partner = attrs["dual_with_cue"]
-
-              attrs =
-                attrs
-                |> then(fn a ->
-                  if character_id,
-                    do: Map.put(a, "character_id", cast_mapping[character_id]),
-                    else: a
-                end)
-                |> then(fn a ->
-                  if partner, do: Map.put(a, "dual_with_cue", local[partner]), else: a
-                end)
-
-              %{
-                "local_id" => local[id],
-                "type" => to_string(element.type),
-                "text" => element.text,
-                "attrs" => attrs
-              }
-            end)
-
-          %{
-            "local_id" => local[scene["id"]],
-            "heading" => scene["heading"],
-            "number" => scene["number"],
-            "omitted" => scene["omitted"],
-            "elements" => body
-          }
-        end)
+        Enum.map(specs, &convert_scene(&1, registry, local, cast_mapping, speaker_links))
 
       referenced_cast =
         for scene <- specs,
@@ -369,20 +393,65 @@ defmodule FountWorkshop.Writing.RecoveryCopy do
             is_binary(partner),
             do: partner
 
-      cond do
-        Enum.any?(referenced_cast, &(not Map.has_key?(cast_mapping, &1))) ->
-          {:error, :missing_cast_mapping}
-
-        Enum.any?(referenced_partners, &(not Map.has_key?(local, &1))) ->
-          {:error, :incomplete_dual_dialogue_copy}
-
-        true ->
-          {:ok, converted, local}
-      end
+      validate_copied_links(referenced_cast, referenced_partners, cast_mapping, local, converted)
     end
   end
 
   defp copied_scenes(_, _, _, _, _), do: {:error, :explicit_cast_mapping_required}
+
+  defp valid_cast_mapping?(base, cast_mapping) do
+    Enum.all?(cast_mapping, fn {source_id, destination_id} ->
+      is_binary(source_id) and is_binary(destination_id) and
+        Map.has_key?(base.cast, destination_id)
+    end)
+  end
+
+  defp validate_copied_links(cast, partners, mapping, local, converted) do
+    cond do
+      Enum.any?(cast, &(not Map.has_key?(mapping, &1))) ->
+        {:error, :missing_cast_mapping}
+
+      Enum.any?(partners, &(not Map.has_key?(local, &1))) ->
+        {:error, :incomplete_dual_dialogue_copy}
+
+      true ->
+        {:ok, converted, local}
+    end
+  end
+
+  defp convert_scene(scene, registry, local, cast_mapping, speaker_links) do
+    body =
+      Enum.map(scene["elements"], fn %{"keep" => id} ->
+        convert_element(id, registry, local, cast_mapping, speaker_links)
+      end)
+
+    %{
+      "local_id" => local[scene["id"]],
+      "heading" => scene["heading"],
+      "number" => scene["number"],
+      "omitted" => scene["omitted"],
+      "elements" => body
+    }
+  end
+
+  defp convert_element(id, registry, local, cast_mapping, speaker_links) do
+    element = registry[id]
+    attrs = Model.plain(element.attrs || %{})
+    character_id = attrs["character_id"] || speaker_links[id]
+    partner = attrs["dual_with_cue"]
+
+    attrs =
+      if character_id, do: Map.put(attrs, "character_id", cast_mapping[character_id]), else: attrs
+
+    attrs = if partner, do: Map.put(attrs, "dual_with_cue", local[partner]), else: attrs
+
+    %{
+      "local_id" => local[id],
+      "type" => to_string(element.type),
+      "text" => element.text,
+      "attrs" => attrs
+    }
+  end
 
   defp attribute(element, key) do
     attrs = element.attrs || %{}

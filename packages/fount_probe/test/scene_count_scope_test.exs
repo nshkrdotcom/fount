@@ -36,7 +36,7 @@ defmodule FountProbe.SceneCountScopeTest do
       }
     }
 
-    assert {:ok, result, _} = Fount.Screenplay.apply(base, [op])
+    assert {:ok, result, _} = Fount.Screenplay.apply(base, [op], [])
 
     constraint = %{
       "id" => "selected-count",

@@ -1,5 +1,8 @@
 defmodule Fount.Slice do
   @moduledoc "Ordered, revision-specific screenplay selections."
+  alias Fount.Screenplay.Model
+  alias Fount.Writing.CanonicalJSON
+
   defstruct [
     :screenplay_id,
     :revision_id,
@@ -27,25 +30,9 @@ defmodule Fount.Slice do
       index = if is_nil(through), do: 0, else: Enum.find_index(elements, &(&1.id == through))
       block = Fount.Query.block_for(model, through)
 
-      joint_last =
-        if block && block.dual_with do
-          partner = Fount.Query.dialogue_block(model, block.dual_with)
-          ids = block.body_ids ++ partner.body_ids
-          elements |> Enum.filter(&(&1.id in ids)) |> List.last() |> Map.fetch!(:id)
-        end
-
-      cond do
-        is_nil(index) ->
-          {:error, :invalid_cutoff}
-
-        block && block.dual_with && through != joint_last ->
-          {:error, :split_simultaneous_group}
-
-        block && is_nil(block.dual_with) && through != List.last(block.body_ids) ->
-          {:error, :split_dialogue_block}
-
-        true ->
-          build(model, Enum.take(elements, index + 1), %{scene_id: id, through: through}, opts)
+      case prefix_cutoff(model, elements, block, through, index) do
+        :ok -> build(model, Enum.take(elements, index + 1), %{scene_id: id, through: through}, opts)
+        error -> error
       end
     end
   end
@@ -85,17 +72,12 @@ defmodule Fount.Slice do
     end
   end
 
-  def to_map(slice), do: slice |> Map.from_struct() |> Fount.Screenplay.Model.plain()
+  def to_map(slice), do: slice |> Map.from_struct() |> Model.plain()
 
   defp build(model, elements, selector, opts) do
     omitted = for s <- model.ir.scenes, s.omitted?, id <- s.element_ids, do: id
 
-    elements =
-      Enum.filter(elements, fn e ->
-        (Keyword.get(opts, :include_omitted, false) or e.id not in omitted) and
-          (Keyword.get(opts, :include_notes, false) or e.type != :note) and
-          (Keyword.get(opts, :include_boneyards, false) or e.type != :boneyard)
-      end)
+    elements = Enum.filter(elements, &include_element?(&1, omitted, opts))
 
     slice = %__MODULE__{
       screenplay_id: model.id,
@@ -121,6 +103,26 @@ defmodule Fount.Slice do
       cast: Fount.Query.characters(model)
     }
 
-    {:ok, %{slice | fingerprint: Fount.Writing.CanonicalJSON.hash(to_map(slice))}}
+    {:ok, %{slice | fingerprint: CanonicalJSON.hash(to_map(slice))}}
+  end
+
+  defp prefix_cutoff(_, _, _, _, nil), do: {:error, :invalid_cutoff}
+  defp prefix_cutoff(_, _, nil, _, _), do: :ok
+
+  defp prefix_cutoff(model, elements, %{dual_with: partner_id} = block, through, _) when not is_nil(partner_id) do
+    partner = Fount.Query.dialogue_block(model, partner_id)
+    ids = block.body_ids ++ partner.body_ids
+    last = elements |> Enum.filter(&(&1.id in ids)) |> List.last() |> Map.fetch!(:id)
+    if through == last, do: :ok, else: {:error, :split_simultaneous_group}
+  end
+
+  defp prefix_cutoff(_, _, block, through, _) do
+    if through == List.last(block.body_ids), do: :ok, else: {:error, :split_dialogue_block}
+  end
+
+  defp include_element?(element, omitted, opts) do
+    (Keyword.get(opts, :include_omitted, false) or element.id not in omitted) and
+      (Keyword.get(opts, :include_notes, false) or element.type != :note) and
+      (Keyword.get(opts, :include_boneyards, false) or element.type != :boneyard)
   end
 end

@@ -1,6 +1,5 @@
 defmodule Fount.Diff do
   @moduledoc "Source and semantic diffs between screenplay revisions."
-
   alias Fount.Document
 
   @spec source(Document.t(), Document.t()) :: list()

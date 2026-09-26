@@ -1,6 +1,5 @@
 defmodule Fount.Query do
   @moduledoc "Headless screenplay query API."
-
   alias Fount.Source.Span
 
   def node(%{index: index}, id), do: Map.get(index.by_id, id)

@@ -1,5 +1,9 @@
 defmodule FountProbe.Profile do
   @moduledoc "Versioned finite question assets, compiled through public SDK constructors."
+  alias Fount.Writing.CanonicalJSON
+  alias SystemOneSDK.Question.Choice
+  alias SystemOneSDK.Question.Noul
+  alias SystemOneSDK.Question.Score
 
   def load(id) when is_binary(id) do
     if Regex.match?(~r/\A[a-z][a-z0-9_]*\z/, id) do
@@ -10,7 +14,7 @@ defmodule FountProbe.Profile do
            %{"id" => ^id, "version" => version, "questions" => questions} <- profile,
            true <- is_integer(version) and version > 0 and is_list(questions),
            true <- valid_thresholds?(Map.get(profile, "thresholds", %{})) do
-        {:ok, Map.put(profile, "sha256", Fount.Writing.CanonicalJSON.hash(profile))}
+        {:ok, Map.put(profile, "sha256", CanonicalJSON.hash(profile))}
       else
         _ -> {:error, {:invalid_profile, id}}
       end
@@ -40,19 +44,7 @@ defmodule FountProbe.Profile do
     with {:ok, profile} <- load(id) do
       overrides = Map.new(profile["questions"], &{&1["key"], &1})
 
-      compiled =
-        Enum.reduce_while(questions, {:ok, []}, fn {key, question}, {:ok, acc} ->
-          case Map.get(overrides, to_string(key)) do
-            nil ->
-              {:cont, {:ok, acc ++ [{key, question}]}}
-
-            spec ->
-              case construct(question, spec) do
-                {:ok, result} -> {:cont, {:ok, acc ++ [{key, result}]}}
-                error -> {:halt, error}
-              end
-          end
-        end)
+      compiled = Enum.reduce_while(questions, {:ok, []}, &compile_question(&1, &2, overrides))
 
       case compiled do
         {:ok, compiled} ->
@@ -64,27 +56,37 @@ defmodule FountProbe.Profile do
     end
   end
 
-  defp construct(%SystemOneSDK.Question.Noul{} = q, %{"type" => "noul", "instructions" => text})
+  defp compile_question({key, question}, {:ok, acc}, overrides) do
+    case Map.get(overrides, to_string(key)) do
+      nil -> {:cont, {:ok, acc ++ [{key, question}]}}
+      spec -> compile_override(key, question, spec, acc)
+    end
+  end
+
+  defp compile_override(key, question, spec, acc) do
+    case construct(question, spec) do
+      {:ok, result} -> {:cont, {:ok, acc ++ [{key, result}]}}
+      error -> {:halt, error}
+    end
+  end
+
+  defp construct(%Noul{} = q, %{"type" => "noul", "instructions" => text})
        when is_binary(text),
-       do: SystemOneSDK.Question.Noul.new(text, extra: q.extra)
+       do: Noul.new(text, extra: q.extra)
 
   defp construct(
-         %SystemOneSDK.Question.Choice{} = q,
+         %Choice{} = q,
          %{"type" => "choice", "instructions" => text} = spec
        )
        when is_binary(text),
-       do:
-         SystemOneSDK.Question.Choice.new(text, Map.get(spec, "criteria", q.criteria),
-           extra: q.extra
-         )
+       do: Choice.new(text, Map.get(spec, "criteria", q.criteria), extra: q.extra)
 
   defp construct(
-         %SystemOneSDK.Question.Score{} = q,
+         %Score{} = q,
          %{"type" => "score", "instructions" => text} = spec
        )
        when is_binary(text),
-       do:
-         SystemOneSDK.Question.Score.new(text, Map.get(spec, "levels", q.levels), extra: q.extra)
+       do: Score.new(text, Map.get(spec, "levels", q.levels), extra: q.extra)
 
   defp construct(_, _), do: {:error, :question_profile_type_mismatch}
 end

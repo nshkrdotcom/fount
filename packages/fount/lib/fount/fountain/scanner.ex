@@ -1,8 +1,8 @@
 defmodule Fount.Fountain.Scanner do
   @moduledoc "Byte-preserving Fountain line scanner."
-
   alias Fount.Source
-  alias Fount.Source.{Line, Span}
+  alias Fount.Source.Line
+  alias Fount.Source.Span
 
   @spec scan(binary(), keyword()) :: Source.t()
   def scan(raw, opts \\ []) when is_binary(raw) do

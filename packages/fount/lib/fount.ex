@@ -3,9 +3,16 @@ defmodule Fount do
   Headless screenplay framework with lossless Fountain source, semantic IR,
   explicit edits, derived annotations, adapters, and pluggable persistence.
   """
-
-  alias Fount.{Annotations, Document, ID, Identity, Index, Revision}
-  alias Fount.Fountain.{CST, Parser, Scanner, Serializer}
+  alias Fount.Annotations
+  alias Fount.Document
+  alias Fount.Fountain.CST
+  alias Fount.Fountain.Parser
+  alias Fount.Fountain.Scanner
+  alias Fount.Fountain.Serializer
+  alias Fount.ID
+  alias Fount.Identity
+  alias Fount.Index
+  alias Fount.Revision
 
   @version "0.1.0"
 

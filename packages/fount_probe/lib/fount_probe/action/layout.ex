@@ -32,17 +32,28 @@ defmodule FountProbe.Action.Layout do
   defp validate_report(model, id, row, payload) when is_map(payload) do
     pdf = get_in(payload, ["data", "candidate_pdf"])
 
-    if row["id"] == id and payload["id"] == id and
-         payload["tool"] == "layout_compare" and payload["status"] == "complete" and
-         payload["screenplay_id"] == model.id and
-         payload["primary_revision_id"] == model.revision.id and
-         is_map(pdf) and pdf["source_revision"] == model.revision.id and
-         is_binary(pdf["settings_sha256"]) and is_binary(pdf["sha256"]),
-       do: :ok,
-       else: {:error, :invalid_layout_report}
+    if valid_report?(model, id, row, payload, pdf),
+      do: :ok,
+      else: {:error, :invalid_layout_report}
   end
 
   defp validate_report(_, _, _, _), do: {:error, :invalid_layout_report}
+
+  defp valid_report?(model, id, row, payload, pdf) do
+    correct_identity?(model, id, row, payload) and valid_pdf?(model, pdf)
+  end
+
+  defp correct_identity?(model, id, row, payload) do
+    row["id"] == id and payload["id"] == id and
+      payload["tool"] == "layout_compare" and payload["status"] == "complete" and
+      payload["screenplay_id"] == model.id and
+      payload["primary_revision_id"] == model.revision.id
+  end
+
+  defp valid_pdf?(model, pdf) do
+    is_map(pdf) and pdf["source_revision"] == model.revision.id and
+      is_binary(pdf["settings_sha256"]) and is_binary(pdf["sha256"])
+  end
 
   defp extract(path) do
     case System.find_executable("pdftotext") do
@@ -82,19 +93,7 @@ defmodule FountProbe.Action.Layout do
 
       case matches do
         [match] ->
-          positions = match |> Enum.map(fn {_, page, line} -> {page, line} end) |> Enum.uniq()
-
-          region = %{
-            "evidence_id" => unit["evidence_id"],
-            "target" => unit["target"],
-            "page_start" => elem(hd(positions), 0),
-            "page_end" => elem(List.last(positions), 0),
-            "line_count" => length(positions),
-            "lines" =>
-              Enum.map(positions, fn {page, line} -> %{"page" => page, "line" => line} end)
-          }
-
-          {:cont, {:ok, acc ++ [region]}}
+          {:cont, {:ok, acc ++ [region(unit, match)]}}
 
         [] ->
           {:halt, {:error, {:layout_excerpt_not_found, unit["evidence_id"]}}}
@@ -103,6 +102,19 @@ defmodule FountProbe.Action.Layout do
           {:halt, {:error, {:ambiguous_layout_excerpt, unit["evidence_id"]}}}
       end
     end)
+  end
+
+  defp region(unit, match) do
+    positions = match |> Enum.map(fn {_, page, line} -> {page, line} end) |> Enum.uniq()
+
+    %{
+      "evidence_id" => unit["evidence_id"],
+      "target" => unit["target"],
+      "page_start" => elem(hd(positions), 0),
+      "page_end" => elem(List.last(positions), 0),
+      "line_count" => length(positions),
+      "lines" => Enum.map(positions, fn {page, line} -> %{"page" => page, "line" => line} end)
+    }
   end
 
   defp words(value) when is_binary(value),

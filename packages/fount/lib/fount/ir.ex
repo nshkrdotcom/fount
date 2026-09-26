@@ -1,8 +1,12 @@
 defmodule Fount.IR do
   @moduledoc "Builders and structural views for the canonical screenplay IR."
-
   alias Fount.Fountain.CST
-  alias Fount.IR.{DialogueBlock, Element, OutlineNode, Scene, Script, TitlePage}
+  alias Fount.IR.DialogueBlock
+  alias Fount.IR.Element
+  alias Fount.IR.OutlineNode
+  alias Fount.IR.Scene
+  alias Fount.IR.Script
+  alias Fount.IR.TitlePage
   alias Fount.Source.Span
 
   @spec from_cst(String.t(), CST.t()) :: Script.t()

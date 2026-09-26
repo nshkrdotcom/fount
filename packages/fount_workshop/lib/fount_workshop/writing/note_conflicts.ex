@@ -1,6 +1,5 @@
 defmodule FountWorkshop.Writing.NoteConflicts do
   @moduledoc false
-
   alias FountProbe.Projection
 
   def detect(model, notes) do

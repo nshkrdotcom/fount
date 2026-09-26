@@ -28,7 +28,7 @@ persistence. A minimal application flow is:
 root = Fount.Screenplay.new()
 {:ok, _} = Fount.Persistence.create(Fount.Repo, "draft", root)
 {:ok, accepted} = Fount.Persistence.load(Fount.Repo, "draft")
-{:ok, candidate, changes} = Fount.Screenplay.apply(accepted, operations)
+{:ok, candidate, changes} = Fount.Screenplay.apply(accepted, operations, [])
 {:ok, _} = Fount.Persistence.save_edit(Fount.Repo, "draft", candidate,
   expected_revision: accepted.revision.id)
 ```

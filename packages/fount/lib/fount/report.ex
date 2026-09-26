@@ -1,6 +1,5 @@
 defmodule Fount.Report do
   @moduledoc "Useful headless screenplay reports derived from canonical IR."
-
   alias Fount.Document
 
   @spec summary(Document.t()) :: map()

@@ -1,4 +1,5 @@
 defmodule FountProbe.ContinuationProjectionTest do
+  alias Fount.Writing.UTF8Span
   use ExUnit.Case, async: true
   alias FountProbe.Projection
 
@@ -37,7 +38,7 @@ defmodule FountProbe.ContinuationProjectionTest do
 
     for unit <- units do
       e = Fount.Query.node(m, unit["target"]["id"])
-      assert :ok = Fount.Writing.UTF8Span.verify(e.text, unit["target"]["span"], unit["excerpt"])
+      assert :ok = UTF8Span.verify(e.text, unit["target"]["span"], unit["excerpt"])
     end
   end
 

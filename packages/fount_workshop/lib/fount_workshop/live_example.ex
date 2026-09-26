@@ -1,14 +1,18 @@
 defmodule FountWorkshop.LiveExample do
   @moduledoc false
+  alias Fount.CLI.Support
   alias Fount.LiveArtifacts, as: A
-  alias FountWorkshop.{Session, Store, Candidate}
+  alias FountWorkshop.Candidate
+  alias FountWorkshop.Session
+  alias FountWorkshop.Store
+  alias FountWorkshop.Writing.ChangeGroups
 
   @modes ~w(bridge alternatives propagate sequence_routes character_workspace grouped_notes pass_all recover_scene investigate)
   def modes, do: @modes
 
   def run(mode, output, options \\ []) do
     A.run(mode, output, fn directory ->
-      repo = Fount.CLI.Support.connect() |> A.require!()
+      repo = Support.connect() |> A.require!()
       {root, _} = A.fixture()
       key = "writer-#{mode}-#{Fount.ID.v4()}"
       Fount.Persistence.create(repo, key, root) |> A.require!()
@@ -459,22 +463,26 @@ defmodule FountWorkshop.LiveExample do
         ]
       }
     else
-      group =
-        Enum.find(candidate["change_groups"], fn group ->
-          Enum.any?(group["operations"], &(&1["kind"] == "insert_elements"))
-        end)
+      pick_insert_group(candidate)
+    end
+  end
 
-      if group do
-        group_ids =
-          case FountWorkshop.Writing.ChangeGroups.select(candidate["change_groups"], [group["id"]]) do
-            {:ok, _} -> [group["id"]]
-            {:error, {:missing_required_groups, %{"proposed_selection" => ids}}} -> ids
-          end
+  defp pick_insert_group(candidate) do
+    group =
+      Enum.find(candidate["change_groups"], fn group ->
+        Enum.any?(group["operations"], &(&1["kind"] == "insert_elements"))
+      end)
 
-        %{"candidate_id" => candidate["id"], "group_ids" => group_ids}
-      else
-        {:error, :alternative_has_no_selectable_passage}
-      end
+    if group do
+      group_ids =
+        case ChangeGroups.select(candidate["change_groups"], [group["id"]]) do
+          {:ok, _} -> [group["id"]]
+          {:error, {:missing_required_groups, %{"proposed_selection" => ids}}} -> ids
+        end
+
+      %{"candidate_id" => candidate["id"], "group_ids" => group_ids}
+    else
+      {:error, :alternative_has_no_selectable_passage}
     end
   end
 
@@ -483,7 +491,7 @@ defmodule FountWorkshop.LiveExample do
       {:ok, session} ->
         session
 
-      {:error, _, session} = error ->
+      {:error, _, session} ->
         _ =
           FountWorkshop.Review.export(
             session["id"],
@@ -491,10 +499,12 @@ defmodule FountWorkshop.LiveExample do
             services
           )
 
-        A.require!(error)
+        throw(
+          {:live_failure, %{"session_id" => session["id"], "progress" => session["progress"]}}
+        )
 
       error ->
-        A.require!(error)
+        throw({:live_failure, %{"unexpected_result" => inspect(error)}})
     end
   end
 
@@ -569,7 +579,7 @@ defmodule FountWorkshop.LiveExample do
     }
 
   defp apply_and_save(root, key, ops, services) do
-    {:ok, edited, changes} = Fount.Screenplay.apply(root, ops)
+    {:ok, edited, changes} = Fount.Screenplay.apply(root, ops, [])
 
     saved =
       Fount.Persistence.save_edit(services.store.repo, key, edited,

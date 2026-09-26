@@ -1,8 +1,11 @@
 defmodule Fount.Screenplay.Model do
   @moduledoc false
-  alias Fount.{ID, Index}
-  alias Fount.Cast.{Character, Mention}
+  alias Fount.Cast.Character
+  alias Fount.Cast.Mention
+  alias Fount.ID
+  alias Fount.Index
   alias Fount.Writing.CanonicalJSON
+  alias Fount.Writing.UTF8Span
 
   def refresh(model) do
     old_scenes = Map.new(model.ir.scenes || [], &{&1.heading_id, &1})
@@ -33,7 +36,7 @@ defmodule Fount.Screenplay.Model do
         element = model.index.by_id[mention.element_id]
 
         is_nil(element) or
-          Fount.Writing.UTF8Span.verify(element.text, {mention.byte_start, mention.byte_end}, mention.surface) != :ok
+          UTF8Span.verify(element.text, {mention.byte_start, mention.byte_end}, mention.surface) != :ok
       end)
 
     mentions = Map.new(mentions, fn {id, item} -> {id, %{item | model_revision_id: model.revision.id}} end)

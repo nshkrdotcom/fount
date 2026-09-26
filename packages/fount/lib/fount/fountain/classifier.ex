@@ -1,6 +1,5 @@
 defmodule Fount.Fountain.Classifier do
   @moduledoc false
-
   alias Fount.Source.Line
 
   @scene_prefix ~r/^(?:INT|EXT|EST|I\/E|INT\.?\/EXT|EXT\.?\/INT)(?:\.|\s)/iu

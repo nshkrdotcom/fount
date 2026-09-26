@@ -1,82 +1,91 @@
 defmodule FountProbe.Investigation do
   @moduledoc "Finite, screenplay-specific investigation plans and evidence-backed hypothesis revision. Does not execute model-supplied code."
-  alias FountProbe.{Report, Projection, Catalog, Completion}
+  alias Fount.Screenplay.Model
+  alias Fount.Writing.Schema
+  alias FountProbe.Catalog
+  alias FountProbe.Completion
+  alias FountProbe.Projection
+  alias FountProbe.Report
 
   def plan(model, concern, clients, opts \\ []) do
     with true <- (is_binary(concern) and String.trim(concern) != "") or {:error, :empty_concern},
          {:ok, units} <-
            Projection.select(model, Keyword.get(opts, :selection, %{"whole_screenplay" => true})) do
-      schema = %{
-        "type" => "object",
-        "properties" => %{
-          "hypotheses" => %{
-            "type" => "array",
-            "minItems" => 1,
-            "maxItems" => 6,
-            "items" => %{
-              "type" => "object",
-              "properties" => %{
-                "id" => nonempty(),
-                "claim" => nonempty(),
-                "reason" => nonempty(),
-                "request_ids" => strings()
-              },
-              "required" => ~w(id claim reason request_ids),
-              "additionalProperties" => false
-            }
-          },
-          "requests" => %{
-            "type" => "array",
-            "minItems" => 1,
-            "maxItems" => 6,
-            "items" => %{
-              "type" => "object",
-              "properties" => %{
-                "id" => %{"type" => "string"},
-                "tool" => %{"enum" => Catalog.names()},
-                "params" => %{"type" => "object"}
-              },
-              "required" => ~w(id tool params),
-              "additionalProperties" => false
-            }
+      plan_selected(model, concern, clients, opts, units)
+    end
+  end
+
+  defp plan_selected(model, concern, clients, opts, units) do
+    schema = %{
+      "type" => "object",
+      "properties" => %{
+        "hypotheses" => %{
+          "type" => "array",
+          "minItems" => 1,
+          "maxItems" => 6,
+          "items" => %{
+            "type" => "object",
+            "properties" => %{
+              "id" => nonempty(),
+              "claim" => nonempty(),
+              "reason" => nonempty(),
+              "request_ids" => strings()
+            },
+            "required" => ~w(id claim reason request_ids),
+            "additionalProperties" => false
           }
         },
-        "required" => ~w(hypotheses requests),
-        "additionalProperties" => false
-      }
+        "requests" => %{
+          "type" => "array",
+          "minItems" => 1,
+          "maxItems" => 6,
+          "items" => %{
+            "type" => "object",
+            "properties" => %{
+              "id" => %{"type" => "string"},
+              "tool" => %{"enum" => Catalog.names()},
+              "params" => %{"type" => "object"}
+            },
+            "required" => ~w(id tool params),
+            "additionalProperties" => false
+          }
+        }
+      },
+      "required" => ~w(hypotheses requests),
+      "additionalProperties" => false
+    }
 
-      validate = fn object ->
-        with :ok <- Fount.Writing.Schema.validate(schema, object),
-             do: validate_plan(model, object)
-      end
+    validate = fn object ->
+      with :ok <- Schema.validate(schema, object),
+           do: validate_plan(model, object)
+    end
 
-      prompt =
-        "Investigate this writer's specific creative question, not whether every scene follows a formula. Form tentative competing hypotheses and choose only needed catalog tools. Requests are inspections, never edits. Exact IDs below are authoritative. For any tool requiring selection, copy the supplied selection object exactly into params.selection; do not invent a selection shape.\n" <>
-          Jason.encode!(%{
-            "concern" => concern,
-            "selection" => Keyword.get(opts, :selection, %{"whole_screenplay" => true}),
-            "material" => units,
-            "tools" => Catalog.tools(),
-            "cast" => Fount.Screenplay.Model.plain(Map.values(model.cast))
-          })
+    prompt =
+      "Investigate this writer's specific creative question, not whether every scene follows a formula. Form tentative competing hypotheses and choose only needed catalog tools. Requests are inspections, never edits. Exact IDs below are authoritative. For any tool requiring selection, copy the supplied selection object exactly into params.selection; do not invent a selection shape.\n" <>
+        Jason.encode!(%{
+          "concern" => concern,
+          "selection" => Keyword.get(opts, :selection, %{"whole_screenplay" => true}),
+          "material" => units,
+          "tools" => Catalog.tools(),
+          "cast" => Model.plain(Map.values(model.cast))
+        })
 
-      # Catalog request params are tool-specific open objects. The provider's strict
-      # structured-output schema cannot express them; keep the full local validator.
-      with {:ok, value, traces} <-
-             Completion.complete(
-               clients[:inference],
-               prompt,
-               schema,
-               validate,
-               Keyword.put(opts, :force_json_text, true)
-             ) do
-        {:ok,
-         Report.new(model, "investigation_plan", %{"concern" => concern}, %{
-           data: value,
-           evidence: Projection.evidence(units),
-           provenance: %{"completions" => traces}
-         })}
-      end
+    # Catalog request params are tool-specific open objects. The provider's strict
+    # structured-output schema cannot express them; keep the full local validator.
+    with {:ok, value, traces} <-
+           Completion.complete(
+             clients[:inference],
+             prompt,
+             schema,
+             validate,
+             Keyword.put(opts, :force_json_text, true)
+           ) do
+      {:ok,
+       Report.new(model, "investigation_plan", %{"concern" => concern}, %{
+         data: value,
+         evidence: Projection.evidence(units),
+         provenance: %{"completions" => traces}
+       })}
     end
   end
 
@@ -86,19 +95,13 @@ defmodule FountProbe.Investigation do
     hypothesis_ids = Enum.map(hypotheses, &if(is_map(&1), do: &1["id"], else: nil))
 
     cond do
-      length(requests) < 1 or length(requests) > 6 or
-        length(hypotheses) < 1 or length(hypotheses) > 6 ->
+      invalid_plan_size?(requests, hypotheses) ->
         {:error, :invalid_investigation_size}
 
-      not unique_nonempty?(request_ids) or not unique_nonempty?(hypothesis_ids) ->
+      invalid_plan_ids?(request_ids, hypothesis_ids) ->
         {:error, :duplicate_or_invalid_investigation_id}
 
-      not Enum.all?(hypotheses, fn h ->
-        is_map(h) and is_binary(h["claim"]) and h["claim"] != "" and
-          is_binary(h["reason"]) and h["reason"] != "" and
-          is_list(h["request_ids"]) and h["request_ids"] != [] and
-            Enum.all?(h["request_ids"], &(&1 in request_ids))
-      end) ->
+      not Enum.all?(hypotheses, &valid_plan_hypothesis?(&1, request_ids)) ->
         {:error, :invalid_hypothesis}
 
       true ->
@@ -107,6 +110,19 @@ defmodule FountProbe.Investigation do
   end
 
   def validate_plan(_, _), do: {:error, :invalid_investigation_plan}
+
+  defp invalid_plan_size?(requests, hypotheses),
+    do: requests == [] or length(requests) > 6 or hypotheses == [] or length(hypotheses) > 6
+
+  defp invalid_plan_ids?(request_ids, hypothesis_ids),
+    do: not unique_nonempty?(request_ids) or not unique_nonempty?(hypothesis_ids)
+
+  defp valid_plan_hypothesis?(h, request_ids) do
+    is_map(h) and is_binary(h["claim"]) and h["claim"] != "" and
+      is_binary(h["reason"]) and h["reason"] != "" and
+      is_list(h["request_ids"]) and h["request_ids"] != [] and
+      Enum.all?(h["request_ids"], &(&1 in request_ids))
+  end
 
   def explain(model, concern, reports, clients, opts \\ []) do
     evidence = reports |> Enum.flat_map(& &1.evidence) |> Enum.uniq_by(& &1["evidence_id"])
@@ -173,7 +189,7 @@ defmodule FountProbe.Investigation do
     remaining = Keyword.get(opts, :followups_remaining, 0)
 
     validate = fn object ->
-      with :ok <- Fount.Writing.Schema.validate(schema, object),
+      with :ok <- Schema.validate(schema, object),
            do:
              validate_explanation(
                model,
@@ -223,36 +239,25 @@ defmodule FountProbe.Investigation do
     followups = Map.get(object, "follow_up_requests", [])
 
     cond do
-      not is_list(strategies) or length(strategies) != 3 or
-          not unique_nonempty?(Enum.map(strategies, &if(is_map(&1), do: &1["id"], else: nil))) ->
+      invalid_strategy_ids?(strategies) ->
         {:error, :invalid_strategy_ids}
 
-      not is_list(hypotheses) or hypotheses == [] or
-          not unique_nonempty?(Enum.map(hypotheses, &if(is_map(&1), do: &1["id"], else: nil))) ->
+      invalid_hypothesis_ids?(hypotheses) ->
         {:error, :invalid_hypothesis_ids}
 
-      initial_ids != [] and
-          MapSet.new(Enum.map(hypotheses, & &1["id"])) != MapSet.new(initial_ids) ->
+      unrevised_hypotheses?(hypotheses, initial_ids) ->
         {:error, :unrevised_hypotheses}
 
-      not Enum.all?(hypotheses, fn h ->
-        is_map(h) and is_binary(h["claim"]) and String.trim(h["claim"]) != "" and
-          is_binary(h["reason"]) and String.trim(h["reason"]) != "" and
-          h["status"] in ~w(supported contradicted unresolved) and is_list(h["evidence_ids"])
-      end) ->
+      not Enum.all?(hypotheses, &valid_revised_hypothesis?/1) ->
         {:error, :invalid_hypothesis}
 
-      not is_list(followups) or length(followups) > min(max(remaining, 0), 3) ->
+      invalid_followups?(followups, remaining) ->
         {:error, :followup_limit_exceeded}
 
-      not unique_nonempty?(Enum.map(followups, &if(is_map(&1), do: &1["id"], else: nil))) ->
+      duplicate_followups?(followups) ->
         {:error, :duplicate_followup_id}
 
-      not Enum.all?(
-        List.wrap(object["evidence_ids"]) ++
-            Enum.flat_map(strategies ++ hypotheses, &List.wrap(&1["evidence_ids"])),
-        &(&1 in ids)
-      ) ->
+      uninspected_evidence?(object, strategies, hypotheses, ids) ->
         {:error, :uninspected_evidence}
 
       true ->
@@ -262,18 +267,55 @@ defmodule FountProbe.Investigation do
 
   def validate_explanation(_, _, _, _, _), do: {:error, :invalid_investigation_explanation}
 
+  defp invalid_strategy_ids?(strategies),
+    do:
+      not is_list(strategies) or length(strategies) != 3 or
+        not unique_nonempty?(Enum.map(strategies, &if(is_map(&1), do: &1["id"], else: nil)))
+
+  defp invalid_hypothesis_ids?(hypotheses),
+    do:
+      not is_list(hypotheses) or hypotheses == [] or
+        not unique_nonempty?(Enum.map(hypotheses, &if(is_map(&1), do: &1["id"], else: nil)))
+
+  defp unrevised_hypotheses?(hypotheses, initial_ids),
+    do:
+      initial_ids != [] and
+        MapSet.new(Enum.map(hypotheses, & &1["id"])) != MapSet.new(initial_ids)
+
+  defp valid_revised_hypothesis?(h),
+    do:
+      is_map(h) and is_binary(h["claim"]) and String.trim(h["claim"]) != "" and
+        is_binary(h["reason"]) and String.trim(h["reason"]) != "" and
+        h["status"] in ~w(supported contradicted unresolved) and is_list(h["evidence_ids"])
+
+  defp uninspected_evidence?(object, strategies, hypotheses, ids) do
+    not Enum.all?(
+      List.wrap(object["evidence_ids"]) ++
+        Enum.flat_map(strategies ++ hypotheses, &List.wrap(&1["evidence_ids"])),
+      &(&1 in ids)
+    )
+  end
+
+  defp invalid_followups?(followups, remaining),
+    do: not is_list(followups) or length(followups) > min(max(remaining, 0), 3)
+
+  defp duplicate_followups?(followups),
+    do: not unique_nonempty?(Enum.map(followups, &if(is_map(&1), do: &1["id"], else: nil)))
+
   defp validate_requests(model, requests) do
     Enum.reduce_while(requests, :ok, fn request, :ok ->
-      if is_map(request) and is_binary(request["id"]) and is_binary(request["tool"]) and
-           is_map(request["params"]) do
-        case Catalog.validate(model, request["tool"], request["params"]) do
-          :ok -> {:cont, :ok}
-          error -> {:halt, error}
-        end
-      else
-        {:halt, {:error, :invalid_investigation_request}}
+      case validate_request(model, request) do
+        :ok -> {:cont, :ok}
+        error -> {:halt, error}
       end
     end)
+  end
+
+  defp validate_request(model, request) do
+    if is_map(request) and is_binary(request["id"]) and is_binary(request["tool"]) and
+         is_map(request["params"]),
+       do: Catalog.validate(model, request["tool"], request["params"]),
+       else: {:error, :invalid_investigation_request}
   end
 
   defp unique_nonempty?(ids),

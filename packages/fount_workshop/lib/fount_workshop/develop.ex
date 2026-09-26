@@ -1,8 +1,8 @@
 defmodule FountWorkshop.Develop do
   @moduledoc "Generates editable screenplay candidates from a writer brief through Inference."
-
-  alias Fount.{Query, Screenplay}
   alias Fount.Persistence
+  alias Fount.Query
+  alias Fount.Screenplay
   alias FountWorkshop.Writing.Completion
 
   @types ~w(action character dialogue parenthetical transition centered lyric note blank)
@@ -63,43 +63,10 @@ defmodule FountWorkshop.Develop do
     else
       approaches
       |> Enum.with_index(route_start)
-      |> Enum.reduce_while({:ok, []}, fn {approach, index}, {:ok, acc} ->
-        route_client = Enum.at(Keyword.get(opts, :clients, []), index - 1) || client
-        prior = Enum.map(acc ++ previous, &Screenplay.to_fountain(&1.screenplay))
-
-        with {:ok, output, trace} <-
-               Completion.complete(
-                 route_client,
-                 prompt(base, brief, approach, after_id, prior),
-                 @schema,
-                 &validate/1,
-                 name: "fount_develop"
-               ),
-             {:ok, screenplay, changes} <- materialize(base, output["scenes"], after_id) do
-          candidate = %{
-            label: "Route #{index}: #{approach}",
-            screenplay: screenplay,
-            changes: changes,
-            approach: output["approach"],
-            completion_trace: trace
-          }
-
-          if Enum.any?(
-               acc ++ previous,
-               &(&1.screenplay.revision.content_hash == screenplay.revision.content_hash)
-             ) do
-            {:halt, partial_result(acc, {:duplicate_candidate, index})}
-          else
-            {:cont, {:ok, [candidate | acc]}}
-          end
-        else
-          {:error, reason, trace} ->
-            {:halt, partial_result(acc, {:completion_failed, index, reason, trace})}
-
-          {:error, reason} ->
-            {:halt, partial_result(acc, {:candidate_failed, index, reason})}
-        end
-      end)
+      |> Enum.reduce_while(
+        {:ok, []},
+        &develop_route(&1, &2, base, brief, client, after_id, opts, previous)
+      )
       |> case do
         {:ok, candidates} -> {:ok, Enum.reverse(candidates)}
         error -> error
@@ -108,6 +75,44 @@ defmodule FountWorkshop.Develop do
   end
 
   def develop(_, _, _, _), do: {:error, :invalid_develop_request}
+
+  defp develop_route({approach, index}, {:ok, acc}, base, brief, client, after_id, opts, previous) do
+    route_client = Enum.at(Keyword.get(opts, :clients, []), index - 1) || client
+    prior = Enum.map(acc ++ previous, &Screenplay.to_fountain(&1.screenplay))
+
+    with {:ok, output, trace} <-
+           Completion.complete(
+             route_client,
+             prompt(base, brief, approach, after_id, prior),
+             @schema,
+             &validate/1,
+             name: "fount_develop"
+           ),
+         {:ok, screenplay, changes} <- materialize(base, output["scenes"], after_id) do
+      candidate = %{
+        label: "Route #{index}: #{approach}",
+        screenplay: screenplay,
+        changes: changes,
+        approach: output["approach"],
+        completion_trace: trace
+      }
+
+      if Enum.any?(
+           acc ++ previous,
+           &(&1.screenplay.revision.content_hash == screenplay.revision.content_hash)
+         ) do
+        {:halt, partial_result(acc, {:duplicate_candidate, index})}
+      else
+        {:cont, {:ok, [candidate | acc]}}
+      end
+    else
+      {:error, reason, trace} ->
+        {:halt, partial_result(acc, {:completion_failed, index, reason, trace})}
+
+      {:error, reason} ->
+        {:halt, partial_result(acc, {:candidate_failed, index, reason})}
+    end
+  end
 
   defp partial_result([], reason), do: {:error, reason}
   defp partial_result(acc, reason), do: {:partial, Enum.reverse(acc), reason}
@@ -126,89 +131,7 @@ defmodule FountWorkshop.Develop do
              status: "running",
              request: %{"brief" => brief, "approaches" => approaches}
            }) do
-      case develop(base, brief, client, opts) do
-        {:ok, generated} ->
-          case save_all(repo, session.id, generated) do
-            {:ok, saved} ->
-              {:ok, updated} =
-                Persistence.save_session(
-                  repo,
-                  Map.merge(session, %{
-                    status: "ready",
-                    progress: %{"candidate_ids" => Enum.map(saved, & &1.id)}
-                  })
-                )
-
-              {:ok,
-               %{session: updated, candidates: saved, accepted_revision_id: base.revision.id}}
-
-            {:error, reason, saved} ->
-              {:ok, updated} =
-                Persistence.save_session(
-                  repo,
-                  Map.merge(session, %{
-                    status: "partial",
-                    progress: %{
-                      "candidate_ids" => Enum.map(saved, & &1.id),
-                      "error" => inspect(reason)
-                    }
-                  })
-                )
-
-              {:partial,
-               %{session: updated, candidates: saved, accepted_revision_id: base.revision.id},
-               reason}
-          end
-
-        {:partial, generated, reason} ->
-          case save_all(repo, session.id, generated) do
-            {:ok, saved} ->
-              {:ok, updated} =
-                Persistence.save_session(
-                  repo,
-                  Map.merge(session, %{
-                    status: "partial",
-                    progress: %{
-                      "candidate_ids" => Enum.map(saved, & &1.id),
-                      "next_route" => length(saved) + 1,
-                      "error" => inspect(reason)
-                    }
-                  })
-                )
-
-              {:partial,
-               %{session: updated, candidates: saved, accepted_revision_id: base.revision.id},
-               reason}
-
-            {:error, save_reason, saved} ->
-              {:ok, updated} =
-                Persistence.save_session(
-                  repo,
-                  Map.merge(session, %{
-                    status: "partial",
-                    progress: %{
-                      "candidate_ids" => Enum.map(saved, & &1.id),
-                      "error" => inspect({reason, save_reason})
-                    }
-                  })
-                )
-
-              {:partial,
-               %{session: updated, candidates: saved, accepted_revision_id: base.revision.id},
-               {reason, save_reason}}
-          end
-
-        {:error, reason} ->
-          Persistence.save_session(
-            repo,
-            Map.merge(session, %{
-              status: "failed",
-              progress: %{"error" => inspect(reason)}
-            })
-          )
-
-          {:error, {:failed_session, session.id, reason}}
-      end
+      run_development(repo, base, session, brief, client, opts)
     end
   end
 
@@ -296,6 +219,91 @@ defmodule FountWorkshop.Develop do
 
         {:partial, %{session: updated, candidates: all, accepted_revision_id: base.revision.id},
          save_reason}
+    end
+  end
+
+  defp run_development(repo, base, session, brief, client, opts) do
+    case develop(base, brief, client, opts) do
+      {:ok, generated} ->
+        case save_all(repo, session.id, generated) do
+          {:ok, saved} ->
+            {:ok, updated} =
+              Persistence.save_session(
+                repo,
+                Map.merge(session, %{
+                  status: "ready",
+                  progress: %{"candidate_ids" => Enum.map(saved, & &1.id)}
+                })
+              )
+
+            {:ok, %{session: updated, candidates: saved, accepted_revision_id: base.revision.id}}
+
+          {:error, reason, saved} ->
+            {:ok, updated} =
+              Persistence.save_session(
+                repo,
+                Map.merge(session, %{
+                  status: "partial",
+                  progress: %{
+                    "candidate_ids" => Enum.map(saved, & &1.id),
+                    "error" => inspect(reason)
+                  }
+                })
+              )
+
+            {:partial,
+             %{session: updated, candidates: saved, accepted_revision_id: base.revision.id},
+             reason}
+        end
+
+      {:partial, generated, reason} ->
+        case save_all(repo, session.id, generated) do
+          {:ok, saved} ->
+            {:ok, updated} =
+              Persistence.save_session(
+                repo,
+                Map.merge(session, %{
+                  status: "partial",
+                  progress: %{
+                    "candidate_ids" => Enum.map(saved, & &1.id),
+                    "next_route" => length(saved) + 1,
+                    "error" => inspect(reason)
+                  }
+                })
+              )
+
+            {:partial,
+             %{session: updated, candidates: saved, accepted_revision_id: base.revision.id},
+             reason}
+
+          {:error, save_reason, saved} ->
+            {:ok, updated} =
+              Persistence.save_session(
+                repo,
+                Map.merge(session, %{
+                  status: "partial",
+                  progress: %{
+                    "candidate_ids" => Enum.map(saved, & &1.id),
+                    "error" => inspect({reason, save_reason})
+                  }
+                })
+              )
+
+            {:partial,
+             %{session: updated, candidates: saved, accepted_revision_id: base.revision.id},
+             {reason, save_reason}}
+        end
+
+      {:error, reason} ->
+        Persistence.save_session(
+          repo,
+          Map.merge(session, %{
+            status: "failed",
+            progress: %{"error" => inspect(reason)}
+          })
+        )
+
+        {:error, {:failed_session, session.id, reason}}
     end
   end
 

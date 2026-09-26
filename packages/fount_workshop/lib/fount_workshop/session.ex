@@ -1,8 +1,15 @@
 defmodule FountWorkshop.Session do
   @moduledoc "Durable writer sessions with immutable bases, saved successes and explicit pending/failed branch retries."
-  alias FountWorkshop.{Store, Request, Strategy, Candidate}
-  alias FountWorkshop.Writing.{Preparation, Generation}
-  alias FountProbe.{Budget, Report}
+  alias Fount.Screenplay.Model
+  alias Fount.Writing.CanonicalJSON
+  alias FountProbe.Budget
+  alias FountProbe.Report
+  alias FountWorkshop.Candidate
+  alias FountWorkshop.Request
+  alias FountWorkshop.Store
+  alias FountWorkshop.Strategy
+  alias FountWorkshop.Writing.Generation
+  alias FountWorkshop.Writing.Preparation
 
   def start(model, request, services, opts \\ []) do
     with {:ok, request} <- Request.validate(model, request),
@@ -79,156 +86,180 @@ defmodule FountWorkshop.Session do
 
     case prepare(model, session, services, Keyword.put(opts, :budget, preparation_budget)) do
       {:ok, context, session} ->
-        case strategies(model, session, context, services, opts) do
-          {:ok, session} ->
-            selected =
-              Keyword.get(
-                opts,
-                :strategy_ids,
-                default_materialization(session["request"], session["strategies"])
-              )
-
-            result =
-              Enum.reduce_while(session["strategies"], {:ok, session}, fn strategy,
-                                                                          {:ok, state} ->
-                branch = get_in(state, ["progress", "branches", strategy["id"]])
-
-                if strategy["id"] not in selected or (branch && branch["status"] == "saved") do
-                  {:cont, {:ok, state}}
-                else
-                  case materialize_one(model, state, strategy, context, services, opts) do
-                    {:ok, updated} ->
-                      {:cont, {:ok, updated}}
-
-                    {:error, reason, updated} ->
-                      case checkpoint(updated, services, budget) do
-                        {:ok, saved} ->
-                          {:cont, {:ok, saved}}
-
-                        {:error, save_reason} ->
-                          {:halt, {:error, {:checkpoint_failed, reason, save_reason}, updated}}
-                      end
-                  end
-                end
-              end)
-
-            finish(result, services, budget)
-
-          {:error, reason, traces} ->
-            fail(session, reason, traces, services, budget)
-
-          {:error, reason} ->
-            fail(session, reason, [], services, budget)
-        end
+        continue_after_preparation(model, session, context, services, opts, budget)
 
       {:error, reason, partial} ->
-        fail(session, reason, [Fount.Screenplay.Model.plain(partial)], services, budget)
+        fail(session, reason, [Model.plain(partial)], services, budget)
 
       {:error, reason} ->
         fail(session, reason, [], services, budget)
     end
   end
 
-  defp prepare(model, session, services, opts) do
-    cached = get_in(session, ["progress", "preparation", "context"])
+  defp continue_after_preparation(model, session, context, services, opts, budget) do
+    case strategies(model, session, context, services, opts) do
+      {:ok, session} ->
+        selected =
+          Keyword.get(
+            opts,
+            :strategy_ids,
+            default_materialization(session["request"], session["strategies"])
+          )
 
-    if is_map(cached) and not Keyword.get(opts, :reinspect, false) do
-      source_ids = cached["source_revision_ids"] || [model.revision.id]
+        result =
+          Enum.reduce_while(session["strategies"], {:ok, session}, fn strategy, state ->
+            materialize_strategy(
+              strategy,
+              state,
+              selected,
+              model,
+              context,
+              services,
+              opts,
+              budget
+            )
+          end)
 
-      sources =
-        Enum.reduce_while(source_ids, {:ok, []}, fn rid, {:ok, acc} ->
-          case Store.call(services[:store], :load_revision, [model.id, rid]) do
-            {:ok, source} -> {:cont, {:ok, acc ++ [source]}}
-            error -> {:halt, error}
-          end
-        end)
+        finish(result, services, budget)
 
-      historical_keys = cached["historical_revisions"] || []
+      {:error, reason, traces} ->
+        fail(session, reason, traces, services, budget)
 
-      historical =
-        Enum.reduce_while(historical_keys, {:ok, []}, fn %{
-                                                           "screenplay_id" => sid,
-                                                           "revision_id" => rid
-                                                         },
-                                                         {:ok, acc} ->
-          case Store.call(services[:store], :load_revision, [sid, rid]) do
-            {:ok, source} -> {:cont, {:ok, acc ++ [source]}}
-            error -> {:halt, error}
-          end
-        end)
-
-      with {:ok, sources} <- sources,
-           {:ok, historical} <- historical do
-        registry =
-          if cached["historical"],
-            do:
-              (sources ++ historical)
-              |> Enum.flat_map(
-                &(&1.ir.elements ++ &1.ir.scenes ++ &1.ir.dialogue_blocks ++ Map.values(&1.cast))
-              )
-              |> Map.new(&{&1.id, &1}),
-            else: %{}
-
-        context = %{
-          data: cached["data"],
-          evidence: cached["evidence"],
-          selection: cached["selection"],
-          reports: [],
-          source_models: sources,
-          historical_models: historical,
-          restore_registry: registry
-        }
-
-        context =
-          if cached["investigation_strategies"],
-            do: Map.put(context, :investigation_strategies, cached["investigation_strategies"]),
-            else: context
-
-        if get_in(session, ["progress", "preparation", "status"]) == "partial" do
-          retry_cached(model, session, context, services, opts)
-        else
-          {:ok, context, session}
-        end
-      end
-    else
-      prepare_fresh(model, session, services, opts)
+      {:error, reason} ->
+        fail(session, reason, [], services, budget)
     end
   end
 
-  defp retry_cached(model, session, context, services, opts) do
-    requests = Preparation.retry_requests(model, session["request"], context)
+  defp materialize_strategy(
+         strategy,
+         {:ok, state},
+         selected,
+         model,
+         context,
+         services,
+         opts,
+         budget
+       ) do
+    branch = get_in(state, ["progress", "branches", strategy["id"]])
 
-    if requests == [] do
+    if strategy["id"] not in selected or (branch && branch["status"] == "saved") do
+      {:cont, {:ok, state}}
+    else
+      case materialize_one(model, state, strategy, context, services, opts) do
+        {:ok, updated} -> {:cont, {:ok, updated}}
+        {:error, reason, updated} -> checkpoint_after_failure(updated, reason, services, budget)
+      end
+    end
+  end
+
+  defp checkpoint_after_failure(updated, reason, services, budget) do
+    case checkpoint(updated, services, budget) do
+      {:ok, saved} ->
+        {:cont, {:ok, saved}}
+
+      {:error, save_reason} ->
+        {:halt, {:error, {:checkpoint_failed, reason, save_reason}, updated}}
+    end
+  end
+
+  defp prepare(model, session, services, opts) do
+    cached = get_in(session, ["progress", "preparation", "context"])
+
+    if is_map(cached) and not Keyword.get(opts, :reinspect, false),
+      do: prepare_cached(model, session, cached, services, opts),
+      else: prepare_fresh(model, session, services, opts)
+  end
+
+  defp prepare_cached(model, session, cached, services, opts) do
+    source_pairs = Enum.map(cached["source_revision_ids"] || [model.revision.id], &{model.id, &1})
+
+    historical_pairs =
+      Enum.map(cached["historical_revisions"] || [], &{&1["screenplay_id"], &1["revision_id"]})
+
+    with {:ok, sources} <- load_cached_revisions(services, source_pairs),
+         {:ok, historical} <- load_cached_revisions(services, historical_pairs) do
+      context = cached_context(cached, sources, historical)
+
+      if get_in(session, ["progress", "preparation", "status"]) == "partial",
+        do: retry_cached(model, session, context, services, opts),
+        else: {:ok, context, session}
+    end
+  end
+
+  defp load_cached_revisions(services, pairs) do
+    Enum.reduce_while(pairs, {:ok, []}, fn {screenplay_id, revision_id}, {:ok, acc} ->
+      case Store.call(services[:store], :load_revision, [screenplay_id, revision_id]) do
+        {:ok, source} -> {:cont, {:ok, acc ++ [source]}}
+        error -> {:halt, error}
+      end
+    end)
+  end
+
+  defp cached_context(cached, sources, historical) do
+    registry =
+      if cached["historical"] do
+        (sources ++ historical)
+        |> Enum.flat_map(
+          &(&1.ir.elements ++ &1.ir.scenes ++ &1.ir.dialogue_blocks ++ Map.values(&1.cast))
+        )
+        |> Map.new(&{&1.id, &1})
+      else
+        %{}
+      end
+
+    context = %{
+      data: cached["data"],
+      evidence: cached["evidence"],
+      selection: cached["selection"],
+      reports: [],
+      source_models: sources,
+      historical_models: historical,
+      restore_registry: registry
+    }
+
+    if cached["investigation_strategies"],
+      do: Map.put(context, :investigation_strategies, cached["investigation_strategies"]),
+      else: context
+  end
+
+  defp retry_cached(model, session, context, services, opts) do
+    if Preparation.retry_requests(model, session["request"], context) == [] do
       {:ok, context, session}
     else
-      with {:ok, retried} <-
-             Preparation.retry_failed(model, session["request"], context, services, opts),
-           {:ok, report_ids} <-
-             save_reports(retried.reports, session["id"], services, retried.source_models) do
-        status =
-          if Enum.all?(retried.data["inspections"], &(&1["status"] == "complete")),
-            do: "complete",
-            else: "partial"
+      retry_cached_reports(model, session, context, services, opts)
+    end
+  end
 
-        updated =
-          session
-          |> put_in(["progress", "preparation", "status"], status)
-          |> put_in(
-            ["progress", "preparation", "context_sha256"],
-            Fount.Writing.CanonicalJSON.hash(retried.data)
-          )
-          |> put_in(["progress", "preparation", "context", "data"], retried.data)
-          |> put_in(["progress", "preparation", "context", "evidence"], retried.evidence)
-          |> put_in(
-            ["progress", "report_ids"],
-            Enum.uniq((session["progress"]["report_ids"] || []) ++ report_ids)
-          )
-          |> put_in(["progress", "spent"], Budget.snapshot(opts[:budget]))
+  defp retry_cached_reports(model, session, context, services, opts) do
+    with {:ok, retried} <-
+           Preparation.retry_failed(model, session["request"], context, services, opts),
+         {:ok, report_ids} <-
+           save_reports(retried.reports, session["id"], services, retried.source_models) do
+      save_retried_context(session, retried, report_ids, services, opts)
+    end
+  end
 
-        with {:ok, saved} <- Store.call(services[:store], :save_session, [updated]) do
-          {:ok, retried, saved}
-        end
-      end
+  defp save_retried_context(session, retried, report_ids, services, opts) do
+    status =
+      if Enum.all?(retried.data["inspections"], &(&1["status"] == "complete")),
+        do: "complete",
+        else: "partial"
+
+    updated =
+      session
+      |> put_in(["progress", "preparation", "status"], status)
+      |> put_in(["progress", "preparation", "context_sha256"], CanonicalJSON.hash(retried.data))
+      |> put_in(["progress", "preparation", "context", "data"], retried.data)
+      |> put_in(["progress", "preparation", "context", "evidence"], retried.evidence)
+      |> put_in(
+        ["progress", "report_ids"],
+        Enum.uniq((session["progress"]["report_ids"] || []) ++ report_ids)
+      )
+      |> put_in(["progress", "spent"], Budget.snapshot(opts[:budget]))
+
+    case Store.call(services[:store], :save_session, [updated]) do
+      {:ok, saved} -> {:ok, retried, saved}
+      error -> error
     end
   end
 
@@ -243,7 +274,7 @@ defmodule FountWorkshop.Session do
           Enum.uniq((session["progress"]["report_ids"] || []) ++ report_ids)
         )
         |> put_in(["progress", "preparation"], %{
-          "context_sha256" => Fount.Writing.CanonicalJSON.hash(context.data),
+          "context_sha256" => CanonicalJSON.hash(context.data),
           "status" =>
             if(Enum.all?(context.reports, &(&1.status == "complete")),
               do: "complete",
@@ -293,7 +324,17 @@ defmodule FountWorkshop.Session do
     outcome = generate_save(model, session, strategy, context, services, opts)
 
     outcome =
-      repair_if_needed(outcome, model, session, strategy, context, services, opts, 0, [], [])
+      repair_if_needed(outcome, %{
+        model: model,
+        session: session,
+        strategy: strategy,
+        context: context,
+        services: services,
+        opts: opts,
+        round: 0,
+        attempts: [],
+        failures: []
+      })
 
     case outcome do
       {:ok, saved, report_ids, attempts, repair_failures} ->
@@ -350,19 +391,20 @@ defmodule FountWorkshop.Session do
     end
   end
 
-  defp repair_if_needed(
-         {:ok, candidate, report_ids},
-         model,
-         session,
-         strategy,
-         context,
-         services,
-         opts,
-         round,
-         attempts,
-         failures
-       ) do
-    attempts = attempts ++ [candidate["id"]]
+  defp repair_if_needed({:ok, candidate, report_ids}, state) do
+    %{
+      model: model,
+      session: session,
+      strategy: strategy,
+      context: context,
+      services: services,
+      opts: opts,
+      round: round,
+      attempts: prior_attempts,
+      failures: failures
+    } = state
+
+    attempts = prior_attempts ++ [candidate["id"]]
 
     failed =
       Enum.filter(
@@ -388,18 +430,7 @@ defmodule FountWorkshop.Session do
 
       case generate_save(model, session, strategy, context, services, repair_opts) do
         {:ok, _, _} = repaired ->
-          repair_if_needed(
-            repaired,
-            model,
-            session,
-            strategy,
-            context,
-            services,
-            opts,
-            round + 1,
-            attempts,
-            failures
-          )
+          repair_if_needed(repaired, %{state | round: round + 1, attempts: attempts})
 
         {:error, reason} ->
           {:ok, candidate, report_ids, attempts,
@@ -428,7 +459,7 @@ defmodule FountWorkshop.Session do
     end
   end
 
-  defp repair_if_needed(error, _, _, _, _, _, _, _, _, _), do: error
+  defp repair_if_needed(error, _state), do: error
 
   def save_reports(reports, session_id, services, sources \\ []) do
     Enum.reduce_while(reports, {:ok, []}, fn report, {:ok, ids} ->
@@ -475,7 +506,7 @@ defmodule FountWorkshop.Session do
       session
       |> Map.put("status", "partial")
       |> put_in(["progress", "last_error"], safe_error(reason))
-      |> put_in(["progress", "last_attempt"], Fount.Screenplay.Model.plain(traces))
+      |> put_in(["progress", "last_attempt"], Model.plain(traces))
 
     case checkpoint(updated, services, budget) do
       {:ok, saved} -> {:error, reason, saved}

@@ -1,6 +1,5 @@
 defmodule Fount.Source do
   @moduledoc "Exact source payload and byte-preserving line index."
-
   alias Fount.Source.Line
   alias Fount.Source.Span
 

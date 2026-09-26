@@ -1,6 +1,5 @@
 defmodule Fount.Builder do
   @moduledoc "Pipeline-friendly structured screenplay builder. Generated source is reparsed through Fount's canonical Fountain path."
-
   alias Fount.Fragment
 
   defstruct title_page: [], fragments: [], newline: "\n"

@@ -1,4 +1,5 @@
 defmodule FountProbe.KnowledgeBehaviorTest do
+  alias FountProbe.KnowledgeTrace.Behavior
   use ExUnit.Case, async: true
 
   test "behavior question receives the selected action and only prior evidence" do
@@ -18,7 +19,7 @@ defmodule FountProbe.KnowledgeBehaviorTest do
     behavior = List.last(model.ir.elements)
 
     assert {:ok, [input], []} =
-             FountProbe.KnowledgeTrace.Behavior.prepare(
+             Behavior.prepare(
                model,
                [behavior.id],
                [%{"kind" => "reader"}],

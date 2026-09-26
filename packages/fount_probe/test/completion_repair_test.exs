@@ -1,4 +1,5 @@
 defmodule FountProbe.CompletionRepairTest do
+  alias Fount.Writing.Schema
   use ExUnit.Case, async: true
 
   defmodule ScriptedAdapter do
@@ -36,7 +37,7 @@ defmodule FountProbe.CompletionRepairTest do
                client,
                "ORIGINAL_MARKER: produce a value",
                schema,
-               &Fount.Writing.Schema.validate(schema, &1),
+               &Schema.validate(schema, &1),
                force_json_text: true,
                decode_repairs: 1
              )

@@ -1,4 +1,5 @@
 defmodule FountWorkshop.PartialRecoveryTest do
+  alias FountWorkshop.Writing.RecoveryCopy
   use ExUnit.Case, async: true
 
   test "restores only an explicit historical fragment into an explicit destination span" do
@@ -71,7 +72,7 @@ defmodule FountWorkshop.PartialRecoveryTest do
     }
 
     assert {:ok, candidate} =
-             FountWorkshop.Writing.RecoveryCopy.propose(
+             RecoveryCopy.propose(
                current,
                req,
                %{"id" => "restore", "title" => "Restore fragment"},
@@ -140,7 +141,7 @@ defmodule FountWorkshop.PartialRecoveryTest do
     }
 
     assert {:ok, candidate} =
-             FountWorkshop.Writing.RecoveryCopy.propose(
+             RecoveryCopy.propose(
                current,
                req,
                %{"id" => "range", "title" => "Restore range"},

@@ -1,9 +1,9 @@
 defmodule Fount.Analyzers.Characters do
   @moduledoc "Deterministic cue-based character index. Entity resolution remains a separate annotation problem."
-  @behaviour Fount.Analyzer
-
   alias Fount.Annotation
-  alias Fount.Annotation.{Provenance, Target}
+  alias Fount.Annotation.Provenance
+  alias Fount.Annotation.Target
+  @behaviour Fount.Analyzer
 
   @impl true
   def analyze(doc, _opts) do

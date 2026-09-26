@@ -1,6 +1,10 @@
 defmodule FountProbe.Comparison do
   @moduledoc "Comparison and removal experiments return actual immutable model values, not accepted changes."
-  alias FountProbe.{Report, Projection, Constraints, KnowledgeTrace}
+  alias Fount.Screenplay.Model
+  alias FountProbe.Constraints
+  alias FountProbe.KnowledgeTrace
+  alias FountProbe.Projection
+  alias FountProbe.Report
 
   def compare(model, params, clients, opts \\ []) do
     with {:ok, before} <- read(model, params["before_revision_id"], opts),
@@ -21,10 +25,9 @@ defmodule FountProbe.Comparison do
          data: %{
            "before_revision_id" => before.revision.id,
            "after_revision_id" => after_model.revision.id,
-           "structural_diff" =>
-             Fount.Screenplay.Model.plain(Fount.Screenplay.diff(before, after_model)),
+           "structural_diff" => Model.plain(Fount.Screenplay.diff(before, after_model)),
            "source_diff" =>
-             Fount.Screenplay.Model.plain(
+             Model.plain(
                String.myers_difference(
                  Fount.Screenplay.to_fountain(before),
                  Fount.Screenplay.to_fountain(after_model)
@@ -48,7 +51,7 @@ defmodule FountProbe.Comparison do
         &%{"kind" => "delete_scene", "target" => %{"kind" => "scene", "id" => &1}}
       )
 
-    with {:ok, experimental, _} <- Fount.Screenplay.apply(model, ops),
+    with {:ok, experimental, _} <- Fount.Screenplay.apply(model, ops, []),
          {:ok, result} <-
            compare(
              model,
@@ -90,50 +93,53 @@ defmodule FountProbe.Comparison do
     }
 
     with {:ok, baseline} <- KnowledgeTrace.run(model, query, clients, opts) do
-      runs =
-        Enum.map(params["groups"], fn group ->
-          with {:ok, ops} <- deletion_ops(group["targets"]),
-               {:ok, changed, _} <- Fount.Screenplay.apply(model, ops),
-               {:ok, _} <- Projection.cutoff(changed, params["point"]),
-               {:ok, report} <- KnowledgeTrace.run(changed, query, clients, opts) do
-            %{id: group["id"], model: changed, report: report, error: nil}
-          else
-            reason ->
-              %{id: group["id"], model: nil, report: nil, error: inspect(reason, limit: 20)}
-          end
-        end)
+      runs = Enum.map(params["groups"], &ablation_run(model, &1, params, query, clients, opts))
 
-      reports = [
-        baseline | Enum.flat_map(runs, fn x -> if x.report, do: [x.report], else: [] end)
-      ]
+      {:ok, ablation_report(model, params, baseline, runs)}
+    end
+  end
 
-      models = Enum.flat_map(runs, fn x -> if x.model, do: [x.model], else: [] end)
+  defp ablation_report(model, params, baseline, runs) do
+    reports = [
+      baseline | Enum.flat_map(runs, fn x -> if x.report, do: [x.report], else: [] end)
+    ]
 
-      rows =
-        Enum.map(runs, fn x ->
-          %{
-            "group_id" => x.id,
-            "status" => if(x.report, do: x.report.status, else: "unresolved"),
-            "revision_id" => x.model && x.model.revision.id,
-            "before" => baseline.data,
-            "after" => x.report && x.report.data,
-            "error" => x.error
-          }
-        end)
+    models = Enum.flat_map(runs, fn x -> if x.model, do: [x.model], else: [] end)
 
-      {:ok,
-       Report.new(model, "ablate", params, %{
-         status:
-           if(Enum.all?(runs, &(&1.report && &1.report.status == "complete")),
-             do: "complete",
-             else: "partial"
-           ),
-         source_revision_ids: [model.revision.id | Enum.map(models, & &1.revision.id)],
-         transient_models: models,
-         data: %{"experiments" => rows, "causal_proof" => false},
-         evidence: reports |> Enum.flat_map(& &1.evidence) |> Enum.uniq_by(& &1["evidence_id"]),
-         provenance: %{"experiments" => Enum.map(reports, & &1.provenance)}
-       })}
+    rows =
+      Enum.map(runs, fn x ->
+        %{
+          "group_id" => x.id,
+          "status" => if(x.report, do: x.report.status, else: "unresolved"),
+          "revision_id" => x.model && x.model.revision.id,
+          "before" => baseline.data,
+          "after" => x.report && x.report.data,
+          "error" => x.error
+        }
+      end)
+
+    Report.new(model, "ablate", params, %{
+      status:
+        if(Enum.all?(runs, &(&1.report && &1.report.status == "complete")),
+          do: "complete",
+          else: "partial"
+        ),
+      source_revision_ids: [model.revision.id | Enum.map(models, & &1.revision.id)],
+      transient_models: models,
+      data: %{"experiments" => rows, "causal_proof" => false},
+      evidence: reports |> Enum.flat_map(& &1.evidence) |> Enum.uniq_by(& &1["evidence_id"]),
+      provenance: %{"experiments" => Enum.map(reports, & &1.provenance)}
+    })
+  end
+
+  defp ablation_run(model, group, params, query, clients, opts) do
+    with {:ok, ops} <- deletion_ops(group["targets"]),
+         {:ok, changed, _} <- Fount.Screenplay.apply(model, ops, []),
+         {:ok, _} <- Projection.cutoff(changed, params["point"]),
+         {:ok, report} <- KnowledgeTrace.run(changed, query, clients, opts) do
+      %{id: group["id"], model: changed, report: report, error: nil}
+    else
+      reason -> %{id: group["id"], model: nil, report: nil, error: inspect(reason, limit: 20)}
     end
   end
 

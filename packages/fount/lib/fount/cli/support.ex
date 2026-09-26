@@ -1,5 +1,6 @@
 defmodule Fount.CLI.Support do
   @moduledoc "Strict launcher utilities. Merely parsing a command never opens PostgreSQL or contacts a provider."
+  alias Fount.Screenplay.Model
 
   def parse(argv, options) do
     {opts, args, invalid} = OptionParser.parse(argv, strict: Keyword.merge([help: :boolean, json: :boolean], options))
@@ -43,14 +44,12 @@ defmodule Fount.CLI.Support do
   def ids(_), do: {:error, :ids_required}
 
   def json_file(path) do
-    with {:ok, bytes} <- File.read(path), {:ok, value} <- Jason.decode(bytes) do
-      {:ok, value}
-    end
+    with {:ok, bytes} <- File.read(path), do: Jason.decode(bytes)
   end
 
   def write_json(path, value) do
     with :ok <- File.mkdir_p(Path.dirname(path)),
-         {:ok, bytes} <- Jason.encode(Fount.Screenplay.Model.plain(value), pretty: true),
+         {:ok, bytes} <- Jason.encode(Model.plain(value), pretty: true),
          :ok <- File.write(path, bytes <> "\n") do
       {:ok, path}
     end
@@ -80,7 +79,7 @@ defmodule Fount.CLI.Support do
   end
 
   def finish!({:ok, value}) do
-    Mix.shell().info(Jason.encode!(Fount.Screenplay.Model.plain(value), pretty: true))
+    Mix.shell().info(Jason.encode!(Model.plain(value), pretty: true))
   end
 
   def finish!({:error, reason, session}) do

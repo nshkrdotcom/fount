@@ -1,7 +1,7 @@
 defmodule Fount.Persistence.Query do
   @moduledoc "Relational queries always name the screenplay AND immutable revision."
-  import Ecto.Query
   alias Fount.Persistence.Schema
+  import Ecto.Query
 
   def scenes(screenplay, revision, opts \\ []) do
     omitted = Keyword.get(opts, :include_omitted, false)

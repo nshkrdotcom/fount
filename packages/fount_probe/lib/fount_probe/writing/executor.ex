@@ -21,37 +21,15 @@ defmodule FountProbe.Writing.Executor do
       states = Enum.map(requests, & &1["state"])
       stream_options = Keyword.merge(@defaults, opts)
       started = System.monotonic_time(:millisecond)
-      result = SystemOneSDK.evaluate_stream(client, states, prepared, stream_options)
-
-      case result do
-        {:error, error} ->
-          {:error, error}
-
-        {:ok, stream} ->
-          collect(stream, requests, prepared, started)
-
-        stream ->
-          collect(stream, requests, prepared, started)
-      end
+      stream = SystemOneSDK.evaluate_stream(client, states, prepared, stream_options)
+      collect(stream, requests, prepared, started)
     end
   end
 
   def assemble(requests, results) do
     size = length(requests)
 
-    Enum.reduce(results, {%{}, []}, fn item, {by_index, errors} ->
-      case index(item) do
-        n when is_integer(n) and n >= 0 and n < size ->
-          if Map.has_key?(by_index, n) do
-            {by_index, [%{"code" => "duplicate_batch_index", "batch_index" => n} | errors]}
-          else
-            {Map.put(by_index, n, item), errors}
-          end
-
-        _ ->
-          {by_index, [%{"code" => "invalid_batch_index"} | errors]}
-      end
-    end)
+    Enum.reduce(results, {%{}, []}, &collect_item(&1, &2, size))
     |> then(fn {by_index, errors} ->
       entries =
         requests
@@ -76,6 +54,20 @@ defmodule FountProbe.Writing.Executor do
           )
       }
     end)
+  end
+
+  defp collect_item(item, {by_index, errors}, size) do
+    case index(item) do
+      n when is_integer(n) and n >= 0 and n < size ->
+        if Map.has_key?(by_index, n) do
+          {by_index, [%{"code" => "duplicate_batch_index", "batch_index" => n} | errors]}
+        else
+          {Map.put(by_index, n, item), errors}
+        end
+
+      _ ->
+        {by_index, [%{"code" => "invalid_batch_index"} | errors]}
+    end
   end
 
   defp collect(stream, requests, prepared, started) do

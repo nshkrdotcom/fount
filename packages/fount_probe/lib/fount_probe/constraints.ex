@@ -1,7 +1,10 @@
 defmodule FountProbe.Constraints do
   @moduledoc "Writer constraints: exact protection is mechanical; semantic uncertainty is reviewable, never silently passed."
-  alias FountProbe.{Projection, Jev, Report}
   alias Fount.Writing.UTF8Span
+  alias FountProbe.Jev
+  alias FountProbe.Projection
+  alias FountProbe.Report
+  alias FountProbe.Writing.DecisionPolicy
 
   @kinds ~w(pin_text retain_ids remove_ids relative_order word_limit scene_count page_goal semantic invention_policy)
   @semantic_keys ~w(proposition question_type question profile_id projection point at character_id expected allowed criteria levels probability_range selection)
@@ -30,41 +33,42 @@ defmodule FountProbe.Constraints do
              severity in ["required", "advisory"] do
     unknown = Map.keys(c) -- ~w(id kind target spec severity source)
 
-    valid =
-      case kind do
-        "pin_text" ->
-          is_binary(spec["text"]) and spec["text"] != ""
-
-        k when k in ["retain_ids", "remove_ids"] ->
-          is_list(spec["ids"]) and spec["ids"] != [] and
-            Enum.all?(spec["ids"], &(is_binary(&1) or valid_target?(&1)))
-
-        "relative_order" ->
-          (valid_target?(spec["before"]) and valid_target?(spec["after"])) or
-            (is_list(spec["ids"]) and length(spec["ids"]) > 1)
-
-        k when k in ["word_limit", "scene_count", "page_goal"] ->
-          Enum.any?(
-            ~w(minimum maximum reduce_by min max exact reduction),
-            &(is_number(spec[&1]) and spec[&1] >= 0)
-          )
-
-        "invention_policy" ->
-          is_list(Map.get(spec, "allowed_categories", Map.get(spec, "allowed", []))) and
-            is_list(Map.get(spec, "prohibited_facts", [])) and
-            Enum.all?(
-              Map.get(spec, "prohibited_facts", []),
-              &(is_binary(&1) and String.trim(&1) != "")
-            )
-
-        "semantic" ->
-          semantic_valid?(spec)
-      end
+    valid = valid_spec?(kind, spec)
 
     if unknown == [] and valid, do: :ok, else: {:error, {:invalid_constraint, id}}
   end
 
   def validate(_), do: {:error, :invalid_constraint}
+
+  defp valid_spec?("pin_text", spec), do: is_binary(spec["text"]) and spec["text"] != ""
+
+  defp valid_spec?(kind, spec) when kind in ["retain_ids", "remove_ids"],
+    do:
+      is_list(spec["ids"]) and spec["ids"] != [] and
+        Enum.all?(spec["ids"], &(is_binary(&1) or valid_target?(&1)))
+
+  defp valid_spec?("relative_order", spec),
+    do:
+      (valid_target?(spec["before"]) and valid_target?(spec["after"])) or
+        (is_list(spec["ids"]) and length(spec["ids"]) > 1)
+
+  defp valid_spec?(kind, spec) when kind in ["word_limit", "scene_count", "page_goal"],
+    do:
+      Enum.any?(
+        ~w(minimum maximum reduce_by min max exact reduction),
+        &(is_number(spec[&1]) and spec[&1] >= 0)
+      )
+
+  defp valid_spec?("invention_policy", spec),
+    do:
+      is_list(Map.get(spec, "allowed_categories", Map.get(spec, "allowed", []))) and
+        is_list(Map.get(spec, "prohibited_facts", [])) and
+        Enum.all?(
+          Map.get(spec, "prohibited_facts", []),
+          &(is_binary(&1) and String.trim(&1) != "")
+        )
+
+  defp valid_spec?("semantic", spec), do: semantic_valid?(spec)
 
   defp valid_target?(%{"kind" => kind, "id" => id}) when is_binary(kind) and is_binary(id),
     do: true
@@ -96,28 +100,31 @@ defmodule FountProbe.Constraints do
   defp semantic_valid?(s) do
     type = Map.get(s, "question_type", "noul")
 
-    region =
-      case type do
-        "noul" ->
-          is_boolean(Map.get(s, "expected", true))
-
-        "choice" ->
-          is_map(s["criteria"]) and map_size(s["criteria"]) >= 2 and is_list(s["allowed"]) and
-            s["allowed"] != [] and Enum.all?(s["allowed"], &Map.has_key?(s["criteria"], &1))
-
-        "score" ->
-          is_list(s["levels"]) and length(s["levels"]) in 2..10 and is_list(s["allowed"]) and
-            s["allowed"] != [] and
-            Enum.all?(s["allowed"], &(is_integer(&1) and &1 >= 0 and &1 < length(s["levels"])))
-
-        _ ->
-          false
-      end
+    region = semantic_region?(type, s)
 
     region and is_binary(s["proposition"]) and String.trim(s["proposition"]) != "" and
       Map.get(s, "projection", "page_reader") in ~w(page_reader audience_estimate character_access) and
       Map.keys(s) -- @semantic_keys == []
   end
+
+  defp semantic_region?("noul", spec), do: is_boolean(Map.get(spec, "expected", true))
+
+  defp semantic_region?("choice", spec),
+    do:
+      is_map(spec["criteria"]) and map_size(spec["criteria"]) >= 2 and
+        is_list(spec["allowed"]) and spec["allowed"] != [] and
+        Enum.all?(spec["allowed"], &Map.has_key?(spec["criteria"], &1))
+
+  defp semantic_region?("score", spec),
+    do:
+      is_list(spec["levels"]) and length(spec["levels"]) in 2..10 and
+        is_list(spec["allowed"]) and spec["allowed"] != [] and
+        Enum.all?(
+          spec["allowed"],
+          &(is_integer(&1) and &1 >= 0 and &1 < length(spec["levels"]))
+        )
+
+  defp semantic_region?(_, _), do: false
 
   def deterministic(base, model, constraints, opts \\ []) do
     Enum.map(constraints, fn original ->
@@ -223,32 +230,7 @@ defmodule FountProbe.Constraints do
          %{"kind" => "scene_count", "target" => target, "spec" => spec},
          opts
        ) do
-    selection = spec["selection"]
-
-    selected =
-      cond do
-        is_map(selection) ->
-          with {:ok, ids} <- Projection.selected_ids(base, selection) do
-            {:ok,
-             base.ir.scenes
-             |> Enum.filter(fn scene ->
-               Enum.any?(scene.element_ids, &MapSet.member?(ids, &1))
-             end)
-             |> Enum.map(& &1.id)}
-          end
-
-        is_list(opts[:sequence_scene_ids]) and opts[:sequence_scene_ids] != [] ->
-          {:ok, opts[:sequence_scene_ids]}
-
-        is_list(opts[:scene_ids]) ->
-          {:ok, opts[:scene_ids]}
-
-        target["kind"] == "scene" ->
-          {:ok, [target["id"]]}
-
-        true ->
-          {:ok, nil}
-      end
+    selected = scene_count_selection(base, target, spec, opts)
 
     case selected do
       {:ok, nil} ->
@@ -321,66 +303,104 @@ defmodule FountProbe.Constraints do
   defp deterministic_one(_, _, %{"kind" => "semantic"}, _),
     do: %{"status" => "unknown", "reason" => "not_evaluated"}
 
+  defp scene_count_selection(base, target, spec, opts) do
+    selection = spec["selection"]
+
+    cond do
+      is_map(selection) ->
+        selected_scene_ids(base, selection)
+
+      is_list(opts[:sequence_scene_ids]) and opts[:sequence_scene_ids] != [] ->
+        {:ok, opts[:sequence_scene_ids]}
+
+      is_list(opts[:scene_ids]) ->
+        {:ok, opts[:scene_ids]}
+
+      target["kind"] == "scene" ->
+        {:ok, [target["id"]]}
+
+      true ->
+        {:ok, nil}
+    end
+  end
+
+  defp selected_scene_ids(base, selection) do
+    with {:ok, ids} <- Projection.selected_ids(base, selection) do
+      {:ok,
+       base.ir.scenes
+       |> Enum.filter(&Enum.any?(&1.element_ids, fn id -> MapSet.member?(ids, id) end))
+       |> Enum.map(& &1.id)}
+    end
+  end
+
   def run(model, params, clients, opts \\ []) do
     base = Keyword.get(opts, :base_model, model)
 
     with {:ok, constraints} <- resolve(base, params["constraints"]) do
-      initial = deterministic(base, model, constraints, opts)
-      initial_by_id = Map.new(initial, &{&1["constraint_id"], &1})
+      run_resolved(base, model, params, clients, opts, constraints)
+    end
+  end
 
-      semantic =
-        Enum.filter(constraints, fn c ->
-          c["kind"] == "semantic" or
-            (c["kind"] == "invention_policy" and c["spec"]["prohibited_facts"] not in [nil, []] and
-               initial_by_id[c["id"]]["status"] != "fail")
-        end)
+  defp run_resolved(base, model, params, clients, opts, constraints) do
+    initial = deterministic(base, model, constraints, opts)
+    initial_by_id = Map.new(initial, &{&1["constraint_id"], &1})
 
-      {evaluated, evidence, errors, traces} =
-        Enum.reduce(semantic, {[], [], [], []}, fn c, {checks, evidence, errors, traces} ->
-          evaluation =
-            if c["kind"] == "invention_policy",
-              do: evaluate_invention(base, model, c, clients[:system_one], opts),
-              else: evaluate_one(model, c, clients[:system_one], opts)
+    semantic = Enum.filter(constraints, &semantic_constraint?(&1, initial_by_id))
 
-          case evaluation do
-            {:ok, result, ev, trace} ->
-              {[result | checks], ev ++ evidence, errors, [trace | traces]}
+    {evaluated, evidence, errors, traces} =
+      Enum.reduce(semantic, {[], [], [], []}, fn constraint, acc ->
+        evaluate_semantic(base, model, constraint, clients[:system_one], opts, acc)
+      end)
 
-            {:error, reason} ->
-              {[
-                 %{
-                   "constraint_id" => c["id"],
-                   "kind" => c["kind"],
-                   "severity" => c["severity"],
-                   "evaluation" => "semantic",
-                   "status" => "unknown",
-                   "reason" => inspect(reason)
-                 }
-                 | checks
-               ], evidence,
-               [%{"input_id" => c["id"], "code" => "semantic_check_failed"} | errors], traces}
-          end
-        end)
+    by_id = Map.new(evaluated, &{&1["constraint_id"], &1})
+    checks = Enum.map(initial, &Map.get(by_id, &1["constraint_id"], &1))
 
-      by_id = Map.new(evaluated, &{&1["constraint_id"], &1})
-      checks = Enum.map(initial, &Map.get(by_id, &1["constraint_id"], &1))
+    {:ok,
+     Report.new(model, "check_constraints", params, %{
+       status:
+         if(
+           errors == [] and Enum.all?(checks, &(&1["status"] not in ["unknown", "unresolved"])),
+           do: "complete",
+           else: "partial"
+         ),
+       data: %{"checks" => checks},
+       evidence: Enum.uniq_by(evidence, & &1["evidence_id"]),
+       errors: errors,
+       provenance: %{"evaluations" => Enum.reverse(traces)},
+       coverage: %{"constraint_ids" => Enum.map(constraints, & &1["id"])},
+       source_revision_ids: Enum.uniq([base.revision.id, model.revision.id]),
+       transient_models: if(base.revision.id == model.revision.id, do: [], else: [base])
+     })}
+  end
 
-      {:ok,
-       Report.new(model, "check_constraints", params, %{
-         status:
-           if(
-             errors == [] and Enum.all?(checks, &(&1["status"] not in ["unknown", "unresolved"])),
-             do: "complete",
-             else: "partial"
-           ),
-         data: %{"checks" => checks},
-         evidence: Enum.uniq_by(evidence, & &1["evidence_id"]),
-         errors: errors,
-         provenance: %{"evaluations" => Enum.reverse(traces)},
-         coverage: %{"constraint_ids" => Enum.map(constraints, & &1["id"])},
-         source_revision_ids: Enum.uniq([base.revision.id, model.revision.id]),
-         transient_models: if(base.revision.id == model.revision.id, do: [], else: [base])
-       })}
+  defp semantic_constraint?(c, initial_by_id) do
+    c["kind"] == "semantic" or
+      (c["kind"] == "invention_policy" and c["spec"]["prohibited_facts"] not in [nil, []] and
+         initial_by_id[c["id"]]["status"] != "fail")
+  end
+
+  defp evaluate_semantic(base, model, c, client, opts, {checks, evidence, errors, traces}) do
+    evaluation =
+      if c["kind"] == "invention_policy",
+        do: evaluate_invention(base, model, c, client, opts),
+        else: evaluate_one(model, c, client, opts)
+
+    case evaluation do
+      {:ok, result, ev, trace} ->
+        {[result | checks], ev ++ evidence, errors, [trace | traces]}
+
+      {:error, reason} ->
+        unknown = %{
+          "constraint_id" => c["id"],
+          "kind" => c["kind"],
+          "severity" => c["severity"],
+          "evaluation" => "semantic",
+          "status" => "unknown",
+          "reason" => inspect(reason)
+        }
+
+        {[unknown | checks], evidence,
+         [%{"input_id" => c["id"], "code" => "semantic_check_failed"} | errors], traces}
     end
   end
 
@@ -394,26 +414,7 @@ defmodule FountProbe.Constraints do
          {:ok, result} <-
            Jev.evaluate(
              client,
-             Enum.flat_map(Enum.with_index(facts), fn {fact, n} ->
-               [
-                 %{
-                   "id" => "#{c["id"]}:#{n}:before",
-                   "state" => %{
-                     "proposition" => fact,
-                     "material" => Projection.compact(before_units),
-                     "revision_id" => base.revision.id
-                   }
-                 },
-                 %{
-                   "id" => "#{c["id"]}:#{n}:after",
-                   "state" => %{
-                     "proposition" => fact,
-                     "material" => Projection.compact(after_units),
-                     "revision_id" => model.revision.id
-                   }
-                 }
-               ]
-             end),
+             invention_inputs(facts, c, base, model, before_units, after_units),
              [
                supported:
                  SystemOneSDK.noul(
@@ -424,33 +425,7 @@ defmodule FountProbe.Constraints do
            ) do
       entries = Map.new(result["entries"], &{&1["input_id"], &1})
 
-      rows =
-        Enum.map(Enum.with_index(facts), fn {fact, n} ->
-          before = entries["#{c["id"]}:#{n}:before"]
-          after_entry = entries["#{c["id"]}:#{n}:after"]
-          before_p = get_in(before, ["answers", "supported", "probability"])
-          after_p = get_in(after_entry, ["answers", "supported", "probability"])
-
-          status =
-            cond do
-              before["status"] != "complete" or after_entry["status"] != "complete" or
-                not is_number(before_p) or not is_number(after_p) ->
-                "unknown"
-
-              before_p <= 0.2 and after_p >= 0.8 ->
-                "possible_new_prohibited_fact"
-
-              true ->
-                "not_established_as_new"
-            end
-
-          %{
-            "fact" => fact,
-            "base_probability" => before_p,
-            "candidate_probability" => after_p,
-            "assessment" => status
-          }
-        end)
+      rows = Enum.map(Enum.with_index(facts), &invention_row(&1, entries, c))
 
       status =
         if Enum.any?(rows, &(&1["assessment"] == "possible_new_prohibited_fact")),
@@ -477,38 +452,59 @@ defmodule FountProbe.Constraints do
     end
   end
 
+  defp invention_inputs(facts, c, base, model, before_units, after_units) do
+    Enum.flat_map(Enum.with_index(facts), fn {fact, n} ->
+      [
+        invention_input(c, n, "before", fact, base, before_units),
+        invention_input(c, n, "after", fact, model, after_units)
+      ]
+    end)
+  end
+
+  defp invention_input(c, n, phase, fact, model, units) do
+    %{
+      "id" => "#{c["id"]}:#{n}:#{phase}",
+      "state" => %{
+        "proposition" => fact,
+        "material" => Projection.compact(units),
+        "revision_id" => model.revision.id
+      }
+    }
+  end
+
+  defp invention_row({fact, n}, entries, c) do
+    before = entries["#{c["id"]}:#{n}:before"]
+    after_entry = entries["#{c["id"]}:#{n}:after"]
+    before_p = get_in(before, ["answers", "supported", "probability"])
+    after_p = get_in(after_entry, ["answers", "supported", "probability"])
+    assessment = invention_assessment(before, after_entry, before_p, after_p)
+
+    %{
+      "fact" => fact,
+      "base_probability" => before_p,
+      "candidate_probability" => after_p,
+      "assessment" => assessment
+    }
+  end
+
+  defp invention_assessment(before, after_entry, before_p, after_p) do
+    cond do
+      before["status"] != "complete" or after_entry["status"] != "complete" or
+        not is_number(before_p) or not is_number(after_p) ->
+        "unknown"
+
+      before_p <= 0.2 and after_p >= 0.8 ->
+        "possible_new_prohibited_fact"
+
+      true ->
+        "not_established_as_new"
+    end
+  end
+
   defp evaluate_one(model, c, client, opts) do
     c = normalize(c)
     spec = c["spec"]
-    projection = Map.get(spec, "projection", "page_reader")
-
-    state_result =
-      if spec["point"] do
-        with {:ok, point} <- Projection.resolve_point(model, spec["point"]) do
-          Projection.at(
-            model,
-            point,
-            projection,
-            Keyword.put(opts, :character_id, spec["character_id"])
-          )
-        end
-      else
-        case Projection.select(model, Map.get(spec, "selection", %{"targets" => [c["target"]]})) do
-          {:ok, units} when projection == "page_reader" ->
-            {:ok,
-             %{
-               "projection" => projection,
-               "material" => Projection.compact(units),
-               "complete_context" => true
-             }, Projection.evidence(units)}
-
-          {:ok, _} ->
-            {:error, :perspective_requires_point}
-
-          error ->
-            error
-        end
-      end
+    state_result = semantic_state(model, c, spec, opts)
 
     with {:ok, state, evidence} <- state_result do
       state = Map.put(state, "proposition", spec["proposition"])
@@ -533,32 +529,69 @@ defmodule FountProbe.Constraints do
             )
         end
 
-      with {:ok, result} <-
-             Jev.evaluate(client, [%{"id" => c["id"], "state" => state}], [q: question], opts),
-           [%{"status" => "complete", "answers" => %{"q" => answer}}] <- result["entries"] do
-        interpreted = interpret(c, answer)
+      evaluate_semantic_state(c, client, opts, state, evidence, question)
+    end
+  end
 
-        interpreted =
-          if state["complete_context"] == false and interpreted["status"] == "fail",
-            do:
-              Map.merge(interpreted, %{"status" => "uncertain", "reason" => "incomplete_access"}),
-            else: interpreted
+  defp semantic_state(model, c, spec, opts) do
+    projection = Map.get(spec, "projection", "page_reader")
 
-        {:ok,
-         Map.merge(
+    if spec["point"] do
+      with {:ok, point} <- Projection.resolve_point(model, spec["point"]) do
+        Projection.at(
+          model,
+          point,
+          projection,
+          Keyword.put(opts, :character_id, spec["character_id"])
+        )
+      end
+    else
+      case Projection.select(model, Map.get(spec, "selection", %{"targets" => [c["target"]]})) do
+        {:ok, units} when projection == "page_reader" ->
+          {:ok,
            %{
-             "constraint_id" => c["id"],
-             "kind" => "semantic",
-             "severity" => c["severity"],
-             "evaluation" => "semantic"
-           },
-           interpreted
-         ), evidence, result}
-      else
-        {:error, _} = error -> error
-        _ -> {:error, :missing_semantic_answer}
+             "projection" => projection,
+             "material" => Projection.compact(units),
+             "complete_context" => true
+           }, Projection.evidence(units)}
+
+        {:ok, _} ->
+          {:error, :perspective_requires_point}
+
+        error ->
+          error
       end
     end
+  end
+
+  defp evaluate_semantic_state(c, client, opts, state, evidence, question) do
+    with {:ok, result} <-
+           Jev.evaluate(client, [%{"id" => c["id"], "state" => state}], [q: question], opts),
+         [%{"status" => "complete", "answers" => %{"q" => answer}}] <- result["entries"] do
+      interpreted = interpret(c, answer)
+
+      interpreted = interpret_context(interpreted, state)
+
+      {:ok,
+       Map.merge(
+         %{
+           "constraint_id" => c["id"],
+           "kind" => "semantic",
+           "severity" => c["severity"],
+           "evaluation" => "semantic"
+         },
+         interpreted
+       ), evidence, result}
+    else
+      {:error, _} = error -> error
+      _ -> {:error, :missing_semantic_answer}
+    end
+  end
+
+  defp interpret_context(interpreted, state) do
+    if state["complete_context"] == false and interpreted["status"] == "fail",
+      do: Map.merge(interpreted, %{"status" => "uncertain", "reason" => "incomplete_access"}),
+      else: interpreted
   end
 
   def interpret(c, %{"type" => "noul", "probability" => p} = answer) when is_number(p) do
@@ -571,7 +604,7 @@ defmodule FountProbe.Constraints do
 
         _ ->
           {:ok, policy} =
-            FountProbe.Writing.DecisionPolicy.semantic_noul(p, Map.get(spec, "expected", true))
+            DecisionPolicy.semantic_noul(p, Map.get(spec, "expected", true))
 
           policy
       end
@@ -582,7 +615,7 @@ defmodule FountProbe.Constraints do
   def interpret(c, %{"probabilities" => probabilities, "confidence" => confidence} = answer) do
     allowed = Enum.map(c["spec"]["allowed"] || [], &to_string/1)
 
-    case FountProbe.Writing.DecisionPolicy.semantic_distribution(
+    case DecisionPolicy.semantic_distribution(
            probabilities,
            allowed,
            confidence

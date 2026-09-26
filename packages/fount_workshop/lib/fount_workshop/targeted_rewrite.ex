@@ -1,7 +1,8 @@
 defmodule FountWorkshop.TargetedRewrite do
   @moduledoc "Creates an exact-element writing candidate from a writer's revision direction."
-
-  alias Fount.{Persistence, Query, Screenplay}
+  alias Fount.Persistence
+  alias Fount.Query
+  alias Fount.Screenplay
   alias FountWorkshop.Writing.Completion
 
   @editable [:action, :dialogue, :parenthetical, :lyric, :centered, :transition]
@@ -36,99 +37,111 @@ defmodule FountWorkshop.TargetedRewrite do
       String.trim(direction) == "" ->
         {:error, :empty_direction}
 
-      length(Enum.uniq(element_ids)) != length(element_ids) or
-        Enum.any?(selected, &(&1 == nil or &1.type not in @editable)) or
-          Enum.any?(element_ids, &(Query.scene_for(base, &1) == nil)) ->
+      invalid_targets?(base, element_ids, selected) ->
         {:error, :invalid_targets}
 
       true ->
-        selected_scene_ids =
-          element_ids
-          |> Enum.map(&Query.scene_for(base, &1))
-          |> Enum.reject(&is_nil/1)
-          |> Enum.map(& &1.id)
-          |> MapSet.new()
-
-        selected_indices =
-          base.ir.scenes
-          |> Enum.with_index()
-          |> Enum.filter(fn {scene, _} -> MapSet.member?(selected_scene_ids, scene.id) end)
-          |> Enum.map(&elem(&1, 1))
-
-        context_indices =
-          selected_indices
-          |> Enum.flat_map(&(max(0, &1 - 2)..min(length(base.ir.scenes) - 1, &1 + 2)))
-          |> MapSet.new()
-
-        context =
-          base.ir.scenes
-          |> Enum.with_index()
-          |> Enum.filter(fn {scene, index} ->
-            not scene.omitted? and MapSet.member?(context_indices, index)
-          end)
-          |> Enum.map_join("\n\n", fn {scene, _} ->
-            label =
-              if MapSet.member?(selected_scene_ids, scene.id),
-                do: "TARGET SCENE",
-                else: "CONTEXT SCENE"
-
-            body =
-              scene.element_ids
-              |> Enum.map(&Query.node(base, &1))
-              |> Enum.reject(&(&1.type in [:note, :boneyard, :section, :synopsis]))
-              |> Enum.map_join("\n", &"#{&1.type}: #{&1.text}")
-
-            "#{label}\n#{body}"
-          end)
-
-        targets =
-          Enum.map_join(selected, "\n", &"#{&1.id} (#{&1.type}): #{&1.text}")
-
-        prompt = """
-        Revise only the listed screenplay elements. Return one replacement text for each exact ID.
-        Keep the same screenplay element type, character intent, pronouns and established
-        story facts unless the writer direction explicitly changes them. The surrounding
-        scenes show continuity you must respect; only exact targets may be rewritten.
-        Do not add scene headings, cues or commentary.
-
-        Writer direction: #{direction}
-        Surrounding scenes:\n#{context}
-        Exact targets:\n#{targets}
-        """
-
-        allowed = MapSet.new(element_ids)
-
-        case Completion.complete(client, prompt, @schema, &validate(&1, allowed),
-               name: "fount_targeted_rewrite"
-             ) do
-          {:ok, %{"changes" => replacements}, trace} ->
-            operations =
-              Enum.map(replacements, fn item ->
-                %{
-                  "kind" => "replace_text",
-                  "target" => %{"kind" => "element", "id" => item["element_id"]},
-                  "value" => item["text"]
-                }
-              end)
-
-            case Screenplay.apply(base, operations, []) do
-              {:ok, result, changes} when result.revision.id != base.revision.id ->
-                {:ok, %{screenplay: result, changes: changes, completion_trace: trace}}
-
-              {:ok, _, _} ->
-                {:error, :no_change}
-
-              error ->
-                error
-            end
-
-          {:error, reason, trace} ->
-            {:error, {:completion_failed, reason, trace}}
-        end
+        propose_validated(base, element_ids, direction, selected, client)
     end
   end
 
   def propose(_, _, _, _), do: {:error, :invalid_request}
+
+  defp invalid_targets?(base, ids, selected) do
+    length(Enum.uniq(ids)) != length(ids) or
+      Enum.any?(selected, &(&1 == nil or &1.type not in @editable)) or
+      Enum.any?(ids, &(Query.scene_for(base, &1) == nil))
+  end
+
+  defp propose_validated(base, element_ids, direction, selected, client) do
+    selected_scene_ids =
+      element_ids
+      |> Enum.map(&Query.scene_for(base, &1))
+      |> Enum.reject(&is_nil/1)
+      |> Enum.map(& &1.id)
+      |> MapSet.new()
+
+    selected_indices =
+      base.ir.scenes
+      |> Enum.with_index()
+      |> Enum.filter(fn {scene, _} -> MapSet.member?(selected_scene_ids, scene.id) end)
+      |> Enum.map(&elem(&1, 1))
+
+    context_indices =
+      selected_indices
+      |> Enum.flat_map(&(max(0, &1 - 2)..min(length(base.ir.scenes) - 1, &1 + 2)))
+      |> MapSet.new()
+
+    context =
+      base.ir.scenes
+      |> Enum.with_index()
+      |> Enum.filter(fn {scene, index} ->
+        not scene.omitted? and MapSet.member?(context_indices, index)
+      end)
+      |> Enum.map_join("\n\n", fn {scene, _} ->
+        label =
+          if MapSet.member?(selected_scene_ids, scene.id),
+            do: "TARGET SCENE",
+            else: "CONTEXT SCENE"
+
+        body =
+          scene.element_ids
+          |> Enum.map(&Query.node(base, &1))
+          |> Enum.reject(&(&1.type in [:note, :boneyard, :section, :synopsis]))
+          |> Enum.map_join("\n", &"#{&1.type}: #{&1.text}")
+
+        "#{label}\n#{body}"
+      end)
+
+    targets =
+      Enum.map_join(selected, "\n", &"#{&1.id} (#{&1.type}): #{&1.text}")
+
+    prompt = """
+    Revise only the listed screenplay elements. Return one replacement text for each exact ID.
+    Keep the same screenplay element type, character intent, pronouns and established
+    story facts unless the writer direction explicitly changes them. The surrounding
+    scenes show continuity you must respect; only exact targets may be rewritten.
+    Do not add scene headings, cues or commentary.
+
+    Writer direction: #{direction}
+    Surrounding scenes:\n#{context}
+    Exact targets:\n#{targets}
+    """
+
+    allowed = MapSet.new(element_ids)
+
+    case Completion.complete(client, prompt, @schema, &validate(&1, allowed),
+           name: "fount_targeted_rewrite"
+         ) do
+      {:ok, %{"changes" => replacements}, trace} ->
+        operations =
+          Enum.map(replacements, fn item ->
+            %{
+              "kind" => "replace_text",
+              "target" => %{"kind" => "element", "id" => item["element_id"]},
+              "value" => item["text"]
+            }
+          end)
+
+        apply_replacements(base, operations, trace)
+
+      {:error, reason, trace} ->
+        {:error, {:completion_failed, reason, trace}}
+    end
+  end
+
+  defp apply_replacements(base, operations, trace) do
+    case Screenplay.apply(base, operations, []) do
+      {:ok, result, changes} when result.revision.id != base.revision.id ->
+        {:ok, %{screenplay: result, changes: changes, completion_trace: trace}}
+
+      {:ok, _, _} ->
+        {:error, :no_change}
+
+      error ->
+        error
+    end
+  end
 
   @doc "Saves the proposal and its reviewable revision; the accepted head stays put."
   def run(repo, key, element_ids, direction, client) do
@@ -145,46 +158,50 @@ defmodule FountWorkshop.TargetedRewrite do
                "direction" => direction
              }
            }) do
-      case propose(base, element_ids, direction, client) do
-        {:ok, proposal} ->
-          candidate =
-            Map.merge(proposal, %{
-              label: "Targeted rewrite",
-              change_groups: [%{"id" => "rewrite", "operations" => proposal.changes.operations}],
-              lineage: proposal.changes.lineage,
-              provenance: %{"completion" => proposal.completion_trace}
-            })
+      run_targeted(repo, base, session, element_ids, direction, client)
+    end
+  end
 
-          case Persistence.save_candidate(repo, session.id, candidate) do
-            {:ok, saved} ->
-              {:ok, updated} =
-                Persistence.save_session(
-                  repo,
-                  Map.merge(session, %{
-                    status: "ready",
-                    progress: %{"candidate_ids" => [saved.id]}
-                  })
-                )
+  defp run_targeted(repo, base, session, element_ids, direction, client) do
+    case propose(base, element_ids, direction, client) do
+      {:ok, proposal} ->
+        candidate =
+          Map.merge(proposal, %{
+            label: "Targeted rewrite",
+            change_groups: [%{"id" => "rewrite", "operations" => proposal.changes.operations}],
+            lineage: proposal.changes.lineage,
+            provenance: %{"completion" => proposal.completion_trace}
+          })
 
-              {:ok, %{session: updated, candidate: saved, accepted_revision_id: base.revision.id}}
-
-            error ->
+        case Persistence.save_candidate(repo, session.id, candidate) do
+          {:ok, saved} ->
+            {:ok, updated} =
               Persistence.save_session(
                 repo,
-                Map.merge(session, %{status: "failed", progress: %{"error" => inspect(error)}})
+                Map.merge(session, %{
+                  status: "ready",
+                  progress: %{"candidate_ids" => [saved.id]}
+                })
               )
 
-              error
-          end
+            {:ok, %{session: updated, candidate: saved, accepted_revision_id: base.revision.id}}
 
-        {:error, reason} ->
-          Persistence.save_session(
-            repo,
-            Map.merge(session, %{status: "failed", progress: %{"error" => inspect(reason)}})
-          )
+          error ->
+            Persistence.save_session(
+              repo,
+              Map.merge(session, %{status: "failed", progress: %{"error" => inspect(error)}})
+            )
 
-          {:error, reason}
-      end
+            error
+        end
+
+      {:error, reason} ->
+        Persistence.save_session(
+          repo,
+          Map.merge(session, %{status: "failed", progress: %{"error" => inspect(reason)}})
+        )
+
+        {:error, reason}
     end
   end
 

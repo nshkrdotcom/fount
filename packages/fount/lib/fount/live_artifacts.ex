@@ -1,5 +1,7 @@
 defmodule Fount.LiveArtifacts do
   @moduledoc "Real-example artifact recording. It records executed work only and never substitutes a fake service."
+  alias Fount.CLI.Support
+
   def fixture do
     path = Application.app_dir(:fount, "priv/fixtures/last_light.fountain")
     raw = File.read!(path)
@@ -19,7 +21,10 @@ defmodule Fount.LiveArtifacts do
     rescue
       error ->
         finish(directory, mode, started, "failed", %{"exception" => inspect(error.__struct__)})
-        raise RuntimeError, "Real #{mode} example failed; inspect #{directory}/run.json. No mock fallback was used."
+
+        reraise RuntimeError,
+                [message: "Real #{mode} example failed; inspect #{directory}/run.json. No mock fallback was used."],
+                __STACKTRACE__
     catch
       :throw, {:live_failure, result} ->
         finish(directory, mode, started, "partial", result)
@@ -38,7 +43,7 @@ defmodule Fount.LiveArtifacts do
   defp safe(value) when is_atom(value), do: to_string(value)
   defp safe(value) when is_tuple(value), do: safe(elem(value, 0))
   defp safe(_), do: "operation_failed"
-  def write!(directory, name, data), do: Fount.CLI.Support.write_json(Path.join(directory, name), data) |> require!()
+  def write!(directory, name, data), do: Support.write_json(Path.join(directory, name), data) |> require!()
 
   defp finish(directory, mode, started, status, result) do
     files =

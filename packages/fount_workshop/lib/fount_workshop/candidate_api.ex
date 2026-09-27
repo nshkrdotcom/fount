@@ -89,7 +89,7 @@ defmodule FountWorkshop.CandidateAPI do
 
   defp save_join_source(base, combined, session_id, _, services) do
     report =
-      FountProbe.Report.new(combined["screenplay"], "combination_source", %{}, %{
+      Fount.Intelligence.Reporting.Report.new(combined["screenplay"], "combination_source", %{}, %{
         source_revision_ids: [base.revision.id, combined["screenplay"].revision.id],
         data: %{
           "lineage" => combined["lineage"],
@@ -115,8 +115,8 @@ defmodule FountWorkshop.CandidateAPI do
        )
        when is_binary(instruction) do
     draft = combined["screenplay"]
-    {:ok, units} = FountProbe.Projection.select(draft, %{"whole_screenplay" => true})
-    {:ok, allowed} = FountProbe.Projection.selected_ids(draft, selection)
+    {:ok, units} = Fount.Selection.select(draft, %{"whole_screenplay" => true})
+    {:ok, allowed} = Fount.Selection.selected_ids(draft, selection)
     # Every substantive selected passage is fixed while connective material is generated.
     changed =
       Enum.filter(draft.ir.elements, fn e ->
@@ -141,7 +141,7 @@ defmodule FountWorkshop.CandidateAPI do
         })
 
     with {:ok, joins, traces} <-
-           FountProbe.Completion.complete(
+           FountWorkshop.Writing.Completion.complete(
              services[:inference],
              prompt,
              schema,
@@ -221,7 +221,7 @@ defmodule FountWorkshop.CandidateAPI do
              |> Keyword.put(
                :evidence,
                Enum.uniq_by(
-                 combined["provenance"]["evidence"] ++ FountProbe.Projection.evidence(units),
+                 combined["provenance"]["evidence"] ++ Fount.Selection.evidence(units),
                  & &1["evidence_id"]
                )
              )

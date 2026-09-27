@@ -1,7 +1,6 @@
 defmodule FountWorkshop.Writing.Context do
   @moduledoc false
   alias Fount.Screenplay.Model
-  alias FountProbe.Projection
 
   @doc "Compacts duplicated projection metadata for provider prompts; saved evidence stays complete."
   def prompt_data(data, opts \\ []) when is_map(data) do
@@ -74,8 +73,8 @@ defmodule FountWorkshop.Writing.Context do
   def build(model, request, opts \\ []) do
     selection = editable_selection(model, request)
 
-    with {:ok, selected} <- Projection.select(model, selection),
-         {:ok, all} <- Projection.select(model, %{"whole_screenplay" => true}) do
+    with {:ok, selected} <- Fount.Selection.select(model, selection),
+         {:ok, all} <- Fount.Selection.select(model, %{"whole_screenplay" => true}) do
       selected_scenes =
         selected |> Enum.map(& &1["scene_id"]) |> Enum.reject(&is_nil/1) |> Enum.uniq()
 
@@ -128,7 +127,7 @@ defmodule FountWorkshop.Writing.Context do
              data: data,
              selection: selection,
              evidence:
-               Projection.evidence(Enum.uniq_by(selected ++ context, & &1["evidence_id"])),
+               Fount.Selection.evidence(Enum.uniq_by(selected ++ context, & &1["evidence_id"])),
              source_models: [model]
            }}
     end
@@ -158,7 +157,7 @@ defmodule FountWorkshop.Writing.Context do
           "targets" =>
             targets
             |> Enum.flat_map(fn target ->
-              case Projection.target_ids(model, target) do
+              case Fount.Selection.target_ids(model, target) do
                 {:ok, ids} ->
                   selected = MapSet.new(ids)
 
@@ -211,7 +210,7 @@ defmodule FountWorkshop.Writing.Context do
         else: result
 
     if request["workflow"] == "sequence" do
-      {:ok, units} = Projection.select(model, context.selection)
+      {:ok, units} = Fount.Selection.select(model, context.selection)
       ids = units |> Enum.map(& &1["scene_id"]) |> Enum.reject(&is_nil/1) |> Enum.uniq()
 
       result

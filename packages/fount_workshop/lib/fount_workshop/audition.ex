@@ -5,7 +5,7 @@ defmodule FountWorkshop.Audition do
 
   def build(id, selection, services, opts \\ []) do
     with {:ok, candidate} <- Store.call(services[:store], :candidate, [id]),
-         {:ok, units} <- FountProbe.Projection.select(candidate["screenplay"], selection) do
+         {:ok, units} <- Fount.Selection.select(candidate["screenplay"], selection) do
       model = candidate["screenplay"]
       ids = Enum.map(model.ir.scenes, & &1.id)
       selected = units |> Enum.map(& &1["scene_id"]) |> Enum.reject(&is_nil/1) |> Enum.uniq()

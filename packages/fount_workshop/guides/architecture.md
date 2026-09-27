@@ -1,6 +1,6 @@
 # Workshop architecture
 
-Fount owns screenplay values, exact edits and PostgreSQL revisions. FountProbe
+Fount owns screenplay values, exact edits and PostgreSQL revisions. Fount.Intelligence
 owns source-grounded inspection and Jev calls. FountWorkshop uses Inference to
 write candidate pages, saves them through `Fount.Persistence`, and renders
 reviewable outputs.

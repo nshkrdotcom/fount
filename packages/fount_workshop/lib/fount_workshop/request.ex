@@ -33,8 +33,8 @@ defmodule FountWorkshop.Request do
          true <-
            Map.keys(request["options"]) -- Map.get(@options, workflow, []) == [] or
              {:error, :unknown_workflow_option},
-         {:ok, _} <- FountProbe.Projection.selected_ids(model, request["selection"]),
-         {:ok, constraints} <- FountProbe.Constraints.resolve(model, request["constraints"]),
+         {:ok, _} <- Fount.Selection.selected_ids(model, request["selection"]),
+         {:ok, constraints} <- Fount.Intelligence.Playbooks.Constraints.resolve(model, request["constraints"]),
          :ok <- options(model, workflow, request["options"]) do
       {:ok, Map.put(request, "constraints", constraints)}
     end
@@ -102,7 +102,7 @@ defmodule FountWorkshop.Request do
     with true <-
            (is_binary(opts["change"]) and opts["change"] != "") or {:error, :missing_story_change},
          {:ok, _} <-
-           FountProbe.Projection.selected_ids(
+           Fount.Selection.selected_ids(
              model,
              Map.get(opts, "repair_scope", %{"whole_screenplay" => true})
            ) do

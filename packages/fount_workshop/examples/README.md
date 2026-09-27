@@ -25,10 +25,11 @@ The primary example runner is [`live.exs`](file:///home/home/p/g/n/fount/package
    ```bash
    export FOUNT_DATABASE_URL="ecto://postgres:postgres@localhost:5432/fount_dev"
    ```
-2. **AI Provider Credentials** (for LLM generation and probe evaluation):
+2. **AI Provider Credentials** (for completion and analytical measurements):
    ```bash
    export SYSTEM_ONE_API_KEY="your-typesafe-api-key"
-   export FOUNT_CODEX_MODEL="gpt-4o"
+   export FOUNT_CODEX_MODEL="YOUR_CONFIGURED_CODEX_MODEL"
+   export SYSTEM_ONE_MODEL="YOUR_CONFIGURED_SYSTEM_ONE_MODEL"
    ```
 3. **Poppler & Node.js Dependencies** (for PDF export and verification):
    - Ensure Poppler tools (`pdfinfo`, `pdffonts`, `pdftotext`) are installed.
@@ -93,3 +94,11 @@ Set the output location with `--out` or the `FOUNT_EXAMPLE_OUT` environment vari
 ```bash
 FOUNT_EXAMPLE_OUT="/tmp/workshop_demo" mix run examples/live.exs --mode recover
 ```
+
+## Phase 1 writer preservation demonstration
+
+`mix run examples/phase_one.exs --out examples/_output/phase_one --decision reject` uses real PostgreSQL persistence, explicit Mock/Sandbox answers, targeted revision, comparison, review, rejection, Fountain export and an HTML table read. `--decision accept --pdf` additionally exercises acceptance and real PDF output. Neither command was executed in the offline delivery. See the package README and `integration/phase_one_writer_demo_test.exs`.
+
+## Read-only analysis examples
+
+`mix run examples/analysis.exs --mode knowledge` runs the migrated inspection example through Workshop-owned configuration. Other modes remain `tools`, `voice`, `knowledge_access` and `consequences`; inspect the runner for their database/completion prerequisites. These live commands require explicit provider authorization. Intelligence itself has no completion or environment dependency.

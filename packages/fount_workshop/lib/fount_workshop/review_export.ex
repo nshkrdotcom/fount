@@ -91,7 +91,7 @@ defmodule FountWorkshop.ReviewExport do
         end
       end)
 
-    layout = Enum.find(reports, &(&1["tool"] == "layout_compare"))
+    layout = Enum.find(reports, &(&1["playbook"] == "layout_compare"))
 
     pdf =
       if Keyword.get(opts, :pdf, false),

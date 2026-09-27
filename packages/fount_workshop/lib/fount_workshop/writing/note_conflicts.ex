@@ -1,6 +1,5 @@
 defmodule FountWorkshop.Writing.NoteConflicts do
   @moduledoc false
-  alias FountProbe.Projection
 
   def detect(model, notes) do
     for {a, i} <- Enum.with_index(notes),
@@ -19,8 +18,8 @@ defmodule FountWorkshop.Writing.NoteConflicts do
   defp overlapping?(_, _, nil), do: false
 
   defp overlapping?(model, a, b) do
-    with {:ok, left} <- Projection.target_ids(model, a),
-         {:ok, right} <- Projection.target_ids(model, b) do
+    with {:ok, left} <- Fount.Selection.target_ids(model, a),
+         {:ok, right} <- Fount.Selection.target_ids(model, b) do
       MapSet.disjoint?(MapSet.new(left), MapSet.new(right)) == false
     else
       _ -> a == b

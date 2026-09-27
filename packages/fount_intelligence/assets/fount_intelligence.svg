@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200" role="img" aria-labelledby="title">
+<title id="title">Fount Intelligence - screenplay evidence and interpretation</title>
+<defs><linearGradient id="edge" x2="1" y2="1"><stop stop-color="#71e2d6"/><stop offset="1" stop-color="#aa8ae8"/></linearGradient><radialGradient id="field"><stop stop-color="#283552"/><stop offset="1" stop-color="#111728"/></radialGradient><clipPath id="hex"><path d="M100 5L182 52V148L100 195L18 148V52Z"/></clipPath></defs>
+<g clip-path="url(#hex)"><path d="M100 5L182 52V148L100 195L18 148V52Z" fill="url(#field)" stroke="url(#edge)" stroke-width="4"/>
+<path d="M100 20L169 60V140L100 180L31 140V60Z" fill="none" stroke="url(#edge)" opacity=".35"/>
+<path d="M64 48H122L142 68V148H64Z" fill="#18243a" stroke="#d4e4fa" stroke-width="2"/><path d="M122 48V68H142M78 80H128M78 94H116M78 108H124M78 122H109M78 136H120" fill="none" stroke="#c4d7ec" stroke-width="2"/>
+<circle cx="101" cy="101" r="49" fill="none" stroke="url(#edge)" stroke-width="2" stroke-dasharray="2 7"/>
+<path d="M43 119L80 93L124 120L159 83" fill="none" stroke="#71e2d6" stroke-width="3"/>
+<g fill="#111728" stroke="#71e2d6" stroke-width="3"><circle cx="43" cy="119" r="6"/><circle cx="80" cy="93" r="6"/><circle cx="124" cy="120" r="6"/><circle cx="159" cy="83" r="6"/></g></g></svg>

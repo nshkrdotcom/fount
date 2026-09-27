@@ -1,0 +1,25 @@
+{
+  "id": "continuity.transitions",
+  "description": "Screenplay measurement wording; interpretation policy is uncalibrated unless separately validated.",
+  "sensor": "system_one",
+  "projection": "explicit_state",
+  "context_contract": {
+    "required": {},
+    "optional": {},
+    "allow_unknown": false
+  },
+  "question_overrides": [
+    {
+      "key": "transition",
+      "kind": "choice",
+      "instructions": "How do these exact state observations relate? An unshown transfer or elapsed time may explain a change; heading differences alone are not contradictions."
+    }
+  ],
+  "interpretation_policy": {
+    "support_probability": 0.8,
+    "unsupported_probability": 0.2,
+    "minimum_confidence": 0.7,
+    "minimum_margin": 0.15
+  },
+  "output_contract": "observe.answer_set"
+}

@@ -1,8 +1,7 @@
 defmodule FountWorkshop.Writing.Preparation do
   @moduledoc false
   alias Fount.Screenplay.Model
-  alias FountProbe.Projection
-  alias FountProbe.Report
+  alias Fount.Intelligence.Reporting.Report
   alias FountWorkshop.Store
   alias FountWorkshop.Writing.Context
   alias FountWorkshop.Writing.NoteConflicts
@@ -15,7 +14,7 @@ defmodule FountWorkshop.Writing.Preparation do
       report_reader = fn id -> Store.call(services[:store], :report, [id]) end
 
       {:ok, reports} =
-        FountProbe.execute(
+        Fount.Intelligence.execute(
           model,
           requests,
           clients,
@@ -72,7 +71,7 @@ defmodule FountWorkshop.Writing.Preparation do
     report_reader = fn id -> Store.call(services[:store], :report, [id]) end
 
     with {:ok, reports} <-
-           FountProbe.execute(
+           Fount.Intelligence.execute(
              model,
              requests,
              clients,
@@ -328,7 +327,7 @@ defmodule FountWorkshop.Writing.Preparation do
        }}
 
   defp inspections(_, %{"workflow" => "investigate"}, _), do: {[], %{}}
-  defp request(id, tool, params), do: %{"id" => id, "tool" => tool, "params" => params}
+  defp request(id, tool, params), do: %{"id" => id, "playbook" => tool, "params" => params}
 
   defp historical(context, model, %{"workflow" => "recover", "options" => opts}, services) do
     source_screenplay_id = Map.get(opts, "source_screenplay_id", model.id)
@@ -339,7 +338,7 @@ defmodule FountWorkshop.Writing.Preparation do
              opts["source_revision_id"]
            ]),
          {:ok, units} <-
-           Projection.select(source, %{"targets" => opts["source_targets"]},
+           Fount.Selection.select(source, %{"targets" => opts["source_targets"]},
              include_omitted: true,
              include_notes: true,
              include_boneyards: true
@@ -380,7 +379,7 @@ defmodule FountWorkshop.Writing.Preparation do
          source_models: if(source.id == model.id, do: [model, source], else: [model]),
          historical_models: [source],
          evidence:
-           Enum.uniq_by(context.evidence ++ Projection.evidence(units), & &1["evidence_id"])
+           Enum.uniq_by(context.evidence ++ Fount.Selection.evidence(units), & &1["evidence_id"])
        })}
     end
   end
@@ -409,15 +408,15 @@ defmodule FountWorkshop.Writing.Preparation do
     followup_limit = max(0, Keyword.get(opts, :max_investigation_followups, 1))
 
     with {:ok, plan} <-
-           FountProbe.plan(
+           Fount.Intelligence.plan(
              model,
              concern,
              clients,
              Keyword.put(probe_opts, :selection, context.selection)
            ),
-         {:ok, reports} <- FountProbe.execute(model, plan.data["requests"], clients, probe_opts),
+         {:ok, reports} <- Fount.Intelligence.execute(model, plan.data["requests"], clients, probe_opts),
          {:ok, first_explanation} <-
-           FountProbe.explain(
+           Fount.Intelligence.explain(
              model,
              concern,
              reports,
@@ -497,9 +496,9 @@ defmodule FountWorkshop.Writing.Preparation do
         {:error, :duplicate_investigation_request_id}
 
       true ->
-        with {:ok, followup_reports} <- FountProbe.execute(model, requests, clients, opts),
+        with {:ok, followup_reports} <- Fount.Intelligence.execute(model, requests, clients, opts),
              {:ok, revised} <-
-               FountProbe.explain(
+               Fount.Intelligence.explain(
                  model,
                  concern,
                  reports ++ followup_reports,

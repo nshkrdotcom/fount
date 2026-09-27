@@ -238,7 +238,7 @@ Explore in-depth documentation covering Fount's internal subsystems:
 Fount is the foundation of a modular three-tier screenplay framework:
 
 1. **[Fount](https://hexdocs.pm/fount)**: The headless screenplay engine, lossless CST parser, and relational revision store.
-2. **[Fount Probe](https://hexdocs.pm/fount_probe)**: The dramaturgical auditor and diagnostic engine. 100% read-only inspection for character knowledge, continuity, scene mechanics, and voice attribution.
+2. **[Fount Intelligence](https://hexdocs.pm/fount_intelligence)**: The dramaturgical auditor and diagnostic engine. 100% read-only inspection for character knowledge, continuity, scene mechanics, and voice attribution.
 3. **[Fount Workshop](https://hexdocs.pm/fount_workshop)**: The writer's studio. Scoped AI revision loops with Myers diffs, beat recovery, competition submission checks, and PDF publishing.
 
 ---

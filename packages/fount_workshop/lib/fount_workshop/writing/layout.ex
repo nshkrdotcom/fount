@@ -40,7 +40,7 @@ defmodule FountWorkshop.Writing.Layout do
       }
 
       report =
-        FountProbe.Report.new(candidate["screenplay"], "layout_compare", %{}, %{
+        Fount.Intelligence.Reporting.Report.new(candidate["screenplay"], "layout_compare", %{}, %{
           source_revision_ids: [base.revision.id, candidate["screenplay"].revision.id],
           data: data,
           status: if(same, do: "complete", else: "partial"),

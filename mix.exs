@@ -39,6 +39,10 @@ defmodule Fount.Workspace.MixProject do
         "cmd --cd packages/fount_workshop npm ci"
       ],
       test: ["blitz.workspace test"],
+      "fount.architecture": [
+        "blitz.workspace compile",
+        "cmd --cd packages/fount_intelligence mix fount.architecture"
+      ],
       ci: [
         "setup",
         "format --check-formatted",
@@ -47,6 +51,7 @@ defmodule Fount.Workspace.MixProject do
         "blitz.workspace lock_check",
         "blitz.workspace compile",
         "blitz.workspace test",
+        "fount.architecture",
         "blitz.workspace credo --strict",
         "blitz.workspace dialyzer",
         "blitz.workspace docs"
@@ -57,7 +62,12 @@ defmodule Fount.Workspace.MixProject do
   defp blitz_workspace do
     [
       root: __DIR__,
-      projects: ["packages/fount", "packages/fount_probe", "packages/fount_workshop"],
+      projects: [
+        "packages/fount",
+        "packages/fount_observe",
+        "packages/fount_intelligence",
+        "packages/fount_workshop"
+      ],
       isolation: [deps_path: true, build_path: true, lockfile: true, hex_home: "_build/hex"],
       parallelism: [
         multiplier: :auto,

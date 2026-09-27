@@ -102,7 +102,7 @@ Sometimes you know exactly what you want changed.
 
 Sometimes you only know that something is wrong.
 
-Fount Probe exists for the second case. Its screenplay-specific investigations are read-only: they can inspect the draft without quietly rewriting it.
+Fount Intelligence exists for the second case. Its screenplay-specific investigations are read-only: they can inspect the draft without quietly rewriting it.
 
 A writer can ask questions such as:
 
@@ -278,80 +278,18 @@ The current delivery surface is primarily for developers, agents, integrations, 
 
 ## Repository Structure
 
-Fount is organized as three cooperating packages:
-
-```text
-.
-├── LICENSE
-├── CHANGELOG.md
-├── README.md
-├── assets/
-│   └── fount.svg
-└── packages/
-    ├── fount/
-    ├── fount_probe/
-    └── fount_workshop/
-```
-
-### [`fount`](packages/fount/README.md)
-
-The deterministic screenplay engine and relational authoring platform.
-
-It owns lossless Fountain parsing and CST roundtripping, screenplay structure, scenes, dialogue blocks, characters with durable UUIDs, the Four Truths architectural tiers, atomic structured edits, queries, interchange (Fountain, Final Draft FDX, JSON v2), PostgreSQL/Ecto transactional persistence, diffs, and accepted screenplay history.
-
-### [`fount_probe`](packages/fount_probe/README.md)
-
-The read-only dramaturgical diagnostics studio.
-
-Powered by TypeSafe AI's Jev model via `system_one_sdk` across a closed catalog of 16 specialized analytical tools. It enforces strict read-only operation (`writes_screenplay: false`) and extracts byte-anchored Concrete Syntax Tree (CST) spans to answer writer questions about character knowledge, reveal timing, scene dependencies, continuity, dialogue cadence, and the structural blast radius of cuts without mutating the draft.
-
-### [`fount_workshop`](packages/fount_workshop/README.md)
-
-The revision studio and writer collaboration engine.
-
-It enforces absolute writer sovereignty through a scoped revision loop (`context → propose → preview → accept`). Workshop coordinates dramatic strategies, generates candidate revisions across multiple creative approaches, synthesizes multi-candidate joins, protects against hallucinated changes, performs beat recovery, produces Poppler-inspected PDF exports, and orchestrates multi-voice table reads.
-
----
+| Package | Responsibility |
+|---|---|
+| [`fount`](packages/fount/README.md) | Canonical screenplay, Fountain/FDX/JSON interchange, typed edits, identity, exact selection/evidence, search and PostgreSQL persistence. |
+| [`fount_observe`](packages/fount_observe/README.md) | Atomic source-grounded measurements, native SDK boundary, deterministic Sandbox, explicit resource limits and L1 result reuse. |
+| [`fount_intelligence`](packages/fount_intelligence/README.md) | Read-only screenplay investigations, knowledge/reveal/continuity/dependency/dialogue/voice analyses, comparison and pure interpretation. |
+| [`fount_workshop`](packages/fount_workshop/README.md) | Actual generated/revised pages, candidates, review/acceptance, recovery, rehearsal and exports. |
 
 ## How the Pieces Fit Together
 
-```text
-                         YOUR SCREENPLAY
-                                │
-                                ▼
-                     ┌────────────────────┐
-                     │       FOUNT        │
-                     │                    │
-                     │ scenes             │
-                     │ dialogue           │
-                     │ characters         │
-                     │ revisions          │
-                     │ screenplay history │
-                     └─────────┬──────────┘
-                               │
-                  inspect      │      revise
-                 ┌─────────────┴─────────────┐
-                 ▼                           ▼
-        ┌─────────────────┐         ┌─────────────────┐
-        │   FOUNT PROBE   │         │ FOUNT WORKSHOP  │
-        │                 │         │                 │
-        │ investigate     │────────>│ strategies      │
-        │ compare         │evidence │ alternate pages │
-        │ trace           │         │ combine / edit  │
-        │ diagnose        │         │ review / accept │
-        └─────────────────┘         └────────┬────────┘
-                                             │
-                                             │ explicit
-                                             │ acceptance
-                                             ▼
-                                   NEW ACCEPTED REVISION
-```
+The writer supplies an intention or concern. Intelligence can investigate it, acquiring exact measurements through Observe and retaining source evidence and uncertainty. Workshop can then generate alternatives against explicit screenplay targets. Fount stores and compares immutable revisions; only explicit review/acceptance advances canon.
 
-Analysis does not automatically rewrite the screenplay.
-
-Generation does not automatically accept the screenplay.
-
-The writer remains the decision point between the two.
+Observe alone talks to SystemOneSDK. Workshop alone owns Inference completion, PDF and speech integration. Pure Intelligence logic takes values and returns values. There is one implementation path, not a compatibility bridge to a retired analysis package.
 
 ---
 
@@ -377,7 +315,7 @@ The root Mix project uses Blitz to operate the three package projects:
 
 ```text
 packages/fount
-packages/fount_probe
+packages/fount_intelligence
 packages/fount_workshop
 ```
 
@@ -448,7 +386,8 @@ Run an individual package directly when needed:
 
 ```bash
 (cd packages/fount && mix test)
-(cd packages/fount_probe && mix test)
+(cd packages/fount_observe && mix test)
+(cd packages/fount_intelligence && mix test)
 (cd packages/fount_workshop && mix test)
 ```
 
@@ -464,43 +403,32 @@ When no workspace override is active, those dependencies remain their ordinary c
 
 ## Executable Examples
 
-Run each example from its package directory. These commands work from the repository root after setup:
+From the repository root after setup:
 
 ```bash
 (cd packages/fount && mix run examples/live.exs --mode roundtrip)
+(cd packages/fount_observe && mix run examples/sandbox.exs)
+(cd packages/fount_intelligence && mix run examples/inspect.exs)
 ```
 
-This exports the bundled screenplay as Fountain, FDX, and JSON. The other Fount modes are `interchange` (format conversion checks) and `database` (revision persistence; requires PostgreSQL and `FOUNT_DATABASE_URL`). See the [Fount example guide](packages/fount/examples/README.md).
+These respectively exercise interchange, deterministic measurement and provider-free inventory. A complete writing/persistence demonstration is:
 
 ```bash
-(cd packages/fount_probe && mix run examples/live.exs --mode knowledge)
+(cd packages/fount_workshop && mix run examples/phase_one.exs \
+  --out examples/_output/phase_one --decision reject)
 ```
 
-Set `SYSTEM_ONE_API_KEY` first: `knowledge` calls the live Jev service. The `tools`, `voice`, `knowledge_access`, and `consequences` modes also need a configured PostgreSQL database and inference provider. See the [Probe example guide](packages/fount_probe/examples/README.md) for setup and mode details.
+It requires a configured PostgreSQL database and migrations, but no live model. Add `--pdf` after installing the Workshop renderer/Poppler. Use `--decision accept` to exercise explicit fixture acceptance. The output distinguishes synthetic completions/measurements from actual database/export operations.
 
-```bash
-(cd packages/fount_workshop && mix run examples/live.exs --mode recover)
-```
-
-Set `FOUNT_DATABASE_URL` and install the PDF dependencies first. `recover` restores a historical beat as a reviewable candidate without changing the accepted revision. Other Workshop modes, including `alternatives`, `sequence_routes`, and `character_workspace`, also call AI services. See the [Workshop example guide](packages/fount_workshop/examples/README.md) for prerequisites and modes.
-
-By default, each script writes to `examples/output` within its package. Pass `--out` to choose another directory.
-
----
+Existing live Workshop workflows remain in `packages/fount_workshop/examples/live.exs`; live inspection examples moved to `examples/analysis.exs` in that same package. Their credentials, database and export prerequisites remain explicit. See each package's example guide.
 
 ## Current Development Status
 
-The codebase is **QC Green** across all implemented packages and verified workflows:
+This is the **Phase 1 offline implementation**, awaiting Codex runtime QC. New source/tests and the four-package architecture are delivered; Elixir compilation, tests, architecture AST/BEAM checks, database integration, PDF/speech and live providers were **not executed** in the source-writing environment.
 
-* **168/168 tests pass** across the workspace (`fount`: 69 passed with property tests, `fount_probe`: 46 passed, `fount_workshop`: 53 passed).
-* **Clean reproducible build**: Warning-free compilation under Elixir 1.20 / OTP 29 and Elixir 1.19 / OTP 28.
-* **Transactional persistence verified**: PostgreSQL migrations pass cleanly; integration test suites verify atomic rollback, report references, same-head race prevention, immutable reload, and explicit candidate acceptance.
-* **Interchange & edit safety verified**: Lossless Fountain roundtripping, Final Draft (`.fdx`) conversion with declared loss reporting, canonical JSON v2, typed structured edits, and review-gate protection.
-* **Probe dramaturgical integrity verified**: TypeSafe AI's Jev model via `system_one_sdk` completed live diagnostic runs across the closed 16-tool catalog (`knowledge`, `tools`, `voice`, `knowledge_access`, `consequences`) with 100% cited evidence matching and strict read-only guarantees (`writes_screenplay: false`).
-* **Workshop revision workflows verified**: Candidate generation across distinct dramatic strategies, Myers diffing, Poppler-inspected PDF exports, and table-read dialogue synthesis with speech engines.
-* **Quality Gates S01–S04, S06, and S07 are green**: See the [stability certification gate](docs/implementation_handoff/STABILITY_CERTIFICATION.md) for detailed verification evidence.
+Historical preparation test counts describe the previous source, not this change. The complete current docset contains progress, preservation mapping, input identities, actual static/transport checks and remaining exit criteria. Phases 2-16 remain unstarted; this source does not establish creative superiority or human validation.
 
-Deferred enhancements and long-term roadmap items (such as a desktop GUI and mixed master audio) are cataloged in the [future development register](docs/implementation_handoff/FUTURE_DEVELOPMENT.md). The [handoff documentation](docs/implementation_handoff/README.md) preserves the architectural specification, dated verification evidence, and implementation history.
+The supplied SDK snapshot exposes version 0.6.0 APIs. Before dependency setup, a local checkout may be selected with `FOUNT_SYSTEM_ONE_SDK_PATH=/absolute/path/system_one_sdk/packages/system_one_sdk`. Codex must verify and record the actual dependency resolution, regenerate appropriate lockfiles, run `mix fount.architecture`, and complete the same phase.
 
 ---
 
@@ -512,4 +440,4 @@ Deferred enhancements and long-term roadmap items (such as a desktop GUI and mix
 
 For the progressive screenplay-writing implementation workflow, generate a parsable XML snapshot with `repomix`, then use `python3 scripts/seal_handoff_snapshot.py --root . --input /absolute/path/fount.raw.xml --output /absolute/path/fount.xml`. The helper verifies included source against disk, preserves exact bytes, and embeds file hashes and Git identity for safe offline overlay construction. Run `python3 -m unittest discover -s scripts/tests -v` to verify the helper.
 
-Use four fresh inputs on each pass: `fount.xml`, `system_one_sdk.xml`, `inference.xml`, and the complete updated `docset.xml`. The source-writing environment returns ZIPs; the user applies and commits them; Codex verifies and repairs the applied phase before the next snapshots. The active 2026-09-25 v4 docset in the separate brainstorms repository defines the product phases. Historical implementation notes above are not a replacement for that current specification.
+Use four fresh inputs on each pass: `fount.xml`, `system_one_sdk.xml`, `inference.xml`, and the complete updated `docset.xml`. The source-writing environment returns ZIPs; the user applies and commits them; Codex verifies and repairs the applied phase before the next snapshots. The complete current docset supplied for the phase defines product scope and progress. Historical implementation notes above are not a replacement for that current specification.

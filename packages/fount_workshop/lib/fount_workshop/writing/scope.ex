@@ -1,13 +1,12 @@
 defmodule FountWorkshop.Writing.Scope do
   @moduledoc "Checks the writer's exact edit authority before replay and against the result."
   alias Fount.Query
-  alias FountProbe.Projection
 
   def operations(_, _, nil, _), do: :ok
   def operations(_, _, %{"whole_screenplay" => true}, _), do: :ok
 
   def operations(base, edits, selection, placement) do
-    with {:ok, allowed} <- Projection.selected_ids(base, selection) do
+    with {:ok, allowed} <- Fount.Selection.selected_ids(base, selection) do
       targets = Map.get(selection, "targets", [])
       full = full_ids(base, targets)
 
@@ -26,7 +25,7 @@ defmodule FountWorkshop.Writing.Scope do
   def result(_, _, %{"whole_screenplay" => true}), do: :ok
 
   def result(base, draft, selection) do
-    with {:ok, allowed} <- Projection.selected_ids(base, selection) do
+    with {:ok, allowed} <- Fount.Selection.selected_ids(base, selection) do
       changed =
         Enum.filter(base.ir.elements, fn element ->
           next = Query.node(draft, element.id)
@@ -98,7 +97,7 @@ defmodule FountWorkshop.Writing.Scope do
     do: ids
 
   defp add_full_target(base, target, ids) do
-    case Projection.target_ids(base, target) do
+    case Fount.Selection.target_ids(base, target) do
       {:ok, found} ->
         ids = Enum.reduce(found, ids, &MapSet.put(&2, &1))
         if target["kind"] == "scene", do: MapSet.put(ids, target["id"]), else: ids
@@ -185,7 +184,7 @@ defmodule FountWorkshop.Writing.Scope do
 
   defp authorized?(base, %{"kind" => "put_authored_item", "value" => value}, allowed, _, _, _) do
     is_nil(base.authored_items[value["id"]]) and
-      case Projection.target_ids(base, value["target"]) do
+      case Fount.Selection.target_ids(base, value["target"]) do
         {:ok, ids} -> ids != [] and Enum.all?(ids, &MapSet.member?(allowed, &1))
         _ -> false
       end

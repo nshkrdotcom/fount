@@ -1,0 +1,544 @@
+[
+  {
+    "source": "packages/fount_probe/test/adjacent_extraction_test.exs",
+    "kind": "test",
+    "disposition": "MOVED TO WORKSHOP",
+    "destinations": [
+      "packages/fount_workshop/test/analysis_adjacent_extraction_test.exs"
+    ]
+  },
+  {
+    "source": "packages/fount_probe/test/catalog_continuation_test.exs",
+    "kind": "test",
+    "disposition": "MOVED TO WORKSHOP",
+    "destinations": [
+      "packages/fount_workshop/test/analysis_catalog_continuation_test.exs"
+    ]
+  },
+  {
+    "source": "packages/fount_probe/test/changed_continuity_test.exs",
+    "kind": "test",
+    "disposition": "REIMPLEMENTED",
+    "destinations": [
+      "packages/fount_intelligence/test/changed_continuity_test.exs"
+    ]
+  },
+  {
+    "source": "packages/fount_probe/test/completion_repair_test.exs",
+    "kind": "test",
+    "disposition": "MOVED TO WORKSHOP",
+    "destinations": [
+      "packages/fount_workshop/test/analysis_completion_repair_test.exs"
+    ]
+  },
+  {
+    "source": "packages/fount_probe/test/constraint_contract_names_test.exs",
+    "kind": "test",
+    "disposition": "REIMPLEMENTED",
+    "destinations": [
+      "packages/fount_intelligence/test/constraint_contract_names_test.exs"
+    ]
+  },
+  {
+    "source": "packages/fount_probe/test/continuation_constraints_test.exs",
+    "kind": "test",
+    "disposition": "REIMPLEMENTED",
+    "destinations": [
+      "packages/fount_intelligence/test/continuation_constraints_test.exs"
+    ]
+  },
+  {
+    "source": "packages/fount_probe/test/continuation_projection_test.exs",
+    "kind": "test",
+    "disposition": "REIMPLEMENTED",
+    "destinations": [
+      "packages/fount_observe/test/continuation_projection_test.exs"
+    ]
+  },
+  {
+    "source": "packages/fount_probe/test/continuation_voice_test.exs",
+    "kind": "test",
+    "disposition": "REIMPLEMENTED",
+    "destinations": [
+      "packages/fount_intelligence/test/continuation_voice_test.exs"
+    ]
+  },
+  {
+    "source": "packages/fount_probe/test/invention_policy_test.exs",
+    "kind": "test",
+    "disposition": "REIMPLEMENTED",
+    "destinations": [
+      "packages/fount_intelligence/test/invention_policy_test.exs"
+    ]
+  },
+  {
+    "source": "packages/fount_probe/test/inventory_test.exs",
+    "kind": "test",
+    "disposition": "MOVED TO FOUNT",
+    "destinations": [
+      "packages/fount/test/canonical_inventory_test.exs"
+    ]
+  },
+  {
+    "source": "packages/fount_probe/test/investigation_contract_test.exs",
+    "kind": "test",
+    "disposition": "REIMPLEMENTED",
+    "destinations": [
+      "packages/fount_intelligence/test/investigation_contract_test.exs"
+    ]
+  },
+  {
+    "source": "packages/fount_probe/test/knowledge_behavior_test.exs",
+    "kind": "test",
+    "disposition": "REIMPLEMENTED",
+    "destinations": [
+      "packages/fount_intelligence/test/knowledge_behavior_test.exs"
+    ]
+  },
+  {
+    "source": "packages/fount_probe/test/knowledge_reveal_test.exs",
+    "kind": "test",
+    "disposition": "REIMPLEMENTED",
+    "destinations": [
+      "packages/fount_intelligence/test/knowledge_reveal_test.exs"
+    ]
+  },
+  {
+    "source": "packages/fount_probe/test/knowledge_test.exs",
+    "kind": "test",
+    "disposition": "REIMPLEMENTED",
+    "destinations": [
+      "packages/fount_intelligence/test/knowledge_test.exs"
+    ]
+  },
+  {
+    "source": "packages/fount_probe/test/profile_continuation_test.exs",
+    "kind": "test",
+    "disposition": "REIMPLEMENTED",
+    "destinations": [
+      "packages/fount_observe/test/lens_asset_test.exs"
+    ]
+  },
+  {
+    "source": "packages/fount_probe/test/profile_threshold_test.exs",
+    "kind": "test",
+    "disposition": "REIMPLEMENTED",
+    "destinations": [
+      "packages/fount_intelligence/test/profile_threshold_test.exs"
+    ]
+  },
+  {
+    "source": "packages/fount_probe/test/retrieval_exact_continuation_test.exs",
+    "kind": "test",
+    "disposition": "REIMPLEMENTED",
+    "destinations": [
+      "packages/fount_intelligence/test/retrieval_exact_continuation_test.exs"
+    ]
+  },
+  {
+    "source": "packages/fount_probe/test/same_scene_dependencies_test.exs",
+    "kind": "test",
+    "disposition": "REIMPLEMENTED",
+    "destinations": [
+      "packages/fount_intelligence/test/same_scene_dependencies_test.exs"
+    ]
+  },
+  {
+    "source": "packages/fount_probe/test/saved_records_test.exs",
+    "kind": "test",
+    "disposition": "REIMPLEMENTED",
+    "destinations": [
+      "packages/fount_intelligence/test/saved_records_test.exs"
+    ]
+  },
+  {
+    "source": "packages/fount_probe/test/scene_count_scope_test.exs",
+    "kind": "test",
+    "disposition": "REIMPLEMENTED",
+    "destinations": [
+      "packages/fount_intelligence/test/scene_count_scope_test.exs"
+    ]
+  },
+  {
+    "source": "packages/fount_probe/test/search_test.exs",
+    "kind": "test",
+    "disposition": "MOVED TO FOUNT",
+    "destinations": [
+      "packages/fount/test/canonical_search_test.exs"
+    ]
+  },
+  {
+    "source": "packages/fount_probe/test/selection_boundary_continuation_test.exs",
+    "kind": "test",
+    "disposition": "REIMPLEMENTED",
+    "destinations": [
+      "packages/fount_observe/test/selection_boundary_continuation_test.exs"
+    ]
+  },
+  {
+    "source": "packages/fount_probe/test/state_test.exs",
+    "kind": "test",
+    "disposition": "REIMPLEMENTED",
+    "destinations": [
+      "packages/fount_intelligence/test/state_test.exs"
+    ]
+  },
+  {
+    "source": "packages/fount_probe/test/test_helper.exs",
+    "kind": "test",
+    "disposition": "REIMPLEMENTED",
+    "destinations": [
+      "packages/fount_intelligence/test/test_helper.exs"
+    ]
+  },
+  {
+    "source": "packages/fount_probe/test/typed_constraint_targets_test.exs",
+    "kind": "test",
+    "disposition": "REIMPLEMENTED",
+    "destinations": [
+      "packages/fount_intelligence/test/typed_constraint_targets_test.exs"
+    ]
+  },
+  {
+    "source": "packages/fount_probe/test/writing_policies_test.exs",
+    "kind": "test",
+    "disposition": "REIMPLEMENTED",
+    "destinations": [
+      "packages/fount_intelligence/test/writing_policies_test.exs"
+    ]
+  },
+  {
+    "source": "packages/fount_probe/lib/fount_probe/access.ex",
+    "module": "FountProbe.Access",
+    "kind": "production",
+    "disposition": "REIMPLEMENTED",
+    "destinations": [
+      "packages/fount_intelligence/lib/fount/intelligence/acquisition/access.ex"
+    ]
+  },
+  {
+    "source": "packages/fount_probe/lib/fount_probe/action/layout.ex",
+    "module": "FountProbe.Action.Layout",
+    "kind": "production",
+    "disposition": "MOVED TO WORKSHOP",
+    "destinations": [
+      "packages/fount_workshop/lib/fount_workshop/writing/action_layout.ex"
+    ]
+  },
+  {
+    "source": "packages/fount_probe/lib/fount_probe/action.ex",
+    "module": "FountProbe.Action",
+    "kind": "production",
+    "disposition": "REIMPLEMENTED",
+    "destinations": [
+      "packages/fount_intelligence/lib/fount/intelligence/playbooks/action.ex"
+    ]
+  },
+  {
+    "source": "packages/fount_probe/lib/fount_probe/budget.ex",
+    "module": "FountProbe.Budget",
+    "kind": "production",
+    "disposition": "MOVED TO WORKSHOP",
+    "destinations": [
+      "packages/fount_workshop/lib/fount_workshop/writing/budget.ex"
+    ]
+  },
+  {
+    "source": "packages/fount_probe/lib/fount_probe/catalog.ex",
+    "module": "FountProbe.Catalog",
+    "kind": "production",
+    "disposition": "REIMPLEMENTED",
+    "destinations": [
+      "packages/fount_intelligence/lib/fount/intelligence/playbooks/registry.ex"
+    ]
+  },
+  {
+    "source": "packages/fount_probe/lib/fount_probe/cli.ex",
+    "module": "FountProbe.CLI",
+    "kind": "production",
+    "disposition": "MOVED TO WORKSHOP",
+    "destinations": [
+      "packages/fount_workshop/lib/fount_workshop/inspection_cli.ex"
+    ]
+  },
+  {
+    "source": "packages/fount_probe/lib/fount_probe/comparison.ex",
+    "module": "FountProbe.Comparison",
+    "kind": "production",
+    "disposition": "REIMPLEMENTED",
+    "destinations": [
+      "packages/fount_intelligence/lib/fount/intelligence/playbooks/comparison.ex"
+    ]
+  },
+  {
+    "source": "packages/fount_probe/lib/fount_probe/completion.ex",
+    "module": "FountProbe.Completion",
+    "kind": "production",
+    "disposition": "MOVED TO WORKSHOP",
+    "destinations": [
+      "packages/fount_workshop/lib/fount_workshop/writing/completion.ex"
+    ]
+  },
+  {
+    "source": "packages/fount_probe/lib/fount_probe/constraints.ex",
+    "module": "FountProbe.Constraints",
+    "kind": "production",
+    "disposition": "REIMPLEMENTED",
+    "destinations": [
+      "packages/fount_intelligence/lib/fount/intelligence/playbooks/constraints.ex"
+    ]
+  },
+  {
+    "source": "packages/fount_probe/lib/fount_probe/continuity.ex",
+    "module": "FountProbe.Continuity",
+    "kind": "production",
+    "disposition": "REIMPLEMENTED",
+    "destinations": [
+      "packages/fount_intelligence/lib/fount/intelligence/playbooks/continuity.ex"
+    ]
+  },
+  {
+    "source": "packages/fount_probe/lib/fount_probe/dependencies.ex",
+    "module": "FountProbe.Dependencies",
+    "kind": "production",
+    "disposition": "REIMPLEMENTED",
+    "destinations": [
+      "packages/fount_intelligence/lib/fount/intelligence/playbooks/dependencies.ex"
+    ]
+  },
+  {
+    "source": "packages/fount_probe/lib/fount_probe/dialogue.ex",
+    "module": "FountProbe.Dialogue",
+    "kind": "production",
+    "disposition": "REIMPLEMENTED",
+    "destinations": [
+      "packages/fount_intelligence/lib/fount/intelligence/playbooks/dialogue.ex"
+    ]
+  },
+  {
+    "source": "packages/fount_probe/lib/fount_probe/extraction.ex",
+    "module": "FountProbe.Extraction",
+    "kind": "production",
+    "disposition": "REIMPLEMENTED",
+    "destinations": [
+      "packages/fount_intelligence/lib/fount/intelligence/acquisition/extraction.ex"
+    ]
+  },
+  {
+    "source": "packages/fount_probe/lib/fount_probe/inventory.ex",
+    "module": "FountProbe.Inventory",
+    "kind": "production",
+    "disposition": "MOVED TO FOUNT",
+    "destinations": [
+      "packages/fount/lib/fount/inventory.ex"
+    ]
+  },
+  {
+    "source": "packages/fount_probe/lib/fount_probe/investigation.ex",
+    "module": "FountProbe.Investigation",
+    "kind": "production",
+    "disposition": "REIMPLEMENTED",
+    "destinations": [
+      "packages/fount_intelligence/lib/fount/intelligence/playbooks/investigation.ex"
+    ]
+  },
+  {
+    "source": "packages/fount_probe/lib/fount_probe/jev.ex",
+    "module": "FountProbe.Jev",
+    "kind": "production",
+    "disposition": "REIMPLEMENTED",
+    "destinations": [
+      "packages/fount_intelligence/lib/fount/intelligence/acquisition/measurements.ex"
+    ]
+  },
+  {
+    "source": "packages/fount_probe/lib/fount_probe/knowledge.ex",
+    "module": "FountProbe.Knowledge",
+    "kind": "production",
+    "disposition": "REIMPLEMENTED",
+    "destinations": [
+      "packages/fount_intelligence/lib/fount/intelligence/acquisition/knowledge.ex"
+    ]
+  },
+  {
+    "source": "packages/fount_probe/lib/fount_probe/knowledge_trace/behavior.ex",
+    "module": "FountProbe.KnowledgeTrace.Behavior",
+    "kind": "production",
+    "disposition": "REIMPLEMENTED",
+    "destinations": [
+      "packages/fount_intelligence/lib/fount/intelligence/playbooks/knowledge_trace/behavior.ex"
+    ]
+  },
+  {
+    "source": "packages/fount_probe/lib/fount_probe/knowledge_trace.ex",
+    "module": "FountProbe.KnowledgeTrace",
+    "kind": "production",
+    "disposition": "REIMPLEMENTED",
+    "destinations": [
+      "packages/fount_intelligence/lib/fount/intelligence/playbooks/knowledge_trace.ex"
+    ]
+  },
+  {
+    "source": "packages/fount_probe/lib/fount_probe/launcher.ex",
+    "module": "FountProbe.Launcher",
+    "kind": "production",
+    "disposition": "MOVED TO WORKSHOP",
+    "destinations": [
+      "packages/fount_workshop/lib/fount_workshop/launcher.ex"
+    ]
+  },
+  {
+    "source": "packages/fount_probe/lib/fount_probe/live_example.ex",
+    "module": "FountProbe.LiveExample",
+    "kind": "production",
+    "disposition": "MOVED TO WORKSHOP",
+    "destinations": [
+      "packages/fount_workshop/lib/fount_workshop/analysis_example.ex"
+    ]
+  },
+  {
+    "source": "packages/fount_probe/lib/fount_probe/profile.ex",
+    "module": "FountProbe.Profile",
+    "kind": "production",
+    "disposition": "REIMPLEMENTED",
+    "destinations": [
+      "packages/fount_observe/lib/fount/observe/lens.ex"
+    ]
+  },
+  {
+    "source": "packages/fount_probe/lib/fount_probe/projection.ex",
+    "module": "FountProbe.Projection",
+    "kind": "production",
+    "disposition": "REIMPLEMENTED",
+    "destinations": [
+      "packages/fount_observe/lib/fount/observe/projection.ex",
+      "packages/fount/lib/fount/selection.ex"
+    ]
+  },
+  {
+    "source": "packages/fount_probe/lib/fount_probe/report.ex",
+    "module": "FountProbe.Report",
+    "kind": "production",
+    "disposition": "REIMPLEMENTED",
+    "destinations": [
+      "packages/fount_intelligence/lib/fount/intelligence/reporting/report.ex"
+    ]
+  },
+  {
+    "source": "packages/fount_probe/lib/fount_probe/retrieval.ex",
+    "module": "FountProbe.Retrieval",
+    "kind": "production",
+    "disposition": "REIMPLEMENTED",
+    "destinations": [
+      "packages/fount_intelligence/lib/fount/intelligence/playbooks/retrieval.ex"
+    ]
+  },
+  {
+    "source": "packages/fount_probe/lib/fount_probe/saved_records.ex",
+    "module": "FountProbe.SavedRecords",
+    "kind": "production",
+    "disposition": "REIMPLEMENTED",
+    "destinations": [
+      "packages/fount_intelligence/lib/fount/intelligence/persistence/saved_records.ex"
+    ]
+  },
+  {
+    "source": "packages/fount_probe/lib/fount_probe/scene_mechanics.ex",
+    "module": "FountProbe.SceneMechanics",
+    "kind": "production",
+    "disposition": "REIMPLEMENTED",
+    "destinations": [
+      "packages/fount_intelligence/lib/fount/intelligence/playbooks/scene_mechanics.ex"
+    ]
+  },
+  {
+    "source": "packages/fount_probe/lib/fount_probe/search.ex",
+    "module": "FountProbe.Search",
+    "kind": "production",
+    "disposition": "MOVED TO FOUNT",
+    "destinations": [
+      "packages/fount/lib/fount/search.ex"
+    ]
+  },
+  {
+    "source": "packages/fount_probe/lib/fount_probe/state.ex",
+    "module": "FountProbe.State",
+    "kind": "production",
+    "disposition": "REIMPLEMENTED",
+    "destinations": [
+      "packages/fount_intelligence/lib/fount/intelligence/acquisition/views.ex"
+    ]
+  },
+  {
+    "source": "packages/fount_probe/lib/fount_probe/strategy_contrast.ex",
+    "module": "FountProbe.StrategyContrast",
+    "kind": "production",
+    "disposition": "REIMPLEMENTED",
+    "destinations": [
+      "packages/fount_intelligence/lib/fount/intelligence/playbooks/strategy_contrast.ex"
+    ]
+  },
+  {
+    "source": "packages/fount_probe/lib/fount_probe/voice.ex",
+    "module": "FountProbe.Voice",
+    "kind": "production",
+    "disposition": "REIMPLEMENTED",
+    "destinations": [
+      "packages/fount_intelligence/lib/fount/intelligence/playbooks/voice.ex"
+    ]
+  },
+  {
+    "source": "packages/fount_probe/lib/fount_probe/writing/decision_policy.ex",
+    "module": "FountProbe.Writing.DecisionPolicy",
+    "kind": "production",
+    "disposition": "REIMPLEMENTED",
+    "destinations": [
+      "packages/fount_intelligence/lib/fount/intelligence/capabilities/decision_policy.ex"
+    ]
+  },
+  {
+    "source": "packages/fount_probe/lib/fount_probe/writing/evidence.ex",
+    "module": "FountProbe.Writing.Evidence",
+    "kind": "production",
+    "disposition": "MOVED TO FOUNT",
+    "destinations": [
+      "packages/fount/lib/fount/source_evidence.ex"
+    ]
+  },
+  {
+    "source": "packages/fount_probe/lib/fount_probe/writing/executor.ex",
+    "module": "FountProbe.Writing.Executor",
+    "kind": "production",
+    "disposition": "REIMPLEMENTED",
+    "destinations": [
+      "packages/fount_observe/lib/fount/observe/association.ex"
+    ]
+  },
+  {
+    "source": "packages/fount_probe/lib/fount_probe.ex",
+    "module": "FountProbe",
+    "kind": "production",
+    "disposition": "REIMPLEMENTED",
+    "destinations": [
+      "packages/fount_intelligence/lib/fount/intelligence.ex"
+    ]
+  },
+  {
+    "source": "packages/fount_probe/lib/mix/tasks/fount.probe.ex",
+    "module": "Mix.Tasks.Fount.Probe",
+    "kind": "production",
+    "disposition": "MOVED TO WORKSHOP",
+    "destinations": [
+      "packages/fount_workshop/lib/mix/tasks/fount.analyze.ex"
+    ]
+  },
+  {
+    "source": "packages/fount_probe/lib/mix/tasks/fount.search.ex",
+    "module": "Mix.Tasks.Fount.Search",
+    "kind": "production",
+    "disposition": "MOVED TO WORKSHOP",
+    "destinations": [
+      "packages/fount_workshop/lib/mix/tasks/fount.search.ex"
+    ]
+  }
+]

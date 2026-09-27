@@ -46,7 +46,7 @@ defmodule FountWorkshop.Writing.Generation do
         })
 
     with {:ok, proposal, traces} <-
-           FountProbe.Completion.complete(
+           FountWorkshop.Writing.Completion.complete(
              services[:inference],
              prompt,
              schema,

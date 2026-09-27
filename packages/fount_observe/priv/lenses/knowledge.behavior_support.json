@@ -1,0 +1,28 @@
+{
+  "id": "knowledge.behavior_support",
+  "description": "Screenplay measurement wording; interpretation policy is uncalibrated unless separately validated.",
+  "sensor": "system_one",
+  "projection": "explicit_state",
+  "context_contract": {
+    "required": {},
+    "optional": {},
+    "allow_unknown": false
+  },
+  "question_overrides": [
+    {
+      "key": "requires_belief",
+      "kind": "noul",
+      "instructions": "Does this selected behavior require the subject already to believe the proposition? Judge the behavior, not whether the proposition is true."
+    },
+    {
+      "key": "prior_belief",
+      "kind": "noul",
+      "instructions": "Does the supplied prior accessible material support this subject already believing the proposition? Exclude the selected behavior itself and later text."
+    }
+  ],
+  "interpretation_policy": {
+    "support_probability": 0.8,
+    "unsupported_probability": 0.2
+  },
+  "output_contract": "observe.answer_set"
+}

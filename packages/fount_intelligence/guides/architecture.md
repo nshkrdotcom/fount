@@ -1,0 +1,15 @@
+# Pure interpretation and explicit acquisition
+
+The package graph is `fount <- fount_observe <- fount_intelligence <- fount_workshop`, with direct canonical dependencies where needed. Only Observe depends on SystemOneSDK. Only Workshop depends on Inference and owns provider-specific completion integration. No previous analysis package or delegate remains.
+
+`StoryWorld.Records` validates proposed records against exact selected evidence. `Reader.Reveal` computes threshold crossings/retractions from explicit measured points. `Capabilities.DecisionPolicy` and `Capabilities.Interpretation` derive policy outcomes without acquiring evidence. These pure components receive values and return values; they do not call providers, databases, environment, filesystem, clocks or randomness.
+
+`Acquisition` creates source-backed Observe requests or invokes explicit host proposal services. `Playbooks` compose existing inspections and experiments. `Reporting` binds logical result contracts and source identity. `Persistence.SavedRecords` validates reusable stored analytical material. `Runner` applies shared resources and checks citations against current/explicit historical models. Workshop supplies completion and measured-layout functions without becoming an Intelligence dependency.
+
+## Gate
+
+Run `mix fount.architecture` at the workspace root after dependency setup. It builds the workspace then checks all production source and compiled imports/attributes/debug references. Source traversal resolves ordinary and grouped aliases, nested module scope, imports, structs, remote calls and captures. The gate rejects wrong package ownership, native-provider leakage, pure-core shell/IO dependencies, dynamic dispatch in pure code, forbidden effectful calls, and a leftover removed-package directory.
+
+`mix fount.architecture --source-only` from this package skips compiled inspection and labels its report accordingly. Full QC requires compiled modules for every owned production module, deterministic replay tests, and a `mix xref` dependency review. Macro-generated/runtime-dispatched code is not proven pure by a static scan alone; this gate is enforcement plus evidence, not a mathematical purity guarantee.
+
+The allowed Observe leaf set is explicit. `Observation`, `MeasurementResult`, `Distribution`, exact references/errors and typed neutral context primitives may be read by pure logic; the executor, provider handles, lenses, registry and cache may not. No full temporal/reader-state or diagnosis expansion is smuggled into Phase 1.

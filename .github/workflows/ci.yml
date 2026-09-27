@@ -50,7 +50,7 @@ jobs:
       - run: mix docs --warnings-as-errors
       - run: mix hex.build
 
-  workshop:
+  workspace:
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -58,11 +58,11 @@ jobs:
         env:
           POSTGRES_USER: fount
           POSTGRES_PASSWORD: fount_test
-          POSTGRES_DB: fount_test
+          POSTGRES_DB: fount_integration
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U fount -d fount_test"
+          --health-cmd "pg_isready -U fount -d fount_integration"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
@@ -71,9 +71,7 @@ jobs:
       FOUNT_TEST_PORT: '5432'
       FOUNT_TEST_USER: fount
       FOUNT_TEST_PASSWORD: fount_test
-    defaults:
-      run:
-        working-directory: packages/fount_workshop
+      FOUNT_DATABASE_URL: ecto://fount:fount_test@localhost:5432/fount_integration
     steps:
       - uses: actions/checkout@v4
       - uses: erlef/setup-beam@v1
@@ -84,12 +82,20 @@ jobs:
         with:
           node-version: '22'
       - run: sudo apt-get update && sudo apt-get install -y poppler-utils
-      - run: npm ci
-      - run: mix deps.get
+      - run: mix local.hex --force
+      - run: mix setup
       - run: mix format --check-formatted
-      - run: mix deps.unlock --check-unused
-      - run: mix compile --warnings-as-errors
+      - run: mix blitz.workspace format --check-formatted
+      - run: mix blitz.workspace lock_check
+      - run: mix blitz.workspace compile
       - run: mix test
-      - run: mix credo --strict
-      - run: mix dialyzer
-      - run: mix docs --warnings-as-errors
+      - run: mix fount.architecture
+      - run: mix blitz.workspace credo --strict
+      - run: mix blitz.workspace dialyzer
+      - run: mix blitz.workspace docs
+      - run: MIX_ENV=test mix ecto.migrate
+        working-directory: packages/fount
+      - run: MIX_ENV=test mix test integration
+        working-directory: packages/fount
+      - run: MIX_ENV=test mix test integration
+        working-directory: packages/fount_workshop

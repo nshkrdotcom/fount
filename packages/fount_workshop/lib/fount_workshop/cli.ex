@@ -68,13 +68,13 @@ defmodule FountWorkshop.CLI do
     paid =
       command in ~w(write materialize combine rebase) or (command == "session" and opts[:resume])
 
-    with {:ok, clients} <- FountProbe.Launcher.clients(inference: paid, jev: paid),
-         {:ok, voices} <- FountProbe.Launcher.voices() do
+    with {:ok, clients} <- FountWorkshop.Launcher.clients(inference: paid, observe: paid),
+         {:ok, voices} <- FountWorkshop.Launcher.voices() do
       {:ok,
        %{
          store: Store.new(repo),
          inference: clients.inference,
-         jev: clients.system_one,
+         observe: clients.observe,
          renderer: PDF,
          voices: voices
        }}

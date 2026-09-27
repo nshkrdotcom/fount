@@ -175,7 +175,7 @@ defmodule FountWorkshop.CandidateScopeTest do
         "selection" => %{"targets" => [%{"kind" => "scene", "id" => office.id}]}
       })
 
-    assert {:ok, units} = FountProbe.Projection.select(model, selection)
+    assert {:ok, units} = Fount.Selection.select(model, selection)
     assert Enum.any?(units, &(&1["scene_id"] == office.id))
     refute Enum.any?(units, &(&1["scene_id"] == dock.id))
   end
@@ -198,7 +198,7 @@ defmodule FountWorkshop.CandidateScopeTest do
       })
 
     assert selection == %{"targets" => [%{"kind" => "scene", "id" => office.id}]}
-    assert {:ok, units} = FountProbe.Projection.select(model, selection)
+    assert {:ok, units} = Fount.Selection.select(model, selection)
     refute Enum.any?(units, &(&1["scene_id"] == dock.id))
   end
 

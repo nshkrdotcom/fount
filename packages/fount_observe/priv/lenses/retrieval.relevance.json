@@ -1,0 +1,25 @@
+{
+  "id": "retrieval.relevance",
+  "description": "Screenplay measurement wording; interpretation policy is uncalibrated unless separately validated.",
+  "sensor": "system_one",
+  "projection": "explicit_state",
+  "context_contract": {
+    "required": {},
+    "optional": {},
+    "allow_unknown": false
+  },
+  "question_overrides": [
+    {
+      "key": "relevant",
+      "kind": "noul",
+      "instructions": "Is this passage substantively relevant to the original writer query, rather than merely sharing a word?"
+    }
+  ],
+  "interpretation_policy": {
+    "support_probability": 0.8,
+    "unsupported_probability": 0.2,
+    "minimum_confidence": 0.7,
+    "minimum_margin": 0.15
+  },
+  "output_contract": "observe.answer_set"
+}

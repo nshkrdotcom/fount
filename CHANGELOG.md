@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased - Phase 1 offline implementation
+
+- Split atomic measurements and screenplay interpretation into Observe and Intelligence; update Workshop to the new services without changing explicit acceptance.
+- Preserve existing writing/analysis behavior and add source-evidence, batch/cache/boundary tests and a writer demonstration.
+- Runtime verification is pending; prior success records do not certify this change.
+
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),

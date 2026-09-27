@@ -6,7 +6,7 @@ defmodule FountWorkshop.Candidate do
   alias Fount.Writing.LocalReferences
   alias Fount.Writing.Schema
   alias Fount.Writing.UTF8Span
-  alias FountProbe.Writing.Evidence
+  alias Fount.SourceEvidence, as: Evidence
   alias FountWorkshop.Writing.ChangeGroups
   alias FountWorkshop.Writing.Footprint
   alias FountWorkshop.Writing.Layout
@@ -38,7 +38,7 @@ defmodule FountWorkshop.Candidate do
       constraints = Keyword.get(opts, :constraints, [])
 
       checks =
-        FountProbe.Constraints.deterministic(
+        Fount.Intelligence.Playbooks.Constraints.deterministic(
           base,
           draft,
           constraints,
@@ -326,7 +326,7 @@ defmodule FountWorkshop.Candidate do
       |> Keyword.put(:inventions, proposal(candidate)["inventions"])
 
     with {:ok, report} <-
-           FountProbe.Constraints.run(
+           Fount.Intelligence.Playbooks.Constraints.run(
              candidate["screenplay"],
              %{"constraints" => constraints},
              FountWorkshop.Store.clients(services),

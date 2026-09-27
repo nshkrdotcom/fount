@@ -33,6 +33,6 @@ defmodule FountWorkshop.Store do
   def normalize(map) when is_map(map),
     do: Map.new(map, fn {key, value} -> {to_string(key), value} end)
 
-  def clients(services), do: %{system_one: services[:jev], inference: services[:inference]}
+  def clients(services), do: FountWorkshop.Services.analysis(services)
   def reader(services), do: fn sid, rid -> call(services[:store], :load_revision, [sid, rid]) end
 end

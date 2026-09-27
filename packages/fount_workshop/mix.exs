@@ -28,7 +28,7 @@ defmodule FountWorkshop.MixProject do
 
   defp deps do
     [
-      {:fount_probe, path: "../fount_probe"},
+      {:fount_intelligence, path: "../fount_intelligence"},
       {:fount, "~> 0.1.0", path: "../fount"},
       {:inference, "~> 0.4.0"},
       {:agent_session_manager, "~> 0.16.0"},

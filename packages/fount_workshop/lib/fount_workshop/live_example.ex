@@ -16,21 +16,21 @@ defmodule FountWorkshop.LiveExample do
       {root, _} = A.fixture()
       key = "writer-#{mode}-#{Fount.ID.v4()}"
       Fount.Persistence.create(repo, key, root) |> A.require!()
-      clients = FountProbe.Launcher.clients() |> A.require!()
+      clients = FountWorkshop.Launcher.clients() |> A.require!()
 
       services = %{
         store: Store.new(repo),
         inference: clients.inference,
-        jev: clients.system_one,
+        observe: clients.observe,
         renderer: FountWorkshop.Export.PDF
       }
 
-      budget = FountProbe.Budget.new(max_inference_calls: 40, max_jev_states: 1500)
+      budget = FountWorkshop.Writing.Budget.new(max_inference_calls: 40, max_measurement_states: 1500)
 
       opts = [
         budget: budget,
         max_inference_calls: 40,
-        max_jev_states: 1500,
+        max_measurement_states: 1500,
         max_context_bytes: 100_000,
         output_dir: directory,
         render: mode == "sequence_routes",
@@ -67,7 +67,7 @@ defmodule FountWorkshop.LiveExample do
         "packets" => packets,
         "details" => details,
         "decision" => decision,
-        "spent" => FountProbe.Budget.snapshot(budget)
+        "spent" => FountWorkshop.Writing.Budget.snapshot(budget)
       }
 
       A.write!(directory, "fixture-bindings.json", %{
@@ -231,12 +231,12 @@ defmodule FountWorkshop.LiveExample do
           model = candidate["screenplay"]
 
           points = [
-            FountProbe.LiveExample.end_point(model, records.id),
-            FountProbe.LiveExample.end_point(model, queue.id)
+            FountWorkshop.AnalysisExample.end_point(model, records.id),
+            FountWorkshop.AnalysisExample.end_point(model, queue.id)
           ]
 
           report =
-            FountProbe.run(
+            Fount.Intelligence.run(
               model,
               "knowledge_trace",
               %{
@@ -259,7 +259,7 @@ defmodule FountWorkshop.LiveExample do
           A.write!(
             opts[:output_dir],
             candidate["id"] <> ".knowledge.json",
-            FountProbe.Report.to_map(report)
+            Fount.Intelligence.Reporting.Report.to_map(report)
           )
 
           %{

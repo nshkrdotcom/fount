@@ -28,12 +28,13 @@ run_check() {
   printf '%s\t%s\t%s\t%s\t%s\n' "$package" "$check" "$status" "$code" "$log" >> "$OUT/status.tsv"
   tail -n 40 "$log"
 }
-for package in fount fount_probe fount_workshop; do
+for package in fount fount_observe fount_intelligence fount_workshop; do
   run_check "$package" deps_get mix deps.get
   run_check "$package" format mix format --check-formatted
   run_check "$package" compile env MIX_ENV=test mix compile --warnings-as-errors
   run_check "$package" test env MIX_ENV=test mix test
 done
+run_check fount_intelligence architecture env MIX_ENV=test mix fount.architecture
 printf '\nActual results: %s/status.tsv\n' "$OUT"
 printf 'PostgreSQL, PDF, providers and speech were not requested by this offline script.\n'
 exit "$FAILED"

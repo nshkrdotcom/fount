@@ -1,7 +1,7 @@
 defmodule FountWorkshop.Strategy do
   @moduledoc "Dramatic alternatives are stored separately from pages and can be materialized after writer selection."
   alias Fount.Writing.Schema
-  alias FountProbe.Completion
+  alias FountWorkshop.Writing.Completion
   alias FountWorkshop.Session
   alias FountWorkshop.Store
   alias FountWorkshop.Writing.Context

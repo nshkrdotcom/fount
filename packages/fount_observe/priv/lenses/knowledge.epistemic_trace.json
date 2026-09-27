@@ -1,0 +1,40 @@
+{
+  "id": "knowledge.epistemic_trace",
+  "description": "Screenplay measurement wording; interpretation policy is uncalibrated unless separately validated.",
+  "sensor": "system_one",
+  "projection": "explicit_state",
+  "context_contract": {
+    "required": {},
+    "optional": {},
+    "allow_unknown": false
+  },
+  "question_overrides": [
+    {
+      "key": "established",
+      "kind": "noul",
+      "instructions": "Does the accessible evidence establish the positive proposition? A statement may be a lie; intentions are not established facts."
+    },
+    {
+      "key": "could_infer",
+      "kind": "noul",
+      "instructions": "Could this subject reasonably infer the proposition from this accessible material? Do not use outside or later information."
+    },
+    {
+      "key": "believes",
+      "kind": "noul",
+      "instructions": "Does the accessible material support this subject believing the proposition? Belief and truth are separate; for a reader/audience assess the invited belief."
+    },
+    {
+      "key": "suspicion",
+      "kind": "score",
+      "instructions": "How much does the accessible material invite suspicion of the proposition?"
+    }
+  ],
+  "interpretation_policy": {
+    "support_probability": 0.8,
+    "unsupported_probability": 0.2,
+    "minimum_confidence": 0.7,
+    "minimum_margin": 0.15
+  },
+  "output_contract": "observe.answer_set"
+}

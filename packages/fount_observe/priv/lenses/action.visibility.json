@@ -1,0 +1,40 @@
+{
+  "id": "action.visibility",
+  "description": "Screenplay measurement wording; interpretation policy is uncalibrated unless separately validated.",
+  "sensor": "system_one",
+  "projection": "explicit_state",
+  "context_contract": {
+    "required": {},
+    "optional": {},
+    "allow_unknown": false
+  },
+  "question_overrides": [
+    {
+      "key": "visibility",
+      "kind": "score",
+      "instructions": "How much of this action passage communicates visible behavior or audible events? This describes prose, not artistic quality."
+    },
+    {
+      "key": "spatial",
+      "kind": "noul",
+      "instructions": "Is the spatial relationship or sequence of physical actions unclear in this supplied passage?"
+    },
+    {
+      "key": "camera",
+      "kind": "noul",
+      "instructions": "Does the passage explicitly instruct the camera or lens?"
+    },
+    {
+      "key": "interior",
+      "kind": "noul",
+      "instructions": "Does the passage communicate private thought or explanation not shown by an observable action?"
+    }
+  ],
+  "interpretation_policy": {
+    "support_probability": 0.8,
+    "unsupported_probability": 0.2,
+    "minimum_confidence": 0.7,
+    "minimum_margin": 0.15
+  },
+  "output_contract": "observe.answer_set"
+}

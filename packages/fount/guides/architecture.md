@@ -49,3 +49,7 @@ Screenplay construction, editing, analysis, and format projection work on immuta
 - `Fount.Fragment` / `Fount.Builder` — generate valid screenplay source from structured values.
 
 The core intentionally has no dependency on an LLM, vector database, web framework, or editor toolkit. Its relational boundary uses PostgreSQL; pure model APIs do not require a running database.
+
+## Canonical selection and evidence
+
+`Fount.Selection` selects exact source material; `Fount.SourceEvidence` validates revision identities, UTF-8 spans, excerpts, and citations. `Fount.Inventory` and `Fount.Search` are provider-free structural queries. These belong to the canonical package and do not acquire measurements or interpret story quality.

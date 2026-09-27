@@ -2,8 +2,8 @@ defmodule FountWorkshop.Session do
   @moduledoc "Durable writer sessions with immutable bases, saved successes and explicit pending/failed branch retries."
   alias Fount.Screenplay.Model
   alias Fount.Writing.CanonicalJSON
-  alias FountProbe.Budget
-  alias FountProbe.Report
+  alias FountWorkshop.Writing.Budget
+  alias Fount.Intelligence.Reporting.Report
   alias FountWorkshop.Candidate
   alias FountWorkshop.Request
   alias FountWorkshop.Store
@@ -544,7 +544,7 @@ defmodule FountWorkshop.Session do
       Map.new(
         [
           max_inference_calls: 12,
-          max_jev_states: 500,
+          max_measurement_states: 500,
           max_repair_rounds: 1,
           max_investigation_followups: 1,
           max_context_bytes: 100_000
@@ -553,7 +553,7 @@ defmodule FountWorkshop.Session do
       )
 
   defp option_key("max_inference_calls"), do: :max_inference_calls
-  defp option_key("max_jev_states"), do: :max_jev_states
+  defp option_key("max_measurement_states"), do: :max_measurement_states
   defp option_key("max_repair_rounds"), do: :max_repair_rounds
   defp option_key("max_investigation_followups"), do: :max_investigation_followups
   defp option_key("max_context_bytes"), do: :max_context_bytes

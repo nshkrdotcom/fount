@@ -1,0 +1,45 @@
+{
+  "id": "dialogue.interaction",
+  "description": "Screenplay measurement wording; interpretation policy is uncalibrated unless separately validated.",
+  "sensor": "system_one",
+  "projection": "explicit_state",
+  "context_contract": {
+    "required": {},
+    "optional": {},
+    "allow_unknown": false
+  },
+  "question_overrides": [
+    {
+      "key": "responsive",
+      "kind": "noul",
+      "instructions": "Does the current turn respond to the immediately preceding turn, including a playable refusal or deflection?"
+    },
+    {
+      "key": "explicit_intention",
+      "kind": "noul",
+      "instructions": "Does this turn explicitly state the speaker's emotion or intention? Direct speech is allowed; this is descriptive."
+    },
+    {
+      "key": "information",
+      "kind": "noul",
+      "instructions": "Does this turn primarily communicate story information?"
+    },
+    {
+      "key": "reason_to_say",
+      "kind": "noul",
+      "instructions": "Does the supplied scene show a specific reason for the speaker to say this now?"
+    },
+    {
+      "key": "repeats",
+      "kind": "noul",
+      "instructions": "Does the current turn repeat the same audience information in the supplied prior turns without an evident new purpose?"
+    }
+  ],
+  "interpretation_policy": {
+    "support_probability": 0.8,
+    "unsupported_probability": 0.2,
+    "minimum_confidence": 0.7,
+    "minimum_margin": 0.15
+  },
+  "output_contract": "observe.answer_set"
+}

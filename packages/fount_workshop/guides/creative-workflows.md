@@ -2,7 +2,7 @@
 
 ## Canonical flow
 
-`FountWorkshop.Session.start(model, request, services, opts)` validates the original base revision and a closed request. `Store.save_session` persists that immutable base/request with optimistic session versions. `Writing.Context` separates editable pages from adjacent read-only context and exact evidence. `Writing.Preparation` executes actual workflow-specific Probe inspections; its context, source revision IDs and results are cached for resume. `Strategy.generate` creates explicit dramatic routes. `Writing.Generation` obtains a full canonical proposal through `FountProbe.Completion`, validates JSON/contracts and compiles actual edits. `Candidate.check` performs deterministic and semantic constraints and optional real PDF comparison. Reports and candidate revisions are stored without moving the accepted head.
+`FountWorkshop.Session.start(model, request, services, opts)` validates the original base revision and a closed request. `Store.save_session` persists that immutable base/request with optimistic session versions. `Writing.Context` separates editable pages from adjacent read-only context and exact evidence. `Writing.Preparation` executes actual workflow-specific Probe inspections; its context, source revision IDs and results are cached for resume. `Strategy.generate` creates explicit dramatic routes. `Writing.Generation` obtains a full canonical proposal through `FountWorkshop.Writing.Completion`, validates JSON/contracts and compiles actual edits. `Candidate.check` performs deterministic and semantic constraints and optional real PDF comparison. Reports and candidate revisions are stored without moving the accepted head.
 
 `Session.resume` reads the saved base and context. It does not silently retarget to the current accepted head, rerun all successful branches or regenerate strategy IDs. `Strategy.materialize` selects saved approaches to materialize. Partial inspections and exhausted call/state budgets remain visible.
 
@@ -23,7 +23,7 @@ services = %{
 
 Clients are supplied by the application; environment access is confined to launchers. The optional `voices` service map is for audition/table reads. The application store is PostgreSQL. The test store under `support/` is an explicitly injected test seam, not a production fallback.
 
-Provider boundaries use the supplied source APIs: `Inference.Client.agent_session!`, `Inference.capabilities`, `Inference.Request`/response formats and `Inference.generate`; public System One Noul/Choice/Score constructors and prepared stream execution. The existing `FountProbe.Writing.Executor` owns association with SDK results. No dependency internals are copied into Fount and no dependency repository is modified.
+Provider boundaries use the supplied source APIs: `Inference.Client.agent_session!`, `Inference.capabilities`, `Inference.Request`/response formats and `Inference.generate`; public System One Noul/Choice/Score constructors and prepared stream execution. The existing `Fount.Observe.Association` owns association with SDK results. No dependency internals are copied into Fount and no dependency repository is modified.
 
 ## Data and result conventions
 
@@ -48,7 +48,7 @@ Evidence records carry screenplay/revision/typed target, exact excerpt and half-
 
 Core contracts remain `packages/fount/priv/writing_contracts/`; original target contracts remain under the archived original spec. New Core CLI helpers are `lib/fount/cli*`; migrations are `priv/repo/migrations/`.
 
-Probe public dispatch is `lib/fount_probe.ex`, closed schemas are `catalog.ex`, tool modules are beside it, and actual question assets are `priv/profiles/*.json`. Shared provider behavior is `completion.ex`, `jev.ex`, `profile.ex`, `budget.ex` and the retained `writing/` helpers.
+Probe public dispatch is `lib/fount_intelligence.ex`, closed schemas are `catalog.ex`, tool modules are beside it, and actual question assets are `priv/profiles/*.json`. Shared provider behavior is `completion.ex`, `jev.ex`, `profile.ex`, `budget.ex` and the retained `writing/` helpers.
 
 Workshop domain modules are `lib/fount_workshop/`. Generation/preparation/context/layout/footprints/recovery helpers are in its `writing/`. Mix tasks are under each owning package's `lib/mix/tasks/`. Read tests alongside every changed module, then KNOWN_GAPS before broadening a claim.
 

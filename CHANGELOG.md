@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased - Phase 5 offline implementation
+
+- Add pure evidence-composed Diagnosis with explicit evidence needs, abstention, uncertainty, support/counterevidence, alternatives and protected strengths.
+- Add a closed Phase-5 acquisition/context bridge and two declarative Observe diagnosis lenses.
+- Add ten writer-facing diagnostic playbook definitions, preflight/resource caps, multi-pass Sandbox execution, writer result packets and deterministic Markdown/JSON rendering.
+- Preserve all Phase 1-4 package boundaries, low-level inspection playbooks, Workshop behavior and canonical Fount behavior; no Phase-6 capability-family implementation is included.
+- Runtime Mix/ExUnit/package/provider checks remain for Codex after application; the offline environment only ran the recorded Python/static/archive checks.
+
 ## Unreleased - Phase 1 offline implementation
 
 - Split atomic measurements and screenplay interpretation into Observe and Intelligence; update Workshop to the new services without changing explicit acceptance.

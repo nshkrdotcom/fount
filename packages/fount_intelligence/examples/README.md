@@ -12,3 +12,6 @@ The historical Phase 1 writing preservation demonstration remains `packages/foun
 ## Phase 4 temporal and Reader demonstration
 
 `mix run examples/phase_four.exs` demonstrates the same screenplay in two coordinate systems: a flashback that is presented later but constrained earlier in diegetic time, and a first-reader ledger in which a private note is ignored until the visible reveal occurs. It also prints an event-qualified character view. The example has no provider or database call.
+## Phase 5 diagnosis and multi-pass writer-playbook demonstration
+
+`mix run examples/phase_five.exs` builds a small interrogation scene, derives its actual evidence IDs, creates matching `Fount.Observe.Sandbox` fixtures, runs the Scene Doctor shell through base Observe measurement, pure evidence-need reduction, closed-context measurement, and pure diagnosis, then renders the writer result packet as Markdown. It uses no database or hosted provider.

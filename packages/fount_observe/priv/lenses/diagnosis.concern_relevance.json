@@ -1,0 +1,29 @@
+{
+  "id": "diagnosis.concern_relevance",
+  "description": "Phase-5 diagnostic shell measurement: whether selected source evidence bears on the writer concern. This is an uncalibrated model estimate, not a screenplay-quality judgment.",
+  "sensor": "system_one",
+  "projection": "explicit_state",
+  "context_contract": {
+    "required": {},
+    "optional": {},
+    "allow_unknown": false
+  },
+  "question_overrides": [
+    {
+      "key": "relevant",
+      "kind": "noul",
+      "instructions": "Considering only the supplied screenplay excerpt and writer concern, does this excerpt bear directly on diagnosing that concern?"
+    }
+  ],
+  "interpretation_policy": {
+    "support_probability": 0.8,
+    "unsupported_probability": 0.2,
+    "minimum_confidence": 0.7,
+    "minimum_margin": 0.15
+  },
+  "output_contract": "observe.answer_set",
+  "resource_policy_request": {
+    "max_states": 200,
+    "max_provider_requests": 200
+  }
+}

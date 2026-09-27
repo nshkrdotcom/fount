@@ -24,3 +24,11 @@
 Use the executable catalog for exact field names and schemas. The examples in `usage.md`, `investigations-and-evidence.md` and `comparison-and-ablation.md` show the orchestration surfaces. Provider-free inventory needs `include_summaries: false` in the string-keyed request map. Other playbooks require the services their work actually uses; they do not silently substitute invented answers when a service is missing.
 
 The first-phase catalog preserves existing inspection behavior. It is not a claim that all future twelve-family capabilities, temporal reducers or human-calibrated diagnostics are implemented.
+
+## Phase-5 writer playbooks
+
+`Fount.Intelligence.writer_playbooks/0` exposes a second closed catalog for writer-facing diagnosis. It does not replace or remove the sixteen low-level inspection intents above; those remain available to existing callers. The ten writer-playbook IDs are `scene_doctor`, `dialogue_pass`, `character_trajectory`, `relationship_pass`, `suspense_audit`, `sequence_momentum`, `setup_payoff`, `notes_diagnosis`, `submission_read`, and `revision_regression`.
+
+Each definition is data only: purpose, writer questions, existing foundational inspection tools, and later capability-family dependencies. No definition names a module/function, provider endpoint, credential, persistence adapter, or arbitrary executable stage. Phase 5 supplies the common diagnosis/multi-pass shell; the deeper capability-family semantics advertised by those definitions remain Phase 6-8 work.
+
+Use `preflight_playbook/4` before `run_playbook/5`. A run requires explicit competing hypotheses rather than silently manufacturing a single explanation. Missing or uncertain evidence becomes an investigation/abstention record rather than a forced conclusion.

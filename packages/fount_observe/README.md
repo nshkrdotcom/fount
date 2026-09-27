@@ -44,3 +44,7 @@ recordings. See [Measurement substrate](guides/measurement-substrate.md).
 Run `mix run examples/phase_two.exs` after dependency setup. Its fixed fixture
 answers are workflow demonstrations, not human validation. Phase 2 runtime
 results are recorded in the docset's `PHASE_02_RUNTIME_QC_REPORT.md`.
+
+## Phase-5 diagnosis measurements
+
+The installed `diagnosis.concern_relevance` and `diagnosis.evidence_support` lenses are declarative measurement assets used by the Intelligence shell. The latter declares a closed context contract for the writer concern plus optional neutral facts, beliefs, relationship state and prior base-assessment literals. Observe remains unaware of Intelligence structs or diagnosis semantics beyond those explicit neutral inputs.

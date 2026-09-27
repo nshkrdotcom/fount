@@ -1,0 +1,41 @@
+{
+  "id": "diagnosis.evidence_support",
+  "description": "Phase-5 contextual measurement for support and counterevidence of an explicit diagnosis hypothesis. Results remain uncalibrated model estimates.",
+  "sensor": "system_one",
+  "projection": "explicit_state",
+  "context_contract": {
+    "required": {
+      "concern": {"type": "literal"}
+    },
+    "optional": {
+      "known_facts": {"type": "list", "items": "fact"},
+      "speaker_beliefs": {"type": "list", "items": "belief"},
+      "relationship_state": {"type": "relation_summary"},
+      "base_assessments": {"type": "list", "items": "literal"}
+    },
+    "allow_unknown": false
+  },
+  "question_overrides": [
+    {
+      "key": "support",
+      "kind": "noul",
+      "instructions": "Considering only the supplied screenplay evidence, writer concern, and declared context, does the evidence materially support the stated diagnostic hypothesis?"
+    },
+    {
+      "key": "counterevidence",
+      "kind": "noul",
+      "instructions": "Considering only the supplied screenplay evidence, writer concern, and declared context, is there material evidence that contradicts or weakens the stated diagnostic hypothesis?"
+    }
+  ],
+  "interpretation_policy": {
+    "support_probability": 0.8,
+    "unsupported_probability": 0.2,
+    "minimum_confidence": 0.7,
+    "minimum_margin": 0.15
+  },
+  "output_contract": "observe.answer_set",
+  "resource_policy_request": {
+    "max_states": 100,
+    "max_provider_requests": 100
+  }
+}

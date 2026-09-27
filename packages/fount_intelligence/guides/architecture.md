@@ -12,7 +12,7 @@ Run `mix fount.architecture` at the workspace root after dependency setup. It bu
 
 `mix fount.architecture --source-only` from this package skips compiled inspection and labels its report accordingly. Full QC requires compiled modules for every owned production module, deterministic replay tests, and a `mix xref` dependency review. Macro-generated/runtime-dispatched code is not proven pure by a static scan alone; this gate is enforcement plus evidence, not a mathematical purity guarantee.
 
-The allowed Observe leaf set is explicit. `Observation`, `MeasurementResult`, `Distribution`, exact references/errors and typed neutral context primitives may be read by pure logic; the executor, provider handles, lenses, registry and cache may not. Phase 4 extends the pure core with `Temporal` views and a forward-only `Reader`. Diagnosis remains a later-phase responsibility.
+The allowed Observe leaf set is explicit. `Observation`, `MeasurementResult`, `Distribution`, exact references/errors and typed neutral context primitives may be read by pure logic; the executor, provider handles, lenses, registry and cache may not. Phase 4 extends the pure core with `Temporal` views and a forward-only `Reader`. Phase 5 adds pure `Diagnosis`, while `Acquisition.ContextBuilder`, the writer-playbook runner, lens loading and Observe execution remain in the shell.
 ## Pure StoryWorld / Temporal / Reader boundary
 
 The StoryWorld compiler consumes only canonical Fount values, allowed Observe leaf values, and explicit replay records/evidence. It adds no call to Observe execution, SystemOneSDK, Inference, Repo, filesystem, environment, clock, randomness, process state, or persistence. Deterministic IDs derive from screenplay/revision/content identities.
@@ -24,3 +24,11 @@ StoryWorld intentionally owns three independent graphs/coordinates: source prese
 `Fount.Intelligence.Reader` derives checkpoints from the canonical visible performed stream. Notes, boneyards and omitted material are excluded from that stream. Reader-visible events must cite current-revision evidence at or before their own presentation point; future evidence is rejected. Private events are ignored rather than allowed to mutate first-reader state.
 
 `Fount.Intelligence.Temporal` stays on the other side of the semantic split: it queries event-qualified StoryWorld state and partial story-time connectivity. Reader recomputation is a presentation suffix; temporal recomputation is a dependency-driven story-time connected region. Neither implies the other.
+
+## Phase-5 diagnosis shell
+
+`Fount.Intelligence.Diagnosis` normalizes writer concerns and competing hypotheses, composes support/counterevidence, keeps uncertainty explicit, and returns `EvidenceNeed` records instead of acquiring. It has no Observe executor, provider, Repo, filesystem, environment, clock, process or random dependency.
+
+`Fount.Intelligence.Playbooks.WriterRunner` owns the imperative sequence: base Observe measurements, pure evidence-need reduction, conversion of plain derived state into a lens-declared `Fount.Observe.Context`, contextual Observe measurements, and final pure diagnosis. The runner preflights the complete context before the first provider dispatch. The context builder rejects Intelligence structs, so rich domain structs cannot leak through the measurement boundary.
+
+The writer-facing packet keeps evidence, derived state, diagnosis, strategy and candidate material separate. Intelligence never materializes or accepts screenplay pages; Workshop retains that responsibility.

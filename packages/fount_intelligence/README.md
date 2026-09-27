@@ -20,9 +20,9 @@ Intelligence never accepts screenplay changes. Proposed fact extraction and inve
 
 Pure interpretation lives in `StoryWorld`, `Temporal`, `Reader` and `Capabilities`. Acquisition, playbooks, reporting and persistence are explicit shell responsibilities. The [architecture guide](guides/architecture.md) describes the enforced rules and their limits.
 
-Phase 4 adds qualified temporal views and a strict forward-only Reader reducer. Writers can inspect character/resource/relationship state at a diegetic event, keep partial story chronology separate from presentation order, follow explicit setup/payoff links, and ask what a first-time reader can carry at any visible screenplay checkpoint. Private notes do not enter Reader checkpoints, and later source evidence is rejected if an earlier Reader event tries to cite it. See [Temporal views and the forward Reader](guides/temporal-and-reader.md) and `mix run examples/phase_four.exs`.
+Phase 4 provides qualified temporal views and a strict forward-only Reader reducer. Phase 5 adds pure evidence-composed diagnosis plus a multi-pass shell that measures selected evidence, returns explicit evidence needs, converts rich state into closed Observe context, measures support/counterevidence, and emits a writer-facing result packet. The ten baseline writer playbooks are available through `Fount.Intelligence.writer_playbooks/0`; see [Diagnosis and multi-pass writer playbooks](guides/diagnosis-and-playbooks.md) and `mix run examples/phase_five.exs`.
 
-The Phase 4 source/tests/example in this delivery are written but not runtime-verified in this source-writing environment. Codex must format, compile, test and repair this same phase after the overlay is applied. The first-reader human checkpoint pilot is prepared as a separate domain-review packet and must not be fabricated. Diagnosis, acquisition-shell expansion and playbook work remain Phase 5 and are not included.
+The Phase 5 source/tests/example in this delivery are source-written against the post-Phase-4 snapshot but are not runtime-verified in this source-writing environment. Codex must format, compile, test and repair this same phase after the overlay is applied. The optional diagnosis/usefulness pilot is validation debt unless actually performed. Phase 6 capability-family implementation is not included.
 
 ## License
 

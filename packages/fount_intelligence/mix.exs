@@ -57,6 +57,7 @@ defmodule Fount.Intelligence.MixProject do
         "guides/verification.md",
         "guides/story-world.md",
         "guides/temporal-and-reader.md",
+        "guides/diagnosis-and-playbooks.md",
         "guides/investigations-and-evidence.md",
         "guides/comparison-and-ablation.md",
         "guides/playbook-catalog.md",
@@ -71,7 +72,9 @@ defmodule Fount.Intelligence.MixProject do
         Public: [
           Fount.Intelligence,
           Fount.Intelligence.Playbooks.Registry,
-          Fount.Intelligence.Playbooks.Request
+          Fount.Intelligence.Playbooks.Request,
+          Fount.Intelligence.Playbooks.WriterRegistry,
+          Fount.Intelligence.Reporting.WriterPacket
         ],
         "Pure interpretation": [
           Fount.Intelligence.Capabilities.DecisionPolicy,
@@ -81,10 +84,14 @@ defmodule Fount.Intelligence.MixProject do
           Fount.Intelligence.Reader.Reveal,
           Fount.Intelligence.Temporal,
           Fount.Intelligence.StoryWorld,
-          Fount.Intelligence.StoryWorld.Records
+          Fount.Intelligence.StoryWorld.Records,
+          Fount.Intelligence.Diagnosis,
+          Fount.Intelligence.Diagnosis.Concern
         ],
         "Acquisition and reporting": [
           Fount.Intelligence.Acquisition.Measurements,
+          Fount.Intelligence.Acquisition.Planner,
+          Fount.Intelligence.Playbooks.WriterRunner,
           Fount.Intelligence.Reporting.Report,
           Fount.Intelligence.Runner.Architecture
         ]

@@ -18,3 +18,11 @@ These Elixir tests and `examples/phase_three.exs` are **not run in the offline d
 The Phase-4 source delivery adds pure Temporal and Reader tests for non-linear presentation/story-time separation, directional relationship state, resource/knowledge views, explicit setup/payoff lifecycle, future-evidence rejection, deterministic replay, private-note exclusion, Reader question lifecycle, Reader-vs-diegetic knowledge differences, presentation-suffix recomputation, and story-time connected-region recomputation.
 
 These Elixir tests and `examples/phase_four.exs` are **not run in the offline delivery environment**. Codex must execute and repair them after the overlay is applied. The first-reader checkpoint pilot described by the implementation docset also remains a real human/domain gate; it must not be fabricated, and fixtures or model outputs cannot substitute for it.
+
+## Phase 5 runtime QC
+
+The Phase-5 source delivery adds tests for pure evidence needs and abstention, competing diagnoses, closed Observe context conversion, rejection of unknown slots and Intelligence structs, the exact ten-playbook registry, deterministic writer packets, a deterministic Sandbox multi-pass run, provider-request/state caps, partial coverage, and Diagnosis architecture violations.
+
+Codex must run at least the targeted `diagnosis_test.exs`, `context_builder_test.exs`, `writer_registry_test.exs`, `writer_packet_test.exs`, `writer_runner_test.exs`, and `phase_five_architecture_test.exs`, plus the complete Intelligence/package/workspace preservation ladder. `mix run examples/phase_five.exs` is the provider-free Phase-5 demonstration.
+
+The offline source-writing environment has no Elixir/Erlang/Mix, so none of those runtime checks is claimed here. The optional Phase-5 diagnosis/usefulness pilot is skipped by default under the current docset policy and remains visible validation debt unless actually performed.

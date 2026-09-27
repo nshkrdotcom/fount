@@ -18,10 +18,38 @@ defmodule Fount.Intelligence.Acquisition.Measurements do
 
   def evaluate(_, _, _, _), do: {:error, :invalid_measurement_inputs}
 
+  @doc "Provider-free preflight for a set of source projections using the same request construction as evaluate/4."
+  def preflight(inputs, questions, opts \\ []) when is_list(inputs) and is_list(opts) do
+    with :ok <- input_ids(inputs) do
+      {requests, rejected} =
+        Enum.reduce(inputs, {[], %{}}, fn input, {requests, errors} ->
+          case prepare_request(input, opts) do
+            {:ok, request} -> {requests ++ [request], errors}
+            {:error, reason} -> {requests, Map.put(errors, input["id"], failure(input["id"], reason))}
+          end
+        end)
+
+      observe_opts =
+        opts
+        |> Keyword.take(Options.allowed())
+        |> Keyword.put(:budget, Resources.from_options(opts))
+
+      with {:ok, estimate} <- Fount.Observe.preflight(requests, questions, observe_opts) do
+        {:ok,
+         estimate
+         |> Map.put("requested", length(inputs))
+         |> Map.put("valid", length(requests))
+         |> Map.put("rejected", Map.values(rejected))}
+      end
+    end
+  end
+
+  def preflight(_, _, _), do: {:error, :invalid_measurement_inputs}
+
   defp evaluate_inputs(provider, inputs, questions, opts) do
     {requests, rejected} =
       Enum.reduce(inputs, {[], %{}}, fn input, {requests, errors} ->
-        case request(input, opts) do
+        case prepare_request(input, opts) do
           {:ok, request} ->
             {requests ++ [request], errors}
 
@@ -61,6 +89,7 @@ defmodule Fount.Intelligence.Acquisition.Measurements do
            "cache_hits" => batch.cache_hits,
            "provider_batches" => batch.provider_batches,
            "elapsed_ms" => batch.elapsed_ms,
+           "resource_usage" => batch.resource_usage,
            "measurement_spec_sha256" => batch.measurement_spec_sha256,
            "measurement_spec" => batch.measurement_spec,
            "lens_asset" => batch.lens_asset,
@@ -79,7 +108,8 @@ defmodule Fount.Intelligence.Acquisition.Measurements do
     end
   end
 
-  defp request(input, opts) do
+  @doc "Builds one source-bound Observe request without dispatching it."
+  def prepare_request(input, opts \\ []) do
     model = Map.get(input, :source_model, Keyword.get(opts, :source_model))
 
     with %Fount.Screenplay{} <- model,

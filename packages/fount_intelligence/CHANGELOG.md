@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased - Phase 5 source delivery
+
+- add pure evidence-composed Diagnosis with explicit evidence needs, abstention, counterevidence, alternatives, protected strengths, and competing hypotheses;
+- add closed-context acquisition planning and a two-Observe-pass writer-playbook runner;
+- add the ten baseline writer-facing playbook definitions without implementing later capability families early;
+- add deterministic writer result packets and Markdown/JSON rendering;
+- add deterministic Sandbox Phase-5 example and targeted source/runtime tests;
+- preserve the existing sixteen low-level inspection playbooks and all Phase 1-4 public surfaces.
+
 ## 0.1.0 - Unreleased
 
 - Phase 4 adds pure `Fount.Intelligence.Temporal` state/trajectory/setup-payoff/recomputation views and a strict forward-only `Fount.Intelligence.Reader` ledger with source-order evidence checks, private-note exclusion, presentation-suffix recomputation, reader/diegetic knowledge comparison, inspectable suspense components and deterministic rendering.

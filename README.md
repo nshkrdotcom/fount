@@ -124,6 +124,8 @@ The goal is not to produce an all-knowing AI opinion about your screenplay.
 
 The goal is to let a creative judgment be traced back to the actual pages that caused it.
 
+Phase 5 adds writer-facing diagnostic playbooks for the cases where the writer knows the symptom but not the cause: Scene Doctor, Dialogue Pass, Character Trajectory, Relationship Pass, Suspense Audit, Sequence Momentum, Setup / Payoff, Notes Diagnosis, Submission Read, and Revision Regression. They keep competing explanations, counterevidence, protected strengths, resource use, and missing evidence visible before Workshop is asked to generate replacement pages.
+
 ---
 
 ## Explore More Than One Answer
@@ -282,7 +284,7 @@ The current delivery surface is primarily for developers, agents, integrations, 
 |---|---|
 | [`fount`](packages/fount/README.md) | Canonical screenplay, Fountain/FDX/JSON interchange, typed edits, identity, exact selection/evidence, search and PostgreSQL persistence. |
 | [`fount_observe`](packages/fount_observe/README.md) | Atomic source-grounded measurements, native SDK boundary, deterministic Sandbox, explicit resource limits and L1 result reuse. |
-| [`fount_intelligence`](packages/fount_intelligence/README.md) | Read-only screenplay investigations plus pure StoryWorld, temporal and first-reader state: diegetic continuity, audience knowledge/reveal trajectories, dependencies, dialogue/voice analysis and comparison. |
+| [`fount_intelligence`](packages/fount_intelligence/README.md) | Read-only screenplay investigations plus pure StoryWorld/Temporal/Reader/Diagnosis reasoning, multi-pass writer playbooks, source-grounded evidence, uncertainty, dependencies, dialogue/voice analysis and comparison. |
 | [`fount_workshop`](packages/fount_workshop/README.md) | Actual generated/revised pages, candidates, review/acceptance, recovery, rehearsal and exports. |
 
 ## How the Pieces Fit Together

@@ -15,10 +15,26 @@ defmodule Fount.Intelligence do
   alias Fount.Intelligence.Playbooks.SceneMechanics
   alias Fount.Intelligence.Playbooks.StrategyContrast
   alias Fount.Intelligence.Playbooks.Voice
-  alias Fount.Intelligence.Reporting.Report
+  alias Fount.Intelligence.Playbooks.{WriterRegistry, WriterRunner}
+  alias Fount.Intelligence.Reporting.{Renderer, Report, WriterPacket}
   alias Fount.Intelligence.Runner.{Resources, ResultValidation}
   alias Fount.Screenplay.Model
   def playbooks, do: Registry.list()
+
+  @doc "Lists the ten writer-facing Phase-5 diagnosis playbooks."
+  def writer_playbooks, do: WriterRegistry.list()
+
+  @doc "Provider-free resource/context preflight for a writer-facing playbook."
+  def preflight_playbook(model, playbook, request, opts \\ []),
+    do: WriterRunner.preflight(model, playbook, request, opts)
+
+  @doc "Runs the Phase-5 Observe -> pure -> contextual Observe -> pure diagnosis shell."
+  def run_playbook(model, playbook, request, clients \\ %{}, opts \\ []),
+    do: WriterRunner.run(model, playbook, request, clients, opts)
+
+  @doc "Renders a writer result packet as deterministic Markdown or canonical JSON."
+  def render_packet(%WriterPacket{} = packet, format \\ :markdown),
+    do: Renderer.render(packet, format)
 
   def run(model, playbook, params, clients \\ %{}, opts \\ []) do
     opts = opts |> Keyword.put(:source_model, model) |> resources()

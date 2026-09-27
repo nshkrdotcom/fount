@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased - Phase 5 declarative diagnosis assets
+
+- Register `diagnosis.concern_relevance` and `diagnosis.evidence_support` as closed declarative lenses for the Intelligence shell.
+- The contextual diagnosis lens accepts only its declared concern/fact/belief/relation/base-assessment slots; no Intelligence struct or executable reference is part of the asset.
+
 ## Unreleased - Phase 2 source delivery
 
 - Add inspectable scene questions and explicit unavailable outcomes without editing the draft.

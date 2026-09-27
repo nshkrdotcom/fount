@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased - Phase 10 offline implementation
+
+- Add an Intelligence-owned durable shell over Core persistence for exact analysis-run history, L2 Observe MeasurementResult reuse, fresh current-revision Observation persistence, and audit export.
+- Add dependency-driven recomputation planning that composes the existing StoryWorld connected-region and Reader presentation-suffix algorithms rather than replacing them.
+- Add host-gated, data-only content-addressed project lens/calibration/playbook/genre-pack persistence plus longitudinal resource-usage history.
+- Preserve all twelve capability families and Phase-9 writer packet semantics; no analysis result ranks candidates or changes canon.
+- Elixir/Mix/PostgreSQL verification is pending; see the Phase-10 QC handoff.
+
 ## Unreleased
 
 - Add Phase-8 Emotional / Value Movement, Theme and Meaning, optional safe Genre/Craft Packs, constrained project/studio declarative lens authoring, and explicit two-revision Revision Intelligence while preserving the existing writer playbook ids and writer-controlled acceptance boundary.

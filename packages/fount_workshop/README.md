@@ -19,6 +19,8 @@ Use Intelligence to investigate a concern and inspect consequences. Use Workshop
 
 Phase 9 now carries that separation through the actual writing loop: provider-free preflight, pre-write writer packets, diagnosis-to-strategy lineage, optional post-candidate Revision Intelligence, protected-strength/collateral review metadata, and actual analysis resource use can travel with a candidate without changing the explicit acceptance model. See [`guides/intelligence-integration.md`](guides/intelligence-integration.md).
 
+Phase 10 adds an opt-in durable analysis layer for session resume and audit: reusable semantic measurements can survive draft revisions while current evidence/provenance is rematerialized for the active revision. Cache eviction remains separate from candidate/history retention, and writer acceptance is unchanged.
+
 ## A complete writer demonstration
 
 After configuring a disposable PostgreSQL database and applying Fount's migrations:

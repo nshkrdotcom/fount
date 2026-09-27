@@ -61,6 +61,7 @@ defmodule Fount.Intelligence.MixProject do
         "guides/capabilities-a.md",
         "guides/capabilities-b.md",
         "guides/capabilities-c.md",
+        "guides/durable-analysis.md",
         "guides/investigations-and-evidence.md",
         "guides/comparison-and-ablation.md",
         "guides/playbook-catalog.md",
@@ -80,7 +81,9 @@ defmodule Fount.Intelligence.MixProject do
           Fount.Intelligence.Reporting.WriterPacket,
           Fount.Intelligence.Packs,
           Fount.Intelligence.Packs.Catalog,
-          Fount.Intelligence.Packs.GenrePack
+          Fount.Intelligence.Packs.GenrePack,
+          Fount.Intelligence.Persistence,
+          Fount.Intelligence.Recomputation
         ],
         "Pure interpretation": [
           Fount.Intelligence.Capabilities.DecisionPolicy,

@@ -8,7 +8,7 @@ not open a database connection.
 
 ## Fresh database
 
-The current schema is the single migration under `priv/repo/migrations/`.
+The current schema is defined by the ordered migrations under `priv/repo/migrations/`.
 Select a new database explicitly with `FOUNT_DATABASE_URL`, then migrate it:
 
 ```sh
@@ -43,3 +43,11 @@ loader. `history/3` lists revisions. An imported, untouched Fountain artifact
 can be exported byte for byte; after edits Fount generates a new Fountain
 rendering. Relational rows are revision-scoped, and the revision also stores a
 canonical model snapshot used by the shared loader.
+
+## Durable derived analysis
+
+Phase 10 adds `Fount.Persistence.Analysis` as a **data-only** persistence boundary for derived screenplay intelligence. It stores exact analysis-run identity, reusable immutable measurement results, freshly materialized revision-bound observations, dependency history, actual resource usage, and content-addressed project analysis assets. It does not interpret measurements, call providers, decide recomputation policy, or change the accepted screenplay revision.
+
+Reusable measurement rows are privacy-namespaced and keyed by Observe's existing semantic cache identity. A screenplay edit never deletes those rows; changed semantic input, output contract, model fingerprint, calibration/lens content, or context naturally produces a different key. Explicit cache eviction is a resource policy and does not delete analysis runs, observations, candidate lineage, or canonical history.
+
+Analysis observations are stored only when their target/evidence provenance matches the exact run screenplay/revision. Cross-revision reuse therefore reuses the immutable `MeasurementResult` while Observe creates a fresh current-revision `Observation`.

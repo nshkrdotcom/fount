@@ -28,7 +28,11 @@ Phase 7 adds Audience / Reader Experience, Sequence Movement, Dialogue Interacti
 
 Phase 8 completes the twelve-family capability catalog with Emotional / Value Movement, Theme and Meaning, optional safe Genre/Craft Packs, and explicit base/candidate Revision Intelligence. Project/studio lens declarations compile only onto registered Observe machinery; genre packs carry trust/source, resource policy and intentional-subversion data; Revision Intelligence keeps Reader presentation effects separate from diegetic state and story-time effects and never selects or accepts a preferred candidate. See [Capabilities C](guides/capabilities-c.md) and `mix run examples/phase_eight.exs`.
 
-The Phase-8 source/tests/example in this delivery are written against the supplied post-Phase-7-QC snapshot. Elixir/Erlang/Mix are unavailable in this source-writing environment, so Phase-8 formatting, compilation, ExUnit and repository runtime gates are not claimed here. Codex must run and repair Phase 8 after the overlay is applied. Optional human/domain review remains validation debt unless actually performed. Phase 9 is not included.
+Phase 9 is the verified baseline for this delivery: Workshop can carry provider-free preflight, prewrite writer packets, diagnosis-to-strategy lineage, explicit post-candidate Revision Intelligence, and advisory protected-strength/collateral checks without changing the writer acceptance boundary.
+
+Phase 10 adds optional durable analysis beneath that writing experience. `Fount.Intelligence.Persistence` stores exact analysis-run history and fronts Observe with a privacy-namespaced L2 MeasurementResult cache; Observe still rematerializes fresh current-revision Observations on reuse. `Fount.Intelligence.Recomputation` composes the existing StoryWorld connected-region and Reader presentation-suffix frontiers with persisted diagnosis/report dependencies. Cache eviction never erases analysis or candidate history. See [Durable analysis, reuse, and recomputation](guides/durable-analysis.md).
+
+The Phase-10 source/tests in this delivery have not been compiled or run under Elixir/PostgreSQL in the source-writing environment. Codex must execute the Phase-10 runtime handoff after the overlay is applied. No Phase-11 calibration/evaluation work is included.
 
 ## License
 

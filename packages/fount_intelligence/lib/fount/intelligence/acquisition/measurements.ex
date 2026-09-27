@@ -2,6 +2,7 @@ defmodule Fount.Intelligence.Acquisition.Measurements do
   @moduledoc "Shell bridge from source projections to Observe, followed by pure review-policy interpretation."
   alias Fount.Intelligence.Acquisition.InputEvidence
   alias Fount.Intelligence.Capabilities.Interpretation
+  alias Fount.Intelligence.Persistence
   alias Fount.Intelligence.Runner.Resources
   alias Fount.Observe.Context
   alias Fount.Observe.{Error, Options, Request}
@@ -74,15 +75,16 @@ defmodule Fount.Intelligence.Acquisition.Measurements do
 
     case Fount.Observe.evaluate(provider, requests, questions, observe_opts) do
       {:ok, batch} ->
-        policy = Interpretation.threshold_options(batch.lens_asset)
+        with :ok <- persist_batch(opts, batch) do
+          policy = Interpretation.threshold_options(batch.lens_asset)
 
-        measured =
-          Map.new(batch.entries, fn entry -> {entry.request_id, decode(entry, policy)} end)
+          measured =
+            Map.new(batch.entries, fn entry -> {entry.request_id, decode(entry, policy)} end)
 
-        entries = Enum.map(inputs, &Map.fetch!(Map.merge(measured, rejected), &1["id"]))
+          entries = Enum.map(inputs, &Map.fetch!(Map.merge(measured, rejected), &1["id"]))
 
-        {:ok,
-         %{
+          {:ok,
+           %{
            "entries" => entries,
            "status" =>
              if(batch.status == :complete and map_size(rejected) == 0,
@@ -110,7 +112,8 @@ defmodule Fount.Intelligence.Acquisition.Measurements do
                   "context" => Context.semantic_map(request.context)
                 })}
              end)
-         }}
+           }}
+        end
 
       {:error, %Error{} = error} ->
         {:error, Error.to_map(error)}
@@ -175,6 +178,19 @@ defmodule Fount.Intelligence.Acquisition.Measurements do
 
   defp safe_reason(reason) when is_atom(reason), do: to_string(reason)
   defp safe_reason(_), do: "invalid_source_projection"
+
+  defp persist_batch(opts, batch) do
+    case Keyword.get(opts, :analysis_run) do
+      %Persistence.Run{} = run ->
+        case Keyword.get(opts, :source_model) do
+          %Fount.Screenplay{} = model -> Persistence.record_batch(run, model, batch)
+          _ -> {:error, :analysis_persistence_source_required}
+        end
+
+      _ ->
+        :ok
+    end
+  end
 
   defp input_ids(inputs) do
     ids = Enum.map(inputs, fn input -> if is_map(input), do: input["id"] end)

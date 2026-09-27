@@ -5,6 +5,7 @@ defmodule Fount.Intelligence.Playbooks.CapabilityRunner do
   alias Fount.Intelligence.Capabilities
   alias Fount.Intelligence.Capabilities.Result
   alias Fount.Intelligence.Packs
+  alias Fount.Intelligence.Persistence
   alias Fount.Intelligence.Playbooks.{StrategyContrast, WriterRegistry}
   alias Fount.Intelligence.Reader
   alias Fount.Intelligence.Reporting.WriterPacket
@@ -130,8 +131,22 @@ defmodule Fount.Intelligence.Playbooks.CapabilityRunner do
   def run_playbook(model, playbook, request, clients \\ %{}, opts \\ []) do
     with {:ok, definition} <- WriterRegistry.fetch(playbook),
          {:ok, families} <- families_for_playbook(playbook, request),
-         {:ok, results} <- run_families(model, families, request, clients, shared_budget(opts)) do
-      packet(model, definition, request, results)
+         {:ok, run, run_opts} <- begin_persistence(model, playbook, definition, request, opts) do
+      case run_families(model, families, request, clients, shared_budget(run_opts)) do
+        {:ok, results} ->
+          with {:ok, packet} <- packet(model, definition, request, results),
+               {:ok, packet} <- Persistence.finish_packet(run, packet) do
+            {:ok, packet}
+          else
+            {:error, reason} = error ->
+              Persistence.fail(run, reason)
+              error
+          end
+
+        {:error, reason} = error ->
+          Persistence.fail(run, reason)
+          error
+      end
     end
   end
 
@@ -277,13 +292,56 @@ defmodule Fount.Intelligence.Playbooks.CapabilityRunner do
         opts
       ) do
     with {:ok, definition} <- WriterRegistry.fetch("revision_regression"),
-         {:ok, result} <-
-           run_revision(before_model, after_model, request, clients, shared_budget(opts)) do
-      packet(after_model, definition, request, [result])
+         {:ok, run, run_opts} <-
+           begin_persistence(after_model, "revision_regression", definition, request, opts) do
+      case run_revision(before_model, after_model, request, clients, shared_budget(run_opts)) do
+        {:ok, result} ->
+          with {:ok, packet} <- packet(after_model, definition, request, [result]),
+               {:ok, packet} <- Persistence.finish_packet(run, packet) do
+            {:ok, packet}
+          else
+            {:error, reason} = error ->
+              Persistence.fail(run, reason)
+              error
+          end
+
+        {:error, reason} = error ->
+          Persistence.fail(run, reason)
+          error
+      end
     end
   end
 
   def run_revision_playbook(_, _, _, _, _, _), do: {:error, :capability_playbook_not_supported}
+
+  defp begin_persistence(model, playbook, definition, request, opts) do
+    case Keyword.get(opts, :analysis_store) do
+      %Persistence{} = store ->
+        attrs = %{
+          "session_id" => Keyword.get(opts, :analysis_session_id),
+          "candidate_id" => Keyword.get(opts, :analysis_candidate_id),
+          "playbook_sha256" => Fount.Writing.CanonicalJSON.hash(definition),
+          "concern" => normalize_concern(request),
+          "intent" => Map.get(request, "intent", %{}),
+          "scope" => %{
+            "selection" => request["selection"],
+            "subject" => Model.plain(request["subject"])
+          },
+          "preflight" => Keyword.get(opts, :analysis_preflight, %{}),
+          "metadata" => %{
+            "changes_canon" => false,
+            "analysis_kind" => "writer_playbook"
+          }
+        }
+
+        with {:ok, run} <- Persistence.begin(store, model, playbook, attrs) do
+          {:ok, run, Persistence.measurement_options(run, opts)}
+        end
+
+      _ ->
+        {:ok, nil, opts}
+    end
+  end
 
   defp prepare(model, family, request, opts) when is_map(request) do
     with {:ok, spec} <- CapabilityMeasurements.fetch(family),

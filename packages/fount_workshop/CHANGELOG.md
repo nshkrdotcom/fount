@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased - Phase 10 offline implementation
+
+- Allow writer sessions to opt into durable Intelligence analysis with an explicit privacy namespace while preserving the existing Store + Inference-only lane.
+- Persist the durable-analysis option through session resume so reopening a writing session can recover analysis lineage without promoting rejected advice or unchosen candidates.
+- Canonical acceptance/rejection semantics are unchanged. Runtime verification is pending in this source-writing environment.
+
+- Adds a PostgreSQL resume/history regression proving rejected advice stays rejected, an unchosen candidate remains available, durable analysis history survives resume, and canon remains unchanged.
 ## Unreleased - Phase 9 offline implementation
 
 - Integrate Workshop sessions with existing Intelligence capability playbooks before substantial revision work when an Observe provider is configured.

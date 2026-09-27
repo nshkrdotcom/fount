@@ -6,6 +6,7 @@ defmodule FountWorkshop.Writing.Intelligence do
   when no Observe provider is configured, and the resulting metadata says that analysis was not run.
   """
 
+  alias Fount.Intelligence.Persistence
   alias Fount.Intelligence.Reporting.WriterPacket
   alias Fount.Screenplay.Model
   alias Fount.Writing.CanonicalJSON
@@ -83,7 +84,8 @@ defmodule FountWorkshop.Writing.Intelligence do
                playbook,
                analysis_request,
                Store.clients(services),
-               phase_opts(opts)
+               phase_opts(opts, services)
+               |> Keyword.put(:analysis_preflight, preflight)
              ) do
           {:ok, %WriterPacket{} = packet} ->
             packet_map = WriterPacket.to_map(packet)
@@ -128,7 +130,8 @@ defmodule FountWorkshop.Writing.Intelligence do
              candidate["screenplay"],
              analysis_request,
              Store.clients(services),
-             phase_opts(opts)
+             phase_opts(opts, services)
+             |> Keyword.put(:analysis_candidate_id, candidate["id"])
            ) do
         {:ok, %WriterPacket{} = packet} -> {:ok, WriterPacket.to_map(packet)}
         {:error, reason} -> {:ok, unavailable(reason, "revision_regression")}
@@ -291,6 +294,24 @@ defmodule FountWorkshop.Writing.Intelligence do
     |> Keyword.put_new(:max_capability_provider_requests, 120)
     |> Keyword.put_new(:max_capability_scenes, 80)
     |> Keyword.put_new(:max_capability_fragments_per_scene, 24)
+  end
+
+  defp phase_opts(opts, services) do
+    base = phase_opts(opts)
+
+    case {Keyword.get(opts, :durable_analysis, false), services[:store]} do
+      {true, %Store{repo: repo}} ->
+        store =
+          Persistence.new(repo,
+            privacy_namespace: Keyword.get(opts, :analysis_privacy_namespace),
+            l1_cache: Keyword.get(opts, :cache)
+          )
+
+        Keyword.put(base, :analysis_store, store)
+
+      _ ->
+        base
+    end
   end
 
   defp put_packet(context, packet),

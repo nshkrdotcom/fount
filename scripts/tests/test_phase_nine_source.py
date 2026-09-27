@@ -104,13 +104,18 @@ class PhaseNineSourceTests(unittest.TestCase):
         self.assertIn('required = check["severity"] == "required"', gate)
         self.assertNotIn("revision_intelligence", gate)
 
-    def test_phase_ten_is_not_added(self) -> None:
-        workshop = "\n".join(
-            path.read_text(encoding="utf-8")
-            for path in (ROOT / "packages" / "fount_workshop").rglob("*.ex")
+    def test_phase_nine_contract_survives_later_persistence_work(self) -> None:
+        bridge = self.read(
+            "packages/fount_workshop/lib/fount_workshop/writing/intelligence.ex"
         )
-        self.assertNotIn("Phase-10", workshop)
-        self.assertNotIn("Phase 10", workshop)
+        self.assertIn('"severity" => "advisory"', bridge)
+        self.assertIn('"observe_provider_not_configured"', bridge)
+        workspace = "\n".join(
+            path.read_text(encoding="utf-8")
+            for path in (ROOT / "packages").rglob("*.ex")
+        )
+        self.assertNotIn("Phase-11", workspace)
+        self.assertNotIn("Phase 11", workspace)
 
 
 if __name__ == "__main__":

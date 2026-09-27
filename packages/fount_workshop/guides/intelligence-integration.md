@@ -76,4 +76,12 @@ Writer selection/edit preserves the candidate's Intelligence lineage. Combining 
 
 ## Runtime verification
 
-This source handoff was produced without an Elixir/Mix runtime. The Phase-9 Elixir tests and complete runtime QC described in the handoff must be executed by Codex after applying the overlay. Static source checks are not substitutes for those runtime results.
+Phase 9 is the verified baseline for this delivery. The new Phase-10 durable-analysis changes were produced without an Elixir/Mix/PostgreSQL runtime, so their migration, ExUnit, integration, architecture, Dialyzer and preservation gates remain for Codex after the overlay is applied. Static source checks are not substitutes for those runtime results.
+
+## Optional durable analysis and resume
+
+Phase 10 can persist the analysis side of the same writer loop without changing the generation or acceptance path. Opt in per session with `durable_analysis: true`; optionally provide `analysis_privacy_namespace:` when the host needs a namespace stricter than the screenplay default. The setting is saved in the existing session limits so resume uses the same policy.
+
+When enabled and the Workshop store exposes its Core Repo, Intelligence records analysis-run identity, current-revision Observations, immutable reusable MeasurementResults, writer packets, dependency rows, and actual resource usage. Rejected or unchosen candidates remain ordinary Workshop history; durable analysis does not resurrect them, select them, or promote them to canon. If durable analysis is disabled, the Phase-9 Store + Inference-only and optional-Observe paths behave as before.
+
+Cache retention is independent of writer history. Hosts may evict reusable L2 measurement rows without deleting writer packets, analysis runs, observations, candidate lineage, or accepted/rejected decisions.

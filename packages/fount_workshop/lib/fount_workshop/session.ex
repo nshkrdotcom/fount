@@ -107,7 +107,10 @@ defmodule FountWorkshop.Session do
         Budget.new(Keyword.put(opts, :spent, session["progress"]["spent"] || %{}))
 
     opts =
-      opts |> Keyword.put(:budget, budget) |> Keyword.put(:history_reader, Store.reader(services))
+      opts
+      |> Keyword.put(:budget, budget)
+      |> Keyword.put(:history_reader, Store.reader(services))
+      |> Keyword.put(:analysis_session_id, session["id"])
 
     # Keep explicit room for strategies and actual pages before spending on supporting inspections.
     reserve =
@@ -594,7 +597,9 @@ defmodule FountWorkshop.Session do
           max_measurement_states: 500,
           max_repair_rounds: 1,
           max_investigation_followups: 1,
-          max_context_bytes: 100_000
+          max_context_bytes: 100_000,
+          durable_analysis: false,
+          analysis_privacy_namespace: nil
         ],
         fn {k, v} -> {Atom.to_string(k), Keyword.get(opts, k, v)} end
       )
@@ -604,4 +609,6 @@ defmodule FountWorkshop.Session do
   defp option_key("max_repair_rounds"), do: :max_repair_rounds
   defp option_key("max_investigation_followups"), do: :max_investigation_followups
   defp option_key("max_context_bytes"), do: :max_context_bytes
+  defp option_key("durable_analysis"), do: :durable_analysis
+  defp option_key("analysis_privacy_namespace"), do: :analysis_privacy_namespace
 end

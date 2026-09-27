@@ -267,3 +267,110 @@ defmodule Fount.Persistence.Schema.MentionCandidate do
     field(:character_id, Ecto.UUID, primary_key: true)
   end
 end
+defmodule Fount.Persistence.Schema.AnalysisAsset do
+  @moduledoc false
+  use Ecto.Schema
+  @primary_key false
+  schema "analysis_assets" do
+    field(:id, Ecto.UUID, primary_key: true)
+    field(:screenplay_id, Ecto.UUID)
+    field(:scope_id, :string)
+    field(:kind, :string)
+    field(:logical_id, :string)
+    field(:trust, :string)
+    field(:source, :map)
+    field(:content, :map)
+    field(:sha256, :string)
+    field(:parent_id, Ecto.UUID)
+    field(:enabled, :boolean)
+    field(:inserted_at, :utc_datetime_usec)
+  end
+end
+
+defmodule Fount.Persistence.Schema.AnalysisRun do
+  @moduledoc false
+  use Ecto.Schema
+  @primary_key false
+  schema "analysis_runs" do
+    field(:id, Ecto.UUID, primary_key: true)
+    field(:screenplay_id, Ecto.UUID)
+    field(:revision_id, Ecto.UUID)
+    field(:revision_content_sha256, :string)
+    field(:session_id, Ecto.UUID)
+    field(:candidate_id, Ecto.UUID)
+    field(:playbook, :string)
+    field(:playbook_sha256, :string)
+    field(:status, :string)
+    field(:concern, :map)
+    field(:intent, :map)
+    field(:scope, :map)
+    field(:privacy_namespace, :string)
+    field(:output_contract_id, :string)
+    field(:output_contract_sha256, :string)
+    field(:preflight, :map)
+    field(:resource_usage, :map)
+    field(:summary, :map)
+    field(:result, :map)
+    field(:metadata, :map)
+    field(:started_at, :utc_datetime_usec)
+    field(:finished_at, :utc_datetime_usec)
+    field(:inserted_at, :utc_datetime_usec)
+  end
+end
+
+defmodule Fount.Persistence.Schema.AnalysisMeasurementResult do
+  @moduledoc false
+  use Ecto.Schema
+  @primary_key false
+  schema "analysis_measurement_results" do
+    field(:cache_key, :string, primary_key: true)
+    field(:ordinal, :integer, primary_key: true)
+    field(:result_id, :string)
+    field(:privacy_namespace, :string)
+    field(:measurement_spec_sha256, :string)
+    field(:input_sha256, :string)
+    field(:semantic_execution_sha256, :string)
+    field(:output_contract_id, :string)
+    field(:output_contract_sha256, :string)
+    field(:provider_fingerprint, :map)
+    field(:payload, :map)
+    field(:inserted_at, :utc_datetime_usec)
+    field(:last_accessed_at, :utc_datetime_usec)
+    field(:access_count, :integer)
+  end
+end
+
+defmodule Fount.Persistence.Schema.AnalysisObservation do
+  @moduledoc false
+  use Ecto.Schema
+  @primary_key false
+  schema "analysis_observations" do
+    field(:id, :string, primary_key: true)
+    field(:analysis_run_id, Ecto.UUID)
+    field(:screenplay_id, Ecto.UUID)
+    field(:revision_id, Ecto.UUID)
+    field(:request_id, :string)
+    field(:result_id, :string)
+    field(:kind, :string)
+    field(:target, :map)
+    field(:evidence, Fount.Persistence.JSONValue)
+    field(:dependencies, Fount.Persistence.JSONValue)
+    field(:payload, :map)
+    field(:inserted_at, :utc_datetime_usec)
+  end
+end
+
+defmodule Fount.Persistence.Schema.AnalysisDependency do
+  @moduledoc false
+  use Ecto.Schema
+  @primary_key false
+  schema "analysis_dependencies" do
+    field(:id, Ecto.UUID, primary_key: true)
+    field(:screenplay_id, Ecto.UUID)
+    field(:subject_kind, :string)
+    field(:subject_id, :string)
+    field(:dependency_key, :string)
+    field(:analysis_run_id, Ecto.UUID)
+    field(:inserted_at, :utc_datetime_usec)
+  end
+end

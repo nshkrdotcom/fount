@@ -1,204 +1,222 @@
 {
   "format_version": 1,
-  "phase": 9,
-  "status": "OFFLINE_IMPLEMENTED",
-  "date": "2026-09-27",
-  "source_attachment_sha256": "84caacd431153200b19d68f50ce2689fae01392067579df17d84c6b6674943c8",
   "files": [
+    {
+      "path": "README.md",
+      "action": "modify",
+      "original_sha256": "6e20ed6b56457f6d52e6938bc0b6fa7fcc4fd248baf2d3aa561d64d625f4a512",
+      "original_terminal_lf_sha256": "bcae22c6b39e64a154c765eaaead6e459a35dcd1a767590dc0506b59a4c904f3",
+      "result_sha256": "4583555e144c2706ba844484e02c6e4a7f269277b6d0757994b4b7719e4bb74c",
+      "mode": 420
+    },
+    {
+      "path": "packages/fount/CHANGELOG.md",
+      "action": "modify",
+      "original_sha256": "2eab777646257e7d789e199899e0037b2e7429dd651e5651cafb1fd32c4599ba",
+      "original_terminal_lf_sha256": "39929bad46c4178370264a718feb5424711af498c05ff7497e33edab565f17a8",
+      "result_sha256": "1db30b760f42d9bbfcc68e6de1da04649667a296d48c26f73d2d9ac971a0f797",
+      "mode": 420
+    },
+    {
+      "path": "packages/fount/guides/persistence.md",
+      "action": "modify",
+      "original_sha256": "370632469af7d583b639636829cc10a5e662dd9d2ac4aca93ab0802973702513",
+      "original_terminal_lf_sha256": "6c993a96a30b14963a5282a64ac01230057336f9f7c5526912e8c55eb431b153",
+      "result_sha256": "4eb557fad2007cfb4638a7fcc4a41f9b1b9dd1ddf4e1392167d2d6317a2c832d",
+      "mode": 420
+    },
+    {
+      "path": "packages/fount/lib/fount/persistence/analysis.ex",
+      "action": "add",
+      "original_sha256": null,
+      "original_terminal_lf_sha256": null,
+      "result_sha256": "12723683322b5929d5b275fa1a92599bd7e918c6a2ae0de05939a1ecf806aa74",
+      "mode": 420
+    },
+    {
+      "path": "packages/fount/lib/fount/persistence/schema.ex",
+      "action": "modify",
+      "original_sha256": "17b54fd2ba465ad3a990f5322cbe8f2b1d942fab265a68ea4ed6992b3682928b",
+      "original_terminal_lf_sha256": "a2eb11dae409310e6a8c0b24d760e6a39acb6bc5ac0ba1d1e84f37a8345cb84b",
+      "result_sha256": "8eb769e57cc41049975fb8c5a3d02cb65ae50b1d304226f6f5bf7f1af39ed7df",
+      "mode": 420
+    },
+    {
+      "path": "packages/fount/mix.exs",
+      "action": "modify",
+      "original_sha256": "f5142b3728921467bef19a22fb7c45b4323c8bf165782b06efd97bf8de41749f",
+      "original_terminal_lf_sha256": "ad53e24550eeaa089a8447d42a5b77065e8db4fc3b6a1682e7a1547b9dd53a03",
+      "result_sha256": "f701840434d90de8267dd3e01983bd1a0c0d648eb6962f9e3516642e852b8532",
+      "mode": 420
+    },
+    {
+      "path": "packages/fount/priv/repo/migrations/20260927000000_create_durable_analysis_state.exs",
+      "action": "add",
+      "original_sha256": null,
+      "original_terminal_lf_sha256": null,
+      "result_sha256": "a678b50df2c6b36ef27ded1f7def83ac74f036b9b061989cfe6ad61d99c35ff1",
+      "mode": 420
+    },
+    {
+      "path": "packages/fount_intelligence/CHANGELOG.md",
+      "action": "modify",
+      "original_sha256": "3ffa2552e5ff74760ca02f79f0b2a20b7b7819203c883cafebd90762d41b8606",
+      "original_terminal_lf_sha256": "3c2b40af4d9bcff23a3e2d1912b3dc0cf5ecd28bf4cf199efd0c6547754a138f",
+      "result_sha256": "4ce5e6dc7e996178876a359e9179a6b0a1cb11e7e3d8f7428f3522734961f063",
+      "mode": 420
+    },
+    {
+      "path": "packages/fount_intelligence/README.md",
+      "action": "modify",
+      "original_sha256": "a563cc02da593322bae2194a8cc37ab6d3bf9864d08bc212532f237332181b8b",
+      "original_terminal_lf_sha256": "edca119c50a91a851962c25d79bf3e8b0b3b2fe1aeeb00d6d93876a0d951077d",
+      "result_sha256": "481913df985724761a9a59d4c046ec54c0c264705be40ba911728c2ca3f61236",
+      "mode": 420
+    },
+    {
+      "path": "packages/fount_intelligence/guides/durable-analysis.md",
+      "action": "add",
+      "original_sha256": null,
+      "original_terminal_lf_sha256": null,
+      "result_sha256": "270a662034bcac063ebe517dc63c40b32407854584036a80eecc84e9ccc6acec",
+      "mode": 420
+    },
+    {
+      "path": "packages/fount_intelligence/integration/phase_ten_durable_analysis_test.exs",
+      "action": "add",
+      "original_sha256": null,
+      "original_terminal_lf_sha256": null,
+      "result_sha256": "89041063a4f5f247b414fefb29d0f2d30dfb4e0028b1305c5ed6899d499f2d99",
+      "mode": 420
+    },
+    {
+      "path": "packages/fount_intelligence/lib/fount/intelligence.ex",
+      "action": "modify",
+      "original_sha256": "e88a9c3906ff384cf98cd2d6f8c54a7ce16f8337cc2f2ea514adba06f0075a3d",
+      "original_terminal_lf_sha256": "50cf733b3f8c61e28664054980ca6c188e391cafd53397e81914580809c1fb42",
+      "result_sha256": "713a6a5f84aaeb1816b665da7a3c4a6a71c38e958cf0d135369879472631557a",
+      "mode": 420
+    },
+    {
+      "path": "packages/fount_intelligence/lib/fount/intelligence/acquisition/measurements.ex",
+      "action": "modify",
+      "original_sha256": "032f7d29edaf41053a506b8807cf0d12de192d2b57011c4b1ef0c690f2c9764a",
+      "original_terminal_lf_sha256": "b9576ea8cf1284fbddd63e1995c5804dd09ab4c3ace2839547b4d32e5b055a46",
+      "result_sha256": "6840785bba21880127f8fdcb3c9072ade3d7b6f2469a5cf6a5682099f855acb9",
+      "mode": 420
+    },
+    {
+      "path": "packages/fount_intelligence/lib/fount/intelligence/persistence.ex",
+      "action": "add",
+      "original_sha256": null,
+      "original_terminal_lf_sha256": null,
+      "result_sha256": "daca87219f8c2f3f4cf75f9f48c5707244b90aa8d327f9e19dbab522cbbe21d2",
+      "mode": 420
+    },
+    {
+      "path": "packages/fount_intelligence/lib/fount/intelligence/persistence/measurement_cache.ex",
+      "action": "add",
+      "original_sha256": null,
+      "original_terminal_lf_sha256": null,
+      "result_sha256": "3d143a824d6959e4f4deec36bb7755d09c0c969379d0ab5820bca69a832779cd",
+      "mode": 420
+    },
+    {
+      "path": "packages/fount_intelligence/lib/fount/intelligence/playbooks/capability_runner.ex",
+      "action": "modify",
+      "original_sha256": "33e0a6154b7fe011c6294c1df24b7ee80e98beee91415e08e9836cecafb7e0b4",
+      "original_terminal_lf_sha256": "0853bd5d253b428871a2c62d46d6b59c1f9f5aa7183cff6615c486f0c7816d9a",
+      "result_sha256": "e5b1eb58cb92deb279f3f24a6bc645c9228f922e74f4b6390ddd1362d1bbd784",
+      "mode": 420
+    },
+    {
+      "path": "packages/fount_intelligence/lib/fount/intelligence/recomputation.ex",
+      "action": "add",
+      "original_sha256": null,
+      "original_terminal_lf_sha256": null,
+      "result_sha256": "a50fec74e935b413f1a01e7e7c9ef98ec9bbe9d2489083b4167f6fbc4fff02bd",
+      "mode": 420
+    },
+    {
+      "path": "packages/fount_intelligence/mix.exs",
+      "action": "modify",
+      "original_sha256": "707721d385abefeb0307409d0069ac295606eb9ff8fdc1a8fa682f5543997412",
+      "original_terminal_lf_sha256": "fb49ac38ee9a4817406ebb1876ca3b16a6f1dadc78574f6f6793fb36a588b698",
+      "result_sha256": "f4a9822265962a74ca2efeebf818b351a658770023f12309b70130f4314022aa",
+      "mode": 420
+    },
+    {
+      "path": "packages/fount_intelligence/test/phase_ten_recomputation_test.exs",
+      "action": "add",
+      "original_sha256": null,
+      "original_terminal_lf_sha256": null,
+      "result_sha256": "5c4587715ff9eaf6140d63abface90842c243624f9251a05e47765e352b35290",
+      "mode": 420
+    },
     {
       "path": "packages/fount_workshop/CHANGELOG.md",
       "action": "modify",
-      "original_sha256": "ec85294d8be5e47564e926bb6a1ad13d4f8231a1d5b5d248d670028db6cf8c96",
-      "original_terminal_lf_sha256": "62c19341655203d809d5e2954f9fd4d758fbc8eeb763ffedaae655cc91573981",
-      "result_sha256": "a37bf94d7bf99d73b90d0400282d60672d1bcbe4d55b40289611edc8272c793f",
-      "mode": 420,
-      "original_bytes": 1001,
-      "result_bytes": 1949
+      "original_sha256": "a37bf94d7bf99d73b90d0400282d60672d1bcbe4d55b40289611edc8272c793f",
+      "original_terminal_lf_sha256": "12241d55de8ce222a375b53a1dd77640f0ced199a5ba7139acd3de5e1d8c864f",
+      "result_sha256": "6046c18cdedf9c1cf288f27632cddfcd7ecd8be17cd1fbc67793a007d187c903",
+      "mode": 420
     },
     {
       "path": "packages/fount_workshop/README.md",
       "action": "modify",
-      "original_sha256": "86167aa11ea145f1c7da0cfba6a19a94ecf6965dfd3fc311ff4e4afe3aad6284",
-      "original_terminal_lf_sha256": "5ab617670735e8a3aa4e92c8c940ff51531fa15aef4ab4033acbbab980cc1041",
-      "result_sha256": "e92b59b561a35a3ad836eb93b5f8704210d6f8e184f0c7c0aea2164ec61ee86c",
-      "mode": 420,
-      "original_bytes": 5038,
-      "result_bytes": 5908
+      "original_sha256": "e92b59b561a35a3ad836eb93b5f8704210d6f8e184f0c7c0aea2164ec61ee86c",
+      "original_terminal_lf_sha256": "cb7768e52c5ec09e6bc14ce260412abadb2f81e872c68758186c117b48e52f83",
+      "result_sha256": "8f804949fe5b236fbd26da8d393f3d752ccc691f45e0f64aa6796c97d29e7c89",
+      "mode": 420
     },
     {
       "path": "packages/fount_workshop/guides/intelligence-integration.md",
+      "action": "modify",
+      "original_sha256": "fe4b6bd0770f368169eec3a88909013e49d3e3f2f7bcc30b728353bb8fe1e5f8",
+      "original_terminal_lf_sha256": "edda6db06bb35edb8f3976dc1208ec77725298141bcd9eac731370c0ca86dfa1",
+      "result_sha256": "9e3d6260d48714e0cf6def2717afc57966245bfbcb3f0172ff823e6bcdf4184b",
+      "mode": 420
+    },
+    {
+      "path": "packages/fount_workshop/integration/phase_ten_resume_history_test.exs",
       "action": "add",
       "original_sha256": null,
       "original_terminal_lf_sha256": null,
-      "result_sha256": "edda6db06bb35edb8f3976dc1208ec77725298141bcd9eac731370c0ca86dfa1",
-      "mode": 420,
-      "original_bytes": null,
-      "result_bytes": 5494
-    },
-    {
-      "path": "packages/fount_workshop/lib/fount_workshop.ex",
-      "action": "modify",
-      "original_sha256": "ab5f46e50accaa2b0e00018fd725d5e9bb820b179c2fd8c9ec4ddecffd6f8e21",
-      "original_terminal_lf_sha256": "36400493087c0a2405ee46d0741f5b15da020961c49a51ed46da9cb7ce5d3e4c",
-      "result_sha256": "4c094ca0d77ece2e30b65374d9bedb69dec1048effaf8ce5592659ddb22670cc",
-      "mode": 420,
-      "original_bytes": 586,
-      "result_bytes": 811
-    },
-    {
-      "path": "packages/fount_workshop/lib/fount_workshop/audition.ex",
-      "action": "modify",
-      "original_sha256": "ffdf155c0018643252b03cd772faf665395a3947ef3314da56b702783e80d484",
-      "original_terminal_lf_sha256": "10e3672a831045de098ec811d9d4604f0082f9e57149852bb5ab9f7067f082b4",
-      "result_sha256": "814a5a0bd6947df8f1b7e17e7a0b22c5930c2a080abe8ca75de5cfea4166b0b1",
-      "mode": 420,
-      "original_bytes": 2849,
-      "result_bytes": 3353
-    },
-    {
-      "path": "packages/fount_workshop/lib/fount_workshop/candidate.ex",
-      "action": "modify",
-      "original_sha256": "919ed9e5f99568ec8f05aea70970388ee630113a21f4a3511d55fc14b8c25b13",
-      "original_terminal_lf_sha256": "8ecfe765111688b337982f48ef89701f505090a4b64239071204b2901676e649",
-      "result_sha256": "e5c26810ed128112e8651c599c5954348b0be732e321378b595ea72766b1c051",
-      "mode": 420,
-      "original_bytes": 17055,
-      "result_bytes": 18796
-    },
-    {
-      "path": "packages/fount_workshop/lib/fount_workshop/rebase.ex",
-      "action": "modify",
-      "original_sha256": "b80e26be1677744e0a1fca81d76c3218f55785008fda243a423971e9158f05df",
-      "original_terminal_lf_sha256": "68574ae10be6804ebfd8fac6ea8dd5e604d875bf149960aa5624e54759aab948",
-      "result_sha256": "352ccec00cf7ffde9cc16513735f3fbc23e3f547ed634b1a4e6f1adaf0ea9cf9",
-      "mode": 420,
-      "original_bytes": 7854,
-      "result_bytes": 8243
-    },
-    {
-      "path": "packages/fount_workshop/lib/fount_workshop/request.ex",
-      "action": "modify",
-      "original_sha256": "1e4dfe951d060dd270b04e903b2ac50af2e205a10b12f138187b4b17cc9e68a4",
-      "original_terminal_lf_sha256": "374fe97655c2de8a3030b72aacb9b96f904eb43714610eae879cdaf747b8d78e",
-      "result_sha256": "e31897baf2c4347a1290403915350fc55c0d03bdc8e8ec129abb5deb6d440c59",
-      "mode": 420,
-      "original_bytes": 7079,
-      "result_bytes": 7690
-    },
-    {
-      "path": "packages/fount_workshop/lib/fount_workshop/review.ex",
-      "action": "modify",
-      "original_sha256": "b79d2da2061fbc55cd72380b0b02d657bdcf1d4b5ccd4604a5120e4d4747f1cb",
-      "original_terminal_lf_sha256": "8e5934b9eda7cb4113b36464d9ccf37ecc04325bece84a9b68074eca72e7139e",
-      "result_sha256": "1e26f4aadc485ab737582bd959968acd338866d40e0a87be5da8e43c44b16778",
-      "mode": 420,
-      "original_bytes": 2640,
-      "result_bytes": 3429
+      "result_sha256": "7c683578d3ecc0b02db53ae18716a80442e4915dd8e45ea12a5b26eb499da512",
+      "mode": 420
     },
     {
       "path": "packages/fount_workshop/lib/fount_workshop/session.ex",
       "action": "modify",
-      "original_sha256": "601930a6f356a558927b239cbee76ae7e96958618436f0be2a1b57b2ec48125c",
-      "original_terminal_lf_sha256": "a84b73930c96bd41fef8bd529e95d99bf6d4f176f88b1ee1d63506922936ba57",
-      "result_sha256": "ffb120e74e8ad4afcdedc54e22e856bd36634425d5dcf6262d7961fe85b7f06a",
-      "mode": 420,
-      "original_bytes": 19102,
-      "result_bytes": 21095
-    },
-    {
-      "path": "packages/fount_workshop/lib/fount_workshop/strategy.ex",
-      "action": "modify",
-      "original_sha256": "7110d3f7e610fe37c6103f6a04c4ca48a75a05d2281779bb728fca3450b90dcf",
-      "original_terminal_lf_sha256": "c6c1adbcaae1a6bffe7971e856f0847af46982f0d3a4563c470b5623d66ea133",
-      "result_sha256": "1335c8f081fd7b8e005eba2bdf3c761ac0dc5501f25c52da7c073898e75df64a",
-      "mode": 420,
-      "original_bytes": 3664,
-      "result_bytes": 4293
-    },
-    {
-      "path": "packages/fount_workshop/lib/fount_workshop/writing/context.ex",
-      "action": "modify",
-      "original_sha256": "a86fa0f812b7f292af65526ee6f5757a6242cd397fe9a4e5cbcd46ba9b3ce51a",
-      "original_terminal_lf_sha256": "f885f39d02e96765d5cc0e5d63889a8bad56397ca5f18684009aa4606f28f83e",
-      "result_sha256": "33e83d857424f19193d2895fe2967e6fc314bba57a2767424802e514ca0d499d",
-      "mode": 420,
-      "original_bytes": 7752,
-      "result_bytes": 8148
-    },
-    {
-      "path": "packages/fount_workshop/lib/fount_workshop/writing/generation.ex",
-      "action": "modify",
-      "original_sha256": "0b8a26de104fae72680bbe70360e6617cba37534cdc0cacf92ed86f666e19714",
-      "original_terminal_lf_sha256": "d666b0bbe1e94ccb77c27e82cfa424d77c110ff3ae272135f568babb8af92bde",
-      "result_sha256": "6654342a89678192e7f139236df9c4df86c3fd7266fb4c0084e01681f5c1eff0",
-      "mode": 420,
-      "original_bytes": 6548,
-      "result_bytes": 6695
+      "original_sha256": "af655e6bc8d348388db38d3c7a04b52f2e5bf8fe223d31b056e2a068461f156a",
+      "original_terminal_lf_sha256": "d33e7dc01a6a4ef1fa589eed02ac9d01fba82ab7d51c46954ea9351408f38607",
+      "result_sha256": "136d9ca3651f696819af7cc1f05c57fb0d27a6fb0a39f50a11c83047845b59c9",
+      "mode": 420
     },
     {
       "path": "packages/fount_workshop/lib/fount_workshop/writing/intelligence.ex",
-      "action": "add",
-      "original_sha256": null,
-      "original_terminal_lf_sha256": null,
-      "result_sha256": "803937009fba7199e34a7d6cf6b8832a930ff383393d67d5d5422eb2635afcd5",
-      "mode": 420,
-      "original_bytes": null,
-      "result_bytes": 14456
-    },
-    {
-      "path": "packages/fount_workshop/lib/fount_workshop/writing/preparation.ex",
       "action": "modify",
-      "original_sha256": "6513d5d8bbc3ed73d97a484be67839fa69c3203ea30906963046983ff015768d",
-      "original_terminal_lf_sha256": "d38791796ab0d77f61dbe59fcb62762fc3051875839680a9174bef07fca18640",
-      "result_sha256": "184f75131836a36bd335fc7838a73f050679c3667542684a68feb03957f31836",
-      "mode": 420,
-      "original_bytes": 17439,
-      "result_bytes": 17793
-    },
-    {
-      "path": "packages/fount_workshop/mix.exs",
-      "action": "modify",
-      "original_sha256": "72377fdcd4a429df7e3c7eca0458d67bb520e16bf165db840c6fdb3d7c9efc28",
-      "original_terminal_lf_sha256": "405285368304c354982b68d79e287c5c58e32c60a0d8ebb41d2cf77218e35c43",
-      "result_sha256": "7f7810cc305535abbc57f805641dd187496c84ee7592e6e2975fb412a81258c8",
-      "mode": 420,
-      "original_bytes": 3282,
-      "result_bytes": 3353
-    },
-    {
-      "path": "packages/fount_workshop/test/phase_nine_intelligence_test.exs",
-      "action": "add",
-      "original_sha256": null,
-      "original_terminal_lf_sha256": null,
-      "result_sha256": "465991d67b8239a1a3e272b51566f9ffd003005cd36583454f6a176cea471305",
-      "mode": 420,
-      "original_bytes": null,
-      "result_bytes": 5739
-    },
-    {
-      "path": "scripts/tests/test_phase_eight_source.py",
-      "action": "modify",
-      "original_sha256": "b9e72956582a9caf0d4fc412dceb2e4518e9bfd01091592560b4fe48301be635",
-      "original_terminal_lf_sha256": "21d110e35b83ce36c20709906211a5cc9e3b44c913a3fd3122d3097aeed6b39d",
-      "result_sha256": "4ba2fda5eb2bd0971b1bc8b12fb71eb1490b38515acccb2e9c4c510f7e1a49c1",
-      "mode": 420,
-      "original_bytes": 9419,
-      "result_bytes": 9315
+      "original_sha256": "b09baef7636bbf61473970bfbdb573b8299bedc379b32231ec18c02799c1920f",
+      "original_terminal_lf_sha256": "740b28653b8d351edf3621246c5e5b9c40300cb990e42b3ca28c55f3581a89bb",
+      "result_sha256": "5f26f31a8f04022bd41d9f4ef38ec926754eba18d26039e3374450ad29987145",
+      "mode": 420
     },
     {
       "path": "scripts/tests/test_phase_nine_source.py",
+      "action": "modify",
+      "original_sha256": "734313d72d0f208396c97319709d604e0365af9137f925166200a8e34d363a92",
+      "original_terminal_lf_sha256": "6730c74c3b770e9f5c0d244a5aba5c53d13154142526a7ca873a31fbb3b288d1",
+      "result_sha256": "7372e34eed6d33bb814efd6a68536ba6bcf1f08c8b55a2947971deb741a5f083",
+      "mode": 420
+    },
+    {
+      "path": "scripts/tests/test_phase_ten_source.py",
       "action": "add",
       "original_sha256": null,
       "original_terminal_lf_sha256": null,
-      "result_sha256": "6730c74c3b770e9f5c0d244a5aba5c53d13154142526a7ca873a31fbb3b288d1",
-      "mode": 420,
-      "original_bytes": null,
-      "result_bytes": 4983
+      "result_sha256": "5bd297d61b3662bf0a30411fe18e65ab28a252b91f59d5b4d1b254898597b9d0",
+      "mode": 420
     }
   ],
-  "deletions": [],
-  "notes": [
-    "Full-file Phase 9 overlay generated from the supplied content-identified Fount snapshot.",
-    "Runtime Elixir/Mix checks are not represented as passed; see the Phase 9 Codex QC handoff."
-  ]
+  "deletions": []
 }

@@ -427,9 +427,9 @@ Existing live Workshop workflows remain in `packages/fount_workshop/examples/liv
 
 ## Current Development Status
 
-**Phases 1–9 are complete on recorded engineering QC. Phase 10 has not started.** Phase 9 connects optional Observe-backed prewrite and revision analysis to Workshop sessions, with diagnosis and strategy lineage, separate writer packets, advisory checks, and explicit writer acceptance. Store and Inference-only hosts retain their generation path with analysis marked `not_run`.
+**Phases 1–9 are complete on recorded engineering QC. Phase 10 is offline-implemented and awaits runtime QC.** Phase 9 connects optional Observe-backed prewrite and revision analysis to Workshop sessions, with diagnosis and strategy lineage, separate writer packets, advisory checks, and explicit writer acceptance. Phase 10 adds optional durable analysis-run history, privacy-namespaced cross-revision measurement reuse, fresh current-revision provenance, dependency-driven recomputation planning, resource history, and data-only project assets without changing canon ownership.
 
-The Phase 9 runtime evidence is in the docset's `handoffs/PHASE_09_RUNTIME_QC_REPORT.md`. It includes a deterministic Observe Sandbox and scripted Inference session backed by PostgreSQL, full workspace CI, and writer/PDF/table-read preservation. The optional human workflow review was skipped under D046 and remains validation debt; no human usefulness claim is made. System One remains behind Observe, while creative completion remains Workshop/Inference-owned.
+The Phase 9 runtime evidence is in the docset's `handoffs/PHASE_09_RUNTIME_QC_REPORT.md`. Phase 10 Elixir/PostgreSQL/runtime gates are intentionally unclaimed in this source delivery and are delegated to its Codex QC handoff. System One remains behind Observe, creative completion remains Workshop/Inference-owned, and Phase 11 is not included.
 
 ---
 

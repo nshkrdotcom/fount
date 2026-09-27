@@ -145,6 +145,7 @@ defmodule Fount.MixProject do
         Persistence: [
           Fount.Repo,
           Fount.Persistence,
+          Fount.Persistence.Analysis,
           Fount.Persistence.Query
         ]
       ]

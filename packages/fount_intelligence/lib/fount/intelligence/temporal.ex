@@ -33,7 +33,8 @@ defmodule Fount.Intelligence.Temporal do
       "scope_id" => scope_id,
       "event_id" => event_id,
       "subject" => Model.plain(character),
-      "attributes" => Map.new(attributes, &{&1, state_packet(world, character, &1, event_id, opts)}),
+      "attributes" =>
+        Map.new(attributes, &{&1, state_packet(world, character, &1, event_id, opts)}),
       "knowledge" => knowledge_state(world, character, event_id, opts),
       "commitments" => commitments_at(world, character, event_id, opts),
       "resources" => resource_state(world, character, event_id, opts)
@@ -59,15 +60,7 @@ defmodule Fount.Intelligence.Temporal do
 
     states =
       Map.new(attributes, fn attribute ->
-        result =
-          Enum.find_value(subjects, :unknown, fn subject ->
-            case StoryWorld.state_at(world, subject, attribute, event_id, opts) do
-              :unknown -> nil
-              value -> value
-            end
-          end)
-
-        {attribute, query_packet(world, result)}
+        {attribute, relationship_attribute(world, subjects, attribute, event_id, opts)}
       end)
 
     %{
@@ -79,6 +72,18 @@ defmodule Fount.Intelligence.Temporal do
       "to" => Model.plain(to),
       "attributes" => states
     }
+  end
+
+  defp relationship_attribute(world, subjects, attribute, event_id, opts) do
+    result =
+      Enum.find_value(subjects, :unknown, fn subject ->
+        case StoryWorld.state_at(world, subject, attribute, event_id, opts) do
+          :unknown -> nil
+          value -> value
+        end
+      end)
+
+    query_packet(world, result)
   end
 
   @doc "Partitions event-qualified assertions for one character into explicit epistemic stances."
@@ -270,7 +275,8 @@ defmodule Fount.Intelligence.Temporal do
 
     %{
       "semantics" => "story_time_connected_region",
-      "changed_dependencies" => changed_dependencies |> Enum.map(&to_string/1) |> Enum.uniq() |> Enum.sort(),
+      "changed_dependencies" =>
+        changed_dependencies |> Enum.map(&to_string/1) |> Enum.uniq() |> Enum.sort(),
       "seed_object_ids" => affected_ids,
       "story_time_node_ids" => nodes,
       "object_ids" => objects
@@ -312,7 +318,8 @@ defmodule Fount.Intelligence.Temporal do
 
   defp epistemic_bucket(assertion) do
     value =
-      assertion.metadata["epistemic_kind"] || assertion.metadata[:epistemic_kind] || assertion.stance
+      assertion.metadata["epistemic_kind"] || assertion.metadata[:epistemic_kind] ||
+        assertion.stance
 
     case to_string(value || "") |> String.downcase() do
       value when value in ["know", "known", "knows", "knowledge", "established"] -> "knows"
@@ -326,7 +333,8 @@ defmodule Fount.Intelligence.Temporal do
 
   defp commitment_applicable?(world, commitment, event_id) do
     Enum.any?(commitment.active_at, fn source_event ->
-      source_event == event_id or applicable_relation?(StoryWorld.story_time_relation(world, source_event, event_id))
+      source_event == event_id or
+        applicable_relation?(StoryWorld.story_time_relation(world, source_event, event_id))
     end)
   end
 
@@ -384,7 +392,9 @@ defmodule Fount.Intelligence.Temporal do
   end
 
   defp presentation_point_key(point),
-    do: {point.scene_ordinal || 9_999_999, point.element_ordinal || 9_999_999, point.element_id || ""}
+    do:
+      {point.scene_ordinal || 9_999_999, point.element_ordinal || 9_999_999,
+       point.element_id || ""}
 
   defp pairwise_relations(world, ids) do
     for {left, index} <- Enum.with_index(ids),
@@ -412,7 +422,9 @@ defmodule Fount.Intelligence.Temporal do
 
     world.commitments
     |> Map.values()
-    |> Enum.filter(fn commitment -> Enum.any?(commitment.active_at, &MapSet.member?(id_set, &1)) end)
+    |> Enum.filter(fn commitment ->
+      Enum.any?(commitment.active_at, &MapSet.member?(id_set, &1))
+    end)
     |> Enum.map(& &1.id)
     |> Enum.sort()
   end
@@ -430,15 +442,29 @@ defmodule Fount.Intelligence.Temporal do
 
   defp story_time_nodes_for(world, id) do
     cond do
-      Map.has_key?(world.story_time.nodes, id) -> [id]
-      Map.has_key?(world.events, id) -> List.wrap(world.events[id].story_time_node_id)
-      transition = world.state_transitions[id] -> List.wrap(event_node(world, transition.event_id))
-      assertion = world.assertions[id] -> Enum.flat_map(assertion.story_time_refs, &List.wrap(event_node(world, &1)))
-      commitment = world.commitments[id] -> Enum.flat_map(commitment.active_at, &List.wrap(event_node(world, &1)))
-      constraint = world.story_time.constraints[id] -> [constraint.left, constraint.right]
+      Map.has_key?(world.story_time.nodes, id) ->
+        [id]
+
+      Map.has_key?(world.events, id) ->
+        List.wrap(world.events[id].story_time_node_id)
+
+      transition = world.state_transitions[id] ->
+        List.wrap(event_node(world, transition.event_id))
+
+      assertion = world.assertions[id] ->
+        Enum.flat_map(assertion.story_time_refs, &List.wrap(event_node(world, &1)))
+
+      commitment = world.commitments[id] ->
+        Enum.flat_map(commitment.active_at, &List.wrap(event_node(world, &1)))
+
+      constraint = world.story_time.constraints[id] ->
+        [constraint.left, constraint.right]
+
       causal = world.causal.edges[id] ->
         Enum.flat_map([causal.from, causal.to], &story_time_nodes_for(world, &1))
-      true -> []
+
+      true ->
+        []
     end
     |> Enum.reject(&is_nil/1)
   end
@@ -456,13 +482,13 @@ defmodule Fount.Intelligence.Temporal do
     ids =
       world.events
       |> Map.values()
-      |> Enum.filter(&(MapSet.member?(node_set, &1.story_time_node_id || &1.id)))
+      |> Enum.filter(&MapSet.member?(node_set, &1.story_time_node_id || &1.id))
       |> Enum.map(& &1.id)
 
     transition_ids =
       world.state_transitions
       |> Map.values()
-      |> Enum.filter(&(MapSet.member?(node_set, event_node(world, &1.event_id))))
+      |> Enum.filter(&MapSet.member?(node_set, event_node(world, &1.event_id)))
       |> Enum.map(& &1.id)
 
     assertion_ids =

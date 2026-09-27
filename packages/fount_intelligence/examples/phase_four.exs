@@ -30,6 +30,7 @@ note = Enum.find(screenplay.ir.elements, &(&1.type == :note))
 [scene_1, scene_2, scene_3] = Enum.map(screenplay.ir.scenes, &("scene:" <> &1.id))
 
 evidence = fn element -> Evidence.canonical_element(screenplay, element) end
+
 record = fn type, id, element, extra ->
   %{"record_type" => type, "id" => id, "evidence" => [%{"element_id" => element.id}]}
   |> Map.merge(extra)

@@ -28,7 +28,9 @@ defmodule Fount.Intelligence.Reader do
   @type t :: %__MODULE__{}
 
   @doc "Compiles deterministic presentation checkpoints and reduces source-backed Reader events once, forward only."
-  def compile(%Fount.Screenplay{} = screenplay, events, opts \\ []) when is_list(events) do
+  def reduce(screenplay, events, opts \\ [])
+
+  def reduce(%Fount.Screenplay{} = screenplay, events, opts) when is_list(events) do
     with {:ok, points} <- discourse_points(screenplay),
          {:ok, normalized, private_ids} <- normalize_events(events),
          :ok <- unique_event_ids(normalized, private_ids),
@@ -51,7 +53,7 @@ defmodule Fount.Intelligence.Reader do
   def reduce(_screenplay, _events, _opts), do: {:error, :invalid_reader_input}
 
   @doc "Compatibility convenience for callers that prefer compiler terminology."
-  def compile(screenplay, events, opts \ []), do: reduce(screenplay, events, opts)
+  def compile(screenplay, events, opts \\ []), do: reduce(screenplay, events, opts)
 
   @doc "Resolves a snapshot by Reader point id, canonical element id, or 0-based point ordinal."
   def snapshot_at(%__MODULE__{} = reader, ref) do
@@ -96,15 +98,11 @@ defmodule Fount.Intelligence.Reader do
   def trajectory(%__MODULE__{} = reader, track, key) do
     with {:ok, track} <- normalize_track(track) do
       {points, _last} =
-        Enum.reduce(reader.snapshots, {[], :__reader_missing__}, fn snapshot, {acc, previous} ->
-          value = snapshot.state |> Map.from_struct() |> Map.get(track, %{}) |> Map.get(key)
-
-          if value == previous do
-            {acc, previous}
-          else
-            {acc ++ [%{"point" => snapshot.point, "value" => Model.plain(value)}], value}
-          end
-        end)
+        Enum.reduce(
+          reader.snapshots,
+          {[], :__reader_missing__},
+          &trajectory_point(&1, &2, track, key)
+        )
 
       %{
         "semantics" => "presentation_relative",
@@ -113,6 +111,14 @@ defmodule Fount.Intelligence.Reader do
         "points" => points
       }
     end
+  end
+
+  defp trajectory_point(snapshot, {acc, previous}, track, key) do
+    value = snapshot.state |> Map.from_struct() |> Map.get(track, %{}) |> Map.get(key)
+
+    if value == previous,
+      do: {acc, previous},
+      else: {acc ++ [%{"point" => snapshot.point, "value" => Model.plain(value)}], value}
   end
 
   @doc "Compares the Reader's model of a character with event-qualified StoryWorld knowledge."
@@ -212,7 +218,8 @@ defmodule Fount.Intelligence.Reader do
     }
   end
 
-  def render_json(%__MODULE__{} = reader), do: Jason.encode!(inspection_packet(reader), pretty: true)
+  def render_json(%__MODULE__{} = reader),
+    do: Jason.encode!(inspection_packet(reader), pretty: true)
 
   def render_markdown(%__MODULE__{} = reader) do
     packet = inspection_packet(reader)
@@ -320,9 +327,8 @@ defmodule Fount.Intelligence.Reader do
 
   defp validate_event(screenplay, point_by_element, point, event) do
     with :ok <- validate_evidence_present(event),
-         :ok <- validate_event_shape(event),
-         :ok <- validate_evidence_order(screenplay, point_by_element, point, event) do
-      :ok
+         :ok <- validate_event_shape(event) do
+      validate_evidence_order(screenplay, point_by_element, point, event)
     end
   end
 
@@ -333,30 +339,34 @@ defmodule Fount.Intelligence.Reader do
 
   defp validate_evidence_order(screenplay, point_by_element, point, event) do
     Enum.reduce_while(event.evidence, :ok, fn evidence, :ok ->
-      case evidence_identity(evidence) do
-        {:ok, revision_id, element_id, evidence_id} ->
-          source_point = point_by_element[element_id]
-
-          cond do
-            revision_id != screenplay.revision.id ->
-              {:halt, {:error, {:reader_evidence_revision_mismatch, event.id, evidence_id}}}
-
-            is_nil(source_point) ->
-              {:halt, {:error, {:reader_evidence_not_visible, event.id, evidence_id, element_id}}}
-
-            source_point["ordinal"] > point["ordinal"] ->
-              {:halt,
-               {:error,
-                {:future_reader_evidence, event.id, evidence_id, source_point["id"], point["id"]}}}
-
-            true ->
-              {:cont, :ok}
-          end
-
-        :error ->
-          {:halt, {:error, {:invalid_reader_evidence, event.id}}}
-      end
+      validate_one_evidence(screenplay, point_by_element, point, event, evidence)
     end)
+  end
+
+  defp validate_one_evidence(screenplay, point_by_element, point, event, evidence) do
+    case evidence_identity(evidence) do
+      {:ok, revision_id, element_id, evidence_id} ->
+        source_point = point_by_element[element_id]
+
+        cond do
+          revision_id != screenplay.revision.id ->
+            {:halt, {:error, {:reader_evidence_revision_mismatch, event.id, evidence_id}}}
+
+          is_nil(source_point) ->
+            {:halt, {:error, {:reader_evidence_not_visible, event.id, evidence_id, element_id}}}
+
+          source_point["ordinal"] > point["ordinal"] ->
+            {:halt,
+             {:error,
+              {:future_reader_evidence, event.id, evidence_id, source_point["id"], point["id"]}}}
+
+          true ->
+            {:cont, :ok}
+        end
+
+      :error ->
+        {:halt, {:error, {:invalid_reader_evidence, event.id}}}
+    end
   end
 
   defp validate_event_shape(%Event{kind: "character_epistemic", data: data} = event) do
@@ -365,7 +375,9 @@ defmodule Fount.Intelligence.Reader do
 
   defp validate_event_shape(%Event{kind: "relationship", data: data} = event) do
     with :ok <- require_fields(event, data, ~w(from to dimensions)) do
-      if is_map(data["dimensions"]), do: :ok, else: {:error, {:invalid_reader_relationship, event.id}}
+      if is_map(data["dimensions"]),
+        do: :ok,
+        else: {:error, {:invalid_reader_relationship, event.id}}
     end
   end
 
@@ -377,10 +389,11 @@ defmodule Fount.Intelligence.Reader do
        when kind in ~w(question expectation promise threat reveal curiosity surprise comprehension_risk alignment forward_pull),
        do: :ok
 
-  defp validate_event_shape(event), do: {:error, {:unsupported_reader_event_kind, event.id, event.kind}}
+  defp validate_event_shape(event),
+    do: {:error, {:unsupported_reader_event_kind, event.id, event.kind}}
 
   defp require_fields(event, data, fields) do
-    missing = Enum.filter(fields, &(is_nil(data[&1])))
+    missing = Enum.filter(fields, &is_nil(data[&1]))
     if missing == [], do: :ok, else: {:error, {:missing_reader_event_fields, event.id, missing}}
   end
 
@@ -429,12 +442,7 @@ defmodule Fount.Intelligence.Reader do
       Enum.reduce_while(points, {:ok, %State{}, []}, fn point, {:ok, state, snapshots} ->
         point_events = Map.get(events_by_point, point["id"], [])
 
-        case Enum.reduce_while(point_events, {:ok, state}, fn event, {:ok, acc} ->
-               case apply_event(acc, event, point) do
-                 {:ok, next} -> {:cont, {:ok, next}}
-                 {:error, reason} -> {:halt, {:error, reason}}
-               end
-             end) do
+        case reduce_point_events(point_events, state, point) do
           {:ok, next_state} ->
             snapshot = %Snapshot{
               point: point,
@@ -455,23 +463,68 @@ defmodule Fount.Intelligence.Reader do
     end
   end
 
+  defp reduce_point_events(events, state, point) do
+    Enum.reduce_while(events, {:ok, state}, fn event, {:ok, acc} ->
+      case apply_event(acc, event, point) do
+        {:ok, next} -> {:cont, {:ok, next}}
+        {:error, reason} -> {:halt, {:error, reason}}
+      end
+    end)
+  end
+
   defp apply_event(state, %Event{kind: "question"} = event, point),
-    do: lifecycle(state, :open_questions, event, point, ~w(open reinforce partial resolve abandon))
+    do:
+      lifecycle(state, :open_questions, event, point, ~w(open reinforce partial resolve abandon))
 
   defp apply_event(state, %Event{kind: "expectation"} = event, point),
-    do: lifecycle(state, :expectations, event, point, ~w(open strengthen delay complicate fulfill subvert abandon))
+    do:
+      lifecycle(
+        state,
+        :expectations,
+        event,
+        point,
+        ~w(open strengthen delay complicate fulfill subvert abandon)
+      )
 
   defp apply_event(state, %Event{kind: "promise"} = event, point),
-    do: lifecycle(state, :promises, event, point, ~w(open reinforce delay complicate fulfill subvert abandon))
+    do:
+      lifecycle(
+        state,
+        :promises,
+        event,
+        point,
+        ~w(open reinforce delay complicate fulfill subvert abandon)
+      )
 
   defp apply_event(state, %Event{kind: "threat"} = event, point),
-    do: lifecycle(state, :threats, event, point, ~w(open reinforce delay complicate fulfill subvert abandon resolve))
+    do:
+      lifecycle(
+        state,
+        :threats,
+        event,
+        point,
+        ~w(open reinforce delay complicate fulfill subvert abandon resolve)
+      )
 
   defp apply_event(state, %Event{kind: "comprehension_risk"} = event, point),
-    do: lifecycle(state, :comprehension_risks, event, point, ~w(open reinforce complicate resolve abandon))
+    do:
+      lifecycle(
+        state,
+        :comprehension_risks,
+        event,
+        point,
+        ~w(open reinforce complicate resolve abandon)
+      )
 
   defp apply_event(state, %Event{kind: "forward_pull"} = event, point),
-    do: lifecycle(state, :forward_pull, event, point, ~w(open strengthen delay redirect resolve abandon))
+    do:
+      lifecycle(
+        state,
+        :forward_pull,
+        event,
+        point,
+        ~w(open strengthen delay redirect resolve abandon)
+      )
 
   defp apply_event(state, %Event{kind: "reveal"} = event, point) do
     statuses = %{
@@ -628,22 +681,28 @@ defmodule Fount.Intelligence.Reader do
   defp append_history(entry, event, point) do
     history = Map.get(entry, "history", [])
 
-    Map.put(entry, "history", history ++ [
-      %{
-        "event_id" => event.id,
-        "action" => event.action,
-        "point_id" => point["id"],
-        "claim_class" => event.claim_class
-      }
-    ])
+    Map.put(
+      entry,
+      "history",
+      history ++
+        [
+          %{
+            "event_id" => event.id,
+            "action" => event.action,
+            "point_id" => point["id"],
+            "claim_class" => event.claim_class
+          }
+        ]
+    )
   end
 
   defp maybe_opened_at(entry, point) do
     if Map.has_key?(entry, "opened_at"), do: entry, else: Map.put(entry, "opened_at", point["id"])
   end
 
-  defp maybe_closed_at(entry, status, point) when status in ~w(resolved abandoned fulfilled subverted),
-    do: Map.put(entry, "closed_at", point["id"])
+  defp maybe_closed_at(entry, status, point)
+       when status in ~w(resolved abandoned fulfilled subverted),
+       do: Map.put(entry, "closed_at", point["id"])
 
   defp maybe_closed_at(entry, _status, _point), do: entry
 
@@ -654,7 +713,12 @@ defmodule Fount.Intelligence.Reader do
       point = by_id[event.point]
 
       Enum.reduce(event.dependencies, acc, fn dependency, nested ->
-        entry = %{"event_id" => event.id, "point_id" => event.point, "ordinal" => point["ordinal"]}
+        entry = %{
+          "event_id" => event.id,
+          "point_id" => event.point,
+          "ordinal" => point["ordinal"]
+        }
+
         Map.update(nested, dependency, [entry], &[entry | &1])
       end)
     end)
@@ -691,7 +755,9 @@ defmodule Fount.Intelligence.Reader do
   defp epistemic_signatures(entries) do
     entries
     |> Enum.map(fn entry ->
-      proposition = entry["proposition"] || entry[:proposition] || entry["object"] || entry[:object]
+      proposition =
+        entry["proposition"] || entry[:proposition] || entry["object"] || entry[:object]
+
       stance = entry["stance"] || entry[:stance] || entry["status"] || entry[:status]
 
       %{
@@ -728,7 +794,9 @@ defmodule Fount.Intelligence.Reader do
   end
 
   defp stable_key(value), do: "reader_" <> CanonicalJSON.hash(Model.plain(value))
-  defp same_value?(left, right), do: CanonicalJSON.hash(Model.plain(left)) == CanonicalJSON.hash(Model.plain(right))
+
+  defp same_value?(left, right),
+    do: CanonicalJSON.hash(Model.plain(left)) == CanonicalJSON.hash(Model.plain(right))
 
   defp markdown_entries(entries) when map_size(entries) == 0, do: "_None_"
 

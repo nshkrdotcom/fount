@@ -10,7 +10,10 @@ defmodule Fount.Intelligence.TemporalViewsTest do
     {:ok, screenplay: screenplay, world: world, events: Fixture.scene_events(screenplay)}
   end
 
-  test "non-linear presentation never manufactures diegetic chronology", %{world: world, events: events} do
+  test "non-linear presentation never manufactures diegetic chronology", %{
+    world: world,
+    events: events
+  } do
     [scene_1, _scene_2, scene_3, _scene_4] = events
 
     presentation = Temporal.sequence_view(world, [scene_1, scene_3], ordering: :presentation)
@@ -37,7 +40,10 @@ defmodule Fount.Intelligence.TemporalViewsTest do
     refute Map.has_key?(dan_to_mara["attributes"], "relationship.trust")
   end
 
-  test "character state includes event-qualified resources and epistemic partitions", %{world: world, events: events} do
+  test "character state includes event-qualified resources and epistemic partitions", %{
+    world: world,
+    events: events
+  } do
     [_scene_1, scene_2, _scene_3, scene_4] = events
 
     state = Temporal.character_state(world, "Mara", scene_4)
@@ -60,10 +66,11 @@ defmodule Fount.Intelligence.TemporalViewsTest do
     assert Enum.any?(promise["payoffs"], &(&1["type"] == "pays_off"))
   end
 
-  test "story-time recomputation expands through the connected temporal region, not presentation suffix", %{
-    world: world,
-    events: events
-  } do
+  test "story-time recomputation expands through the connected temporal region, not presentation suffix",
+       %{
+         world: world,
+         events: events
+       } do
     [_scene_1, scene_2, scene_3, scene_4] = events
     region = Temporal.recomputation_region(world, ["fixture:timeline"])
 

@@ -82,12 +82,12 @@ defmodule Fount.Intelligence.StoryWorld.StoryTime do
       |> Map.values()
       |> Enum.reduce(%{}, fn constraint, acc ->
         acc
-        |> Map.update(constraint.left, MapSet.new([constraint.right]), &MapSet.put(&1, constraint.right))
-        |> Map.update(constraint.right, MapSet.new([constraint.left]), &MapSet.put(&1, constraint.left))
+        |> Map.update(constraint.left, [constraint.right], &[constraint.right | &1])
+        |> Map.update(constraint.right, [constraint.left], &[constraint.left | &1])
       end)
 
-    connected_walk(adjacency, seeds, MapSet.new())
-    |> MapSet.to_list()
+    connected_walk(adjacency, seeds, [])
+    |> Enum.uniq()
     |> Enum.sort()
   end
 
@@ -96,11 +96,11 @@ defmodule Fount.Intelligence.StoryWorld.StoryTime do
   defp connected_walk(_adjacency, [], seen), do: seen
 
   defp connected_walk(adjacency, [current | rest], seen) do
-    if MapSet.member?(seen, current) do
+    if current in seen do
       connected_walk(adjacency, rest, seen)
     else
-      next = Map.get(adjacency, current, MapSet.new()) |> MapSet.to_list() |> Enum.sort()
-      connected_walk(adjacency, rest ++ next, MapSet.put(seen, current))
+      next = Map.get(adjacency, current, []) |> Enum.uniq() |> Enum.sort()
+      connected_walk(adjacency, rest ++ next, [current | seen])
     end
   end
 

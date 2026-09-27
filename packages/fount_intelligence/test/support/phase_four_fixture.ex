@@ -27,7 +27,9 @@ defmodule Fount.Intelligence.TestSupport.PhaseFourFixture do
         },
         %{
           heading: "EXT. LOADING DOCK - DAWN",
-          elements: [%{type: :action, text: "Mara hands Dan the ledger she recovered from the archive."}]
+          elements: [
+            %{type: :action, text: "Mara hands Dan the ledger she recovered from the archive."}
+          ]
         }
       ]
     )
@@ -165,7 +167,12 @@ defmodule Fount.Intelligence.TestSupport.PhaseFourFixture do
         },
         dependencies: ["reader:mara-model"]
       ),
-      event("flashback-origin-reveal", "reveal", "explicit", Enum.at(actions(screenplay), 2), screenplay,
+      event(
+        "flashback-origin-reveal",
+        "reveal",
+        "explicit",
+        Enum.at(actions(screenplay), 2),
+        screenplay,
         key: "key-origin-reveal",
         data: %{"proposition" => "Mara saw the key years earlier."},
         dependencies: ["reader:flashback-origin"]
@@ -209,8 +216,7 @@ defmodule Fount.Intelligence.TestSupport.PhaseFourFixture do
         "action" => action,
         "point" => element.id,
         "key" => Keyword.get(opts, :key),
-        "claim_class" =>
-          Keyword.get(opts, :claim_class, "deterministic_derived_narrative_state"),
+        "claim_class" => Keyword.get(opts, :claim_class, "deterministic_derived_narrative_state"),
         "visibility" => Keyword.get(opts, :visibility, "reader_visible"),
         "data" => Keyword.get(opts, :data, %{}),
         "evidence" => [evidence(screenplay, element)],

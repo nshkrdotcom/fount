@@ -22,6 +22,33 @@ defmodule Fount.Intelligence.ReaderForwardTest do
     refute "private-note" in reader.event_ids
   end
 
+  test "boneyards and omitted scenes never become ordinary Reader checkpoints" do
+    screenplay =
+      Fount.Screenplay.new(
+        scenes: [
+          %{
+            heading: "INT. ROOM - DAY",
+            elements: [
+              %{type: :action, text: "Mara opens the box."},
+              %{type: :boneyard, text: "/* The secret is inside. */"}
+            ]
+          },
+          %{heading: "EXT. ROAD - DAY", elements: [%{type: :action, text: "The car leaves."}]}
+        ]
+      )
+
+    [_, omitted_scene] = screenplay.ir.scenes
+
+    {:ok, screenplay} =
+      Fount.Screenplay.apply(screenplay, Fount.Edit.omit_scene(omitted_scene.id))
+
+    {:ok, reader} = Reader.reduce(screenplay, [])
+
+    refute Enum.any?(reader.points, &(&1["type"] == "boneyard"))
+    refute Enum.any?(reader.points, &(&1["scene_id"] == omitted_scene.id))
+    assert Enum.any?(reader.points, &(&1["type"] == "action"))
+  end
+
   test "question lifecycle opens then resolves without altering the earlier snapshot", %{
     screenplay: screenplay,
     reader: reader
@@ -62,7 +89,11 @@ defmodule Fount.Intelligence.ReaderForwardTest do
     changed_suffix =
       Enum.map(events, fn
         %{id: "promise-fulfilled"} = event ->
-          %{event | data: %{"outcome" => "Mara withholds the ledger after all."}, evidence: [Fixture.evidence(screenplay, action_4)]}
+          %{
+            event
+            | data: %{"outcome" => "Mara withholds the ledger after all."},
+              evidence: [Fixture.evidence(screenplay, action_4)]
+          }
 
         event ->
           event
@@ -73,18 +104,23 @@ defmodule Fount.Intelligence.ReaderForwardTest do
     assert Reader.snapshot_at(reader, action_2.id) == Reader.snapshot_at(revised, action_2.id)
   end
 
-  test "deterministic replay produces identical snapshots", %{screenplay: screenplay, events: events, reader: reader} do
+  test "deterministic replay produces identical snapshots", %{
+    screenplay: screenplay,
+    events: events,
+    reader: reader
+  } do
     assert {:ok, replay} = Reader.reduce(screenplay, events)
     assert replay.points == reader.points
     assert replay.snapshots == reader.snapshots
     assert Reader.inspection_packet(replay) == Reader.inspection_packet(reader)
   end
 
-  test "moving a reveal earlier changes only snapshots at and after the new presentation point", %{
-    screenplay: screenplay,
-    events: events,
-    reader: later_reader
-  } do
+  test "moving a reveal earlier changes only snapshots at and after the new presentation point",
+       %{
+         screenplay: screenplay,
+         events: events,
+         reader: later_reader
+       } do
     [action_1, action_2 | _] = Fixture.actions(screenplay)
 
     earlier_events =
@@ -109,7 +145,9 @@ defmodule Fount.Intelligence.ReaderForwardTest do
     assert earlier_second.state.reveals["archive-key-reveal"]["status"] == "explicit"
   end
 
-  test "presentation suffix recomputation starts at the earliest affected event", %{reader: reader} do
+  test "presentation suffix recomputation starts at the earliest affected event", %{
+    reader: reader
+  } do
     boundary = Reader.recomputation_boundary(reader, ["reader:key-reveal"])
 
     assert boundary["semantics"] == "presentation_suffix"
@@ -124,8 +162,9 @@ defmodule Fount.Intelligence.ReaderForwardTest do
     assert Reader.recomputation_boundary(reader, ["reader:unrelated"]) == :unaffected
   end
 
-
-  test "question reinforce and abandon remain explicit lifecycle events", %{screenplay: screenplay} do
+  test "question reinforce and abandon remain explicit lifecycle events", %{
+    screenplay: screenplay
+  } do
     [action_1, action_2 | _] = Fixture.actions(screenplay)
 
     events = [
@@ -151,10 +190,11 @@ defmodule Fount.Intelligence.ReaderForwardTest do
     assert Reader.open_questions(second) == []
   end
 
-  test "a later-presented flashback can update Reader state while remaining diegetically earlier", %{
-    screenplay: screenplay,
-    reader: reader
-  } do
+  test "a later-presented flashback can update Reader state while remaining diegetically earlier",
+       %{
+         screenplay: screenplay,
+         reader: reader
+       } do
     [_action_1, action_2, action_3 | _] = Fixture.actions(screenplay)
 
     assert {:ok, before_flashback} = Reader.snapshot_at(reader, action_2.id)
@@ -169,7 +209,9 @@ defmodule Fount.Intelligence.ReaderForwardTest do
              Reader.trajectory(reader, "not_a_track", "anything")
   end
 
-  test "suspense remains inspectable components rather than one universal score", %{reader: reader} do
+  test "suspense remains inspectable components rather than one universal score", %{
+    reader: reader
+  } do
     suspense = reader.snapshots |> List.last() |> then(& &1.state.suspense["corridor-pressure"])
 
     assert suspense["data"]["components"]["threat"] == "Dan may stop her"

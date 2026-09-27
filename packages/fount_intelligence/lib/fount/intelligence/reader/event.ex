@@ -46,7 +46,12 @@ defmodule Fount.Intelligence.Reader.Event do
       visibility: scalar(attrs["visibility"] || "reader_visible"),
       data: Model.plain(attrs["data"] || %{}),
       evidence: List.wrap(attrs["evidence"]),
-      dependencies: attrs["dependencies"] |> List.wrap() |> Enum.map(&to_string/1) |> Enum.uniq() |> Enum.sort(),
+      dependencies:
+        attrs["dependencies"]
+        |> List.wrap()
+        |> Enum.map(&to_string/1)
+        |> Enum.uniq()
+        |> Enum.sort(),
       metadata: Model.plain(attrs["metadata"] || %{})
     }
 
@@ -57,19 +62,43 @@ defmodule Fount.Intelligence.Reader.Event do
 
   defp validate(%__MODULE__{} = event) do
     cond do
-      not (is_binary(event.id) and event.id != "") -> {:error, :invalid_reader_event_id}
-      not (is_binary(event.kind) and event.kind != "") -> {:error, {:invalid_reader_event_kind, event.id}}
-      not (is_binary(event.action) and event.action != "") -> {:error, {:invalid_reader_event_action, event.id}}
-      not valid_point?(event.point) -> {:error, {:invalid_reader_event_point, event.id}}
-      event.claim_class not in @claim_classes -> {:error, {:invalid_reader_claim_class, event.id}}
-      event.visibility not in @visibilities -> {:error, {:invalid_reader_visibility, event.id}}
-      not is_map(event.data) -> {:error, {:invalid_reader_event_data, event.id}}
-      not is_map(event.metadata) -> {:error, {:invalid_reader_event_metadata, event.id}}
-      true -> {:ok, event}
+      not nonempty?(event.id) ->
+        {:error, :invalid_reader_event_id}
+
+      not nonempty?(event.kind) ->
+        {:error, {:invalid_reader_event_kind, event.id}}
+
+      not nonempty?(event.action) ->
+        {:error, {:invalid_reader_event_action, event.id}}
+
+      not nonempty?(event.point) ->
+        {:error, {:invalid_reader_event_point, event.id}}
+
+      event.claim_class not in @claim_classes ->
+        {:error, {:invalid_reader_claim_class, event.id}}
+
+      event.visibility not in @visibilities ->
+        {:error, {:invalid_reader_visibility, event.id}}
+
+      true ->
+        validate_maps(event)
     end
   end
 
-  defp valid_point?(point), do: is_binary(point) and point != ""
+  defp validate_maps(event) do
+    cond do
+      not is_map(event.data) ->
+        {:error, {:invalid_reader_event_data, event.id}}
+
+      not is_map(event.metadata) ->
+        {:error, {:invalid_reader_event_metadata, event.id}}
+
+      true ->
+        {:ok, event}
+    end
+  end
+
+  defp nonempty?(value), do: is_binary(value) and value != ""
   defp scalar(value) when is_atom(value), do: Atom.to_string(value)
   defp scalar(value) when is_binary(value), do: value
   defp scalar(value), do: value

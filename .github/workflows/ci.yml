@@ -72,8 +72,14 @@ jobs:
       FOUNT_TEST_USER: fount
       FOUNT_TEST_PASSWORD: fount_test
       FOUNT_DATABASE_URL: ecto://fount:fount_test@localhost:5432/fount_integration
+      FOUNT_SYSTEM_ONE_SDK_PATH: ${{ github.workspace }}/.ci/system_one_sdk/packages/system_one_sdk
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: nshkrdotcom/system_one_sdk
+          ref: e757598a89e549274b979f0e77c6a4b2b6667752
+          path: .ci/system_one_sdk
       - uses: erlef/setup-beam@v1
         with:
           elixir-version: '1.20'

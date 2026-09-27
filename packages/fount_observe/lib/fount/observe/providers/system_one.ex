@@ -1,7 +1,16 @@
 defmodule Fount.Observe.Providers.SystemOne do
   @moduledoc "SystemOneSDK adapter. All SDK-native questions, clients, responses and errors terminate here."
   @behaviour Fount.Observe.Provider
-  alias Fount.Observe.{Distribution, Error, Provider, ProviderCall, ProviderResult, Question, Request}
+  alias Fount.Observe.{
+    Distribution,
+    Error,
+    Provider,
+    ProviderCall,
+    ProviderResult,
+    Question,
+    Request
+  }
+
   alias Fount.Writing.CanonicalJSON
   @client_options [:api_key, :base_url, :model, :timeout_ms, :retry]
   @request_options [
@@ -83,11 +92,13 @@ defmodule Fount.Observe.Providers.SystemOne do
 
         states = Enum.map(requests, &semantic_input/1)
         results = SystemOneSDK.evaluate_stream(state.client, states, prepared, sdk_opts)
-        {:ok, Enum.map(results, fn result ->
-          normalized = normalize(result, questions)
-          ProviderCall.deliver(opts, normalized)
-          normalized
-        end)}
+
+        {:ok,
+         Enum.map(results, fn result ->
+           normalized = normalize(result, questions)
+           ProviderCall.deliver(opts, normalized)
+           normalized
+         end)}
 
       {:error, error} ->
         {:error, normalize_error(error)}

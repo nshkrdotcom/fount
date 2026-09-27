@@ -183,7 +183,8 @@ Run `mix run examples/fixture_file.exs` for the installed data-only fixture.
 
 ## Verification status
 
-The Phase 2 source-writing delivery adds executable ExUnit tests but has not run
-Elixir, Mix, ExUnit, providers or database checks. Read the phase handoff for exact
-static/archive evidence and the mandatory runtime-QC ladder. No human usefulness
-or calibration study is claimed.
+Phase 2 runtime QC executed the focused tests and examples, four-package `mix ci`,
+isolated database integrations, writer demonstrations, package builds, and one
+authorized synthetic TypeSafe measurement. See the docset's
+`handoffs/PHASE_02_RUNTIME_QC_REPORT.md` for commands and limitations. No human
+usefulness or calibration study is claimed.

@@ -1,6 +1,6 @@
 defmodule Fount.Observe.Question do
   @moduledoc "Provider-neutral atomic questions. Caller labels and ordered rubrics are data, never executable names."
-  alias Fount.Observe.Error
+  alias Fount.Observe.{Error, Options, OutputContract}
   alias Fount.Writing.CanonicalJSON
   @enforce_keys [:kind, :instructions]
   defstruct [:kind, :instructions, criteria: [], levels: [], extra: %{}]
@@ -46,7 +46,7 @@ defmodule Fount.Observe.Question do
         String.valid?(q.instructions) and is_map(q.extra) and
         match?({:ok, _}, CanonicalJSON.encode(q.extra)) and
         Enum.all?(Map.keys(q.extra), &(&1 not in ["type", "instructions", "criteria"])) and
-        Fount.Observe.Options.safe_extra?(q.extra) and valid_shape?(q)
+        Options.safe_extra?(q.extra) and valid_shape?(q)
 
     if valid, do: :ok, else: {:error, Error.at(:invalid_request, ["question"])}
   end
@@ -71,7 +71,7 @@ defmodule Fount.Observe.Question do
     Enum.map(pairs, fn {key, q} -> Map.put(specification(q), "key", to_string(key)) end)
   end
 
-  def output_contract(%__MODULE__{} = q), do: Fount.Observe.OutputContract.for_question(q)
+  def output_contract(%__MODULE__{} = q), do: OutputContract.for_question(q)
   def output_digest(%__MODULE__{} = q), do: output_contract(q)["sha256"]
 
   def domain(%__MODULE__{kind: :noul}), do: ["true", "false"]

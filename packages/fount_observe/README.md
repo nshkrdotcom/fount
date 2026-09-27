@@ -42,5 +42,5 @@ preflight, partial-result retention, data-only fixture files, and human/determin
 recordings. See [Measurement substrate](guides/measurement-substrate.md).
 
 Run `mix run examples/phase_two.exs` after dependency setup. Its fixed fixture
-answers are workflow demonstrations, not live or human validation. Phase 2 runtime
-verification is pending; the current handoff lists the checks Codex must run.
+answers are workflow demonstrations, not human validation. Phase 2 runtime
+results are recorded in the docset's `PHASE_02_RUNTIME_QC_REPORT.md`.

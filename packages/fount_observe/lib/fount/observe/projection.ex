@@ -1,6 +1,7 @@
 defmodule Fount.Observe.Projection do
   @moduledoc "Presentation-order, audience and character-access measurement projections. Future and hidden material stay excluded."
   alias Fount.Fountain.Inline
+  alias Fount.Observe.Request
   alias Fount.Query
   alias Fount.Writing.UTF8Span
 
@@ -87,7 +88,6 @@ defmodule Fount.Observe.Projection do
     end
   end
 
-
   @doc """
   Builds an evidence-bound measurement request from an existing projection.
   Inspection via at/4 retains all provenance; this request sends only screenplay
@@ -97,17 +97,37 @@ defmodule Fount.Observe.Projection do
   def request(model, id, point, projection, opts \\ []) do
     request_opts = Keyword.take(opts, [:context, :provenance])
     projection_opts = Keyword.drop(opts, [:context, :provenance])
+
     with {:ok, state, evidence} <- at(model, point, projection, projection_opts) do
       material = Enum.map(state["material"], &Map.take(&1, ~w(type text speaker channel access)))
-      input = state |> Map.take(~w(projection complete_context access_coverage projection_gaps))
+
+      input =
+        state
+        |> Map.take(~w(projection complete_context access_coverage projection_gaps))
         |> Map.put("material", material)
-      input = if projection == "character_access",
-        do: Map.put(input, "perspective", model.cast[state["character_id"]].display_name), else: input
-      provenance = Map.merge(Keyword.get(request_opts, :provenance, %{}), %{
-        "projection_point" => point, "character_id" => state["character_id"]})
-      Fount.Observe.Request.new(model, id, input,
-        Keyword.merge(request_opts, target: %{"kind" => "scene", "id" => point["scene_id"]},
-          evidence: evidence, projection_id: projection, provenance: provenance))
+
+      input =
+        if projection == "character_access",
+          do: Map.put(input, "perspective", model.cast[state["character_id"]].display_name),
+          else: input
+
+      provenance =
+        Map.merge(Keyword.get(request_opts, :provenance, %{}), %{
+          "projection_point" => point,
+          "character_id" => state["character_id"]
+        })
+
+      Request.new(
+        model,
+        id,
+        input,
+        Keyword.merge(request_opts,
+          target: %{"kind" => "scene", "id" => point["scene_id"]},
+          evidence: evidence,
+          projection_id: projection,
+          provenance: provenance
+        )
+      )
     end
   end
 

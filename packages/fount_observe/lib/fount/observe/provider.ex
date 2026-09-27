@@ -15,6 +15,9 @@ defmodule Fount.Observe.Provider do
               {:ok, [Fount.Observe.ProviderResult.t()]} | {:error, Error.t()}
   @callback identity(term(), Fount.Observe.Request.t()) :: map()
 
+  def sensor_id(%__MODULE__{sensor_id: id}), do: id
+  def sensor_id(_), do: nil
+
   def identity(%__MODULE__{} = provider, request) do
     with {:ok, adapter} <- Registry.adapter(provider.sensor_id) do
       Map.merge(provider.fingerprint, adapter.identity(provider.state, request))

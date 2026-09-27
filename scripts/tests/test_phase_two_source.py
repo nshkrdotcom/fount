@@ -69,10 +69,10 @@ class PhaseTwoSourceTests(unittest.TestCase):
         self.assertIn('FOUNT_OBSERVE_LIVE', live)
         self.assertIn('max_provider_requests: 1', live)
 
-    def test_docs_state_runtime_is_unrun(self):
+    def test_docs_state_runtime_is_recorded(self):
         guide = (OBSERVE / 'guides/measurement-substrate.md').read_text()
-        self.assertIn('has not run', guide)
-        self.assertIn('No human usefulness', guide)
+        self.assertIn('PHASE_02_RUNTIME_QC_REPORT.md', guide)
+        self.assertRegex(guide, r'No human\s+usefulness')
 
 
 if __name__ == '__main__':

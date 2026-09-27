@@ -103,7 +103,12 @@ defmodule Fount.Observe.MixProject do
           Fount.Observe.Sandbox,
           Fount.Observe.Providers.SystemOne
         ],
-        Assets: [Fount.Observe.Lens, Fount.Observe.Registry, Fount.Observe.Projection, Fount.Observe.Calibration],
+        Assets: [
+          Fount.Observe.Lens,
+          Fount.Observe.Registry,
+          Fount.Observe.Projection,
+          Fount.Observe.Calibration
+        ],
         Cache: [Fount.Observe.Cache, Fount.Observe.Cache.Memory, Fount.Observe.Cache.ETS]
       ]
     ]

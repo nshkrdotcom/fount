@@ -22,43 +22,65 @@ defmodule Fount.Observe.Lens do
     end
   end
 
-
   @doc "Checks a caller-supplied declaration without loading modules, URLs or credentials."
   def validate(asset) when is_map(asset) do
     raw = Map.delete(asset, "sha256")
-    with :ok <- validate_asset(raw, raw["id"]), {:ok, bytes} <- CanonicalJSON.encode(raw),
+
+    with :ok <- validate_asset(raw, raw["id"]),
+         {:ok, bytes} <- CanonicalJSON.encode(raw),
          true <- byte_size(bytes) <= 65_536 do
       sha = CanonicalJSON.hash(raw)
+
       if Map.has_key?(asset, "sha256") and asset["sha256"] != sha,
-        do: {:error, Error.new(:stale_contract)}, else: {:ok, Map.put(raw, "sha256", sha)}
+        do: {:error, Error.new(:stale_contract)},
+        else: {:ok, Map.put(raw, "sha256", sha)}
     else
       _ -> {:error, Error.new(:lens_not_applicable)}
     end
   rescue
     _ -> {:error, Error.new(:lens_not_applicable)}
   end
+
   def validate(_), do: {:error, Error.new(:lens_not_applicable)}
 
   @doc false
-  def measurement_digest(asset), do: asset
-    |> Map.take(~w(id sensor projection context_contract question_overrides output_contract))
-    |> CanonicalJSON.hash()
+  def measurement_digest(asset),
+    do:
+      asset
+      |> Map.take(~w(id sensor projection context_contract question_overrides output_contract))
+      |> CanonicalJSON.hash()
 
   @doc false
   def restrict_options(asset, opts) do
     requests = Map.get(asset, "resource_policy_request", %{})
-    Enum.reduce([:max_states, :max_context_bytes, :max_question_bytes, :max_questions,
-                 :total_timeout_ms, :max_concurrency, :max_provider_requests], opts, fn key, acc ->
-      case requests[to_string(key)] do
-        nil -> acc
-        requested -> Keyword.put(acc, key, min(requested, acc[key] || requested))
+
+    Enum.reduce(
+      [
+        :max_states,
+        :max_context_bytes,
+        :max_question_bytes,
+        :max_questions,
+        :total_timeout_ms,
+        :max_concurrency,
+        :max_provider_requests
+      ],
+      opts,
+      fn key, acc ->
+        case requests[to_string(key)] do
+          nil -> acc
+          requested -> Keyword.put(acc, key, min(requested, acc[key] || requested))
+        end
       end
-    end)
+    )
   end
 
-  defp valid_resources?(requests) when is_map(requests), do:
-    Map.keys(requests) -- ~w(max_states max_context_bytes max_question_bytes max_questions total_timeout_ms max_concurrency max_provider_requests) == [] and
-      Enum.all?(requests, fn {_, value} -> is_integer(value) and value > 0 end)
+  defp valid_resources?(requests) when is_map(requests),
+    do:
+      Map.keys(requests) --
+        ~w(max_states max_context_bytes max_question_bytes max_questions total_timeout_ms max_concurrency max_provider_requests) ==
+        [] and
+        Enum.all?(requests, fn {_, value} -> is_integer(value) and value > 0 end)
+
   defp valid_resources?(_), do: false
 
   def valid_thresholds?(thresholds) when is_map(thresholds) do
@@ -92,21 +114,28 @@ defmodule Fount.Observe.Lens do
   defp asset(id, _projection), do: load(id)
 
   defp validate_asset(asset, id) when is_map(asset) do
-    allowed =
-      ~w(id description sensor projection context_contract question_overrides interpretation_policy output_contract resource_policy_request)
-
-    valid =
-      Map.keys(asset) -- allowed == [] and asset["id"] == id and OutputContract.logical_id?(id) and Registry.sensor?(asset["sensor"]) and
-        Registry.projection?(asset["projection"]) and
-        asset["output_contract"] == "observe.answer_set" and
-        Context.validate_contract(asset["context_contract"]) == :ok and valid_resources?(Map.get(asset, "resource_policy_request", %{})) and
-        valid_overrides?(asset["question_overrides"]) and
-        valid_thresholds?(Map.get(asset, "interpretation_policy", %{}))
+    valid = valid_asset_identity?(asset, id) and valid_asset_contracts?(asset)
 
     if valid, do: :ok, else: {:error, :invalid_asset}
   end
 
   defp validate_asset(_, _), do: {:error, :invalid_asset}
+
+  defp valid_asset_identity?(asset, id) do
+    allowed =
+      ~w(id description sensor projection context_contract question_overrides interpretation_policy output_contract resource_policy_request)
+
+    Map.keys(asset) -- allowed == [] and asset["id"] == id and OutputContract.logical_id?(id) and
+      Registry.sensor?(asset["sensor"]) and Registry.projection?(asset["projection"]) and
+      asset["output_contract"] == "observe.answer_set"
+  end
+
+  defp valid_asset_contracts?(asset) do
+    Context.validate_contract(asset["context_contract"]) == :ok and
+      valid_resources?(Map.get(asset, "resource_policy_request", %{})) and
+      valid_overrides?(asset["question_overrides"]) and
+      valid_thresholds?(Map.get(asset, "interpretation_policy", %{}))
+  end
 
   defp valid_overrides?(specs) when is_list(specs) do
     Enum.all?(specs, fn

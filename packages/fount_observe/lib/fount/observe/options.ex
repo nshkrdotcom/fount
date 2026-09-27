@@ -69,13 +69,23 @@ defmodule Fount.Observe.Options do
   end
 
   defp valid_limits?(opts) do
-    nonnegative?(opts[:max_states]) and positive?(opts[:max_context_bytes]) and
-      positive?(opts[:max_question_bytes]) and is_integer(opts[:max_questions]) and opts[:max_questions] in 1..255 and
-      (is_nil(opts[:max_provider_requests]) or nonnegative?(opts[:max_provider_requests])) and
-      is_integer(opts[:max_concurrency]) and opts[:max_concurrency] in 1..1024 and
-      is_integer(opts[:max_pending]) and opts[:max_pending] >= opts[:max_concurrency] and
-      opts[:max_pending] <= 10_000
+    valid_size_limits?(opts) and valid_request_limits?(opts) and valid_parallel_limits?(opts)
   end
+
+  defp valid_size_limits?(opts),
+    do:
+      nonnegative?(opts[:max_states]) and positive?(opts[:max_context_bytes]) and
+        positive?(opts[:max_question_bytes]) and is_integer(opts[:max_questions]) and
+        opts[:max_questions] in 1..255
+
+  defp valid_request_limits?(opts),
+    do: is_nil(opts[:max_provider_requests]) or nonnegative?(opts[:max_provider_requests])
+
+  defp valid_parallel_limits?(opts),
+    do:
+      is_integer(opts[:max_concurrency]) and opts[:max_concurrency] in 1..1024 and
+        is_integer(opts[:max_pending]) and opts[:max_pending] >= opts[:max_concurrency] and
+        opts[:max_pending] <= 10_000
 
   defp valid_timeouts?(opts) do
     Enum.all?([:task_timeout_ms, :total_timeout_ms], &positive?(opts[&1])) and
@@ -87,14 +97,18 @@ defmodule Fount.Observe.Options do
   end
 
   defp valid_semantics?(opts) do
-    valid_model?(opts[:model]) and
-      safe_extra?(opts[:extra_body]) and
-      (is_nil(opts[:max_provider_requests]) or opts[:retry] != true) and
-      (is_nil(opts[:lens]) or is_nil(opts[:lens_id])) and
+    valid_model?(opts[:model]) and safe_extra?(opts[:extra_body]) and
+      valid_retry?(opts) and valid_lens_selection?(opts) and
       match?({:ok, _}, CanonicalJSON.encode(semantic(opts))) and
-      (is_nil(opts[:retry]) or is_boolean(opts[:retry])) and
       valid_tolerance?(opts[:probability_tolerance])
   end
+
+  defp valid_retry?(opts),
+    do:
+      (is_nil(opts[:max_provider_requests]) or opts[:retry] != true) and
+        (is_nil(opts[:retry]) or is_boolean(opts[:retry]))
+
+  defp valid_lens_selection?(opts), do: is_nil(opts[:lens]) or is_nil(opts[:lens_id])
 
   defp valid_model?(nil), do: true
   defp valid_model?(model), do: is_binary(model) and String.trim(model) != ""
@@ -122,12 +136,16 @@ defmodule Fount.Observe.Options do
   end
 
   def safe_extra?(nil), do: true
+
   def safe_extra?(map) when is_map(map) do
-    forbidden = ~w(api_key apikey authorization token access_token refresh_token password secret headers base_url endpoint provider credentials)
+    forbidden =
+      ~w(api_key apikey authorization token access_token refresh_token password secret headers base_url endpoint provider credentials)
+
     Enum.all?(map, fn {key, value} ->
       is_binary(key) and String.downcase(key) not in forbidden and safe_extra?(value)
     end)
   end
+
   def safe_extra?(items) when is_list(items), do: Enum.all?(items, &safe_extra?/1)
   def safe_extra?(value), do: is_binary(value) or is_number(value) or is_boolean(value)
 

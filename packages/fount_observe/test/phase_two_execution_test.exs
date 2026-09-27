@@ -1,11 +1,12 @@
 defmodule Fount.Observe.PhaseTwoExecutionTest do
   use ExUnit.Case, async: true
-  alias Fount.Observe.{Budget, Cache, Context, Lens, Question, Request, Sandbox}
+  alias Fount.Observe.{Budget, Cache, Context, Lens, Question, Request, Resources, Sandbox}
 
   defp request(text \\ "Mara waits.") do
     {:ok, request} = Request.new(Fount.Screenplay.new(), "scene", %{"passage" => text})
     request
   end
+
   defp questions, do: [q: Question.noul("Is there observable action?")]
   defp provider, do: Sandbox.new!(%{"scene" => %{"q" => 0.8}})
   defp result(batch), do: hd(hd(batch.entries).observations).result
@@ -42,8 +43,11 @@ defmodule Fount.Observe.PhaseTwoExecutionTest do
     measurement = result(first)
     key = measurement.metadata["cache_key"]
     assert is_binary(key)
-    for corrupted <- [%{measurement | output_contract_sha256: String.duplicate("0", 64)},
-                       %{measurement | normalized_raw: %{"false" => 1}}] do
+
+    for corrupted <- [
+          %{measurement | output_contract_sha256: String.duplicate("0", 64)},
+          %{measurement | normalized_raw: %{"false" => 1}}
+        ] do
       :ok = Cache.ETS.put(cache, key, [corrupted])
       assert {:ok, checked} = Fount.Observe.evaluate(provider(), [req], questions(), opts)
       assert checked.cache_hits == 0
@@ -53,7 +57,12 @@ defmodule Fount.Observe.PhaseTwoExecutionTest do
 
   test "changing context changes measurement identity but changing revision does not" do
     {:ok, _, asset} = Lens.compile(questions())
-    lens = asset |> Map.delete("sha256") |> put_in(["context_contract", "optional"], %{"intent" => %{"type" => "literal"}})
+
+    lens =
+      asset
+      |> Map.delete("sha256")
+      |> put_in(["context_contract", "optional"], %{"intent" => %{"type" => "literal"}})
+
     {:ok, cache} = Cache.ETS.start_link(max_entries: 10)
     on_exit(fn -> if Process.alive?(cache), do: GenServer.stop(cache) end)
     opts = [lens: lens, cache: {Cache.ETS, cache}, privacy_namespace: "project"]
@@ -72,7 +81,10 @@ defmodule Fount.Observe.PhaseTwoExecutionTest do
 
   test "lens resource requests cannot raise host caps or spend budget at preflight" do
     {:ok, _, asset} = Lens.compile(questions())
-    lens = asset |> Map.delete("sha256") |> Map.put("resource_policy_request", %{"max_states" => 900})
+
+    lens =
+      asset |> Map.delete("sha256") |> Map.put("resource_policy_request", %{"max_states" => 900})
+
     budget = Budget.new(limit: 2)
     opts = [lens: lens, max_states: 0, budget: budget]
     assert {:ok, preflight} = Fount.Observe.preflight([request()], questions(), opts)
@@ -85,15 +97,40 @@ defmodule Fount.Observe.PhaseTwoExecutionTest do
     assert hd(batch.entries).error.class == :budget_exhausted
   end
 
+  test "remote request count stays unknown when a scheduled call has no completion metadata" do
+    actual = Resources.actual(%{sensor_id: "system_one"}, [], 1, nil)
+    assert actual["initial_provider_requests_scheduled"] == 1
+    assert actual["provider_requests"] == nil
+    assert actual["reported_retries"] == nil
+
+    assert Resources.actual(%{sensor_id: "system_one"}, [], 0, nil)[
+             "provider_requests"
+           ] == 0
+  end
+
   test "state and question caps fail before dispatch" do
-    {:ok, batch} = Fount.Observe.evaluate(provider(), [request(String.duplicate("x", 500))], questions(), max_context_bytes: 50)
+    {:ok, batch} =
+      Fount.Observe.evaluate(provider(), [request(String.duplicate("x", 500))], questions(),
+        max_context_bytes: 50
+      )
+
     assert batch.scheduled == 0
     assert hd(batch.entries).error.class == :state_too_large
-    assert {:error, %{class: :state_too_large}} = Fount.Observe.evaluate(provider(), [request()], questions(), max_question_bytes: 5)
+
+    assert {:error, %{class: :state_too_large}} =
+             Fount.Observe.evaluate(provider(), [request()], questions(), max_question_bytes: 5)
   end
 
   test "mutable aliases cannot be promoted to durable identity by their spelling" do
-    unstable = %{provider() | fingerprint: %{"provider" => "sandbox", "model" => "jev-1.13.0", "stability" => "mutable_alias_or_unknown"}}
+    unstable = %{
+      provider()
+      | fingerprint: %{
+          "provider" => "sandbox",
+          "model" => "jev-1.13.0",
+          "stability" => "mutable_alias_or_unknown"
+        }
+    }
+
     {:ok, cache} = Cache.ETS.start_link(max_entries: 10)
     on_exit(fn -> if Process.alive?(cache), do: GenServer.stop(cache) end)
     opts = [cache: {Cache.ETS, cache}, privacy_namespace: "private", cache_policy: :durable]
@@ -103,26 +140,51 @@ defmodule Fount.Observe.PhaseTwoExecutionTest do
   end
 
   test "credential-like transport extras are rejected, not persisted" do
-    for extra <- [%{"api_key" => "never-store"}, %{"headers" => %{"Authorization" => "never-store"}}] do
-      assert {:error, error} = Fount.Observe.evaluate(provider(), [request()], questions(), extra_body: extra)
+    for extra <- [
+          %{"api_key" => "never-store"},
+          %{"headers" => %{"Authorization" => "never-store"}}
+        ] do
+      assert {:error, error} =
+               Fount.Observe.evaluate(provider(), [request()], questions(), extra_body: extra)
+
       refute inspect(error) =~ "never-store"
     end
   end
 
   test "raw measurements, separate calibration, resources and exact model metadata survive" do
-    calibration = %{"id" => "project.raw", "method" => "identity", "validation" => "identity_not_empirical"}
-    {:ok, batch} = Fount.Observe.evaluate(provider(), [request()], questions(), calibration: calibration)
+    calibration = %{
+      "id" => "project.raw",
+      "method" => "identity",
+      "validation" => "identity_not_empirical"
+    }
+
+    {:ok, batch} =
+      Fount.Observe.evaluate(provider(), [request()], questions(), calibration: calibration)
+
     measured = result(batch)
     assert measured.normalized_raw == measured.value
     assert measured.calibration["validation"] == "identity_not_empirical"
-    assert hd(hd(batch.entries).observations).calibration_sha256 == measured.calibration["asset_sha256"]
+
+    assert hd(hd(batch.entries).observations).calibration_sha256 ==
+             measured.calibration["asset_sha256"]
+
     assert batch.resource_usage["actual"]["scheduled_states"] == 1
     assert batch.resource_usage["actual"]["provider_requests"] == 0
     assert batch.resource_usage["actual"]["hosted_cost"] == nil
   end
+
   test "configured normalization tolerance applies to Sandbox as well as the SDK" do
-    p = Sandbox.new!(%{"scene" => %{"q" => %{"choice" => "a", "confidence" => 0.3,
-      "probabilities" => %{"a" => 0.5, "b" => 0.49}}}})
+    p =
+      Sandbox.new!(%{
+        "scene" => %{
+          "q" => %{
+            "choice" => "a",
+            "confidence" => 0.3,
+            "probabilities" => %{"a" => 0.5, "b" => 0.49}
+          }
+        }
+      })
+
     q = [q: Question.choice("Which?", a: "A", b: "B")]
     {:ok, permissive} = Fount.Observe.evaluate(p, [request()], q)
     assert permissive.status == :complete
@@ -132,8 +194,13 @@ defmodule Fount.Observe.PhaseTwoExecutionTest do
 
   test "atomic reservations cannot overspend one shared state budget" do
     budget = Budget.new(limit: 7)
-    granted = 1..50 |> Task.async_stream(fn _ -> Budget.take(budget, 1) end, max_concurrency: 10)
-      |> Enum.map(fn {:ok, count} -> count end) |> Enum.sum()
+
+    granted =
+      1..50
+      |> Task.async_stream(fn _ -> Budget.take(budget, 1) end, max_concurrency: 10)
+      |> Enum.map(fn {:ok, count} -> count end)
+      |> Enum.sum()
+
     assert granted == 7
     assert Budget.snapshot(budget)["spent"] == 7
   end
@@ -150,5 +217,4 @@ defmodule Fount.Observe.PhaseTwoExecutionTest do
     assert checked.cache_hits == 0
     refute inspect(checked) =~ "never-export-this"
   end
-
 end

@@ -1,6 +1,6 @@
 # Verification
 
-This delivery did not run Elixir, Mix, PostgreSQL, hosted providers, PDF rendering or speech. The source contains tests for Codex to execute and repair. Do not interpret an offline source/ZIP check as runtime success.
+The source-writing delivery did not run Elixir or providers. The subsequent Phase 2 runtime QC did; see the docset's `handoffs/PHASE_02_RUNTIME_QC_REPORT.md` for actual commands and results. Do not interpret an offline source/ZIP check as runtime success.
 
 From the repository root, configure the actual SDK source if needed, then use `mix setup`, `mix test`, and `mix fount.architecture`. Package-local checks are `mix format --check-formatted`, `mix compile --warnings-as-errors`, `mix test`, `mix credo --strict`, `mix dialyzer`, `mix docs --warnings-as-errors`, and `mix hex.build` where package assets are present. Runtime QC must inspect lockfile changes rather than copy invented dependency hashes.
 
@@ -23,5 +23,5 @@ Then run the entire workspace's architecture/CI gates, database integrations and
 preserved writer examples. The new tests include real-SDK transport stubs; they
 are not live-provider calls. Explicitly authorize and run `examples/live.exs`
 separately. Codex must inspect timeout cleanup, returned usage and exact source
-evidence, not just an exit code. No runtime command above was run in the offline
-source-writing environment.
+evidence, not just an exit code. These commands were unrun in the offline
+source-writing environment and executed during runtime QC.

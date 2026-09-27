@@ -47,18 +47,21 @@ defmodule Fount.Observe.Context do
 
   def hash(context), do: context |> semantic_map() |> CanonicalJSON.hash()
 
-
-
   @doc "Validates a closed schema before any value or provider dispatch. No remote or executable schemas."
-  def validate_contract(%{"required" => required, "optional" => optional, "allow_unknown" => false} = contract)
+  def validate_contract(
+        %{"required" => required, "optional" => optional, "allow_unknown" => false} = contract
+      )
       when is_map(required) and is_map(optional) do
-    valid = map_size(contract) == 3 and map_size(required) + map_size(optional) <= 64 and
-      MapSet.disjoint?(MapSet.new(Map.keys(required)), MapSet.new(Map.keys(optional))) and
-      Enum.all?(Map.merge(required, optional), fn {key, schema} ->
-        text?(key) and schema?(schema, 0)
-      end)
+    valid =
+      map_size(contract) == 3 and map_size(required) + map_size(optional) <= 64 and
+        MapSet.disjoint?(MapSet.new(Map.keys(required)), MapSet.new(Map.keys(optional))) and
+        Enum.all?(Map.merge(required, optional), fn {key, schema} ->
+          text?(key) and schema?(schema, 0)
+        end)
+
     if valid, do: :ok, else: invalid(["context_contract"])
   end
+
   def validate_contract(_), do: invalid(["context_contract"])
 
   def contract_digest(contract) do
@@ -69,14 +72,15 @@ defmodule Fount.Observe.Context do
   end
 
   @doc "Storage representation retains evidence pointers; semantic representation deliberately omits them."
-  def semantic_map(%__MODULE__{slots: slots}), do:
-    %{"slots" => Map.new(slots, fn {k, v} -> {k, semantic(v)} end)}
+  def semantic_map(%__MODULE__{slots: slots}),
+    do: %{"slots" => Map.new(slots, fn {k, v} -> {k, semantic(v)} end)}
 
-  def evidence_ids(%__MODULE__{slots: slots}), do:
-    slots |> Map.values() |> Enum.flat_map(&pointers/1) |> Enum.uniq() |> Enum.sort()
+  def evidence_ids(%__MODULE__{slots: slots}),
+    do: slots |> Map.values() |> Enum.flat_map(&pointers/1) |> Enum.uniq() |> Enum.sort()
 
   @doc "Decodes only installed primitive types; input strings never become atoms or modules."
-  def from_map(%{"slots" => slots} = value, contract) when map_size(value) == 1 and is_map(slots) do
+  def from_map(%{"slots" => slots} = value, contract)
+      when map_size(value) == 1 and is_map(slots) do
     with :ok <- validate_contract(contract) do
       schemas = Map.merge(contract["required"], contract["optional"])
       decoded = Map.new(slots, fn {key, item} -> {key, decode(item, schemas[key])} end)
@@ -86,20 +90,26 @@ defmodule Fount.Observe.Context do
   rescue
     _ -> invalid(["slots"])
   end
+
   def from_map(_, _), do: invalid(["slots"])
 
   @doc false
   def prepare_many(contexts, contract) do
-    {results, _seen} = Enum.map_reduce(contexts, %{}, fn context, seen ->
-      prepare_cached(context, contract, seen)
-    end)
+    {results, _seen} =
+      Enum.map_reduce(contexts, %{}, fn context, seen ->
+        prepare_cached(context, contract, seen)
+      end)
+
     results
   end
 
   defp prepare_cached(context, contract, seen) do
     key = context |> to_map() |> CanonicalJSON.hash()
+
     case Map.fetch(seen, key) do
-      {:ok, result} -> {result, seen}
+      {:ok, result} ->
+        {result, seen}
+
       :error ->
         result = with :ok <- validate(context, contract), do: {:ok, semantic_map(context)}
         {result, Map.put(seen, key, result)}
@@ -109,51 +119,80 @@ defmodule Fount.Observe.Context do
   end
 
   defp schema?(%{"type" => "list", "items" => item} = schema, depth) when depth < 8 do
-    map_size(schema) == 2 and schema?(if(is_binary(item), do: %{"type" => item}, else: item), depth + 1)
+    map_size(schema) == 2 and
+      schema?(if(is_binary(item), do: %{"type" => item}, else: item), depth + 1)
   end
-  defp schema?(%{"type" => type} = schema, _), do:
-    map_size(schema) == 1 and type in ~w(literal fact belief relation relation_summary turn entity_ref quantity score temporal_ref)
+
+  defp schema?(%{"type" => type} = schema, _),
+    do:
+      map_size(schema) == 1 and
+        type in ~w(literal fact belief relation relation_summary turn entity_ref quantity score temporal_ref)
+
   defp schema?(_, _), do: false
 
-  defp semantic(%Fact{} = value), do: value |> Map.put(:evidence_ids, []) |> plain() |> Map.delete("evidence_ids")
-  defp semantic(%module{} = value) when module in [Belief, Relation, Turn, EntityRef, Quantity, TemporalRef], do: plain(value)
+  defp semantic(%Fact{} = value),
+    do: value |> Map.put(:evidence_ids, []) |> plain() |> Map.delete("evidence_ids")
+
+  defp semantic(%module{} = value)
+       when module in [Belief, Relation, Turn, EntityRef, Quantity, TemporalRef], do: plain(value)
+
   defp semantic(%{__struct__: _}), do: raise(ArgumentError, "unknown context primitive")
   defp semantic(values) when is_list(values), do: Enum.map(values, &semantic/1)
-  defp semantic(values) when is_map(values), do: Map.new(values, fn {k, v} -> {k, semantic(v)} end)
+
+  defp semantic(values) when is_map(values),
+    do: Map.new(values, fn {k, v} -> {k, semantic(v)} end)
+
   defp semantic(value), do: value
 
   defp pointers(%Fact{evidence_ids: ids}) when is_list(ids), do: ids
   defp pointers(%{__struct__: _}), do: []
   defp pointers(values) when is_list(values), do: Enum.flat_map(values, &pointers/1)
-  defp pointers(values) when is_map(values), do: values |> Map.values() |> Enum.flat_map(&pointers/1)
+
+  defp pointers(values) when is_map(values),
+    do: values |> Map.values() |> Enum.flat_map(&pointers/1)
+
   defp pointers(_), do: []
 
-  defp decode(values, %{"type" => "list", "items" => item}) when is_list(values), do:
-    Enum.map(values, &decode(&1, if(is_binary(item), do: %{"type" => item}, else: item)))
+  defp decode(values, %{"type" => "list", "items" => item}) when is_list(values),
+    do: Enum.map(values, &decode(&1, if(is_binary(item), do: %{"type" => item}, else: item)))
+
   defp decode(value, %{"type" => "literal"}), do: value
+
   defp decode(value, %{"type" => type}) when is_map(value) do
-    module = case type do
-      "fact" -> Fact
-      "belief" -> Belief
-      "relation" -> Relation
-      "relation_summary" -> Relation
-      "turn" -> Turn
-      "entity_ref" -> EntityRef
-      "quantity" -> Quantity
-      "score" -> Quantity
-      "temporal_ref" -> TemporalRef
-      _ -> raise ArgumentError, "unknown context primitive"
-    end
+    module = primitive_module(type)
+
     fields = module |> struct() |> Map.from_struct() |> Map.keys()
-    if Map.keys(value) -- Enum.map(fields, &to_string/1) != [], do: raise(ArgumentError, "unknown context field")
-    attrs = for key <- fields, Map.has_key?(value, to_string(key)), into: %{} do
-      item = value[to_string(key)]
-      {key, if(key in [:subject, :object, :owner, :speaker], do: decode_entity(item), else: item)}
-    end
+
+    if Map.keys(value) -- Enum.map(fields, &to_string/1) != [],
+      do: raise(ArgumentError, "unknown context field")
+
+    attrs =
+      for key <- fields, Map.has_key?(value, to_string(key)), into: %{} do
+        item = value[to_string(key)]
+
+        {key,
+         if(key in [:subject, :object, :owner, :speaker], do: decode_entity(item), else: item)}
+      end
+
     struct(module, attrs)
   end
+
   defp decode(_, _), do: raise(ArgumentError, "invalid context value")
-  defp decode_entity(%{"id" => id, "kind" => kind} = v) when map_size(v) == 2, do: %EntityRef{id: id, kind: kind}
+
+  defp primitive_module("fact"), do: Fact
+  defp primitive_module("belief"), do: Belief
+  defp primitive_module("relation"), do: Relation
+  defp primitive_module("relation_summary"), do: Relation
+  defp primitive_module("turn"), do: Turn
+  defp primitive_module("entity_ref"), do: EntityRef
+  defp primitive_module("quantity"), do: Quantity
+  defp primitive_module("score"), do: Quantity
+  defp primitive_module("temporal_ref"), do: TemporalRef
+  defp primitive_module(_), do: raise(ArgumentError, "unknown context primitive")
+
+  defp decode_entity(%{"id" => id, "kind" => kind} = v) when map_size(v) == 2,
+    do: %EntityRef{id: id, kind: kind}
+
   defp decode_entity(v), do: v
 
   defp valid_value?(value, %{"type" => "list", "items" => item}) when is_list(value),

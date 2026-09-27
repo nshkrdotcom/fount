@@ -1,0 +1,11 @@
+{
+  "id": "theme.meaning",
+  "description": "Phase-8 value-conflict and thematic-hypothesis measurements. Multiple readings and counterevidence remain first-class; no authoritative theme or depth score is produced.",
+  "sensor": "system_one",
+  "projection": "explicit_state",
+  "context_contract": {"required": {}, "optional": {}, "allow_unknown": false},
+  "question_overrides": [],
+  "interpretation_policy": {"support_probability": 0.8, "unsupported_probability": 0.2, "minimum_confidence": 0.7, "minimum_margin": 0.15},
+  "output_contract": "observe.answer_set",
+  "resource_policy_request": {"max_states": 240, "max_provider_requests": 240, "max_questions": 32}
+}

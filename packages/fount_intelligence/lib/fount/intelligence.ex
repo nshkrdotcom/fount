@@ -2,6 +2,7 @@ defmodule Fount.Intelligence do
   @moduledoc "Screenplay-specific inspection, comparison and investigation. All observations retain exact source identity."
   alias Fount.Intelligence.Acquisition.Extraction
   alias Fount.Intelligence.Capabilities
+  alias Fount.Intelligence.Packs
   alias Fount.Intelligence.Playbooks.Action
   alias Fount.Intelligence.Playbooks.CapabilityRunner
   alias Fount.Intelligence.Playbooks.Comparison
@@ -24,7 +25,7 @@ defmodule Fount.Intelligence do
   alias Fount.Screenplay.Model
   def playbooks, do: Registry.list()
 
-  @doc "Lists the ten writer-facing Phase-5 diagnosis playbooks."
+  @doc "Lists the preserved writer-facing diagnosis playbook catalog."
   def writer_playbooks, do: WriterRegistry.list()
 
   @doc "Provider-free resource/context preflight for a writer-facing playbook."
@@ -35,24 +36,59 @@ defmodule Fount.Intelligence do
   def run_playbook(model, playbook, request, clients \\ %{}, opts \\ []),
     do: WriterRunner.run(model, playbook, request, clients, opts)
 
-  @doc "Lists the four installed Phase-6 capability families."
+  @doc "Lists all twelve installed screenplay capability families through Phase 8."
   def capability_families, do: Capabilities.families()
 
-  @doc "Provider-free preflight for one Phase-6 screenplay capability."
+  @doc "Provider-free preflight for one installed screenplay capability."
   def preflight_capability(model, family, request, opts \\ []),
     do: CapabilityRunner.preflight(model, family, request, opts)
 
-  @doc "Runs one Phase-6 source-grounded capability through Observe and pure Intelligence reasoning."
+  @doc "Runs one installed source-grounded capability through Observe and pure Intelligence reasoning."
   def run_capability(model, family, request, clients \\ %{}, opts \\ []),
     do: CapabilityRunner.run(model, family, request, clients, opts)
 
-  @doc "Provider-free preflight for a Phase-6 writer playbook integration."
+  @doc "Provider-free preflight for an installed capability-backed writer playbook integration."
   def preflight_capability_playbook(model, playbook, request, opts \\ []),
     do: CapabilityRunner.preflight_playbook(model, playbook, request, opts)
 
-  @doc "Runs a Phase-6 Scene Doctor, Character Trajectory, or Relationship Pass packet without generating pages."
+  @doc "Runs a supported capability-backed writer packet without generating pages."
   def run_capability_playbook(model, playbook, request, clients \\ %{}, opts \\ []),
     do: CapabilityRunner.run_playbook(model, playbook, request, clients, opts)
+
+  @doc "Provider-free preflight for an explicit base/candidate Revision Intelligence comparison."
+  def preflight_revision(before_model, after_model, request, opts \\ []),
+    do: CapabilityRunner.preflight_revision(before_model, after_model, request, opts)
+
+  @doc "Runs Phase-8 Revision Intelligence across an explicit base and candidate revision without changing canon."
+  def run_revision_intelligence(before_model, after_model, request, clients \\ %{}, opts \\ []),
+    do: CapabilityRunner.run_revision(before_model, after_model, request, clients, opts)
+
+  @doc "Runs the preserved revision_regression writer playbook over an explicit base/candidate pair."
+  def run_revision_playbook(before_model, after_model, request, clients \\ %{}, opts \\ []),
+    do:
+      CapabilityRunner.run_revision_playbook(
+        before_model,
+        after_model,
+        "revision_regression",
+        request,
+        clients,
+        opts
+      )
+
+  @doc "Lists the six installed core genre/craft pack assets; none is mandatory or auto-enabled."
+  def genre_packs, do: Packs.core_assets()
+
+  @doc "Returns a caller-owned immutable genre-pack catalog seeded with disabled core packs."
+  def new_genre_pack_catalog, do: Packs.new_catalog()
+
+  def validate_genre_pack(asset, opts \\ []), do: Packs.validate(asset, opts)
+  def preview_genre_pack(asset, opts \\ []), do: Packs.preview(asset, opts)
+  def install_genre_pack(catalog, asset, opts \\ []), do: Packs.install(catalog, asset, opts)
+  def enable_genre_pack(catalog, id), do: Packs.enable(catalog, id)
+  def disable_genre_pack(catalog, id), do: Packs.disable(catalog, id)
+  def fetch_genre_pack(catalog, id), do: Packs.fetch(catalog, id)
+  def list_genre_packs(catalog), do: Packs.list(catalog)
+  def enabled_genre_packs(catalog), do: Packs.enabled(catalog)
 
   @doc "Renders a writer result packet as deterministic Markdown or canonical JSON."
   def render_packet(%WriterPacket{} = packet, format \\ :markdown),

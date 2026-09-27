@@ -36,6 +36,7 @@ defmodule Fount.Intelligence.Playbooks.WriterRegistry do
       "foundational_tools" => ~w(extract_story dependencies knowledge_trace),
       "future_capability_families" => ~w(character_trajectory agency_causality),
       "phase_6_capability_families" => ~w(character_trajectory agency_causality),
+      "phase_8_capability_families" => ~w(emotional_value_movement),
       "writer_questions" => [
         "What changes because this character chooses or refuses to choose?",
         "What evidence supports an apparent trajectory break?"
@@ -113,6 +114,7 @@ defmodule Fount.Intelligence.Playbooks.WriterRegistry do
       "foundational_tools" => ~w(inventory extract_story scene_mechanics dialogue voice),
       "future_capability_families" =>
         ~w(audience_reader_experience sequence_movement dialogue_interaction revision_intelligence),
+      "phase_8_capability_families" => ~w(theme_meaning genre_lens_packs),
       "writer_questions" => [
         "Which concerns are strongly evidenced versus speculative?",
         "What strengths should survive any revision response?"
@@ -125,6 +127,7 @@ defmodule Fount.Intelligence.Playbooks.WriterRegistry do
         "Compare intended gains and collateral effects across revisions while keeping reader effects separate from diegetic continuity and causal changes.",
       "foundational_tools" => ~w(compare strategy_contrast),
       "future_capability_families" => ~w(revision_intelligence),
+      "phase_8_capability_families" => ~w(revision_intelligence),
       "writer_questions" => [
         "Did the intended effect change?",
         "Which protected strengths or downstream dependencies regressed?"

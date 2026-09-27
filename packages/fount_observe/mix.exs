@@ -68,6 +68,7 @@ defmodule Fount.Observe.MixProject do
         "guides/architecture.md",
         "guides/usage.md",
         "guides/measurement-substrate.md",
+        "guides/declarative-lenses.md",
         "guides/verification.md",
         {"examples/README.md", filename: "examples"}
       ],
@@ -105,6 +106,7 @@ defmodule Fount.Observe.MixProject do
         ],
         Assets: [
           Fount.Observe.Lens,
+          Fount.Observe.DeclarativeLens,
           Fount.Observe.Registry,
           Fount.Observe.Projection,
           Fount.Observe.Calibration

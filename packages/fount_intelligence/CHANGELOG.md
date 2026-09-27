@@ -2,7 +2,8 @@
 
 ## Unreleased
 
-- Add Phase-7 Audience / Reader Experience, Sequence Movement, Dialogue Interaction, and Setup / Payoff + Motifs capability families, writer-playbook mappings, strict-forward Reader composition, typed dialogue-context validation, non-linear payoff qualification, deterministic fixtures, and source tests.
+- Add Phase-8 Emotional / Value Movement, Theme and Meaning, optional safe Genre/Craft Packs, constrained project/studio declarative lens authoring, and explicit two-revision Revision Intelligence while preserving the existing writer playbook ids and writer-controlled acceptance boundary.
+- Preserve Phase-7 Audience / Reader Experience, Sequence Movement, Dialogue Interaction, and Setup / Payoff + Motifs capability families, writer-playbook mappings, strict-forward Reader composition, typed dialogue-context validation, non-linear payoff qualification, deterministic fixtures, and source tests.
 
 ## Unreleased - Phase 6 source delivery
 

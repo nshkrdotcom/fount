@@ -48,3 +48,7 @@ results are recorded in the docset's `PHASE_02_RUNTIME_QC_REPORT.md`.
 ## Phase-5 diagnosis measurements
 
 The installed `diagnosis.concern_relevance` and `diagnosis.evidence_support` lenses are declarative measurement assets used by the Intelligence shell. The latter declares a closed context contract for the writer concern plus optional neutral facts, beliefs, relationship state and prior base-assessment literals. Observe remains unaware of Intelligence structs or diagnosis semantics beyond those explicit neutral inputs.
+
+## Phase 8: safe project/studio lens declarations
+
+`Fount.Observe.validate_declarative_lens/1`, `preview_declarative_lens/1`, and the explicit install/enable catalog helpers allow project/studio teams to define one generic proposition/choice/score measurement without loading executable code. Declarations are limited to registered projections, closed typed context, standard thresholds/resources and the existing System One measurement path; module/function names, shell/file access, endpoints, credentials, database/HTTP callbacks, tools and custom decoders/adapters are rejected. See [Constrained declarative lenses](guides/declarative-lenses.md). Durable asset persistence remains a later phase.

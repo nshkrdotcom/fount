@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add the Phase-8 constrained declarative lens validator/preview/compiler and explicit caller-owned install/enable catalog, without opening executable extension points.
+
 - Add closed Phase-7 measurement lenses for audience/reader experience, sequence movement, typed-context dialogue exchange, and setup/payoff + motifs.
 
 ## Unreleased - Phase 6 source delivery

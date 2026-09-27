@@ -1,10 +1,11 @@
 defmodule Fount.Intelligence.Playbooks.CapabilityRunner do
-  @moduledoc "Capability shell through Phase 7: exact screenplay selection -> validated Observe measurements -> pure reasoning -> optional writer packet."
+  @moduledoc "Capability shell through Phase 8: exact screenplay selection -> validated Observe measurements -> pure reasoning -> optional writer packet and explicit two-revision comparison."
 
   alias Fount.Intelligence.Acquisition.{CapabilityMeasurements, ContextBuilder, Measurements}
   alias Fount.Intelligence.Capabilities
   alias Fount.Intelligence.Capabilities.Result
-  alias Fount.Intelligence.Playbooks.WriterRegistry
+  alias Fount.Intelligence.Packs
+  alias Fount.Intelligence.Playbooks.{StrategyContrast, WriterRegistry}
   alias Fount.Intelligence.Reader
   alias Fount.Intelligence.Reporting.WriterPacket
   alias Fount.Intelligence.Runner.Resources
@@ -22,7 +23,8 @@ defmodule Fount.Intelligence.Playbooks.CapabilityRunner do
     "suspense_audit" => ~w(audience_reader_experience),
     "sequence_momentum" => ~w(sequence_movement),
     "dialogue_pass" => ~w(dialogue_interaction relationship_dynamics),
-    "setup_payoff" => ~w(setup_payoff_motifs)
+    "setup_payoff" => ~w(setup_payoff_motifs),
+    "submission_read" => ~w(theme_meaning)
   }
 
   def playbook_families, do: @playbook_families
@@ -107,7 +109,7 @@ defmodule Fount.Intelligence.Playbooks.CapabilityRunner do
   end
 
   def preflight_playbook(model, playbook, request, opts \\ []) do
-    with {:ok, families} <- families_for_playbook(playbook) do
+    with {:ok, families} <- families_for_playbook(playbook, request) do
       preflight_families(model, playbook, request, opts, families)
     end
   end
@@ -127,11 +129,121 @@ defmodule Fount.Intelligence.Playbooks.CapabilityRunner do
 
   def run_playbook(model, playbook, request, clients \\ %{}, opts \\ []) do
     with {:ok, definition} <- WriterRegistry.fetch(playbook),
-         {:ok, families} <- families_for_playbook(playbook),
+         {:ok, families} <- families_for_playbook(playbook, request),
          {:ok, results} <- run_families(model, families, request, clients, shared_budget(opts)) do
       packet(model, definition, request, results)
     end
   end
+
+  @doc "Provider-free preflight for an explicit base/candidate Revision Intelligence comparison."
+  def preflight_revision(before_model, after_model, request, opts \\ [])
+
+  def preflight_revision(before_model, after_model, request, opts) when is_map(request) do
+    before_request = revision_request(request, :before)
+    after_request = revision_request(request, :after)
+
+    with {:ok, before_prepared} <- prepare(before_model, "revision_intelligence", before_request, opts),
+         {:ok, after_prepared} <- prepare(after_model, "revision_intelligence", after_request, opts),
+         {:ok, cap} <- provider_cap(opts),
+         {:ok, before_estimate} <-
+           Measurements.preflight(
+             before_prepared.inputs,
+             before_prepared.spec["questions"],
+             measurement_opts(opts, before_model, before_prepared.spec["lens_id"], min(cap, length(before_prepared.inputs)))
+           ),
+         {:ok, after_estimate} <-
+           Measurements.preflight(
+             after_prepared.inputs,
+             after_prepared.spec["questions"],
+             measurement_opts(opts, after_model, after_prepared.spec["lens_id"], min(cap, length(after_prepared.inputs)))
+           ) do
+      {:ok,
+       %{
+         "family" => "revision_intelligence",
+         "before_revision_id" => before_model.revision.id,
+         "after_revision_id" => after_model.revision.id,
+         "before" => %{"coverage" => before_prepared.coverage, "estimate" => before_estimate},
+         "after" => %{"coverage" => after_prepared.coverage, "estimate" => after_estimate},
+         "strategy_contrast_requested" => strategy_request?(request),
+         "limitations" => [
+           "Preflight dispatches no provider requests and does not claim that the intended effect or protected strengths are satisfied.",
+           "Base and candidate StoryWorld/Reader inputs are revision-specific; missing derived records remain unknown."
+         ]
+       }}
+    end
+  rescue
+    _ in [ArgumentError, KeyError, FunctionClauseError, MatchError, BadMapError] ->
+      {:error, :invalid_revision_comparison_request}
+  end
+
+  def preflight_revision(_, _, _, _), do: {:error, :invalid_revision_comparison_request}
+
+  @doc "Runs explicit base/candidate Revision Intelligence without generating, ranking, accepting or rejecting screenplay pages."
+  def run_revision(before_model, after_model, request, clients \\ %{}, opts \\ [])
+
+  def run_revision(before_model, after_model, request, clients, opts) when is_map(request) do
+    before_request = revision_request(request, :before)
+    after_request = revision_request(request, :after)
+
+    with {:ok, provider} <- provider(clients),
+         {:ok, before_prepared} <- prepare(before_model, "revision_intelligence", before_request, opts),
+         {:ok, after_prepared} <- prepare(after_model, "revision_intelligence", after_request, opts),
+         {:ok, cap} <- provider_cap(opts),
+         {:ok, before_report, before_entries} <- measure_prepared(provider, before_model, before_prepared, cap, opts),
+         {:ok, after_report, after_entries} <- measure_prepared(provider, after_model, after_prepared, cap, opts),
+         {:ok, strategy} <- strategy_contrast(after_model, request, provider, opts),
+         {:ok, result} <-
+           Capabilities.compare_revision(
+             before_prepared.world,
+             after_prepared.world,
+             after_prepared.subject,
+             before_entries,
+             after_entries,
+             revision_compare_opts(before_model, after_model, request, before_prepared, after_prepared, strategy)
+           ) do
+      result =
+        %{
+          result
+          | status:
+              if(
+                combined_status(result.status, before_report["status"], before_prepared.coverage) == "complete" and
+                  combined_status(result.status, after_report["status"], after_prepared.coverage) == "complete",
+                do: "complete",
+                else: "partial"
+              ),
+            metadata:
+              Map.merge(result.metadata, %{
+                "before_measurement_spec_sha256" => before_report["measurement_spec_sha256"],
+                "after_measurement_spec_sha256" => after_report["measurement_spec_sha256"],
+                "before_measurement_resource_usage" => before_report["resource_usage"],
+                "after_measurement_resource_usage" => after_report["resource_usage"],
+                "before_measurement_errors" => before_report["errors"],
+                "after_measurement_errors" => after_report["errors"],
+                "before_selection_coverage" => before_prepared.coverage,
+                "after_selection_coverage" => after_prepared.coverage
+              })
+        }
+
+      {:ok, result}
+    end
+  rescue
+    _ in [ArgumentError, KeyError, FunctionClauseError, MatchError, BadMapError] ->
+      {:error, :invalid_revision_comparison_request}
+  end
+
+  def run_revision(_, _, _, _, _), do: {:error, :invalid_revision_comparison_request}
+
+  @doc "Returns the existing revision_regression writer packet around an explicit two-revision capability comparison."
+  def run_revision_playbook(before_model, after_model, playbook, request, clients \\ %{}, opts \\ [])
+
+  def run_revision_playbook(before_model, after_model, "revision_regression", request, clients, opts) do
+    with {:ok, definition} <- WriterRegistry.fetch("revision_regression"),
+         {:ok, result} <- run_revision(before_model, after_model, request, clients, shared_budget(opts)) do
+      packet(after_model, definition, request, [result])
+    end
+  end
+
+  def run_revision_playbook(_, _, _, _, _, _), do: {:error, :capability_playbook_not_supported}
 
   defp prepare(model, family, request, opts) when is_map(request) do
     with {:ok, spec} <- CapabilityMeasurements.fetch(family),
@@ -412,15 +524,42 @@ defmodule Fount.Intelligence.Playbooks.CapabilityRunner do
   defp subject("relationship_dynamics", %{"subject" => subject}, _source),
     do: validate_pair(subject)
 
+  defp subject("emotional_value_movement", %{"subject" => subject}, _source),
+    do: validate_character(subject)
+
+  defp subject("genre_lens_packs", request, _source) do
+    custom_lenses = Map.get(request, "custom_lenses", %{})
+
+    with true <- is_map(custom_lenses),
+         pack when not is_nil(pack) <- Map.get(request, "genre_pack"),
+         {:ok, resolved} <- Packs.resolve(pack, custom_lenses: custom_lenses) do
+      {:ok, %{"genre_pack" => resolved}}
+    else
+      false -> {:error, :invalid_custom_lens_catalog}
+      nil -> {:error, :genre_pack_required}
+      error -> error
+    end
+  end
+
+  defp subject("revision_intelligence", request, _source) do
+    {:ok,
+     %{
+       "intended_effect" => request["intended_effect"],
+       "protected_strengths" => List.wrap(request["protected_strengths"] || []),
+       "constraints" => List.wrap(request["constraints"] || []),
+       "strategy" => request["strategy"]
+     }}
+  end
+
   defp subject(family, %{"subject" => subject}, _source)
-       when family in ~w(audience_reader_experience sequence_movement dialogue_interaction setup_payoff_motifs),
+       when family in ~w(audience_reader_experience sequence_movement dialogue_interaction setup_payoff_motifs theme_meaning),
        do: {:ok, subject}
 
   defp subject("sequence_movement", _request, source),
     do: {:ok, %{"scene_ids" => Enum.map(source.groups, &elem(&1, 0))}}
 
   defp subject(family, _request, _source)
-       when family in ~w(audience_reader_experience dialogue_interaction setup_payoff_motifs),
+       when family in ~w(audience_reader_experience dialogue_interaction setup_payoff_motifs theme_meaning),
        do: {:ok, %{"scope" => "selection"}}
 
   defp subject(_, _, _), do: {:error, :capability_subject_required}
@@ -449,7 +588,7 @@ defmodule Fount.Intelligence.Playbooks.CapabilityRunner do
 
   defp validate_pair(_), do: {:error, :relationship_pair_required}
 
-  defp reader(model, "audience_reader_experience", request) do
+  defp reader(model, family, request) when family in ~w(audience_reader_experience revision_intelligence) do
     case Map.get(request, "reader_events") do
       nil -> {:ok, nil}
       events when is_list(events) -> Reader.reduce(model, events)
@@ -514,6 +653,7 @@ defmodule Fount.Intelligence.Playbooks.CapabilityRunner do
         protected_strengths: List.wrap(request["protected_strengths"] || []),
         next_investigations: maps |> Enum.flat_map(& &1["next_investigations"]) |> Enum.uniq(),
         strategies: List.wrap(request["strategies"] || []),
+        revision_comparison: revision_comparison(maps),
         resource_usage: combined_usage(results),
         errors: maps |> Enum.flat_map(&(get_in(&1, ["metadata", "measurement_errors"]) || [])),
         provenance: %{
@@ -527,7 +667,7 @@ defmodule Fount.Intelligence.Playbooks.CapabilityRunner do
           maps
           |> Enum.flat_map(& &1["limitations"])
           |> Kernel.++([
-            "Installed capability families through Phase 7 provide source-grounded analysis and writer-facing diagnosis; they do not generate replacement screenplay pages.",
+            "Installed capability families through Phase 8 provide source-grounded analysis and writer-facing diagnosis/comparison; they do not generate replacement screenplay pages.",
             "Workshop candidate generation/acceptance integration remains a later phase; no later-phase functionality is claimed here.",
             "No human reader/usefulness claim is made unless a separate rights-cleared study records one."
           ])
@@ -560,6 +700,13 @@ defmodule Fount.Intelligence.Playbooks.CapabilityRunner do
     "#{definition["label"]} surfaced source-grounded diagnosis candidates: #{labels}#{suffix}. They remain hypotheses until the writer inspects the cited evidence and alternatives."
   end
 
+  defp revision_comparison(maps) do
+    case Enum.find(maps, &(&1["family"] == "revision_intelligence")) do
+      nil -> nil
+      result -> result["derived_state"]
+    end
+  end
+
   defp combined_usage(results) do
     usages =
       Enum.map(results, & &1.metadata["measurement_resource_usage"]) |> Enum.reject(&is_nil/1)
@@ -568,12 +715,11 @@ defmodule Fount.Intelligence.Playbooks.CapabilityRunner do
   end
 
   defp packet_phase(results) do
-    if Enum.any?(
-         results,
-         &(&1.family in ~w(audience_reader_experience sequence_movement dialogue_interaction setup_payoff_motifs))
-       ),
-       do: 7,
-       else: 6
+    cond do
+      Enum.any?(results, &(&1.family in ~w(emotional_value_movement theme_meaning genre_lens_packs revision_intelligence))) -> 8
+      Enum.any?(results, &(&1.family in ~w(audience_reader_experience sequence_movement dialogue_interaction setup_payoff_motifs))) -> 7
+      true -> 6
+    end
   end
 
   defp measurement_opts(opts, model, lens_id, cap) do
@@ -600,12 +746,104 @@ defmodule Fount.Intelligence.Playbooks.CapabilityRunner do
       else: {:error, :invalid_resource_cap}
   end
 
-  defp families_for_playbook(playbook) do
+  defp families_for_playbook("revision_regression", _request),
+    do: {:error, :use_explicit_revision_playbook}
+
+  defp families_for_playbook(playbook, request) do
     case @playbook_families[playbook] do
-      nil -> {:error, :capability_playbook_not_supported}
-      families -> {:ok, families}
+      nil ->
+        {:error, :capability_playbook_not_supported}
+
+      families ->
+        extra =
+          cond do
+            playbook == "character_trajectory" and is_map(request) and
+                request["include_emotional_value_movement"] == true ->
+              ["emotional_value_movement"]
+
+            playbook == "submission_read" and is_map(request) and
+                not is_nil(request["genre_pack"]) ->
+              ["genre_lens_packs"]
+
+            true ->
+              []
+          end
+
+        {:ok, Enum.uniq(families ++ extra)}
     end
   end
+
+  defp measure_prepared(provider, model, prepared, cap, opts) do
+    with {:ok, report} <-
+           Measurements.evaluate(
+             provider,
+             prepared.inputs,
+             prepared.spec["questions"],
+             measurement_opts(opts, model, prepared.spec["lens_id"], min(cap, length(prepared.inputs)))
+           ) do
+      {:ok, report, annotate_entries(report["entries"], prepared.inputs)}
+    end
+  end
+
+  defp revision_request(request, side) do
+    prefix = if side == :before, do: "before", else: "after"
+    selection = request["#{prefix}_selection"] || request["selection"] || %{"whole_screenplay" => true}
+    records = request["#{prefix}_story_world_records"] || request["story_world_records"] || []
+    reader_events = request["#{prefix}_reader_events"]
+
+    request
+    |> Map.put("selection", selection)
+    |> Map.put("story_world_records", records)
+    |> Map.put("reader_events", reader_events)
+    |> Map.put("intent", revision_intent(request))
+  end
+
+  defp revision_intent(request) do
+    base = if is_map(request["intent"]), do: request["intent"], else: %{}
+
+    Map.merge(base, %{
+      "intended_effect" => request["intended_effect"],
+      "protected_strengths" => List.wrap(request["protected_strengths"] || []),
+      "constraints" => List.wrap(request["constraints"] || []),
+      "strategy" => request["strategy"]
+    })
+  end
+
+  defp revision_compare_opts(before_model, after_model, request, before_prepared, after_prepared, strategy) do
+    [
+      intent: revision_intent(request),
+      concern: request["concern"],
+      strategy: request["strategy"],
+      intended_effect: request["intended_effect"],
+      protected_strengths: List.wrap(request["protected_strengths"] || []),
+      constraints: List.wrap(request["constraints"] || []),
+      before_reader: before_prepared.reader,
+      after_reader: after_prepared.reader,
+      structural_diff: Fount.Screenplay.diff(before_model, after_model),
+      source_diff:
+        String.myers_difference(
+          Fount.Screenplay.to_fountain(before_model),
+          Fount.Screenplay.to_fountain(after_model)
+        ),
+      strategy_contrast: strategy
+    ]
+  end
+
+  defp strategy_contrast(model, request, provider, opts) do
+    if strategy_request?(request) do
+      params = %{"brief" => request["strategy_brief"] || request["concern"] || "Revision strategy contrast", "strategies" => request["strategies"]}
+
+      case StrategyContrast.run(model, params, %{observe: provider}, opts) do
+        {:ok, report} -> {:ok, report.data}
+        {:error, reason} -> {:ok, %{"status" => "unavailable", "reason" => if(is_atom(reason), do: to_string(reason), else: "provider_or_contract_error")}}
+      end
+    else
+      {:ok, %{"status" => "not_requested"}}
+    end
+  end
+
+  defp strategy_request?(request),
+    do: is_list(request["strategies"]) and length(request["strategies"]) in 2..5
 
   defp shared_budget(opts) do
     if Resources.from_options(opts),

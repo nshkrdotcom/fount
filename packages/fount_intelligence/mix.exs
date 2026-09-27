@@ -60,6 +60,7 @@ defmodule Fount.Intelligence.MixProject do
         "guides/diagnosis-and-playbooks.md",
         "guides/capabilities-a.md",
         "guides/capabilities-b.md",
+        "guides/capabilities-c.md",
         "guides/investigations-and-evidence.md",
         "guides/comparison-and-ablation.md",
         "guides/playbook-catalog.md",
@@ -76,7 +77,10 @@ defmodule Fount.Intelligence.MixProject do
           Fount.Intelligence.Playbooks.Registry,
           Fount.Intelligence.Playbooks.Request,
           Fount.Intelligence.Playbooks.WriterRegistry,
-          Fount.Intelligence.Reporting.WriterPacket
+          Fount.Intelligence.Reporting.WriterPacket,
+          Fount.Intelligence.Packs,
+          Fount.Intelligence.Packs.Catalog,
+          Fount.Intelligence.Packs.GenrePack
         ],
         "Pure interpretation": [
           Fount.Intelligence.Capabilities.DecisionPolicy,

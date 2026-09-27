@@ -1,0 +1,11 @@
+{
+  "id": "genre.lens_pack",
+  "description": "Phase-8 optional genre/craft pack-relative measurements. Pack expectations are salience overlays, never mandatory rules, and explicit subversion intent remains visible.",
+  "sensor": "system_one",
+  "projection": "explicit_state",
+  "context_contract": {"required": {}, "optional": {}, "allow_unknown": false},
+  "question_overrides": [],
+  "interpretation_policy": {"support_probability": 0.8, "unsupported_probability": 0.2, "minimum_confidence": 0.7, "minimum_margin": 0.15},
+  "output_contract": "observe.answer_set",
+  "resource_policy_request": {"max_states": 240, "max_provider_requests": 240, "max_questions": 32}
+}

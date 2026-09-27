@@ -23,3 +23,7 @@ The historical Phase 1 writing preservation demonstration remains `packages/foun
 ## Phase 7 audience/reader demonstration
 
 `mix run examples/phase_seven.exs` builds a two-scene non-linear watch setup, supplies source-backed strict-forward Reader events, creates deterministic `Fount.Observe.Sandbox` answers for the Audience / Reader Experience lens, and runs the `suspense_audit` writer playbook. The later-presented flashback resolves the question only when it is actually presented. Runtime execution of the new Phase-7 source remains for Codex QC in this source delivery.
+
+## Phase 8 capability-completion demonstration
+
+`mix run examples/phase_eight.exs` creates a tiny base screenplay and an explicit candidate revision, supplies deterministic `Fount.Observe.Sandbox` answers, and runs the preserved `revision_regression` writer packet through Phase-8 Revision Intelligence. The packet reports intended-effect/protected-strength evidence and separate source/StoryWorld/Reader comparison slots without accepting either revision or generating new pages. Runtime execution remains for Codex QC in this source delivery.

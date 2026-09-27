@@ -18,10 +18,15 @@ Intelligence never accepts screenplay changes. Proposed fact extraction and inve
 
 ## Architecture and verification
 
-Pure interpretation lives in `StoryWorld`, `Reader` and `Capabilities`. Acquisition, playbooks, reporting and persistence are explicit shell responsibilities. The [architecture guide](guides/architecture.md) describes the enforced rules and their limits. The full expanded temporal/diagnosis/capability program belongs to later phases and is not claimed here.
+Pure interpretation lives in `StoryWorld`, `Reader` and `Capabilities`. Acquisition, playbooks, reporting and persistence are explicit shell responsibilities. The [architecture guide](guides/architecture.md) describes the enforced rules and their limits. Phase 3 implements only the pure StoryWorld portion of the larger temporal program. Forward Reader state, diagnosis, capability expansion and revision strategy remain later phases and are not claimed here.
 
-Phase 1 Elixir source/tests are written but unexecuted in this delivery. See [verification](guides/verification.md); Codex must compile, test, repair and close this same phase before the next starts.
+The Phase 3 Elixir source/tests are written but unexecuted in this offline delivery. See [verification](guides/verification.md); Codex must compile, test and repair this same phase, and the required human structural/factual pilot must be recorded before Phase 3 can be marked COMPLETE.
 
 ## License
 
 [MIT](LICENSE) - Copyright (c) 2026 nshkrdotcom.
+## Phase 3: story-world reference core
+
+`Fount.Intelligence.StoryWorld` now provides the pure narrative reference layer used before later reader-state and diagnosis phases. Give it the canonical screenplay revision plus frozen Observe observations and it keeps presentation order, partial diegetic story time, causality and reality scope separate. Writers can ask what state is established at a particular event, inspect contradictory or ambiguous chronology, trace causal support, and see exact source evidence without turning scene order into fictional chronology.
+
+See [Story-world reference core](guides/story-world.md) and `mix run examples/phase_three.exs`. This phase adds no provider or repository call to the pure core; System One remains behind Observe and completion remains a Workshop/Inference responsibility.

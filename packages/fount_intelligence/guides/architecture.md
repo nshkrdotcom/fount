@@ -12,4 +12,9 @@ Run `mix fount.architecture` at the workspace root after dependency setup. It bu
 
 `mix fount.architecture --source-only` from this package skips compiled inspection and labels its report accordingly. Full QC requires compiled modules for every owned production module, deterministic replay tests, and a `mix xref` dependency review. Macro-generated/runtime-dispatched code is not proven pure by a static scan alone; this gate is enforcement plus evidence, not a mathematical purity guarantee.
 
-The allowed Observe leaf set is explicit. `Observation`, `MeasurementResult`, `Distribution`, exact references/errors and typed neutral context primitives may be read by pure logic; the executor, provider handles, lenses, registry and cache may not. No full temporal/reader-state or diagnosis expansion is smuggled into Phase 1.
+The allowed Observe leaf set is explicit. `Observation`, `MeasurementResult`, `Distribution`, exact references/errors and typed neutral context primitives may be read by pure logic; the executor, provider handles, lenses, registry and cache may not. Phase 3 adds the StoryWorld temporal/causal reference core only. Forward Reader state and diagnosis remain later-phase responsibilities.
+## Phase-3 pure StoryWorld boundary
+
+The Phase-3 StoryWorld compiler consumes only canonical Fount values, allowed Observe leaf values, and explicit replay records/evidence. It adds no call to Observe execution, SystemOneSDK, Inference, Repo, filesystem, environment, clock, randomness, process state, or persistence. Deterministic IDs derive from screenplay/revision/content identities.
+
+StoryWorld intentionally owns three independent graphs/coordinates: source presentation points, partial story-time constraints, and typed causality. Only unambiguous strict temporal precedence propagates. Causality never manufactures time order, and source order never manufactures diegetic order. Non-base dream/recollection/hypothetical/alternate/contested scopes stay qualified instead of being silently merged into base-story state.

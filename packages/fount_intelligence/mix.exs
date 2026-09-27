@@ -55,6 +55,7 @@ defmodule Fount.Intelligence.MixProject do
         "guides/architecture.md",
         "guides/usage.md",
         "guides/verification.md",
+        "guides/story-world.md",
         "guides/investigations-and-evidence.md",
         "guides/comparison-and-ablation.md",
         "guides/playbook-catalog.md",
@@ -75,6 +76,7 @@ defmodule Fount.Intelligence.MixProject do
           Fount.Intelligence.Capabilities.DecisionPolicy,
           Fount.Intelligence.Capabilities.Interpretation,
           Fount.Intelligence.Reader.Reveal,
+          Fount.Intelligence.StoryWorld,
           Fount.Intelligence.StoryWorld.Records
         ],
         "Acquisition and reporting": [

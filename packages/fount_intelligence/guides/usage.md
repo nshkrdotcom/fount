@@ -38,3 +38,19 @@ The result contains source/structural changes and constraint checks. Evidence is
 Use `Reporting.Report.to_map/1` for JSON-friendly output and `Reporting.Report.persistence/2` for Fount's existing report storage boundary. Reports retain request/definition identities, coverage, findings, exact evidence, provenance and explicit errors. Measurements retain their raw distributions and actual acquisition status. No universal quality score, automatic deletions or calibrated claim about audience response is produced.
 
 For actual generation/revision, see `packages/fount_workshop/examples/phase_one.exs` and the existing Workshop workflows.
+## Build and query the story-world reference
+
+For non-linear continuity, event-qualified possession/injury/death/access state, character knowledge, causal tracing, and reality-scope separation, compile already-acquired evidence into the pure StoryWorld core:
+
+```elixir
+{:ok, world} =
+  Fount.Intelligence.StoryWorld.compile(screenplay, frozen_observations,
+    records: story_records
+  )
+
+Fount.Intelligence.StoryWorld.state_at(world, "brass-key", "possessor", event_id)
+Fount.Intelligence.StoryWorld.story_time_relation(world, earlier_event, later_event)
+Fount.Intelligence.StoryWorld.inspection_packet(world)
+```
+
+Compilation does not acquire missing evidence. `:unknown` and ambiguous relation packets are useful results; they prevent a tool from inventing chronology where the screenplay/evidence does not establish one. See [Story-world reference core](story-world.md).

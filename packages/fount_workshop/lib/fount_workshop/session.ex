@@ -9,11 +9,34 @@ defmodule FountWorkshop.Session do
   alias FountWorkshop.Strategy
   alias FountWorkshop.Writing.Budget
   alias FountWorkshop.Writing.Generation
+  alias FountWorkshop.Writing.Intelligence
   alias FountWorkshop.Writing.Preparation
+
+  @doc "Validates a workflow and returns provider-free generation/analysis resource preflight."
+  def preflight(model, request, opts \\ []) do
+    with {:ok, request} <- Request.validate(model, request),
+         {:ok, analysis} <- Intelligence.preflight(model, request, opts) do
+      {:ok,
+       %{
+         "workflow" => request["workflow"],
+         "base_revision_id" => model.revision.id,
+         "alternatives" => request["alternatives"],
+         "generation" => %{
+           "strategy_completion_calls" => if(request["alternatives"] > 0, do: 1, else: 0),
+           "candidate_completion_calls_before_repairs" => request["alternatives"],
+           "configured_max_inference_calls" => Keyword.get(opts, :max_inference_calls, 12),
+           "configured_max_repair_rounds" => Keyword.get(opts, :max_repair_rounds, 1)
+         },
+         "analysis" => analysis,
+         "changes_canon" => false
+       }}
+    end
+  end
 
   def start(model, request, services, opts \\ []) do
     with {:ok, request} <- Request.validate(model, request),
          :ok <- services(services),
+         {:ok, preflight} <- preflight(model, request, opts),
          {:ok, session} <-
            Store.call(services[:store], :save_session, [
              %{
@@ -27,7 +50,8 @@ defmodule FountWorkshop.Session do
                "progress" => %{"branches" => %{}, "report_ids" => [], "spent" => %{}},
                "provenance" => %{
                  "limits" => limits(opts),
-                 "implementation" => "creative-workflows-v1"
+                 "implementation" => "creative-workflows-v1",
+                 "phase9_preflight" => preflight
                }
              }
            ]) do
@@ -57,8 +81,21 @@ defmodule FountWorkshop.Session do
       candidates = Store.call(services[:store], :candidates_for_session, [id])
 
       case candidates do
-        {:error, _} = error -> error
-        list -> {:ok, Map.put(session, "candidates", list)}
+        {:error, _} = error ->
+          error
+
+        list ->
+          writer_packet =
+            get_in(session, ["progress", "preparation", "context", "data", "writer_intelligence"]) || %{}
+
+          {:ok,
+           session
+           |> Map.put("candidates", list)
+           |> Map.put("writer_packet", writer_packet)
+           |> Map.put(
+             "resource_preflight",
+             get_in(session, ["provenance", "phase9_preflight"]) || %{}
+           )}
       end
     end
   end
@@ -345,6 +382,10 @@ defmodule FountWorkshop.Session do
           "attempt_candidate_ids" => attempts,
           "repair_failures" => repair_failures,
           "checks" => saved["provenance"]["checks"],
+          "writer_packet_id" =>
+            get_in(saved, ["provenance", "intelligence_lineage", "pre_analysis_packet_id"]),
+          "revision_packet_id" => get_in(saved, ["provenance", "revision_intelligence", "id"]),
+          "resource_usage" => saved["provenance"]["resource_usage"] || %{},
           "needs_writer_review" => true
         }
 
@@ -373,7 +414,12 @@ defmodule FountWorkshop.Session do
   defp generate_save(model, session, strategy, context, services, opts) do
     with {:ok, candidate} <-
            Generation.propose(model, session["request"], strategy, context, services, opts),
-         {:ok, candidate, reports} <- Candidate.check(model, candidate, services, opts),
+         check_opts =
+           opts
+           |> Keyword.put(:workshop_request, session["request"])
+           |> Keyword.put(:workshop_context, context)
+           |> Keyword.put(:session_strategies, session["strategies"]),
+         {:ok, candidate, reports} <- Candidate.check(model, candidate, services, check_opts),
          {:ok, report_ids} <-
            save_reports(reports, session["id"], services, [
              candidate["screenplay"] | context.source_models

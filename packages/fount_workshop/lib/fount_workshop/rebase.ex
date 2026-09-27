@@ -118,6 +118,14 @@ defmodule FountWorkshop.Rebase do
              |> Keyword.put(:reference_map, candidate["provenance"]["allocated_ids"] || %{})
              |> Keyword.put(:evidence, candidate["provenance"]["evidence"] || [])
              |> Keyword.put(:constraints, candidate["provenance"]["constraints"] || [])
+             |> Keyword.put(
+               :intelligence_lineage,
+               Map.merge(candidate["provenance"]["intelligence_lineage"] || %{}, %{
+                 "rebase_source_candidate_id" => candidate["id"],
+                 "rebase_source_revision_packet_id" =>
+                   get_in(candidate, ["provenance", "revision_intelligence", "id"])
+               })
+             )
              |> Keyword.put(:lineage, [
                %{
                  "candidate_id" => candidate["id"],

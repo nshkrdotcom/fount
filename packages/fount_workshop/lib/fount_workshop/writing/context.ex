@@ -58,7 +58,18 @@ defmodule FountWorkshop.Writing.Context do
         |> Map.put("finding_count", length(report["findings"] || []))
       end)
     )
+    |> Map.update("writer_intelligence", %{}, &compact_writer_packet/1)
   end
+
+
+  defp compact_writer_packet(packet) when is_map(packet) do
+    Map.take(
+      packet,
+      ~w(id playbook status concern finding diagnoses counterevidence alternatives uncertainty missing_evidence protected_strengths next_investigations resource_usage limitations)
+    )
+  end
+
+  defp compact_writer_packet(_), do: %{}
 
   defp compact_inspection_data(data, sample_limit) when is_map(data) do
     Map.new(data, fn

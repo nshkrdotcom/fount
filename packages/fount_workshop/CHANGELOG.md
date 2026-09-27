@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased - Phase 9 offline implementation
+
+- Integrate Workshop sessions with existing Intelligence capability playbooks before substantial revision work when an Observe provider is configured.
+- Add provider-free workflow/resource preflight while preserving the store + Inference-only writing lane.
+- Carry writer packets, diagnosis/strategy lineage, note reaction/cause/treatment separation, consequence proposals and resource metadata into candidate/review surfaces.
+- Run optional explicit base/candidate Revision Intelligence after candidate compilation and expose protected-strength/collateral checks as advisory review information only.
+- Preserve explicit writer acceptance, recovery, selection, combination, audition and rebase behavior; no analysis result can promote canon.
+- Runtime verification is pending in the source-writing environment; Codex must execute the Phase-9 handoff checks before the phase is engineering-complete.
+
 ## Unreleased - Phase 1 offline implementation
 
 - Split atomic measurements and screenplay interpretation into Observe and Intelligence; update Workshop to the new services without changing explicit acceptance.

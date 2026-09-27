@@ -34,7 +34,16 @@ defmodule FountWorkshop.Review do
          "lineage" => candidate["lineage"],
          "provenance" => candidate["provenance"],
          "checks" => candidate["provenance"]["checks"] || [],
-         "report_ids" => candidate["provenance"]["report_ids"] || []
+         "report_ids" => candidate["provenance"]["report_ids"] || [],
+         "writer_packet" => get_in(candidate, ["provenance", "intelligence_lineage", "pre_analysis_packet"]) || %{},
+         "revision_packet" => candidate["provenance"]["revision_intelligence"] || %{},
+         "strategy_lineage" => get_in(candidate, ["provenance", "intelligence_lineage", "strategy_lineage"]) || %{},
+         "note_triage" => get_in(candidate, ["provenance", "intelligence_lineage", "note_triage"]) || [],
+         "resource_usage" => candidate["provenance"]["resource_usage"] || %{},
+         "consequence_proposals" =>
+           get_in(candidate, ["provenance", "intelligence_lineage", "consequence_proposals"]) || [],
+         "causal_ripple" =>
+           get_in(candidate, ["provenance", "revision_intelligence", "revision_comparison", "causal_ripple"]) || %{}
        }}
     end
   end

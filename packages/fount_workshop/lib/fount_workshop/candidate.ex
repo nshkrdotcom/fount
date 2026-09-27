@@ -10,7 +10,7 @@ defmodule FountWorkshop.Candidate do
   alias Fount.Writing.UTF8Span
   alias FountWorkshop.Writing.ChangeGroups
   alias FountWorkshop.Writing.Footprint
-  alias FountWorkshop.Writing.Layout
+  alias FountWorkshop.Writing.{Intelligence, Layout}
   alias FountWorkshop.Writing.Scope
 
   def compile(base, proposal, opts \\ []) do
@@ -63,7 +63,8 @@ defmodule FountWorkshop.Candidate do
         "constraints" => constraints,
         "all_change_groups" => all_groups,
         "unresolved_questions" => proposal["unresolved_questions"],
-        "origin_by_group" => Map.new(groups, &{&1["id"], &1["origin"]})
+        "origin_by_group" => Map.new(groups, &{&1["id"], &1["origin"]}),
+        "intelligence_lineage" => Keyword.get(opts, :intelligence_lineage, %{})
       }
 
       {:ok,
@@ -193,8 +194,24 @@ defmodule FountWorkshop.Candidate do
         |> Keyword.put(:writer_edit, true)
         |> Keyword.put(:evidence, evidence)
         |> Keyword.put(:lineage, lineage)
+        |> Keyword.put(:intelligence_lineage, combined_intelligence_lineage(candidates))
       )
     end
+  end
+
+  defp combined_intelligence_lineage(candidates) do
+    %{
+      "operation" => "combine",
+      "source_candidate_ids" => Enum.map(candidates, & &1["id"]),
+      "source_lineages" =>
+        Enum.map(candidates, fn candidate ->
+          %{
+            "candidate_id" => candidate["id"],
+            "intelligence_lineage" => candidate["provenance"]["intelligence_lineage"] || %{},
+            "revision_packet_id" => get_in(candidate, ["provenance", "revision_intelligence", "id"])
+          }
+        end)
+    }
   end
 
   defp combine_picks(base, by_id, picks) do
@@ -343,10 +360,34 @@ defmodule FountWorkshop.Candidate do
 
       reports = [report | layout_reports]
 
+      base_checks = report.data["checks"] ++ application_checks
+
+      {:ok, revision_packet} =
+        case {Keyword.get(opts, :workshop_request), Keyword.get(opts, :workshop_context)} do
+          {%{} = request, %{} = context} ->
+            Intelligence.revision_packet(
+              base,
+              candidate,
+              request,
+              candidate["strategy"] || %{},
+              context,
+              services,
+              opts
+            )
+
+          _ ->
+            {:ok, Intelligence.not_run("workshop_phase9_context_not_supplied", "revision_regression")}
+        end
+
       provenance =
         candidate["provenance"]
-        |> Map.put("checks", report.data["checks"] ++ application_checks)
+        |> Map.put("checks", base_checks ++ Intelligence.revision_checks(revision_packet))
         |> Map.put("report_ids", Enum.map(reports, & &1.id))
+        |> Map.put("revision_intelligence", revision_packet)
+        |> Map.put("resource_usage", %{
+          "pre_analysis" => get_in(candidate, ["provenance", "intelligence_lineage", "pre_analysis_packet", "resource_usage"]) || %{},
+          "revision_analysis" => revision_packet["resource_usage"] || %{}
+        })
 
       {:ok, Map.put(candidate, "provenance", provenance), reports}
     end
@@ -391,6 +432,7 @@ defmodule FountWorkshop.Candidate do
       |> Keyword.put_new(:evidence, c["provenance"]["evidence"] || [])
       |> Keyword.put_new(:constraints, c["provenance"]["constraints"] || [])
       |> Keyword.put_new(:strategy, c["strategy"] || %{})
+      |> Keyword.put_new(:intelligence_lineage, c["provenance"]["intelligence_lineage"] || %{})
       |> Keyword.put_new(:all_groups, c["provenance"]["all_change_groups"] || c["change_groups"])
 
   defp origins(groups, opts) do

@@ -4,6 +4,8 @@ defmodule FountWorkshop.Request do
   alias Fount.Writing.Schema
   alias Fount.Writing.UTF8Span
 
+  @common_options ~w(protected_strengths intended_effect)
+
   @options %{
     "develop" =>
       ~w(placement brief brief_item_id story_plan_id entry_requirements exit_requirements),
@@ -32,11 +34,12 @@ defmodule FountWorkshop.Request do
          true <-
            request["base_revision_id"] == model.revision.id or {:error, :request_base_mismatch},
          true <-
-           Map.keys(request["options"]) -- Map.get(@options, workflow, []) == [] or
+           Map.keys(request["options"]) -- (Map.get(@options, workflow, []) ++ @common_options) == [] or
              {:error, :unknown_workflow_option},
          {:ok, _} <- Fount.Selection.selected_ids(model, request["selection"]),
          {:ok, constraints} <-
            Constraints.resolve(model, request["constraints"]),
+         :ok <- common_options(request["options"]),
          :ok <- options(model, workflow, request["options"]) do
       {:ok, Map.put(request, "constraints", constraints)}
     end
@@ -46,6 +49,24 @@ defmodule FountWorkshop.Request do
   defp default_alternatives(%{"mode" => "explore"}), do: 3
   defp default_alternatives(%{"workflow" => "pass"}), do: 1
   defp default_alternatives(_), do: 2
+
+
+  defp common_options(opts) do
+    strengths = Map.get(opts, "protected_strengths", [])
+    effect = Map.get(opts, "intended_effect")
+
+    cond do
+      not is_list(strengths) or
+          Enum.any?(strengths, &(not is_binary(&1) or String.trim(&1) == "")) ->
+        {:error, :invalid_protected_strengths}
+
+      not is_nil(effect) and (not is_binary(effect) or String.trim(effect) == "") ->
+        {:error, :invalid_intended_effect}
+
+      true ->
+        :ok
+    end
+  end
 
   defp options(model, "develop", opts) do
     if opts["brief"] && opts["brief_item_id"],

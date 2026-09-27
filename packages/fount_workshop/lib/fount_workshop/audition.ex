@@ -23,12 +23,12 @@ defmodule FountWorkshop.Audition do
         )
 
       with {:ok, view, _} <- Fount.Screenplay.apply(model, operations, []) do
-        write_audition(id, model, view, context_ids, services, opts)
+        write_audition(id, candidate, model, view, context_ids, services, opts)
       end
     end
   end
 
-  defp write_audition(id, model, view, context_ids, services, opts) do
+  defp write_audition(id, candidate, model, view, context_ids, services, opts) do
     output = Keyword.get(opts, :output_dir)
 
     if is_binary(output) do
@@ -55,7 +55,15 @@ defmodule FountWorkshop.Audition do
          "json" => json,
          "html" => html,
          "pdf" => pdf,
-         "speech" => speech
+         "speech" => speech,
+         "analysis" => %{
+           "writer_packet_id" =>
+             get_in(candidate, ["provenance", "intelligence_lineage", "pre_analysis_packet_id"]),
+           "revision_packet_id" => get_in(candidate, ["provenance", "revision_intelligence", "id"]),
+           "strategy_lineage" =>
+             get_in(candidate, ["provenance", "intelligence_lineage", "strategy_lineage"]) || %{},
+           "resource_usage" => candidate["provenance"]["resource_usage"] || %{}
+         }
        }}
     else
       {:error, :output_directory_required}

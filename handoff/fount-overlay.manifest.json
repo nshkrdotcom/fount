@@ -1,265 +1,204 @@
 {
   "format_version": 1,
+  "phase": 9,
+  "status": "OFFLINE_IMPLEMENTED",
+  "date": "2026-09-27",
+  "source_attachment_sha256": "84caacd431153200b19d68f50ce2689fae01392067579df17d84c6b6674943c8",
   "files": [
     {
-      "path": "packages/fount_intelligence/CHANGELOG.md",
+      "path": "packages/fount_workshop/CHANGELOG.md",
       "action": "modify",
-      "original_sha256": "b9050935e2e899dc083f43e7c86461b49fb53669bdde8424ffe67ab919fbc4a5",
-      "result_sha256": "3ffa2552e5ff74760ca02f79f0b2a20b7b7819203c883cafebd90762d41b8606",
-      "mode": 420
+      "original_sha256": "ec85294d8be5e47564e926bb6a1ad13d4f8231a1d5b5d248d670028db6cf8c96",
+      "original_terminal_lf_sha256": "62c19341655203d809d5e2954f9fd4d758fbc8eeb763ffedaae655cc91573981",
+      "result_sha256": "a37bf94d7bf99d73b90d0400282d60672d1bcbe4d55b40289611edc8272c793f",
+      "mode": 420,
+      "original_bytes": 1001,
+      "result_bytes": 1949
     },
     {
-      "path": "packages/fount_intelligence/README.md",
+      "path": "packages/fount_workshop/README.md",
       "action": "modify",
-      "original_sha256": "34decde6e55124020089b57b5ccf83cb7353aea3b224bed3e80f6ab5f7292575",
-      "result_sha256": "a563cc02da593322bae2194a8cc37ab6d3bf9864d08bc212532f237332181b8b",
-      "mode": 420
+      "original_sha256": "86167aa11ea145f1c7da0cfba6a19a94ecf6965dfd3fc311ff4e4afe3aad6284",
+      "original_terminal_lf_sha256": "5ab617670735e8a3aa4e92c8c940ff51531fa15aef4ab4033acbbab980cc1041",
+      "result_sha256": "e92b59b561a35a3ad836eb93b5f8704210d6f8e184f0c7c0aea2164ec61ee86c",
+      "mode": 420,
+      "original_bytes": 5038,
+      "result_bytes": 5908
     },
     {
-      "path": "packages/fount_intelligence/examples/README.md",
+      "path": "packages/fount_workshop/guides/intelligence-integration.md",
+      "action": "add",
+      "original_sha256": null,
+      "original_terminal_lf_sha256": null,
+      "result_sha256": "edda6db06bb35edb8f3976dc1208ec77725298141bcd9eac731370c0ca86dfa1",
+      "mode": 420,
+      "original_bytes": null,
+      "result_bytes": 5494
+    },
+    {
+      "path": "packages/fount_workshop/lib/fount_workshop.ex",
       "action": "modify",
-      "original_sha256": "3440a4dfb1a563663adfcc5642d72b56f7a95d4fd7202cac1525b921e405bb0f",
-      "result_sha256": "23f8452fa51f2dc0f6e19e0403269dfa5cdc09844d8effc51708450a44214ecc",
-      "mode": 420
+      "original_sha256": "ab5f46e50accaa2b0e00018fd725d5e9bb820b179c2fd8c9ec4ddecffd6f8e21",
+      "original_terminal_lf_sha256": "36400493087c0a2405ee46d0741f5b15da020961c49a51ed46da9cb7ce5d3e4c",
+      "result_sha256": "4c094ca0d77ece2e30b65374d9bedb69dec1048effaf8ce5592659ddb22670cc",
+      "mode": 420,
+      "original_bytes": 586,
+      "result_bytes": 811
     },
     {
-      "path": "packages/fount_intelligence/examples/phase_eight.exs",
-      "action": "add",
-      "original_sha256": null,
-      "result_sha256": "8c5b2b2054e3e4b1e821d55c22b50b39626f9f5653da72c3f0c775ac2034cd25",
-      "mode": 420
-    },
-    {
-      "path": "packages/fount_intelligence/guides/capabilities-c.md",
-      "action": "add",
-      "original_sha256": null,
-      "result_sha256": "023796b287a714a723b1716c8c8295a6b6767b586bd2716fc7521a28e4090f27",
-      "mode": 420
-    },
-    {
-      "path": "packages/fount_intelligence/lib/fount/intelligence.ex",
+      "path": "packages/fount_workshop/lib/fount_workshop/audition.ex",
       "action": "modify",
-      "original_sha256": "63ea4ff7b18129324daf6858b4d970cb22cbfbfc7d22f1506c16b43b68e56bec",
-      "result_sha256": "e88a9c3906ff384cf98cd2d6f8c54a7ce16f8337cc2f2ea514adba06f0075a3d",
-      "mode": 420
+      "original_sha256": "ffdf155c0018643252b03cd772faf665395a3947ef3314da56b702783e80d484",
+      "original_terminal_lf_sha256": "10e3672a831045de098ec811d9d4604f0082f9e57149852bb5ab9f7067f082b4",
+      "result_sha256": "814a5a0bd6947df8f1b7e17e7a0b22c5930c2a080abe8ca75de5cfea4166b0b1",
+      "mode": 420,
+      "original_bytes": 2849,
+      "result_bytes": 3353
     },
     {
-      "path": "packages/fount_intelligence/lib/fount/intelligence/acquisition/capability_measurements.ex",
+      "path": "packages/fount_workshop/lib/fount_workshop/candidate.ex",
       "action": "modify",
-      "original_sha256": "d496e7f6cd8c61d0bd2324e242427f396d6b6bcba917c86ddaafcb773fbe8cf6",
-      "result_sha256": "4e03df91fc40742e8e9022ff661c07e88a66ec30fbab222fa40f2e8429caab08",
-      "mode": 420
+      "original_sha256": "919ed9e5f99568ec8f05aea70970388ee630113a21f4a3511d55fc14b8c25b13",
+      "original_terminal_lf_sha256": "8ecfe765111688b337982f48ef89701f505090a4b64239071204b2901676e649",
+      "result_sha256": "e5c26810ed128112e8651c599c5954348b0be732e321378b595ea72766b1c051",
+      "mode": 420,
+      "original_bytes": 17055,
+      "result_bytes": 18796
     },
     {
-      "path": "packages/fount_intelligence/lib/fount/intelligence/capabilities.ex",
+      "path": "packages/fount_workshop/lib/fount_workshop/rebase.ex",
       "action": "modify",
-      "original_sha256": "58712f4b6e479a482c07e696bb6cbe9a769be2d508328c0b80d127b1285ca6ee",
-      "result_sha256": "64b2e8cb1b43d4d87ac843b7ac4dee1ee2e76d56df9fc15adca96233f7dce534",
-      "mode": 420
+      "original_sha256": "b80e26be1677744e0a1fca81d76c3218f55785008fda243a423971e9158f05df",
+      "original_terminal_lf_sha256": "68574ae10be6804ebfd8fac6ea8dd5e604d875bf149960aa5624e54759aab948",
+      "result_sha256": "352ccec00cf7ffde9cc16513735f3fbc23e3f547ed634b1a4e6f1adaf0ea9cf9",
+      "mode": 420,
+      "original_bytes": 7854,
+      "result_bytes": 8243
     },
     {
-      "path": "packages/fount_intelligence/lib/fount/intelligence/capabilities/emotional_value_movement.ex",
-      "action": "add",
-      "original_sha256": null,
-      "result_sha256": "788f040ae8b04fe794cd25fea1f8d31f746960500e375a288a8c151c1f2805b9",
-      "mode": 420
-    },
-    {
-      "path": "packages/fount_intelligence/lib/fount/intelligence/capabilities/genre_lens_packs.ex",
-      "action": "add",
-      "original_sha256": null,
-      "result_sha256": "0cee266d384d8fabe1ac97b2504932a9e5015d32e90a1ed961a254e14e59165a",
-      "mode": 420
-    },
-    {
-      "path": "packages/fount_intelligence/lib/fount/intelligence/capabilities/result.ex",
+      "path": "packages/fount_workshop/lib/fount_workshop/request.ex",
       "action": "modify",
-      "original_sha256": "0bcbef2abb666520bf1ededc5e216dd34b0c188d5226e05c08e79bf47398202c",
-      "result_sha256": "4460c5db2493e8247794c2284058203914b6f3718e5b3e7efe7af33351ce4e24",
-      "mode": 420
+      "original_sha256": "1e4dfe951d060dd270b04e903b2ac50af2e205a10b12f138187b4b17cc9e68a4",
+      "original_terminal_lf_sha256": "374fe97655c2de8a3030b72aacb9b96f904eb43714610eae879cdaf747b8d78e",
+      "result_sha256": "e31897baf2c4347a1290403915350fc55c0d03bdc8e8ec129abb5deb6d440c59",
+      "mode": 420,
+      "original_bytes": 7079,
+      "result_bytes": 7690
     },
     {
-      "path": "packages/fount_intelligence/lib/fount/intelligence/capabilities/revision_intelligence.ex",
-      "action": "add",
-      "original_sha256": null,
-      "result_sha256": "46f9d6dc81481b4fc284a53cec8a4b184bc3c569fa9e06894b9e591d893b185e",
-      "mode": 420
-    },
-    {
-      "path": "packages/fount_intelligence/lib/fount/intelligence/capabilities/theme_meaning.ex",
-      "action": "add",
-      "original_sha256": null,
-      "result_sha256": "dd6d302ebf680b91df7014b0e9c5d95feff5270ea0e538122630c752c4129d8a",
-      "mode": 420
-    },
-    {
-      "path": "packages/fount_intelligence/lib/fount/intelligence/packs.ex",
-      "action": "add",
-      "original_sha256": null,
-      "result_sha256": "c0cbeb65a27b9aea6da2d09529f44385c09421025d1d29fc4b92a855697fd500",
-      "mode": 420
-    },
-    {
-      "path": "packages/fount_intelligence/lib/fount/intelligence/packs/catalog.ex",
-      "action": "add",
-      "original_sha256": null,
-      "result_sha256": "f8b859881b8c0811c6b2a937e42e115dc7880868f458359d1c10985c8b743e80",
-      "mode": 420
-    },
-    {
-      "path": "packages/fount_intelligence/lib/fount/intelligence/packs/genre_pack.ex",
-      "action": "add",
-      "original_sha256": null,
-      "result_sha256": "1a2e863905c4805749a39947307d9954c701b4fb231442cbbe4a498cc5c5a8df",
-      "mode": 420
-    },
-    {
-      "path": "packages/fount_intelligence/lib/fount/intelligence/playbooks/capability_runner.ex",
+      "path": "packages/fount_workshop/lib/fount_workshop/review.ex",
       "action": "modify",
-      "original_sha256": "d80ce998148e84fbe8677db224fa2182bf7b492521019cbf2750f95328f85190",
-      "result_sha256": "7aea2bb7bdba88636815624b0f1ab38ef907dccc2570373e8cd1a7a9318d12db",
-      "mode": 420
+      "original_sha256": "b79d2da2061fbc55cd72380b0b02d657bdcf1d4b5ccd4604a5120e4d4747f1cb",
+      "original_terminal_lf_sha256": "8e5934b9eda7cb4113b36464d9ccf37ecc04325bece84a9b68074eca72e7139e",
+      "result_sha256": "1e26f4aadc485ab737582bd959968acd338866d40e0a87be5da8e43c44b16778",
+      "mode": 420,
+      "original_bytes": 2640,
+      "result_bytes": 3429
     },
     {
-      "path": "packages/fount_intelligence/lib/fount/intelligence/playbooks/writer_registry.ex",
+      "path": "packages/fount_workshop/lib/fount_workshop/session.ex",
       "action": "modify",
-      "original_sha256": "cfaa7a94a125c81c692762fb684a544d57486a69be7acf2ca7ccd85af90fdab0",
-      "result_sha256": "c573d8ff8b9c4d451cfe6e0ec3bde9dff927993ed130d6e6ec3633c9aada09e4",
-      "mode": 420
+      "original_sha256": "601930a6f356a558927b239cbee76ae7e96958618436f0be2a1b57b2ec48125c",
+      "original_terminal_lf_sha256": "a84b73930c96bd41fef8bd529e95d99bf6d4f176f88b1ee1d63506922936ba57",
+      "result_sha256": "ffb120e74e8ad4afcdedc54e22e856bd36634425d5dcf6262d7961fe85b7f06a",
+      "mode": 420,
+      "original_bytes": 19102,
+      "result_bytes": 21095
     },
     {
-      "path": "packages/fount_intelligence/mix.exs",
+      "path": "packages/fount_workshop/lib/fount_workshop/strategy.ex",
       "action": "modify",
-      "original_sha256": "cb2b202b20c43b4013ad1df54845e12eb3aeb2877e404eb7a71573bdeca93ebc",
-      "result_sha256": "707721d385abefeb0307409d0069ac295606eb9ff8fdc1a8fa682f5543997412",
-      "mode": 420
+      "original_sha256": "7110d3f7e610fe37c6103f6a04c4ca48a75a05d2281779bb728fca3450b90dcf",
+      "original_terminal_lf_sha256": "c6c1adbcaae1a6bffe7971e856f0847af46982f0d3a4563c470b5623d66ea133",
+      "result_sha256": "1335c8f081fd7b8e005eba2bdf3c761ac0dc5501f25c52da7c073898e75df64a",
+      "mode": 420,
+      "original_bytes": 3664,
+      "result_bytes": 4293
     },
     {
-      "path": "packages/fount_intelligence/test/phase_eight_architecture_test.exs",
-      "action": "add",
-      "original_sha256": null,
-      "result_sha256": "7244cef95f5a162593d5d85f59a97bc6156df4a292884b92a4875b51b7201e82",
-      "mode": 420
-    },
-    {
-      "path": "packages/fount_intelligence/test/phase_eight_capabilities_test.exs",
-      "action": "add",
-      "original_sha256": null,
-      "result_sha256": "da8ae09a57df8a9ccf5bf59b4368552477a82a9cdf5ccd973911818a4d16a3bc",
-      "mode": 420
-    },
-    {
-      "path": "packages/fount_intelligence/test/phase_eight_packs_test.exs",
-      "action": "add",
-      "original_sha256": null,
-      "result_sha256": "6e93f1696bf902aeb7083e257b844a3fd922dfc2b110e23b989dca7e7d393fab",
-      "mode": 420
-    },
-    {
-      "path": "packages/fount_intelligence/test/phase_eight_runner_test.exs",
-      "action": "add",
-      "original_sha256": null,
-      "result_sha256": "222fd33d50ed5d7e6a155a44a639f610548fb09e59662b17d4d3bcbc86aa6b53",
-      "mode": 420
-    },
-    {
-      "path": "packages/fount_intelligence/test/support/phase_eight_fixture.ex",
-      "action": "add",
-      "original_sha256": null,
-      "result_sha256": "c4f11f2ec21f01f6d0ebf06aaf33408294ee49816fe8a1e5d6f2eae8a2627f59",
-      "mode": 420
-    },
-    {
-      "path": "packages/fount_observe/CHANGELOG.md",
+      "path": "packages/fount_workshop/lib/fount_workshop/writing/context.ex",
       "action": "modify",
-      "original_sha256": "89af9ac28260e59472e72fbce250c50224685c6d60f62e94b98beab2442408e2",
-      "result_sha256": "271442671d04169a299f4a5881f4891c068b221592a11b161c04a7424260dccd",
-      "mode": 420
+      "original_sha256": "a86fa0f812b7f292af65526ee6f5757a6242cd397fe9a4e5cbcd46ba9b3ce51a",
+      "original_terminal_lf_sha256": "f885f39d02e96765d5cc0e5d63889a8bad56397ca5f18684009aa4606f28f83e",
+      "result_sha256": "33e83d857424f19193d2895fe2967e6fc314bba57a2767424802e514ca0d499d",
+      "mode": 420,
+      "original_bytes": 7752,
+      "result_bytes": 8148
     },
     {
-      "path": "packages/fount_observe/README.md",
+      "path": "packages/fount_workshop/lib/fount_workshop/writing/generation.ex",
       "action": "modify",
-      "original_sha256": "ee28406ebf68f7cc94449f030eebf1e6466f5c71bfde44405cc8e43256006e2c",
-      "result_sha256": "285e7f41317224128b779c341817252dc992e6be1862a42e3b87ad0b2fe108f1",
-      "mode": 420
+      "original_sha256": "0b8a26de104fae72680bbe70360e6617cba37534cdc0cacf92ed86f666e19714",
+      "original_terminal_lf_sha256": "d666b0bbe1e94ccb77c27e82cfa424d77c110ff3ae272135f568babb8af92bde",
+      "result_sha256": "6654342a89678192e7f139236df9c4df86c3fd7266fb4c0084e01681f5c1eff0",
+      "mode": 420,
+      "original_bytes": 6548,
+      "result_bytes": 6695
     },
     {
-      "path": "packages/fount_observe/guides/declarative-lenses.md",
+      "path": "packages/fount_workshop/lib/fount_workshop/writing/intelligence.ex",
       "action": "add",
       "original_sha256": null,
-      "result_sha256": "5f1e3eaad6b95139a04383605943d55d73fbe2ed3e124957942215dcdbe18dbc",
-      "mode": 420
+      "original_terminal_lf_sha256": null,
+      "result_sha256": "803937009fba7199e34a7d6cf6b8832a930ff383393d67d5d5422eb2635afcd5",
+      "mode": 420,
+      "original_bytes": null,
+      "result_bytes": 14456
     },
     {
-      "path": "packages/fount_observe/lib/fount/observe.ex",
+      "path": "packages/fount_workshop/lib/fount_workshop/writing/preparation.ex",
       "action": "modify",
-      "original_sha256": "145d292de693618f4e0a1957a2f55ae8e1b6d8a40248f7bcb0d13ed7a27a3314",
-      "result_sha256": "803a807209ad5f46f66690a1e551c51ef730c8bd77628742cc8a5a03633a960c",
-      "mode": 420
+      "original_sha256": "6513d5d8bbc3ed73d97a484be67839fa69c3203ea30906963046983ff015768d",
+      "original_terminal_lf_sha256": "d38791796ab0d77f61dbe59fcb62762fc3051875839680a9174bef07fca18640",
+      "result_sha256": "184f75131836a36bd335fc7838a73f050679c3667542684a68feb03957f31836",
+      "mode": 420,
+      "original_bytes": 17439,
+      "result_bytes": 17793
     },
     {
-      "path": "packages/fount_observe/lib/fount/observe/declarative_lens.ex",
-      "action": "add",
-      "original_sha256": null,
-      "result_sha256": "92e03b2614e083d1344a2a3b6386e1b6b9d45b7ef51df3566ffe901c639768f7",
-      "mode": 420
-    },
-    {
-      "path": "packages/fount_observe/lib/fount/observe/registry.ex",
+      "path": "packages/fount_workshop/mix.exs",
       "action": "modify",
-      "original_sha256": "d6951112ad3275d98843d0e498d602f90ebd29d95d5b019ad70578c88357f812",
-      "result_sha256": "10a17efe69a1c1da7b09da52197b6903ee514fae911177830747b6c7bce06a9c",
-      "mode": 420
+      "original_sha256": "72377fdcd4a429df7e3c7eca0458d67bb520e16bf165db840c6fdb3d7c9efc28",
+      "original_terminal_lf_sha256": "405285368304c354982b68d79e287c5c58e32c60a0d8ebb41d2cf77218e35c43",
+      "result_sha256": "7f7810cc305535abbc57f805641dd187496c84ee7592e6e2975fb412a81258c8",
+      "mode": 420,
+      "original_bytes": 3282,
+      "result_bytes": 3353
     },
     {
-      "path": "packages/fount_observe/mix.exs",
-      "action": "modify",
-      "original_sha256": "489598bb6eb3a4be7871743e09219e4d79a1fad552ed10b27e698c3d47ccc861",
-      "result_sha256": "0431a2147df506d44c94160cb08b0cddb2ce32dbe601fe04c5ffa90740edf830",
-      "mode": 420
-    },
-    {
-      "path": "packages/fount_observe/priv/lenses/emotional.value_movement.json",
+      "path": "packages/fount_workshop/test/phase_nine_intelligence_test.exs",
       "action": "add",
       "original_sha256": null,
-      "result_sha256": "27c42d894e4536e8ef390ab27a747c1cd1a85c25535d8c6d3646bac515d7de78",
-      "mode": 420
-    },
-    {
-      "path": "packages/fount_observe/priv/lenses/genre.lens_pack.json",
-      "action": "add",
-      "original_sha256": null,
-      "result_sha256": "98e70059190267873c48484bfe51fc893e9523b0cea0002e3c8028aac34659cd",
-      "mode": 420
-    },
-    {
-      "path": "packages/fount_observe/priv/lenses/revision.intelligence.json",
-      "action": "add",
-      "original_sha256": null,
-      "result_sha256": "a4adbd4d843299c23c271c1f087e680334953d8d3571f75a4f0ecb28105bbcd0",
-      "mode": 420
-    },
-    {
-      "path": "packages/fount_observe/priv/lenses/theme.meaning.json",
-      "action": "add",
-      "original_sha256": null,
-      "result_sha256": "782286855f50251685d960616c17f34e7a689075d687ae8e606b6cad844cf388",
-      "mode": 420
-    },
-    {
-      "path": "packages/fount_observe/test/phase_eight_lens_assets_test.exs",
-      "action": "add",
-      "original_sha256": null,
-      "result_sha256": "4ec7252709dad74b31fdf4a922c53069795784c6164b9d49fede44cfa4ee276a",
-      "mode": 420
+      "original_terminal_lf_sha256": null,
+      "result_sha256": "465991d67b8239a1a3e272b51566f9ffd003005cd36583454f6a176cea471305",
+      "mode": 420,
+      "original_bytes": null,
+      "result_bytes": 5739
     },
     {
       "path": "scripts/tests/test_phase_eight_source.py",
+      "action": "modify",
+      "original_sha256": "b9e72956582a9caf0d4fc412dceb2e4518e9bfd01091592560b4fe48301be635",
+      "original_terminal_lf_sha256": "21d110e35b83ce36c20709906211a5cc9e3b44c913a3fd3122d3097aeed6b39d",
+      "result_sha256": "4ba2fda5eb2bd0971b1bc8b12fb71eb1490b38515acccb2e9c4c510f7e1a49c1",
+      "mode": 420,
+      "original_bytes": 9419,
+      "result_bytes": 9315
+    },
+    {
+      "path": "scripts/tests/test_phase_nine_source.py",
       "action": "add",
       "original_sha256": null,
-      "result_sha256": "115b6db1b078eb5e1c3d62676ebfdc218e973601bc58b34ee7490a0dc72ab2d7",
-      "mode": 420
+      "original_terminal_lf_sha256": null,
+      "result_sha256": "6730c74c3b770e9f5c0d244a5aba5c53d13154142526a7ca873a31fbb3b288d1",
+      "mode": 420,
+      "original_bytes": null,
+      "result_bytes": 4983
     }
   ],
-  "deletions": []
+  "deletions": [],
+  "notes": [
+    "Full-file Phase 9 overlay generated from the supplied content-identified Fount snapshot.",
+    "Runtime Elixir/Mix checks are not represented as passed; see the Phase 9 Codex QC handoff."
+  ]
 }

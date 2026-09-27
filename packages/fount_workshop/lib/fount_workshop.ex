@@ -2,6 +2,10 @@ defmodule FountWorkshop do
   @moduledoc "Writer-controlled screenplay candidates and explicit review decisions."
   alias FountWorkshop.Develop
   alias FountWorkshop.Review
+  alias FountWorkshop.Session
+
+  @doc "Provider-free Phase-9 workflow/resource preflight. It does not start a session or call a model."
+  def preflight(model, request, opts \\ []), do: Session.preflight(model, request, opts)
 
   def develop(repo, key, brief, client, opts \\ []),
     do: Develop.run(repo, key, brief, client, opts)

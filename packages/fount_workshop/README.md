@@ -17,6 +17,8 @@ Workshop develops a draft from a brief, continues or bridges scenes, creates com
 
 Use Intelligence to investigate a concern and inspect consequences. Use Workshop to generate actual screenplay material, save alternatives, review exact differences, hear dialogue and render pages. A probability is not permission to change the script.
 
+Phase 9 now carries that separation through the actual writing loop: provider-free preflight, pre-write writer packets, diagnosis-to-strategy lineage, optional post-candidate Revision Intelligence, protected-strength/collateral review metadata, and actual analysis resource use can travel with a candidate without changing the explicit acceptance model. See [`guides/intelligence-integration.md`](guides/intelligence-integration.md).
+
 ## A complete writer demonstration
 
 After configuring a disposable PostgreSQL database and applying Fount's migrations:
@@ -30,6 +32,16 @@ mix run examples/phase_one.exs --out examples/_output/phase_one_pdf --decision a
 This creates two stored alternatives using Inference's explicit mock, rejects one, accepts the selected fixture draft, makes an exact targeted rewrite, measures a strategy contrast with Observe Sandbox, compares real revisions, and exports original/candidate/accepted Fountain, review JSON and an HTML table read. The final `--decision` accepts or rejects the rewrite. It uses real persistence and export code, not a fake acceptance implementation. Fixture selections are not evidence of a human preference or live model performance.
 
 ## Use actual APIs
+
+For the integrated session workflow, preflight first when the caller wants resource visibility before provider work:
+
+```elixir
+{:ok, preflight} = FountWorkshop.preflight(model, request)
+{:ok, session} = FountWorkshop.Session.start(model, request, services)
+# Add services.observe to obtain pre/post Intelligence packets; omit it to preserve the generation-only lane.
+```
+
+The lower-level and original workflow APIs remain available:
 
 ```elixir
 # repo is a running Fount.Repo with migrations applied; key identifies an existing project.

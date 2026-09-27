@@ -209,13 +209,11 @@ class PhaseEightSourceTests(unittest.TestCase):
         for token in forbidden:
             self.assertNotIn(token, text, token)
 
-    def test_phase_nine_is_not_implemented_or_claimed(self) -> None:
+    def test_phase_eight_handoff_still_records_its_original_stop_boundary(self) -> None:
         guide = self.read("packages/fount_intelligence/guides/capabilities-c.md")
         self.assertIn("stop before Phase 9", guide)
         self.assertIn("not run here", guide.lower())
         self.assertIn("validation debt", guide.lower())
-        workshop = self.read("packages/fount_workshop/lib/fount_workshop.ex")
-        self.assertNotIn("Phase 9", workshop)
 
 
 if __name__ == "__main__":

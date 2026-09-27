@@ -4,7 +4,7 @@ defmodule FountWorkshop.Writing.Preparation do
   alias Fount.Screenplay.Model
   alias FountWorkshop.Store
   alias FountWorkshop.Writing.Context
-  alias FountWorkshop.Writing.NoteConflicts
+  alias FountWorkshop.Writing.{Intelligence, NoteConflicts}
 
   def run(model, request, services, opts \\ []) do
     with {:ok, context} <- Context.build(model, request, opts),
@@ -37,9 +37,10 @@ defmodule FountWorkshop.Writing.Preparation do
 
       context = Map.put(context, :reports, reports)
 
-      if request["workflow"] == "investigate",
-        do: investigate(model, request, context, services, opts),
-        else: {:ok, context}
+      with {:ok, context} <- maybe_investigate(model, request, context, services, opts),
+           {:ok, context} <- Intelligence.enrich_preparation(model, request, context, services, opts) do
+        {:ok, context}
+      end
     end
   end
 
@@ -464,6 +465,11 @@ defmodule FountWorkshop.Writing.Preparation do
        |> Map.put(:investigation_strategies, explanation.data["strategies"])}
     end
   end
+
+  defp maybe_investigate(model, %{"workflow" => "investigate"} = request, context, services, opts),
+    do: investigate(model, request, context, services, opts)
+
+  defp maybe_investigate(_model, _request, context, _services, _opts), do: {:ok, context}
 
   @doc false
   def propagation_targets(request) do

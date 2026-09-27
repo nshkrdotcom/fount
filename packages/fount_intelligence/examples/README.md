@@ -15,3 +15,7 @@ The historical Phase 1 writing preservation demonstration remains `packages/foun
 ## Phase 5 diagnosis and multi-pass writer-playbook demonstration
 
 `mix run examples/phase_five.exs` builds a small interrogation scene, derives its actual evidence IDs, creates matching `Fount.Observe.Sandbox` fixtures, runs the Scene Doctor shell through base Observe measurement, pure evidence-need reduction, closed-context measurement, and pure diagnosis, then renders the writer result packet as Markdown. It uses no database or hosted provider.
+
+## Phase 6 capability demonstration
+
+`mix run examples/phase_six.exs` builds one screenplay scene, creates deterministic `Fount.Observe.Sandbox` answers for the installed Scene Engine measurement contract, and runs the Phase-6 Scene Doctor integration. The packet contains source-grounded capability state and diagnoses only; it does not generate or accept screenplay pages. Runtime execution remains for Codex QC in this source delivery.

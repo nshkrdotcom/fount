@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased - Phase 6 source delivery
+
+- install closed declarative lens assets for `scene.engine`, `agency.causality`, `character.trajectory`, and `relationship.dynamics`;
+- preserve the existing Observe execution/cache/provider contracts; no new provider dependency is added.
+
 ## Unreleased - Phase 5 declarative diagnosis assets
 
 - Register `diagnosis.concern_relevance` and `diagnosis.evidence_support` as closed declarative lenses for the Intelligence shell.

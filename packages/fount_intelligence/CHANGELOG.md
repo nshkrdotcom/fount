@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased - Phase 6 source delivery
+
+- add complete Scene Engine, Agency/Causality, Character Trajectory, and Relationship Dynamics analysis slices;
+- add four declarative Observe lens assets and a closed capability measurement registry;
+- add scene-level source-visible measurement acquisition with explicit selection/cap reporting;
+- add separate reader-visible and diegetic trajectory views for non-linear character and relationship analysis;
+- add Phase-6 Scene Doctor, Character Trajectory, and Relationship Pass writer-packet integrations without generating pages;
+- add deterministic screenplay/Sandbox fixtures, source checks, and Phase-6 guides/examples;
+- preserve all Phase 1-5 public surfaces and leave Phase 7 capability families unimplemented.
+
 ## Unreleased - Phase 5 source delivery
 
 - add pure evidence-composed Diagnosis with explicit evidence needs, abstention, counterevidence, alternatives, protected strengths, and competing hypotheses;

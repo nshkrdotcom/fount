@@ -22,7 +22,9 @@ Pure interpretation lives in `StoryWorld`, `Temporal`, `Reader` and `Capabilitie
 
 Phase 4 provides qualified temporal views and a strict forward-only Reader reducer. Phase 5 adds pure evidence-composed diagnosis plus a multi-pass shell that measures selected evidence, returns explicit evidence needs, converts rich state into closed Observe context, measures support/counterevidence, and emits a writer-facing result packet. The ten baseline writer playbooks are available through `Fount.Intelligence.writer_playbooks/0`; see [Diagnosis and multi-pass writer playbooks](guides/diagnosis-and-playbooks.md) and `mix run examples/phase_five.exs`.
 
-The Phase 5 source/tests/example in this delivery are source-written against the post-Phase-4 snapshot but are not runtime-verified in this source-writing environment. Codex must format, compile, test and repair this same phase after the overlay is applied. The optional diagnosis/usefulness pilot is validation debt unless actually performed. Phase 6 capability-family implementation is not included.
+Phase 6 adds source-grounded Scene Engine, Agency/Causality, Character Trajectory, and Relationship Dynamics capabilities through `Fount.Intelligence.run_capability/5`, plus Scene Doctor, Character Trajectory, and Relationship Pass packet integrations through `run_capability_playbook/5`. Character and relationship views keep reader-visible presentation order separate from explicit diegetic story time, and no transformation arc is required. See [Capabilities A](guides/capabilities-a.md) and `mix run examples/phase_six.exs`.
+
+The Phase 6 source/tests/example in this delivery are written against the supplied post-Phase-5 snapshot but are not runtime-verified in this source-writing environment because Elixir/Erlang/Mix are unavailable here. Codex must format, compile, test and repair this same phase after the overlay is applied. Optional human/domain review remains validation debt unless actually performed. Phase 7 is not included.
 
 ## License
 

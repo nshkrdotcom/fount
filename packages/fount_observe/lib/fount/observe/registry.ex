@@ -3,7 +3,7 @@ defmodule Fount.Observe.Registry do
   alias Fount.Observe.Error
   alias Fount.Writing.CanonicalJSON
 
-  @lenses ~w(knowledge.access_evidence action.visibility continuity.transitions causality.support dialogue.interaction knowledge.behavior_support knowledge.epistemic_trace retrieval.relevance strategy.distinctness dialogue.voice_distinction diagnosis.concern_relevance diagnosis.evidence_support)
+  @lenses ~w(knowledge.access_evidence action.visibility continuity.transitions causality.support dialogue.interaction knowledge.behavior_support knowledge.epistemic_trace retrieval.relevance strategy.distinctness dialogue.voice_distinction diagnosis.concern_relevance diagnosis.evidence_support scene.engine agency.causality character.trajectory relationship.dynamics)
   @projections ~w(explicit_state page_reader audience_estimate character_access)
   def lenses, do: @lenses
   def projections, do: @projections

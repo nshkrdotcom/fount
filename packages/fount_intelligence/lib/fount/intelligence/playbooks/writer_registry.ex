@@ -1,5 +1,5 @@
 defmodule Fount.Intelligence.Playbooks.WriterRegistry do
-  @moduledoc "Closed Phase-5 writer playbook catalog. Definitions are data; callers cannot inject executable modules."
+  @moduledoc "Closed writer playbook catalog. Definitions and installed capability-family mappings are data; callers cannot inject executable modules."
 
   @definitions [
     %{
@@ -9,6 +9,7 @@ defmodule Fount.Intelligence.Playbooks.WriterRegistry do
         "Diagnose why a selected scene is not producing the intended dramatic effect before proposing a rewrite.",
       "foundational_tools" => ~w(scene_mechanics dependencies continuity),
       "future_capability_families" => ~w(scene_engine agency_causality),
+      "phase_6_capability_families" => ~w(scene_engine),
       "writer_questions" => [
         "What is the scene trying to make the reader expect, fear, understand, or want?",
         "Which competing explanations fit the evidence?"
@@ -33,6 +34,7 @@ defmodule Fount.Intelligence.Playbooks.WriterRegistry do
         "Track a character's goals, commitments, decisions, consequences, and adaptation without forcing a universal arc shape.",
       "foundational_tools" => ~w(extract_story dependencies knowledge_trace),
       "future_capability_families" => ~w(character_trajectory agency_causality),
+      "phase_6_capability_families" => ~w(character_trajectory agency_causality),
       "writer_questions" => [
         "What changes because this character chooses or refuses to choose?",
         "What evidence supports an apparent trajectory break?"
@@ -45,6 +47,7 @@ defmodule Fount.Intelligence.Playbooks.WriterRegistry do
         "Diagnose changes in trust, leverage, intimacy, allegiance, concealment, and dependency across the selected relationship.",
       "foundational_tools" => ~w(extract_story continuity dependencies),
       "future_capability_families" => ~w(relationship_dynamics),
+      "phase_6_capability_families" => ~w(relationship_dynamics),
       "writer_questions" => [
         "What changes between the characters at each consequential encounter?",
         "Does presentation order obscure or sharpen the relationship movement?"

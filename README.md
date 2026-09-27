@@ -427,11 +427,13 @@ Existing live Workshop workflows remain in `packages/fount_workshop/examples/liv
 
 ## Current Development Status
 
-This is the **Phase 1 offline implementation**, awaiting Codex runtime QC. New source/tests and the four-package architecture are delivered; Elixir compilation, tests, architecture AST/BEAM checks, database integration, PDF/speech and live providers were **not executed** in the source-writing environment.
+The current source delivery is **Phase 6 — Capabilities A: Scene / Agency / Character / Relationship**, implemented offline against the supplied post-Phase-5 Fount snapshot and awaiting Codex runtime QC. Phases 1–5 are complete in the accompanying progress record; Phase 7 and later work are not included.
 
-Historical preparation test counts describe the previous source, not this change. The complete current docset contains progress, preservation mapping, input identities, actual static/transport checks and remaining exit criteria. Phases 2-16 remain unstarted; this source does not establish creative superiority or human validation.
+Phase 6 adds source-grounded measurement/reasoning slices for scene objective/opposition/stakes/urgency/tactics/turns/decisions/consequences/entry-exit, character agency and causal reach/latency, non-linear character trajectories without requiring transformation, and directional pair/group relationship state. The writer-facing integrations remain investigative: they return evidence, derived state, diagnoses and next investigations, while actual candidate-page generation and canonical acceptance remain Workshop responsibilities.
 
-The supplied SDK snapshot exposes version 0.6.0 APIs. Before dependency setup, a local checkout may be selected with `FOUNT_SYSTEM_ONE_SDK_PATH=/absolute/path/system_one_sdk/packages/system_one_sdk`. Codex must verify and record the actual dependency resolution, regenerate appropriate lockfiles, run `mix fount.architecture`, and complete the same phase.
+Elixir/Erlang/Mix are unavailable in this source-writing environment, so compilation, ExUnit, architecture AST/BEAM checks, package gates, database/PDF preservation and runtime provider behavior are **not claimed passed**. The complete current docset records the source checks that were actually run and the exact Codex exit criteria. Optional human/domain review is validation debt unless real participants and records exist.
+
+The supplied System One SDK snapshot exposes version 0.6.0 APIs. Phase 6 reaches it only through the existing `Fount.Observe` provider boundary; it adds no direct SystemOneSDK, Inference, or ASM dependency to pure Intelligence. Codex must verify the actual dependency resolution and run the repository-native runtime/QC ladder after application.
 
 ---
 
@@ -443,4 +445,4 @@ The supplied SDK snapshot exposes version 0.6.0 APIs. Before dependency setup, a
 
 For the progressive screenplay-writing implementation workflow, generate a parsable XML snapshot with `repomix`, then use `python3 scripts/seal_handoff_snapshot.py --root . --input /absolute/path/fount.raw.xml --output /absolute/path/fount.xml`. The helper verifies included source against disk, preserves exact bytes, and embeds file hashes and Git identity for safe offline overlay construction. Run `python3 -m unittest discover -s scripts/tests -v` to verify the helper.
 
-Use four fresh inputs on each pass: `fount.xml`, `system_one_sdk.xml`, `inference.xml`, and the complete updated `docset.xml`. The source-writing environment returns ZIPs; the user applies and commits them; Codex verifies and repairs the applied phase before the next snapshots. The complete current docset supplied for the phase defines product scope and progress. Historical implementation notes above are not a replacement for that current specification.
+Use five fresh inputs on each pass: `fount.xml`, `system_one_sdk.xml`, `inference.xml`, `agent_session_manager.xml`, and the complete updated `docset.xml`. The source-writing environment returns ZIPs; the user applies and commits them; Codex verifies and repairs the applied phase before the next snapshots. The complete current docset supplied for the phase defines product scope and progress. Historical implementation notes above are not a replacement for that current specification.

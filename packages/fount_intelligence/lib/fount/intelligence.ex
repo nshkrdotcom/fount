@@ -15,7 +15,7 @@ defmodule Fount.Intelligence do
   alias Fount.Intelligence.Playbooks.SceneMechanics
   alias Fount.Intelligence.Playbooks.StrategyContrast
   alias Fount.Intelligence.Playbooks.Voice
-  alias Fount.Intelligence.Playbooks.{WriterRegistry, WriterRunner}
+  alias Fount.Intelligence.Playbooks.{CapabilityRunner, WriterRegistry, WriterRunner}
   alias Fount.Intelligence.Reporting.{Renderer, Report, WriterPacket}
   alias Fount.Intelligence.Runner.{Resources, ResultValidation}
   alias Fount.Screenplay.Model
@@ -31,6 +31,25 @@ defmodule Fount.Intelligence do
   @doc "Runs the Phase-5 Observe -> pure -> contextual Observe -> pure diagnosis shell."
   def run_playbook(model, playbook, request, clients \\ %{}, opts \\ []),
     do: WriterRunner.run(model, playbook, request, clients, opts)
+
+  @doc "Lists the four installed Phase-6 capability families."
+  def capability_families, do: Fount.Intelligence.Capabilities.families()
+
+  @doc "Provider-free preflight for one Phase-6 screenplay capability."
+  def preflight_capability(model, family, request, opts \\ []),
+    do: CapabilityRunner.preflight(model, family, request, opts)
+
+  @doc "Runs one Phase-6 source-grounded capability through Observe and pure Intelligence reasoning."
+  def run_capability(model, family, request, clients \\ %{}, opts \\ []),
+    do: CapabilityRunner.run(model, family, request, clients, opts)
+
+  @doc "Provider-free preflight for a Phase-6 writer playbook integration."
+  def preflight_capability_playbook(model, playbook, request, opts \\ []),
+    do: CapabilityRunner.preflight_playbook(model, playbook, request, opts)
+
+  @doc "Runs a Phase-6 Scene Doctor, Character Trajectory, or Relationship Pass packet without generating pages."
+  def run_capability_playbook(model, playbook, request, clients \\ %{}, opts \\ []),
+    do: CapabilityRunner.run_playbook(model, playbook, request, clients, opts)
 
   @doc "Renders a writer result packet as deterministic Markdown or canonical JSON."
   def render_packet(%WriterPacket{} = packet, format \\ :markdown),

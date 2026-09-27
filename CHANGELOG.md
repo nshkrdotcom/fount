@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased - Phase 6 offline implementation
+
+- Add the Scene Engine, Agency/Causality, Character Trajectory, and Relationship Dynamics capability families with source-grounded Observe measurements and pure Intelligence reducers.
+- Add explicit scene turn/entry-exit/sequence-contribution, decision-action-consequence/latency, non-linear character trajectory, and directional pair/group relationship views.
+- Add four closed declarative Observe lenses and deterministic Sandbox playbook coverage for Scene Doctor, Character Trajectory, and Relationship Pass.
+- Preserve canonical Core and Workshop writing/acceptance behavior; Phase 6 emits investigative writer packets and does not generate or accept screenplay pages.
+- Runtime Mix/ExUnit/package/provider checks remain for Codex after application; no unrun runtime or human-usefulness result is claimed.
+
 ## Unreleased - Phase 5 offline implementation
 
 - Add pure evidence-composed Diagnosis with explicit evidence needs, abstention, uncertainty, support/counterevidence, alternatives and protected strengths.

@@ -147,7 +147,7 @@ defmodule FountWorkshop.PhaseTenResumeHistoryTest do
 
     decisions = Map.new(loaded["candidates"], &{&1["id"], &1["decision"]})
     assert decisions[first["id"]] == "rejected"
-    assert is_nil(decisions[second["id"]])
+    assert decisions[second["id"]] == "proposed"
 
     after_runs = Analysis.runs_for_session(Repo, base.id, session_id)
     assert Enum.map(after_runs, & &1["id"]) == Enum.map(before_runs, & &1["id"])

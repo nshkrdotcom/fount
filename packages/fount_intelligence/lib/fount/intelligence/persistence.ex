@@ -8,8 +8,10 @@ defmodule Fount.Intelligence.Persistence do
   dependency keys for later recomputation.
   """
 
+  alias Fount.Intelligence.Packs
   alias Fount.Intelligence.Persistence.MeasurementCache
   alias Fount.Intelligence.Reporting.WriterPacket
+  alias Fount.Observe.DeclarativeLens
   alias Fount.Persistence.Analysis
   alias Fount.Screenplay.Model
   alias Fount.Writing.CanonicalJSON
@@ -42,24 +44,24 @@ defmodule Fount.Intelligence.Persistence do
   @doc "Starts one logical analysis run and binds its durable cache namespace."
   def begin(%__MODULE__{} = store, model, playbook, attrs \\ %{}) when is_map(attrs) do
     namespace = store.privacy_namespace || "screenplay:" <> model.id
-    id = attrs["id"] || attrs[:id] || Fount.ID.v4()
+    id = attr(attrs, :id, Fount.ID.v4())
 
     run = %{
       id: id,
       screenplay_id: model.id,
       revision_id: model.revision.id,
       revision_content_sha256: model.revision.content_hash,
-      session_id: attrs["session_id"] || attrs[:session_id],
-      candidate_id: attrs["candidate_id"] || attrs[:candidate_id],
+      session_id: attr(attrs, :session_id),
+      candidate_id: attr(attrs, :candidate_id),
       playbook: playbook,
-      playbook_sha256: attrs["playbook_sha256"] || attrs[:playbook_sha256],
+      playbook_sha256: attr(attrs, :playbook_sha256),
       status: "running",
-      concern: attrs["concern"] || attrs[:concern] || %{},
-      intent: attrs["intent"] || attrs[:intent] || %{},
-      scope: attrs["scope"] || attrs[:scope] || %{},
+      concern: attr(attrs, :concern, %{}),
+      intent: attr(attrs, :intent, %{}),
+      scope: attr(attrs, :scope, %{}),
       privacy_namespace: namespace,
-      preflight: attrs["preflight"] || attrs[:preflight] || %{},
-      metadata: attrs["metadata"] || attrs[:metadata] || %{}
+      preflight: attr(attrs, :preflight, %{}),
+      metadata: attr(attrs, :metadata, %{})
     }
 
     with {:ok, saved} <- Analysis.start_run(store.repo, run) do
@@ -77,6 +79,9 @@ defmodule Fount.Intelligence.Persistence do
     end
   end
 
+  defp attr(attrs, key, default \\ nil),
+    do: Map.get(attrs, to_string(key)) || Map.get(attrs, key) || default
+
   @doc "Adds the durable L2 adapter without discarding a caller's existing L1 cache."
   def measurement_options(%Run{} = run, opts) when is_list(opts) do
     existing_l1 = Keyword.get(opts, :cache, run.store.l1_cache)
@@ -92,7 +97,6 @@ defmodule Fount.Intelligence.Persistence do
     |> Keyword.put(:privacy_namespace, run.store.privacy_namespace)
     |> Keyword.put(:cache_policy, :durable)
     |> Keyword.put(:run_id, run.id)
-    |> Keyword.put(:analysis_run, run)
   end
 
   def measurement_options(nil, opts), do: opts
@@ -151,7 +155,11 @@ defmodule Fount.Intelligence.Persistence do
              output_contract_id: packet.output_contract_id,
              output_contract_sha256: packet.output_contract_sha256,
              resource_usage: packet.resource_usage,
-             summary: Map.take(map, ~w(id playbook concern finding coverage diagnoses uncertainty protected_strengths next_investigations revision_comparison)),
+             summary:
+               Map.take(
+                 map,
+                 ~w(id playbook concern finding coverage diagnoses uncertainty protected_strengths next_investigations revision_comparison)
+               ),
              result: map,
              metadata: %{
                "candidate_is_canon" => false,
@@ -200,7 +208,8 @@ defmodule Fount.Intelligence.Persistence do
   end
 
   @doc "Evicts reusable measurement rows for this privacy namespace only."
-  def evict_cache(%__MODULE__{} = store, keep_entries) when is_integer(keep_entries) and keep_entries >= 0 do
+  def evict_cache(%__MODULE__{} = store, keep_entries)
+      when is_integer(keep_entries) and keep_entries >= 0 do
     case store.privacy_namespace do
       namespace when is_binary(namespace) and namespace != "" ->
         Analysis.evict_cache(store.repo, namespace, keep_entries)
@@ -213,7 +222,7 @@ defmodule Fount.Intelligence.Persistence do
   @doc "Persists a validated declarative lens as disabled-by-default data when host policy permits it."
   def save_lens(%__MODULE__{} = store, screenplay_id, declaration, opts \\ []) do
     with :ok <- project_assets_allowed(opts),
-         {:ok, asset} <- Fount.Observe.DeclarativeLens.validate(declaration) do
+         {:ok, asset} <- DeclarativeLens.validate(declaration) do
       persist_asset(store, screenplay_id, "lens", asset, opts)
     end
   end
@@ -221,13 +230,15 @@ defmodule Fount.Intelligence.Persistence do
   @doc "Persists a validated project/studio genre pack as disabled-by-default data when host policy permits it."
   def save_genre_pack(%__MODULE__{} = store, screenplay_id, pack, opts \\ []) do
     with :ok <- project_assets_allowed(opts),
-         {:ok, asset} <- Fount.Intelligence.Packs.validate(pack, opts) do
+         {:ok, asset} <- Packs.validate(pack, opts) do
       persist_asset(store, screenplay_id, "genre_pack", asset, opts)
     end
   end
 
   @doc "Persists a data-only calibration or playbook asset when host policy permits it."
-  def save_data_asset(%__MODULE__{} = store, screenplay_id, kind, logical_id, content, opts \\ [])
+  def save_data_asset(store, screenplay_id, kind, logical_id, content, opts \\ [])
+
+  def save_data_asset(%__MODULE__{} = store, screenplay_id, kind, logical_id, content, opts)
       when kind in ["calibration", "playbook"] and is_binary(logical_id) and is_map(content) do
     source = Keyword.get(opts, :source)
 
@@ -235,7 +246,8 @@ defmodule Fount.Intelligence.Persistence do
          :ok <- safe_data_asset(content),
          {:ok, _json} <- CanonicalJSON.encode(content),
          :ok <- require_asset_source(source) do
-      scope = Keyword.get(opts, :scope_id, store.privacy_namespace || "screenplay:" <> screenplay_id)
+      scope =
+        Keyword.get(opts, :scope_id, store.privacy_namespace || "screenplay:" <> screenplay_id)
 
       Analysis.save_asset(store.repo, %{
         screenplay_id: screenplay_id,
@@ -260,7 +272,9 @@ defmodule Fount.Intelligence.Persistence do
     do: Analysis.set_asset_enabled(store.repo, asset_id, enabled)
 
   defp persist_asset(store, screenplay_id, kind, asset, opts) do
-    scope = Keyword.get(opts, :scope_id, store.privacy_namespace || "screenplay:" <> screenplay_id)
+    scope =
+      Keyword.get(opts, :scope_id, store.privacy_namespace || "screenplay:" <> screenplay_id)
+
     content = Map.delete(asset, "sha256")
 
     Analysis.save_asset(store.repo, %{
@@ -307,22 +321,25 @@ defmodule Fount.Intelligence.Persistence do
         |> Enum.uniq()
         |> Enum.sort()
 
-      if is_binary(id) and id != "" do
-        case Analysis.replace_dependencies(
-               run.store.repo,
-               run.screenplay_id,
-               "diagnosis",
-               id,
-               dependencies,
-               analysis_run_id: run.id
-             ) do
-          {:ok, _} -> {:cont, :ok}
-          {:error, reason} -> {:halt, {:error, reason}}
-        end
-      else
-        {:cont, :ok}
-      end
+      persist_diagnosis_dependency(run, id, dependencies)
     end)
+  end
+
+  defp persist_diagnosis_dependency(_run, id, _dependencies) when not is_binary(id) or id == "",
+    do: {:cont, :ok}
+
+  defp persist_diagnosis_dependency(run, id, dependencies) do
+    case Analysis.replace_dependencies(
+           run.store.repo,
+           run.screenplay_id,
+           "diagnosis",
+           id,
+           dependencies,
+           analysis_run_id: run.id
+         ) do
+      {:ok, _} -> {:cont, :ok}
+      {:error, reason} -> {:halt, {:error, reason}}
+    end
   end
 
   defp diagnosis_dependency_keys(diagnosis) when is_map(diagnosis) do
@@ -363,40 +380,47 @@ defmodule Fount.Intelligence.Persistence do
     end)
   end
 
-  defp unsafe_asset_value?(value) when is_list(value), do: Enum.any?(value, &unsafe_asset_value?/1)
+  defp unsafe_asset_value?(value) when is_list(value),
+    do: Enum.any?(value, &unsafe_asset_value?/1)
+
   defp unsafe_asset_value?(_), do: false
 
   @doc "Canonical dependency keys shared by persistence and recomputation planning."
   def dependency_keys(dependencies) when is_list(dependencies) do
     dependencies
-    |> Enum.flat_map(fn dependency ->
-      target = dependency["target"] || dependency[:target] || %{}
-      kind = target["kind"] || target[:kind]
-      id = target["id"] || target[:id]
-
-      target_key =
-        if is_binary(kind) and is_binary(id), do: ["target:#{kind}:#{id}"], else: []
-
-      evidence_key =
-        case {dependency["kind"] || dependency[:kind], dependency["id"] || dependency[:id]} do
-          {"evidence", evidence_id} when is_binary(evidence_id) -> ["evidence:#{evidence_id}"]
-          {:evidence, evidence_id} when is_binary(evidence_id) -> ["evidence:#{evidence_id}"]
-          _ -> []
-        end
-
-      ["dependency:" <> CanonicalJSON.hash(Model.plain(dependency)) | target_key ++ evidence_key]
-    end)
+    |> Enum.flat_map(&dependency_keys_for/1)
     |> Enum.uniq()
     |> Enum.sort()
   end
 
   def dependency_keys(_), do: []
 
+  defp dependency_keys_for(dependency) do
+    target = dependency["target"] || dependency[:target] || %{}
+    kind = target["kind"] || target[:kind]
+    id = target["id"] || target[:id]
+    target_key = if is_binary(kind) and is_binary(id), do: ["target:#{kind}:#{id}"], else: []
+
+    [
+      "dependency:" <> CanonicalJSON.hash(Model.plain(dependency))
+      | target_key ++ evidence_key(dependency)
+    ]
+  end
+
+  defp evidence_key(dependency) do
+    case {dependency["kind"] || dependency[:kind], dependency["id"] || dependency[:id]} do
+      {kind, id} when kind in ["evidence", :evidence] and is_binary(id) -> ["evidence:#{id}"]
+      _ -> []
+    end
+  end
+
   defp evidence_dependency_keys(evidence) when is_map(evidence) do
     target = evidence["target"] || evidence[:target] || %{}
     kind = target["kind"] || target[:kind]
     id = target["id"] || target[:id]
-    evidence_id = evidence["evidence_id"] || evidence[:evidence_id] || evidence["id"] || evidence[:id]
+
+    evidence_id =
+      evidence["evidence_id"] || evidence[:evidence_id] || evidence["id"] || evidence[:id]
 
     []
     |> maybe_key(is_binary(kind) and is_binary(id), "target:#{kind}:#{id}")

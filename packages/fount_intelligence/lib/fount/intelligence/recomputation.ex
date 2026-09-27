@@ -14,7 +14,9 @@ defmodule Fount.Intelligence.Recomputation do
   alias Fount.Persistence.Analysis
 
   @doc "Builds the pure StoryWorld + Reader frontier and, optionally, durable derived dependents."
-  def plan(%StoryWorld{} = world, %Reader{} = reader, changed_dependencies, opts \\ [])
+  def plan(world, reader, changed_dependencies, opts \\ [])
+
+  def plan(%StoryWorld{} = world, %Reader{} = reader, changed_dependencies, opts)
       when is_list(changed_dependencies) and is_list(opts) do
     normalized = normalize(changed_dependencies)
 

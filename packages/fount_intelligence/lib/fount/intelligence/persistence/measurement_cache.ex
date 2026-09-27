@@ -19,24 +19,27 @@ defmodule Fount.Intelligence.Persistence.MeasurementCache do
         {:hit, values}
 
       :miss ->
-        case Analysis.cache_get(handle.repo, handle.privacy_namespace, key) do
-          {:hit, payloads} ->
-            with {:ok, values} <- decode_many(payloads) do
-              _ = l1_put(handle, key, values)
-              {:hit, values}
-            else
-              _ -> :miss
-            end
-
-          :miss ->
-            :miss
-        end
+        durable_get(handle, key)
     end
   rescue
     _ -> :miss
   catch
     :exit, _ -> :miss
   end
+
+  defp durable_get(handle, key) do
+    case Analysis.cache_get(handle.repo, handle.privacy_namespace, key) do
+      {:hit, payloads} -> decoded_get(handle, key, decode_many(payloads))
+      :miss -> :miss
+    end
+  end
+
+  defp decoded_get(handle, key, {:ok, values}) do
+    _ = l1_put(handle, key, values)
+    {:hit, values}
+  end
+
+  defp decoded_get(_handle, _key, _error), do: :miss
 
   @impl true
   def put(handle, key, results) when is_list(results) do

@@ -4,7 +4,6 @@ defmodule Fount.Intelligence do
   alias Fount.Intelligence.Capabilities
   alias Fount.Intelligence.Packs
   alias Fount.Intelligence.Persistence
-  alias Fount.Intelligence.Recomputation
   alias Fount.Intelligence.Playbooks.Action
   alias Fount.Intelligence.Playbooks.CapabilityRunner
   alias Fount.Intelligence.Playbooks.Comparison
@@ -22,6 +21,7 @@ defmodule Fount.Intelligence do
   alias Fount.Intelligence.Playbooks.Voice
   alias Fount.Intelligence.Playbooks.WriterRegistry
   alias Fount.Intelligence.Playbooks.WriterRunner
+  alias Fount.Intelligence.Recomputation
   alias Fount.Intelligence.Reporting.{Renderer, Report, WriterPacket}
   alias Fount.Intelligence.Runner.{Resources, ResultValidation}
   alias Fount.Screenplay.Model
@@ -91,7 +91,6 @@ defmodule Fount.Intelligence do
   def fetch_genre_pack(catalog, id), do: Packs.fetch(catalog, id)
   def list_genre_packs(catalog), do: Packs.list(catalog)
   def enabled_genre_packs(catalog), do: Packs.enabled(catalog)
-
 
   @doc "Creates an Intelligence-owned durable analysis store over the Core persistence boundary."
   def durable_store(repo, opts \\ []), do: Persistence.new(repo, opts)

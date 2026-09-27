@@ -12,6 +12,7 @@ defmodule Fount.Intelligence.Playbooks.CapabilityRunner do
   alias Fount.Intelligence.Runner.Resources
   alias Fount.Intelligence.StoryWorld
   alias Fount.Screenplay.Model
+  alias Fount.Writing.CanonicalJSON
 
   @default_provider_cap 240
   @default_scene_cap 160
@@ -134,14 +135,7 @@ defmodule Fount.Intelligence.Playbooks.CapabilityRunner do
          {:ok, run, run_opts} <- begin_persistence(model, playbook, definition, request, opts) do
       case run_families(model, families, request, clients, shared_budget(run_opts)) do
         {:ok, results} ->
-          with {:ok, packet} <- packet(model, definition, request, results),
-               {:ok, packet} <- Persistence.finish_packet(run, packet) do
-            {:ok, packet}
-          else
-            {:error, reason} = error ->
-              Persistence.fail(run, reason)
-              error
-          end
+          finish_results(run, packet(model, definition, request, results))
 
         {:error, reason} = error ->
           Persistence.fail(run, reason)
@@ -296,14 +290,7 @@ defmodule Fount.Intelligence.Playbooks.CapabilityRunner do
            begin_persistence(after_model, "revision_regression", definition, request, opts) do
       case run_revision(before_model, after_model, request, clients, shared_budget(run_opts)) do
         {:ok, result} ->
-          with {:ok, packet} <- packet(after_model, definition, request, [result]),
-               {:ok, packet} <- Persistence.finish_packet(run, packet) do
-            {:ok, packet}
-          else
-            {:error, reason} = error ->
-              Persistence.fail(run, reason)
-              error
-          end
+          finish_results(run, packet(after_model, definition, request, [result]))
 
         {:error, reason} = error ->
           Persistence.fail(run, reason)
@@ -314,13 +301,29 @@ defmodule Fount.Intelligence.Playbooks.CapabilityRunner do
 
   def run_revision_playbook(_, _, _, _, _, _), do: {:error, :capability_playbook_not_supported}
 
+  defp finish_results(run, {:ok, packet}) do
+    case Persistence.finish_packet(run, packet) do
+      {:ok, _} = result ->
+        result
+
+      {:error, reason} = error ->
+        Persistence.fail(run, reason)
+        error
+    end
+  end
+
+  defp finish_results(run, {:error, reason} = error) do
+    Persistence.fail(run, reason)
+    error
+  end
+
   defp begin_persistence(model, playbook, definition, request, opts) do
     case Keyword.get(opts, :analysis_store) do
       %Persistence{} = store ->
         attrs = %{
           "session_id" => Keyword.get(opts, :analysis_session_id),
           "candidate_id" => Keyword.get(opts, :analysis_candidate_id),
-          "playbook_sha256" => Fount.Writing.CanonicalJSON.hash(definition),
+          "playbook_sha256" => CanonicalJSON.hash(definition),
           "concern" => normalize_concern(request),
           "intent" => Map.get(request, "intent", %{}),
           "scope" => %{
@@ -335,7 +338,8 @@ defmodule Fount.Intelligence.Playbooks.CapabilityRunner do
         }
 
         with {:ok, run} <- Persistence.begin(store, model, playbook, attrs) do
-          {:ok, run, Persistence.measurement_options(run, opts)}
+          {:ok, run,
+           Persistence.measurement_options(run, opts) |> Keyword.put(:analysis_run, run)}
         end
 
       _ ->

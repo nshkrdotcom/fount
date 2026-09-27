@@ -10,7 +10,6 @@ defmodule Fount.Persistence.Analysis do
   alias Ecto.Adapters.SQL
   alias Fount.ID
   alias Fount.Screenplay.Model
-  alias Fount.Writing.CanonicalJSON
 
   @run_statuses ~w(running complete partial failed)
   @asset_kinds ~w(lens calibration playbook genre_pack)
@@ -58,7 +57,9 @@ defmodule Fount.Persistence.Analysis do
           ]
         )
 
-        Map.put(asset, :id, id)
+        asset
+        |> Map.new(fn {key, value} -> {to_string(key), value} end)
+        |> Map.put("id", id)
 
       row ->
         row
@@ -68,7 +69,9 @@ defmodule Fount.Persistence.Analysis do
   @doc "Enables or disables an installed asset without mutating its content identity."
   def set_asset_enabled(repo, id, enabled) when is_binary(id) and is_boolean(enabled) do
     case one(repo, "SELECT id FROM analysis_assets WHERE id=$1::uuid", [id]) do
-      nil -> {:error, :not_found}
+      nil ->
+        {:error, :not_found}
+
       _ ->
         q(repo, "UPDATE analysis_assets SET enabled=$2 WHERE id=$1::uuid", [id, enabled])
         {:ok, enabled}
@@ -102,31 +105,13 @@ defmodule Fount.Persistence.Analysis do
 
   defp persist_run(repo, run) do
     id = field(run, :id) || ID.v4()
-    screenplay_id = field(run, :screenplay_id)
-    revision_id = field(run, :revision_id)
 
     case one(repo, "SELECT * FROM analysis_runs WHERE id=$1::uuid", [id]) do
       nil ->
         q(
           repo,
           "INSERT INTO analysis_runs(id,screenplay_id,revision_id,revision_content_sha256,session_id,candidate_id,playbook,playbook_sha256,status,concern,intent,scope,privacy_namespace,preflight,metadata) VALUES($1::uuid,$2::uuid,$3::uuid,$4,$5::uuid,$6::uuid,$7,$8,$9,$10::jsonb,$11::jsonb,$12::jsonb,$13,$14::jsonb,$15::jsonb)",
-          [
-            id,
-            screenplay_id,
-            revision_id,
-            field(run, :revision_content_sha256),
-            field(run, :session_id),
-            field(run, :candidate_id),
-            field(run, :playbook),
-            field(run, :playbook_sha256),
-            field(run, :status) || "running",
-            json(field(run, :concern) || %{}),
-            json(field(run, :intent) || %{}),
-            json(field(run, :scope) || %{}),
-            field(run, :privacy_namespace),
-            json(field(run, :preflight) || %{}),
-            json(field(run, :metadata) || %{})
-          ]
+          run_params(run, id)
         )
 
         Map.put(run, :id, id)
@@ -136,6 +121,23 @@ defmodule Fount.Persistence.Analysis do
           do: existing,
           else: rollback(repo, :analysis_run_identity_conflict)
     end
+  end
+
+  defp run_params(run, id) do
+    [id] ++
+      Enum.map(
+        ~w(screenplay_id revision_id revision_content_sha256 session_id candidate_id playbook playbook_sha256)a,
+        &field(run, &1)
+      ) ++
+      [
+        field(run, :status) || "running",
+        json(field(run, :concern) || %{}),
+        json(field(run, :intent) || %{}),
+        json(field(run, :scope) || %{}),
+        field(run, :privacy_namespace),
+        json(field(run, :preflight) || %{}),
+        json(field(run, :metadata) || %{})
+      ]
   end
 
   @doc "Finishes a run. Summary/resource usage stay advisory derived history."
@@ -185,7 +187,6 @@ defmodule Fount.Persistence.Analysis do
       [screenplay_id, session_id]
     )
   end
-
 
   @doc "Lists fresh revision-bound observations recorded for one durable analysis run."
   def observations_for_run(repo, run_id) when is_binary(run_id) do
@@ -351,24 +352,28 @@ defmodule Fount.Persistence.Analysis do
         q(
           repo,
           "INSERT INTO analysis_observations(id,analysis_run_id,screenplay_id,revision_id,request_id,result_id,kind,target,evidence,dependencies,payload) VALUES($1,$2::uuid,$3::uuid,$4::uuid,$5,$6,$7,$8::jsonb,$9::jsonb,$10::jsonb,$11::jsonb)",
-          [
-            id,
-            run_id,
-            screenplay_id,
-            revision_id,
-            request_id,
-            result_id,
-            to_string(field(observation, :kind)),
-            json(field(observation, :target) || %{}),
-            json(field(observation, :evidence) || []),
-            json(field(observation, :dependencies) || []),
-            json(Model.plain(observation))
-          ]
+          observation_params(observation, id, run_id, screenplay_id, revision_id, request_id, result_id)
         )
 
       %{"payload" => payload} ->
         if payload != Model.plain(observation), do: rollback(repo, :analysis_observation_identity_conflict)
     end
+  end
+
+  defp observation_params(observation, id, run_id, screenplay_id, revision_id, request_id, result_id) do
+    [
+      id,
+      run_id,
+      screenplay_id,
+      revision_id,
+      request_id,
+      result_id,
+      to_string(field(observation, :kind)),
+      json(field(observation, :target) || %{}),
+      json(field(observation, :evidence) || []),
+      json(field(observation, :dependencies) || []),
+      json(Model.plain(observation))
+    ]
   end
 
   @doc "Replaces declared dependency keys for one derived record. Dependencies drive recomputation, never deletion."
@@ -407,7 +412,9 @@ defmodule Fount.Persistence.Analysis do
     keys = changed_dependencies |> Enum.map(&to_string/1) |> Enum.uniq() |> Enum.sort()
 
     case keys do
-      [] -> []
+      [] ->
+        []
+
       _ ->
         all(
           repo,
@@ -473,21 +480,25 @@ defmodule Fount.Persistence.Analysis do
         text?(field(observation, :id)) and not is_nil(field(observation, :kind)) and
           is_map(target) and field(target, :screenplay_id) == screenplay_id and
           field(target, :revision_id) == revision_id and
-          Enum.all?(evidence, fn item ->
-            evidence_screenplay = field(item, :screenplay_id)
-            evidence_revision = field(item, :revision_id)
-
-            (is_nil(evidence_screenplay) or evidence_screenplay == screenplay_id) and
-              (is_nil(evidence_revision) or evidence_revision == revision_id)
-          end)
+          Enum.all?(evidence, &current_evidence?(&1, screenplay_id, revision_id))
       end)
 
     if valid, do: :ok, else: {:error, :stale_analysis_observation_provenance}
   end
 
+  defp current_evidence?(item, screenplay_id, revision_id) do
+    evidence_screenplay = field(item, :screenplay_id)
+    evidence_revision = field(item, :revision_id)
+
+    (is_nil(evidence_screenplay) or evidence_screenplay == screenplay_id) and
+      (is_nil(evidence_revision) or evidence_revision == revision_id)
+  end
+
   defp secret_free(value) do
     if contains_secret_key?(value), do: {:error, :credential_material_forbidden}, else: :ok
   end
+
+  defp contains_secret_key?(%_{} = value), do: contains_secret_key?(Map.from_struct(value))
 
   defp contains_secret_key?(value) when is_map(value) do
     Enum.any?(value, fn {key, nested} ->

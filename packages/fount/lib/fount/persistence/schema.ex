@@ -267,6 +267,7 @@ defmodule Fount.Persistence.Schema.MentionCandidate do
     field(:character_id, Ecto.UUID, primary_key: true)
   end
 end
+
 defmodule Fount.Persistence.Schema.AnalysisAsset do
   @moduledoc false
   use Ecto.Schema

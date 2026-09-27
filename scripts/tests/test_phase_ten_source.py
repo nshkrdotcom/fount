@@ -97,7 +97,7 @@ class PhaseTenSourceTests(unittest.TestCase):
         )
         self.assertIn("Session.resume", source)
         self.assertIn('== "rejected"', source)
-        self.assertIn("is_nil(decisions[second", source)
+        self.assertIn('decisions[second["id"]] == "proposed"', source)
         self.assertIn("Analysis.runs_for_session", source)
         self.assertIn("head.revision.id == base.revision.id", source)
 

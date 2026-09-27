@@ -75,49 +75,44 @@ defmodule Fount.Intelligence.Acquisition.Measurements do
 
     case Fount.Observe.evaluate(provider, requests, questions, observe_opts) do
       {:ok, batch} ->
-        with :ok <- persist_batch(opts, batch) do
-          policy = Interpretation.threshold_options(batch.lens_asset)
-
-          measured =
-            Map.new(batch.entries, fn entry -> {entry.request_id, decode(entry, policy)} end)
-
-          entries = Enum.map(inputs, &Map.fetch!(Map.merge(measured, rejected), &1["id"]))
-
-          {:ok,
-           %{
-           "entries" => entries,
-           "status" =>
-             if(batch.status == :complete and map_size(rejected) == 0,
-               do: "complete",
-               else: "partial"
-             ),
-           "errors" =>
-             Enum.map(batch.errors, &Error.to_map/1) ++
-               Enum.map(Map.values(rejected), & &1["error"]),
-           "requested" => length(inputs),
-           "scheduled" => batch.scheduled,
-           "received" => batch.received,
-           "cache_hits" => batch.cache_hits,
-           "provider_batches" => batch.provider_batches,
-           "elapsed_ms" => batch.elapsed_ms,
-           "resource_usage" => batch.resource_usage,
-           "measurement_spec_sha256" => batch.measurement_spec_sha256,
-           "measurement_spec" => batch.measurement_spec,
-           "lens_asset" => batch.lens_asset,
-           "state_hashes" =>
-             Map.new(requests, fn request ->
-               {request.id,
-                CanonicalJSON.hash(%{
-                  "state" => request.input,
-                  "context" => Context.semantic_map(request.context)
-                })}
-             end)
-           }}
-        end
+        with :ok <- persist_batch(opts, batch),
+             do: {:ok, evaluated_batch(batch, inputs, rejected, requests)}
 
       {:error, %Error{} = error} ->
         {:error, Error.to_map(error)}
     end
+  end
+
+  defp evaluated_batch(batch, inputs, rejected, requests) do
+    policy = Interpretation.threshold_options(batch.lens_asset)
+    measured = Map.new(batch.entries, fn entry -> {entry.request_id, decode(entry, policy)} end)
+
+    %{
+      "entries" => Enum.map(inputs, &Map.fetch!(Map.merge(measured, rejected), &1["id"])),
+      "status" =>
+        if(batch.status == :complete and map_size(rejected) == 0, do: "complete", else: "partial"),
+      "errors" =>
+        Enum.map(batch.errors, &Error.to_map/1) ++ Enum.map(Map.values(rejected), & &1["error"]),
+      "requested" => length(inputs),
+      "scheduled" => batch.scheduled,
+      "received" => batch.received,
+      "cache_hits" => batch.cache_hits,
+      "provider_batches" => batch.provider_batches,
+      "elapsed_ms" => batch.elapsed_ms,
+      "resource_usage" => batch.resource_usage,
+      "measurement_spec_sha256" => batch.measurement_spec_sha256,
+      "measurement_spec" => batch.measurement_spec,
+      "lens_asset" => batch.lens_asset,
+      "state_hashes" => Map.new(requests, &request_state_hash/1)
+    }
+  end
+
+  defp request_state_hash(request) do
+    {request.id,
+     CanonicalJSON.hash(%{
+       "state" => request.input,
+       "context" => Context.semantic_map(request.context)
+     })}
   end
 
   @doc "Builds one source-bound Observe request without dispatching it."

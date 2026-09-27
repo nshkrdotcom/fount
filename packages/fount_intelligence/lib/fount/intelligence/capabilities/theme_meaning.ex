@@ -33,7 +33,13 @@ defmodule Fount.Intelligence.Capabilities.ThemeMeaning do
       trajectories: %{
         "measurements" => Support.measurement_trajectory(entries, @keys),
         "conflict_axis_by_scene" =>
-          Enum.map(entries, &%{"scene_id" => &1["scene_id"], "conflict_axis" => Support.choice(&1, :conflict_axis)})
+          Enum.map(
+            entries,
+            &%{
+              "scene_id" => &1["scene_id"],
+              "conflict_axis" => Support.choice(&1, :conflict_axis)
+            }
+          )
       },
       diagnoses: diagnoses,
       uncertainty: uncertainty(entries),
@@ -54,7 +60,8 @@ defmodule Fount.Intelligence.Capabilities.ThemeMeaning do
     |> Enum.group_by(&Support.choice(&1, :conflict_axis))
     |> Enum.reject(fn {axis, items} -> axis in [nil, "other_or_unclear"] or length(items) < 2 end)
     |> Enum.map(fn {axis, items} ->
-      support = Enum.map(items, & &1["scene_id"]) |> Enum.reject(&is_nil/1) |> Enum.uniq() |> Enum.sort()
+      support =
+        Enum.map(items, & &1["scene_id"]) |> Enum.reject(&is_nil/1) |> Enum.uniq() |> Enum.sort()
 
       counter =
         entries
@@ -67,7 +74,8 @@ defmodule Fount.Intelligence.Capabilities.ThemeMeaning do
       %{
         "id" => "theme.axis.#{axis}",
         "claim_class" => "model_estimated_interpretation",
-        "hypothesis" => "The selected material repeatedly stages the value-conflict axis '#{axis}'.",
+        "hypothesis" =>
+          "The selected material repeatedly stages the value-conflict axis '#{axis}'.",
         "support_scene_ids" => support,
         "counterevidence_scene_ids" => counter,
         "choice_embodiment_scene_ids" => scenes(items, :choice_embodies_conflict),
@@ -108,7 +116,9 @@ defmodule Fount.Intelligence.Capabilities.ThemeMeaning do
         "Some choices or consequences may point against a currently supported thematic hypothesis.",
         "Contradictory-signal measurement is supported in the selected material.",
         support,
-        limitations: ["Counterevidence can deepen or complicate a thematic question rather than weaken it."]
+        limitations: [
+          "Counterevidence can deepen or complicate a thematic question rather than weaken it."
+        ]
       )
     )
     |> maybe_diag(
@@ -138,7 +148,11 @@ defmodule Fount.Intelligence.Capabilities.ThemeMeaning do
     for entry <- entries,
         key <- @keys,
         Support.status(entry, key) in ["uncertain", "insufficient_evidence", "unavailable"] do
-      %{"scene_id" => entry["scene_id"], "measurement" => to_string(key), "status" => Support.status(entry, key)}
+      %{
+        "scene_id" => entry["scene_id"],
+        "measurement" => to_string(key),
+        "status" => Support.status(entry, key)
+      }
     end
   end
 
@@ -148,7 +162,15 @@ defmodule Fount.Intelligence.Capabilities.ThemeMeaning do
         "Trace the choices and consequences that support #{item["id"]}, then inspect its listed counterevidence before strengthening the hypothesis."
       end)
 
-    if diagnoses == [], do: base, else: Enum.uniq(base ++ ["Compare recurring value conflict against the ending and the writer's declared thematic intent without forcing a single reading."])
+    if diagnoses == [],
+      do: base,
+      else:
+        Enum.uniq(
+          base ++
+            [
+              "Compare recurring value conflict against the ending and the writer's declared thematic intent without forcing a single reading."
+            ]
+        )
   end
 
   defp measurement_ids(entries) do
@@ -158,7 +180,9 @@ defmodule Fount.Intelligence.Capabilities.ThemeMeaning do
     |> Enum.sort()
   end
 
-  defp status(entries), do: if(Enum.all?(entries, &(&1["status"] == "complete")), do: "complete", else: "partial")
+  defp status(entries),
+    do: if(Enum.all?(entries, &(&1["status"] == "complete")), do: "complete", else: "partial")
+
   defp maybe_diag(list, true, diagnosis), do: list ++ [diagnosis]
   defp maybe_diag(list, false, _diagnosis), do: list
 end

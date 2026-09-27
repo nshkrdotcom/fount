@@ -26,8 +26,8 @@ defmodule Fount.Intelligence.PhaseSevenArchitectureTest do
     end
   end
 
-  test "Phase-7 capability catalog stops before Phase-8 families" do
-    assert Capabilities.families() == [
+  test "Phase-7 capability catalog retains its original ordered prefix" do
+    assert Enum.take(Capabilities.families(), 8) == [
              "scene_engine",
              "agency_causality",
              "character_trajectory",
@@ -37,10 +37,5 @@ defmodule Fount.Intelligence.PhaseSevenArchitectureTest do
              "dialogue_interaction",
              "setup_payoff_motifs"
            ]
-
-    refute Capabilities.member?("emotional_value_movement")
-    refute Capabilities.member?("theme_meaning")
-    refute Capabilities.member?("genre_lens_packs")
-    refute Capabilities.member?("revision_intelligence")
   end
 end

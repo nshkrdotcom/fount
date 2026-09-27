@@ -81,7 +81,9 @@ defmodule Fount.Intelligence.Capabilities.GenreLensPacks do
         "Expectation-present is supported while fulfillment and visible subversion are unsupported.",
         support,
         uncertainty: "high",
-        limitations: ["The expectation may resolve outside the selected scope or be intentionally omitted."]
+        limitations: [
+          "The expectation may resolve outside the selected scope or be intentionally omitted."
+        ]
       )
     )
     |> Enum.sort_by(& &1["id"])
@@ -113,15 +115,23 @@ defmodule Fount.Intelligence.Capabilities.GenreLensPacks do
     for entry <- entries,
         key <- @keys,
         Support.status(entry, key) in ["uncertain", "insufficient_evidence", "unavailable"] do
-      %{"scene_id" => entry["scene_id"], "measurement" => to_string(key), "status" => Support.status(entry, key)}
+      %{
+        "scene_id" => entry["scene_id"],
+        "measurement" => to_string(key),
+        "status" => Support.status(entry, key)
+      }
     end
   end
 
   defp next_investigations(diagnoses, pack) do
     if diagnoses == [] do
-      ["Inspect the pack's specialized pressure and subversion outputs as optional evidence; do not force convention where the writer's intent rejects it."]
+      [
+        "Inspect the pack's specialized pressure and subversion outputs as optional evidence; do not force convention where the writer's intent rejects it."
+      ]
     else
-      ["Compare the cited expectation against the pack's declared subversions/opt-out guidance and the writer's stated intent before treating the gap as actionable."]
+      [
+        "Compare the cited expectation against the pack's declared subversions/opt-out guidance and the writer's stated intent before treating the gap as actionable."
+      ]
     end ++ Enum.map(subversions(pack), &("Declared subversion to preserve: " <> &1))
   end
 
@@ -132,7 +142,9 @@ defmodule Fount.Intelligence.Capabilities.GenreLensPacks do
     |> Enum.sort()
   end
 
-  defp status(entries), do: if(Enum.all?(entries, &(&1["status"] == "complete")), do: "complete", else: "partial")
+  defp status(entries),
+    do: if(Enum.all?(entries, &(&1["status"] == "complete")), do: "complete", else: "partial")
+
   defp maybe_diag(list, true, diagnosis), do: list ++ [diagnosis]
   defp maybe_diag(list, false, _diagnosis), do: list
 end

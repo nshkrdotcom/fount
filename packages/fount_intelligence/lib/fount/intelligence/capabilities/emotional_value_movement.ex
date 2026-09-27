@@ -18,7 +18,11 @@ defmodule Fount.Intelligence.Capabilities.EmotionalValueMovement do
       source_revision: world.revision_id,
       subject: Model.plain(subject),
       status: status(entries),
-      evidence: Support.merge_evidence([Support.measurement_evidence(entries), Support.evidence(transitions)]),
+      evidence:
+        Support.merge_evidence([
+          Support.measurement_evidence(entries),
+          Support.evidence(transitions)
+        ]),
       measurements: %{
         "keys" => Enum.map(@keys, &to_string/1),
         "entries" => entries
@@ -131,7 +135,9 @@ defmodule Fount.Intelligence.Capabilities.EmotionalValueMovement do
         "A major event may not produce a visible emotional or behavioral consequence in the selected material.",
         "A major-event signal is supported while both reaction and behavioral-consequence signals are unsupported.",
         support,
-        limitations: ["Delayed, concealed, or intentionally withheld reaction can be dramatically useful."]
+        limitations: [
+          "Delayed, concealed, or intentionally withheld reaction can be dramatically useful."
+        ]
       )
     )
     |> maybe_diag(
@@ -153,7 +159,9 @@ defmodule Fount.Intelligence.Capabilities.EmotionalValueMovement do
         "Declared feeling may be carrying work that is not yet reflected in behavior, choice, or consequence.",
         "The dedicated declaration-without-behavior measurement is supported.",
         support,
-        limitations: ["Verbal self-description can itself be action, deception, avoidance, or characterization."]
+        limitations: [
+          "Verbal self-description can itself be action, deception, avoidance, or characterization."
+        ]
       )
     )
     |> maybe_diag(
@@ -164,7 +172,9 @@ defmodule Fount.Intelligence.Capabilities.EmotionalValueMovement do
         "The value/action inconsistency measurement is supported.",
         support,
         uncertainty: "high",
-        limitations: ["Contradiction, hypocrisy, ambivalence, and self-deception can be intentional character behavior."]
+        limitations: [
+          "Contradiction, hypocrisy, ambivalence, and self-deception can be intentional character behavior."
+        ]
       )
     )
     |> Enum.sort_by(& &1["id"])
@@ -208,7 +218,9 @@ defmodule Fount.Intelligence.Capabilities.EmotionalValueMovement do
     |> Enum.sort()
   end
 
-  defp status(entries), do: if(Enum.all?(entries, &(&1["status"] == "complete")), do: "complete", else: "partial")
+  defp status(entries),
+    do: if(Enum.all?(entries, &(&1["status"] == "complete")), do: "complete", else: "partial")
+
   defp maybe_diag(list, true, diagnosis), do: list ++ [diagnosis]
   defp maybe_diag(list, false, _diagnosis), do: list
 end

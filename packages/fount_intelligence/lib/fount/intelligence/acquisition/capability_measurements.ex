@@ -405,7 +405,6 @@ defmodule Fount.Intelligence.Acquisition.CapabilityMeasurements do
     )
   end
 
-
   def emotional_value_movement do
     direction = fn dimension ->
       Question.choice(
@@ -414,7 +413,8 @@ defmodule Fount.Intelligence.Acquisition.CapabilityMeasurements do
         worsens: "the condition materially worsens or becomes less available",
         mixed: "gains and losses coexist or the direction materially conflicts",
         unchanged: "the supplied material supports no material change",
-        other_or_unclear: "the dimension is not applicable or the direction is not clear from the supplied evidence"
+        other_or_unclear:
+          "the dimension is not applicable or the direction is not clear from the supplied evidence"
       )
     end
 
@@ -427,67 +427,176 @@ defmodule Fount.Intelligence.Acquisition.CapabilityMeasurements do
       trust_direction: direction.("trust versus distrust"),
       status_direction: direction.("status, dignity, or social standing"),
       control_direction: direction.("control, agency, or powerlessness"),
-      certainty_direction: direction.("certainty versus uncertainty about consequential facts, choices, or outcomes"),
-      moral_confidence_direction: direction.("moral confidence versus conflict about what the character believes they should do"),
-      anticipated_gain: noul("Does the selected character visibly anticipate a meaningful gain in this scene?"),
-      anticipated_loss: noul("Does the selected character visibly anticipate a meaningful loss in this scene?"),
-      major_event: noul("Does this scene contain a major event for the selected character that plausibly calls for later emotional or behavioral consequence?"),
-      reaction_consequence: noul("Does the selected character show a visible reaction or changed emotional condition that is connected to a consequential event in the supplied material?"),
-      behavioral_consequence: noul("Does a consequential event change the selected character's later choice, tactic, avoidance, commitment, or other behavior in the supplied material?"),
-      reversal: noul("Does the selected character undergo a material reversal in a tracked practical/emotional/value condition in this scene?"),
-      reversal_prepared: noul("Where a reversal occurs, does earlier supplied material visibly prepare pressure, contradiction, choice, or information that can support it?"),
-      declared_feeling_without_behavioral_change: noul("Does dialogue or narration name a feeling while the supplied material shows no corresponding change in behavior, choice, tactic, relationship, or consequence?"),
-      value_action_inconsistency: noul("Does the selected character take an action that appears inconsistent with an established value or commitment without visible pressure, conflict, self-deception, or revision of that value?"))
+      certainty_direction:
+        direction.("certainty versus uncertainty about consequential facts, choices, or outcomes"),
+      moral_confidence_direction:
+        direction.(
+          "moral confidence versus conflict about what the character believes they should do"
+        ),
+      anticipated_gain:
+        noul("Does the selected character visibly anticipate a meaningful gain in this scene?"),
+      anticipated_loss:
+        noul("Does the selected character visibly anticipate a meaningful loss in this scene?"),
+      major_event:
+        noul(
+          "Does this scene contain a major event for the selected character that plausibly calls for later emotional or behavioral consequence?"
+        ),
+      reaction_consequence:
+        noul(
+          "Does the selected character show a visible reaction or changed emotional condition that is connected to a consequential event in the supplied material?"
+        ),
+      behavioral_consequence:
+        noul(
+          "Does a consequential event change the selected character's later choice, tactic, avoidance, commitment, or other behavior in the supplied material?"
+        ),
+      reversal:
+        noul(
+          "Does the selected character undergo a material reversal in a tracked practical/emotional/value condition in this scene?"
+        ),
+      reversal_prepared:
+        noul(
+          "Where a reversal occurs, does earlier supplied material visibly prepare pressure, contradiction, choice, or information that can support it?"
+        ),
+      declared_feeling_without_behavioral_change:
+        noul(
+          "Does dialogue or narration name a feeling while the supplied material shows no corresponding change in behavior, choice, tactic, relationship, or consequence?"
+        ),
+      value_action_inconsistency:
+        noul(
+          "Does the selected character take an action that appears inconsistent with an established value or commitment without visible pressure, conflict, self-deception, or revision of that value?"
+        )
+    )
   end
 
   def theme_meaning do
     axis =
       Question.choice(
         "If a recurring value conflict is legible in this scene, which broad axis is best supported? Use other_or_unclear rather than forcing the material into the installed vocabulary.",
-        loyalty_vs_truth: "loyalty, allegiance, or protection conflicts with truth, disclosure, or honesty",
-        belonging_vs_autonomy: "belonging, family, community, or acceptance conflicts with autonomy or individuation",
-        control_vs_acceptance: "control, mastery, or certainty conflicts with acceptance, surrender, or uncertainty",
-        justice_vs_mercy: "justice, accountability, or punishment conflicts with mercy, forgiveness, or compassion",
-        security_vs_freedom: "security, safety, or stability conflicts with freedom, risk, or self-determination",
-        intimacy_vs_self_protection: "intimacy or vulnerability conflicts with concealment, distance, or self-protection",
-        duty_vs_desire: "duty, obligation, role, or responsibility conflicts with personal desire",
-        identity_vs_role: "self-conception or identity conflicts with an imposed or chosen social role",
-        other_or_unclear: "a different value conflict is present or the installed axes do not fit clearly"
+        loyalty_vs_truth:
+          "loyalty, allegiance, or protection conflicts with truth, disclosure, or honesty",
+        belonging_vs_autonomy:
+          "belonging, family, community, or acceptance conflicts with autonomy or individuation",
+        control_vs_acceptance:
+          "control, mastery, or certainty conflicts with acceptance, surrender, or uncertainty",
+        justice_vs_mercy:
+          "justice, accountability, or punishment conflicts with mercy, forgiveness, or compassion",
+        security_vs_freedom:
+          "security, safety, or stability conflicts with freedom, risk, or self-determination",
+        intimacy_vs_self_protection:
+          "intimacy or vulnerability conflicts with concealment, distance, or self-protection",
+        duty_vs_desire:
+          "duty, obligation, role, or responsibility conflicts with personal desire",
+        identity_vs_role:
+          "self-conception or identity conflicts with an imposed or chosen social role",
+        other_or_unclear:
+          "a different value conflict is present or the installed axes do not fit clearly"
       )
 
     spec("theme_meaning", "theme.meaning",
-      value_conflict: noul("Does this scene materially stage a conflict between values, obligations, identities, loyalties, or meanings rather than only a practical obstacle?"),
+      value_conflict:
+        noul(
+          "Does this scene materially stage a conflict between values, obligations, identities, loyalties, or meanings rather than only a practical obstacle?"
+        ),
       conflict_axis: axis,
-      choice_embodies_conflict: noul("Does a consequential character choice or refusal embody the value conflict rather than merely state it?"),
-      consequence_complicates_conflict: noul("Does the consequence of a choice complicate, reverse, or deepen the apparent value conflict rather than simply reward one side?"),
-      motif_reinforces_question: noul("Does a recurring image, object, phrase, place, behavior, or contrast connect materially to the value conflict in the supplied material?"),
-      contrast_reinforces_question: noul("Does a character, scene, outcome, or repeated contrast provide a materially different answer to the same value question?"),
-      ending_recontextualizes_question: noul("If this material is at or near the ending, does it revisit, complicate, answer, or deliberately leave open a value question established earlier?"),
-      writer_intent_alignment: noul("Where writer thematic intent is supplied, does the scene materially support or productively complicate that declared intent?"),
-      contradictory_signal: noul("Does this scene provide material counterevidence to an otherwise recurring thematic hypothesis or value-conflict reading?"))
+      choice_embodies_conflict:
+        noul(
+          "Does a consequential character choice or refusal embody the value conflict rather than merely state it?"
+        ),
+      consequence_complicates_conflict:
+        noul(
+          "Does the consequence of a choice complicate, reverse, or deepen the apparent value conflict rather than simply reward one side?"
+        ),
+      motif_reinforces_question:
+        noul(
+          "Does a recurring image, object, phrase, place, behavior, or contrast connect materially to the value conflict in the supplied material?"
+        ),
+      contrast_reinforces_question:
+        noul(
+          "Does a character, scene, outcome, or repeated contrast provide a materially different answer to the same value question?"
+        ),
+      ending_recontextualizes_question:
+        noul(
+          "If this material is at or near the ending, does it revisit, complicate, answer, or deliberately leave open a value question established earlier?"
+        ),
+      writer_intent_alignment:
+        noul(
+          "Where writer thematic intent is supplied, does the scene materially support or productively complicate that declared intent?"
+        ),
+      contradictory_signal:
+        noul(
+          "Does this scene provide material counterevidence to an otherwise recurring thematic hypothesis or value-conflict reading?"
+        )
+    )
   end
 
   def genre_lens_packs do
     spec("genre_lens_packs", "genre.lens_pack",
-      expectation_present: noul("Given the supplied optional genre/craft pack, is one of its specialized expectations or pressures materially present in this scene?"),
-      expectation_satisfied: noul("Where a pack expectation is present, does the scene visibly fulfill or advance it in a way consistent with the writer's declared intent?"),
-      expectation_subverted: noul("Where a pack expectation is present, does the scene visibly subvert, invert, refuse, or redirect it rather than simply omit it?"),
-      intentional_subversion_visible: noul("Does the supplied material support that a pack expectation is being intentionally subverted or de-emphasized, consistent with declared subversion/anti-genre intent?"),
-      specialized_pressure: noul("Does the pack contribute a specialized analytical pressure or question here that is not already exhausted by generic scene/character/reader analysis?"),
-      conflict_with_writer_intent: noul("Would applying the pack expectation as a defect rule conflict with the writer's declared intent, opt-out guidance, or intentional subversion?"))
+      expectation_present:
+        noul(
+          "Given the supplied optional genre/craft pack, is one of its specialized expectations or pressures materially present in this scene?"
+        ),
+      expectation_satisfied:
+        noul(
+          "Where a pack expectation is present, does the scene visibly fulfill or advance it in a way consistent with the writer's declared intent?"
+        ),
+      expectation_subverted:
+        noul(
+          "Where a pack expectation is present, does the scene visibly subvert, invert, refuse, or redirect it rather than simply omit it?"
+        ),
+      intentional_subversion_visible:
+        noul(
+          "Does the supplied material support that a pack expectation is being intentionally subverted or de-emphasized, consistent with declared subversion/anti-genre intent?"
+        ),
+      specialized_pressure:
+        noul(
+          "Does the pack contribute a specialized analytical pressure or question here that is not already exhausted by generic scene/character/reader analysis?"
+        ),
+      conflict_with_writer_intent:
+        noul(
+          "Would applying the pack expectation as a defect rule conflict with the writer's declared intent, opt-out guidance, or intentional subversion?"
+        )
+    )
   end
 
   def revision_intelligence do
     spec("revision_intelligence", "revision.intelligence",
-      intended_effect_present: noul("Relative to the supplied revision contract, is the intended dramatic or reader-facing effect visibly present in this revision's selected material?"),
-      protected_strength_preserved: noul("Does the selected material preserve the declared protected strengths or constraints relevant to this revision?"),
-      continuity_risk: noul("Does this revision create a plausible continuity contradiction or unsupported state transition in the selected material?"),
-      knowledge_risk: noul("Does this revision create a plausible character-knowledge/access inconsistency or require knowledge that is no longer established?"),
-      causal_risk: noul("Does this revision create a plausible causal or motivational gap where a later event, choice, or consequence loses visible support?"),
-      voice_drift: noul("Does this revision create a plausible character-voice drift relative to the supplied local/trajectory evidence and writer intent?"),
-      action_readability_risk: noul("Does this revision make physical action, spatial relation, objective, or cause/effect materially harder to follow in the selected material?"),
-      setup_payoff_break: noul("Does this revision plausibly break, contradict, orphan, or unsupportedly preserve a setup/payoff/motif dependency in the supplied scope?"),
-      reader_state_regression: noul("Does this revision plausibly create an unintended first-exposure reader-state regression such as premature inference, missing setup, comprehension loss, or collapsed uncertainty?"))
+      intended_effect_present:
+        noul(
+          "Relative to the supplied revision contract, is the intended dramatic or reader-facing effect visibly present in this revision's selected material?"
+        ),
+      protected_strength_preserved:
+        noul(
+          "Does the selected material preserve the declared protected strengths or constraints relevant to this revision?"
+        ),
+      continuity_risk:
+        noul(
+          "Does this revision create a plausible continuity contradiction or unsupported state transition in the selected material?"
+        ),
+      knowledge_risk:
+        noul(
+          "Does this revision create a plausible character-knowledge/access inconsistency or require knowledge that is no longer established?"
+        ),
+      causal_risk:
+        noul(
+          "Does this revision create a plausible causal or motivational gap where a later event, choice, or consequence loses visible support?"
+        ),
+      voice_drift:
+        noul(
+          "Does this revision create a plausible character-voice drift relative to the supplied local/trajectory evidence and writer intent?"
+        ),
+      action_readability_risk:
+        noul(
+          "Does this revision make physical action, spatial relation, objective, or cause/effect materially harder to follow in the selected material?"
+        ),
+      setup_payoff_break:
+        noul(
+          "Does this revision plausibly break, contradict, orphan, or unsupportedly preserve a setup/payoff/motif dependency in the supplied scope?"
+        ),
+      reader_state_regression:
+        noul(
+          "Does this revision plausibly create an unintended first-exposure reader-state regression such as premature inference, missing setup, comprehension loss, or collapsed uncertainty?"
+        )
+    )
   end
 
   defp spec(id, lens_id, questions),

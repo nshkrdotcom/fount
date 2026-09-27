@@ -43,17 +43,25 @@ defmodule Fount.Intelligence.Packs.Catalog do
 
   def list(%__MODULE__{} = catalog) do
     catalog.packs
-    |> Enum.map(fn {_id, entry} -> Map.merge(entry["asset"], %{"enabled" => entry["enabled"]}) end)
+    |> Enum.map(fn {_id, entry} ->
+      Map.merge(entry["asset"], %{"enabled" => entry["enabled"]})
+    end)
     |> Enum.sort_by(& &1["id"])
   end
 
   defp set_enabled(%__MODULE__{} = catalog, id, enabled) do
     case catalog.packs[id] do
-      nil -> {:error, :pack_not_installed}
-      entry -> {:ok, %{catalog | packs: Map.put(catalog.packs, id, Map.put(entry, "enabled", enabled))}}
+      nil ->
+        {:error, :pack_not_installed}
+
+      entry ->
+        {:ok, %{catalog | packs: Map.put(catalog.packs, id, Map.put(entry, "enabled", enabled))}}
     end
   end
 
   defp put(catalog, asset, enabled),
-    do: %{catalog | packs: Map.put(catalog.packs, asset["id"], %{"asset" => asset, "enabled" => enabled})}
+    do: %{
+      catalog
+      | packs: Map.put(catalog.packs, asset["id"], %{"asset" => asset, "enabled" => enabled})
+    }
 end

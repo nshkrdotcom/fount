@@ -8,7 +8,10 @@ defmodule Fount.Intelligence.PhaseEightCapabilitiesTest do
 
   test "emotional/value movement keeps conditions multidimensional and connects visible consequence to story evidence" do
     screenplay = PhaseEightFixture.screenplay()
-    {:ok, world} = StoryWorld.compile(screenplay, [], records: PhaseEightFixture.records(screenplay))
+
+    {:ok, world} =
+      StoryWorld.compile(screenplay, [], records: PhaseEightFixture.records(screenplay))
+
     [scene | _] = screenplay.ir.scenes
 
     entry =
@@ -47,7 +50,10 @@ defmodule Fount.Intelligence.PhaseEightCapabilitiesTest do
 
   test "theme produces hypotheses with counterevidence and no authoritative theme/depth score" do
     screenplay = PhaseEightFixture.screenplay()
-    {:ok, world} = StoryWorld.compile(screenplay, [], records: PhaseEightFixture.records(screenplay))
+
+    {:ok, world} =
+      StoryWorld.compile(screenplay, [], records: PhaseEightFixture.records(screenplay))
+
     [scene_a, scene_b | _] = screenplay.ir.scenes
 
     entries = [
@@ -81,11 +87,17 @@ defmodule Fount.Intelligence.PhaseEightCapabilitiesTest do
 
   test "genre pack interpretation honors explicit subversion instead of converting convention into a defect rule" do
     screenplay = PhaseEightFixture.screenplay()
-    {:ok, world} = StoryWorld.compile(screenplay, [], records: PhaseEightFixture.records(screenplay))
+
+    {:ok, world} =
+      StoryWorld.compile(screenplay, [], records: PhaseEightFixture.records(screenplay))
+
     [scene | _] = screenplay.ir.scenes
     {:ok, core} = Packs.core("genre.mystery")
 
-    pack = put_in(core, ["intent", "subversions"], ["Reveal the culprit at midpoint; keep the second half character-first."])
+    pack =
+      put_in(core, ["intent", "subversions"], [
+        "Reveal the culprit at midpoint; keep the second half character-first."
+      ])
 
     entry =
       PhaseEightFixture.complete_entry(
@@ -114,7 +126,9 @@ defmodule Fount.Intelligence.PhaseEightCapabilitiesTest do
     before_scene = List.last(before_model.ir.scenes)
     after_scene = List.last(after_model.ir.scenes)
 
-    before_entries = [PhaseEightFixture.complete_entry(before_scene.id, ~w(protected_strength_preserved), %{})]
+    before_entries = [
+      PhaseEightFixture.complete_entry(before_scene.id, ~w(protected_strength_preserved), %{})
+    ]
 
     after_entries =
       [
@@ -129,13 +143,20 @@ defmodule Fount.Intelligence.PhaseEightCapabilitiesTest do
       Capabilities.compare_revision(
         before_world,
         after_world,
-        %{"intended_effect" => "Mara chooses public accountability without losing the private history."},
+        %{
+          "intended_effect" =>
+            "Mara chooses public accountability without losing the private history."
+        },
         before_entries,
         after_entries,
         intended_effect: "Mara chooses public accountability without losing the private history.",
         protected_strengths: ["The watch remains emotionally meaningful"],
         structural_diff: Fount.Screenplay.diff(before_model, after_model),
-        source_diff: String.myers_difference(Fount.Screenplay.to_fountain(before_model), Fount.Screenplay.to_fountain(after_model))
+        source_diff:
+          String.myers_difference(
+            Fount.Screenplay.to_fountain(before_model),
+            Fount.Screenplay.to_fountain(after_model)
+          )
       )
 
     split = result.derived_state["presentation_vs_diegetic"]
@@ -143,6 +164,7 @@ defmodule Fount.Intelligence.PhaseEightCapabilitiesTest do
     assert Map.has_key?(split, "presentation_effects")
     assert Map.has_key?(split, "diegetic_state_effects")
     assert Map.has_key?(split, "story_time_effects")
+
     assert result.derived_state["target_effect"]["quality_score"] == nil or
              not Map.has_key?(result.derived_state["target_effect"], "quality_score")
   end

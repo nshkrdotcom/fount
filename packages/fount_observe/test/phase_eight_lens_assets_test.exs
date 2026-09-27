@@ -60,14 +60,18 @@ defmodule Fount.Observe.PhaseEightLensAssetsTest do
   defp project_lens do
     %{
       "id" => "project.reversal_visibility",
-      "description" => "Project-specific question about whether a reversal is externally legible without explaining it away.",
+      "description" =>
+        "Project-specific question about whether a reversal is externally legible without explaining it away.",
       "trust" => "project",
       "source" => %{"label" => "writers room", "revision" => "2026-09-27", "owner" => "project"},
       "kind" => "choice",
-      "instructions" => "How legible is the selected reversal from observable screenplay evidence?",
+      "instructions" =>
+        "How legible is the selected reversal from observable screenplay evidence?",
       "criteria" => %{
-        "legible" => "observable setup makes the reversal legible without requiring hidden author intent",
-        "partly_legible" => "some support is visible but a material inference remains unsupported",
+        "legible" =>
+          "observable setup makes the reversal legible without requiring hidden author intent",
+        "partly_legible" =>
+          "some support is visible but a material inference remains unsupported",
         "unclear" => "the selected material does not establish enough evidence"
       },
       "projection" => "explicit_state",

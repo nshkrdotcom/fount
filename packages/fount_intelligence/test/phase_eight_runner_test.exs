@@ -27,10 +27,15 @@ defmodule Fount.Intelligence.PhaseEightRunnerTest do
                screenplay,
                "submission_read",
                %{
-                 "selection" => %{"targets" => Enum.map(scenes, &%{"kind" => "scene", "id" => &1.id})},
+                 "selection" => %{
+                   "targets" => Enum.map(scenes, &%{"kind" => "scene", "id" => &1.id})
+                 },
                  "story_world_records" => PhaseEightFixture.records(screenplay),
-                 "intent" => %{"theme_question" => "What does loyalty cost when it protects a lie?"},
-                 "concern" => "The ending may state its value conflict more clearly than the middle earns."
+                 "intent" => %{
+                   "theme_question" => "What does loyalty cost when it protects a lie?"
+                 },
+                 "concern" =>
+                   "The ending may state its value conflict more clearly than the middle earns."
                },
                %{observe: Sandbox.new!(fixtures)}
              )
@@ -59,13 +64,19 @@ defmodule Fount.Intelligence.PhaseEightRunnerTest do
                before_model,
                after_model,
                %{
-                 "before_selection" => %{"targets" => [%{"kind" => "scene", "id" => before_scene.id}]},
-                 "after_selection" => %{"targets" => [%{"kind" => "scene", "id" => after_scene.id}]},
+                 "before_selection" => %{
+                   "targets" => [%{"kind" => "scene", "id" => before_scene.id}]
+                 },
+                 "after_selection" => %{
+                   "targets" => [%{"kind" => "scene", "id" => after_scene.id}]
+                 },
                  "before_story_world_records" => PhaseEightFixture.records(before_model),
                  "after_story_world_records" => PhaseEightFixture.records(after_model),
-                 "intended_effect" => "Make Mara's final choice more active while preserving the watch's private history.",
+                 "intended_effect" =>
+                   "Make Mara's final choice more active while preserving the watch's private history.",
                  "protected_strengths" => ["The watch remains emotionally meaningful"],
-                 "concern" => "Does the new handoff gain agency without flattening the Mara/Dan relationship?"
+                 "concern" =>
+                   "Does the new handoff gain agency without flattening the Mara/Dan relationship?"
                },
                %{observe: Sandbox.new!(fixtures)}
              )

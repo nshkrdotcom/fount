@@ -31,9 +31,10 @@ defmodule Fount.Observe do
   @doc "Returns an empty caller-owned declarative-lens catalog; installation never enables assets implicitly."
   def new_declarative_lens_catalog, do: %{}
 
-  def install_declarative_lens(catalog, declaration), do: DeclarativeLens.install(catalog, declaration)
+  def install_declarative_lens(catalog, declaration),
+    do: DeclarativeLens.install(catalog, declaration)
+
   def enable_declarative_lens(catalog, id), do: DeclarativeLens.enable(catalog, id)
   def disable_declarative_lens(catalog, id), do: DeclarativeLens.disable(catalog, id)
   def fetch_declarative_lens(catalog, id), do: DeclarativeLens.fetch(catalog, id)
-
 end

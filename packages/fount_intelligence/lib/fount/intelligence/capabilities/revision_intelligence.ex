@@ -2,6 +2,7 @@ defmodule Fount.Intelligence.Capabilities.RevisionIntelligence do
   @moduledoc "Pure Phase-8 before/after revision reasoning over frozen measurements, StoryWorlds, Reader state and exact diff metadata supplied by the shell."
 
   alias Fount.Intelligence.Capabilities.{Result, Support}
+  alias Fount.Intelligence.Reader
   alias Fount.Screenplay.Model
   alias Fount.Writing.CanonicalJSON
 
@@ -18,18 +19,25 @@ defmodule Fount.Intelligence.Capabilities.RevisionIntelligence do
       measurements: %{"keys" => Enum.map(@keys, &to_string/1), "entries" => entries},
       derived_state: %{
         "single_revision_snapshot" => aggregate(entries),
-        "story_world_state_transition_ids" => world.state_transitions |> Map.keys() |> Enum.sort(),
+        "story_world_state_transition_ids" =>
+          world.state_transitions |> Map.keys() |> Enum.sort(),
         "causal_edge_ids" => world.causal.edges |> Map.keys() |> Enum.sort()
       },
       trajectories: %{"measurements" => Support.measurement_trajectory(entries, @keys)},
       diagnoses: [],
       uncertainty: uncertainty(entries),
-      next_investigations: ["Use the explicit two-revision comparison API for target-effect, collateral, causal, reader, character and relationship diffs."],
+      next_investigations: [
+        "Use the explicit two-revision comparison API for target-effect, collateral, causal, reader, character and relationship diffs."
+      ],
       limitations: [
         "A single-revision run is only a snapshot. Revision claims require an explicit base and candidate comparison.",
         "No candidate is accepted, rejected, ranked, or promoted to canon by this family."
       ],
-      metadata: %{"family_version" => 1, "comparison" => false, "intent" => Model.plain(Keyword.get(opts, :intent, %{}))}
+      metadata: %{
+        "family_version" => 1,
+        "comparison" => false,
+        "intent" => Model.plain(Keyword.get(opts, :intent, %{}))
+      }
     }
   end
 
@@ -37,16 +45,34 @@ defmodule Fount.Intelligence.Capabilities.RevisionIntelligence do
     before = aggregate(before_entries)
     after_state = aggregate(after_entries)
     transition_diff = object_diff(before_world.state_transitions, after_world.state_transitions)
-    character_transition_diff = transition_diff_for(before_world.state_transitions, after_world.state_transitions, :character)
-    relationship_transition_diff = transition_diff_for(before_world.state_transitions, after_world.state_transitions, :relationship)
+
+    character_transition_diff =
+      transition_diff_for(
+        before_world.state_transitions,
+        after_world.state_transitions,
+        :character
+      )
+
+    relationship_transition_diff =
+      transition_diff_for(
+        before_world.state_transitions,
+        after_world.state_transitions,
+        :relationship
+      )
+
     causal_diff = object_diff(before_world.causal.edges, after_world.causal.edges)
-    story_time_diff = object_diff(before_world.story_time.constraints, after_world.story_time.constraints)
+
+    story_time_diff =
+      object_diff(before_world.story_time.constraints, after_world.story_time.constraints)
+
     reader_diff = reader_diff(Keyword.get(opts, :before_reader), Keyword.get(opts, :after_reader))
     measurement_diff = measurement_diff(before, after_state)
     structural_diff = Model.plain(Keyword.get(opts, :structural_diff, %{}))
     source_diff = Model.plain(Keyword.get(opts, :source_diff, []))
     strategies = Model.plain(Keyword.get(opts, :strategy_contrast))
-    diagnoses = diagnoses(after_entries, measurement_diff, reader_diff, transition_diff, causal_diff)
+
+    diagnoses =
+      diagnoses(after_entries, measurement_diff, reader_diff, transition_diff, causal_diff)
 
     %Result{
       family: "revision_intelligence",
@@ -105,7 +131,9 @@ defmodule Fount.Intelligence.Capabilities.RevisionIntelligence do
         "story_world" => transition_diff
       },
       diagnoses: diagnoses,
-      uncertainty: uncertainty(before_entries) ++ uncertainty(after_entries) ++ reader_uncertainty(reader_diff),
+      uncertainty:
+        uncertainty(before_entries) ++
+          uncertainty(after_entries) ++ reader_uncertainty(reader_diff),
       next_investigations: next_investigations(diagnoses),
       limitations: [
         "The packet compares evidence; it does not decide whether the revision is better or choose a preferred candidate.",
@@ -131,7 +159,8 @@ defmodule Fount.Intelligence.Capabilities.RevisionIntelligence do
        %{
          "supported" => Enum.count(statuses, &(&1 == "supported")),
          "not_supported" => Enum.count(statuses, &(&1 == "not_supported")),
-         "uncertain" => Enum.count(statuses, &(&1 in ["uncertain", "insufficient_evidence", "unavailable"])),
+         "uncertain" =>
+           Enum.count(statuses, &(&1 in ["uncertain", "insufficient_evidence", "unavailable"])),
          "total" => length(statuses)
        }}
     end)
@@ -170,7 +199,8 @@ defmodule Fount.Intelligence.Capabilities.RevisionIntelligence do
   defp collateral(after_state, opts) do
     %{
       "declared_constraints" => Model.plain(Keyword.get(opts, :constraints, [])),
-      "risk_support" => Map.new(@risk_keys, &{to_string(&1), after_state[to_string(&1)]["supported"]}),
+      "risk_support" =>
+        Map.new(@risk_keys, &{to_string(&1), after_state[to_string(&1)]["supported"]}),
       "quality_score" => nil
     }
   end
@@ -213,8 +243,7 @@ defmodule Fount.Intelligence.Capabilities.RevisionIntelligence do
     }
   end
 
-  defp reader_packet(%Fount.Intelligence.Reader{} = reader),
-    do: Fount.Intelligence.Reader.inspection_packet(reader)
+  defp reader_packet(%Reader{} = reader), do: Reader.inspection_packet(reader)
 
   defp reader_packet(_), do: %{"status" => "not_supplied", "final_state" => %{}}
 
@@ -225,21 +254,31 @@ defmodule Fount.Intelligence.Capabilities.RevisionIntelligence do
       "retained" => Map.keys(left) |> Enum.filter(&Map.has_key?(right, &1)) |> Enum.sort(),
       "changed" =>
         Map.keys(left)
-        |> Enum.filter(&(Map.has_key?(right, &1) and CanonicalJSON.hash(Model.plain(left[&1])) != CanonicalJSON.hash(Model.plain(right[&1]))))
+        |> Enum.filter(
+          &(Map.has_key?(right, &1) and
+              CanonicalJSON.hash(Model.plain(left[&1])) !=
+                CanonicalJSON.hash(Model.plain(right[&1])))
+        )
         |> Enum.sort()
     }
   end
 
-  defp map_key_delta(_, _), do: %{"added" => [], "removed" => [], "retained" => [], "changed" => []}
+  defp map_key_delta(_, _),
+    do: %{"added" => [], "removed" => [], "retained" => [], "changed" => []}
 
   defp transition_diff_for(before, after_objects, kind) do
     before = Map.filter(before, fn {_id, transition} -> transition_kind(transition) == kind end)
-    after_objects = Map.filter(after_objects, fn {_id, transition} -> transition_kind(transition) == kind end)
+
+    after_objects =
+      Map.filter(after_objects, fn {_id, transition} -> transition_kind(transition) == kind end)
+
     object_diff(before, after_objects)
   end
 
   defp transition_kind(transition) do
-    attribute = transition |> Map.get(:attribute, Map.get(transition, "attribute", "")) |> to_string()
+    attribute =
+      transition |> Map.get(:attribute, Map.get(transition, "attribute", "")) |> to_string()
+
     subject = Map.get(transition, :subject, Map.get(transition, "subject"))
 
     if String.starts_with?(attribute, "relationship.") or
@@ -257,7 +296,8 @@ defmodule Fount.Intelligence.Capabilities.RevisionIntelligence do
 
     changed =
       Enum.filter(shared, fn id ->
-        CanonicalJSON.hash(Model.plain(before[id])) != CanonicalJSON.hash(Model.plain(after_objects[id]))
+        CanonicalJSON.hash(Model.plain(before[id])) !=
+          CanonicalJSON.hash(Model.plain(after_objects[id]))
       end)
       |> Enum.sort()
 
@@ -347,7 +387,11 @@ defmodule Fount.Intelligence.Capabilities.RevisionIntelligence do
     for entry <- entries,
         key <- @keys,
         Support.status(entry, key) in ["uncertain", "insufficient_evidence", "unavailable"] do
-      %{"scene_id" => entry["scene_id"], "measurement" => to_string(key), "status" => Support.status(entry, key)}
+      %{
+        "scene_id" => entry["scene_id"],
+        "measurement" => to_string(key),
+        "status" => Support.status(entry, key)
+      }
     end
   end
 
@@ -385,10 +429,13 @@ defmodule Fount.Intelligence.Capabilities.RevisionIntelligence do
     |> Enum.sort()
   end
 
-  defp status(entries), do: if(Enum.all?(entries, &(&1["status"] == "complete")), do: "complete", else: "partial")
+  defp status(entries),
+    do: if(Enum.all?(entries, &(&1["status"] == "complete")), do: "complete", else: "partial")
 
   defp comparison_status(before_entries, after_entries) do
-    if status(before_entries) == "complete" and status(after_entries) == "complete", do: "complete", else: "partial"
+    if status(before_entries) == "complete" and status(after_entries) == "complete",
+      do: "complete",
+      else: "partial"
   end
 
   defp maybe_diag(list, true, diagnosis), do: list ++ [diagnosis]

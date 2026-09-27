@@ -23,15 +23,19 @@ defmodule Fount.Intelligence.PhaseEightPacksTest do
 
     pack = %{
       "id" => "project.character_first_mystery",
-      "description" => "Project hybrid that keeps mystery information pressure while intentionally becoming character-first after midpoint.",
-      "purpose" => "Add project-specific reversal visibility to ordinary mystery/character analysis without executable extension code.",
+      "description" =>
+        "Project hybrid that keeps mystery information pressure while intentionally becoming character-first after midpoint.",
+      "purpose" =>
+        "Add project-specific reversal visibility to ordinary mystery/character analysis without executable extension code.",
       "trust" => "project",
       "source" => %{"label" => "writers room", "revision" => "3", "owner" => "project"},
       "lenses" => ["audience.reader_experience", declaration["id"]],
       "capability_families" => ["audience_reader_experience", "theme_meaning"],
       "playbooks" => ["suspense_audit", "submission_read"],
       "diagnostic_salience" => %{"premature_inference" => 1.0, "reversal_visibility" => 0.8},
-      "writer_intent_prompts" => ["After midpoint, preserve character-first emphasis even if mystery pressure drops."],
+      "writer_intent_prompts" => [
+        "After midpoint, preserve character-first emphasis even if mystery pressure drops."
+      ],
       "intent" => %{
         "subversions" => ["Do not treat early culprit identification as a defect after midpoint."],
         "opt_out" => ["late culprit reveal"]
@@ -48,11 +52,19 @@ defmodule Fount.Intelligence.PhaseEightPacksTest do
     assert validated["trust"] == "project"
     assert validated["effective_resource_policy"]["max_provider_requests"] == 120
 
+    forged_catalog = %{declaration["id"] => %{"enabled" => true}}
+    assert {:error, :invalid_genre_pack} = Packs.validate(pack, custom_lenses: forged_catalog)
+
+    altered_catalog = put_in(lens_catalog, [declaration["id"], "asset", "projection"], "unknown")
+    assert {:error, :invalid_genre_pack} = Packs.validate(pack, custom_lenses: altered_catalog)
+
     catalog = Packs.new_catalog()
     assert {:ok, catalog} = Packs.install(catalog, pack, custom_lenses: lens_catalog)
     assert {:ok, installed} = Packs.fetch(catalog, pack["id"])
     assert installed["enabled"] == false
-    assert {:error, :genre_pack_not_enabled} = Packs.resolve(installed, custom_lenses: lens_catalog)
+
+    assert {:error, :genre_pack_not_enabled} =
+             Packs.resolve(installed, custom_lenses: lens_catalog)
 
     assert {:ok, catalog} = Packs.enable(catalog, pack["id"])
     assert {:ok, enabled} = Packs.fetch(catalog, pack["id"])
@@ -63,7 +75,13 @@ defmodule Fount.Intelligence.PhaseEightPacksTest do
   test "pack validation rejects executable authority and resource requests above host caps" do
     {:ok, mystery} = Packs.core("genre.mystery")
 
-    executable = Map.put(mystery |> Map.drop(["sha256", "effective_resource_policy"]), "module", "Bad.Loader")
+    executable =
+      Map.put(
+        mystery |> Map.drop(["sha256", "effective_resource_policy"]),
+        "module",
+        "Bad.Loader"
+      )
+
     assert {:error, :invalid_genre_pack} = Packs.validate(executable)
 
     oversized =
@@ -91,7 +109,11 @@ defmodule Fount.Intelligence.PhaseEightPacksTest do
         "minimum_confidence" => 0.7,
         "minimum_margin" => 0.15
       },
-      "resource_policy_request" => %{"max_states" => 80, "max_provider_requests" => 80, "max_questions" => 4},
+      "resource_policy_request" => %{
+        "max_states" => 80,
+        "max_provider_requests" => 80,
+        "max_questions" => 4
+      },
       "calibration_refs" => [],
       "resource_class" => "small"
     }

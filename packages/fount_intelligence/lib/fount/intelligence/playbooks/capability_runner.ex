@@ -142,20 +142,32 @@ defmodule Fount.Intelligence.Playbooks.CapabilityRunner do
     before_request = revision_request(request, :before)
     after_request = revision_request(request, :after)
 
-    with {:ok, before_prepared} <- prepare(before_model, "revision_intelligence", before_request, opts),
-         {:ok, after_prepared} <- prepare(after_model, "revision_intelligence", after_request, opts),
+    with {:ok, before_prepared} <-
+           prepare(before_model, "revision_intelligence", before_request, opts),
+         {:ok, after_prepared} <-
+           prepare(after_model, "revision_intelligence", after_request, opts),
          {:ok, cap} <- provider_cap(opts),
          {:ok, before_estimate} <-
            Measurements.preflight(
              before_prepared.inputs,
              before_prepared.spec["questions"],
-             measurement_opts(opts, before_model, before_prepared.spec["lens_id"], min(cap, length(before_prepared.inputs)))
+             measurement_opts(
+               opts,
+               before_model,
+               before_prepared.spec["lens_id"],
+               min(cap, length(before_prepared.inputs))
+             )
            ),
          {:ok, after_estimate} <-
            Measurements.preflight(
              after_prepared.inputs,
              after_prepared.spec["questions"],
-             measurement_opts(opts, after_model, after_prepared.spec["lens_id"], min(cap, length(after_prepared.inputs)))
+             measurement_opts(
+               opts,
+               after_model,
+               after_prepared.spec["lens_id"],
+               min(cap, length(after_prepared.inputs))
+             )
            ) do
       {:ok,
        %{
@@ -186,11 +198,15 @@ defmodule Fount.Intelligence.Playbooks.CapabilityRunner do
     after_request = revision_request(request, :after)
 
     with {:ok, provider} <- provider(clients),
-         {:ok, before_prepared} <- prepare(before_model, "revision_intelligence", before_request, opts),
-         {:ok, after_prepared} <- prepare(after_model, "revision_intelligence", after_request, opts),
+         {:ok, before_prepared} <-
+           prepare(before_model, "revision_intelligence", before_request, opts),
+         {:ok, after_prepared} <-
+           prepare(after_model, "revision_intelligence", after_request, opts),
          {:ok, cap} <- provider_cap(opts),
-         {:ok, before_report, before_entries} <- measure_prepared(provider, before_model, before_prepared, cap, opts),
-         {:ok, after_report, after_entries} <- measure_prepared(provider, after_model, after_prepared, cap, opts),
+         {:ok, before_report, before_entries} <-
+           measure_prepared(provider, before_model, before_prepared, cap, opts),
+         {:ok, after_report, after_entries} <-
+           measure_prepared(provider, after_model, after_prepared, cap, opts),
          {:ok, strategy} <- strategy_contrast(after_model, request, provider, opts),
          {:ok, result} <-
            Capabilities.compare_revision(
@@ -199,15 +215,24 @@ defmodule Fount.Intelligence.Playbooks.CapabilityRunner do
              after_prepared.subject,
              before_entries,
              after_entries,
-             revision_compare_opts(before_model, after_model, request, before_prepared, after_prepared, strategy)
+             revision_compare_opts(
+               before_model,
+               after_model,
+               request,
+               before_prepared,
+               after_prepared,
+               strategy
+             )
            ) do
       result =
         %{
           result
           | status:
               if(
-                combined_status(result.status, before_report["status"], before_prepared.coverage) == "complete" and
-                  combined_status(result.status, after_report["status"], after_prepared.coverage) == "complete",
+                combined_status(result.status, before_report["status"], before_prepared.coverage) ==
+                  "complete" and
+                  combined_status(result.status, after_report["status"], after_prepared.coverage) ==
+                    "complete",
                 do: "complete",
                 else: "partial"
               ),
@@ -234,11 +259,26 @@ defmodule Fount.Intelligence.Playbooks.CapabilityRunner do
   def run_revision(_, _, _, _, _), do: {:error, :invalid_revision_comparison_request}
 
   @doc "Returns the existing revision_regression writer packet around an explicit two-revision capability comparison."
-  def run_revision_playbook(before_model, after_model, playbook, request, clients \\ %{}, opts \\ [])
+  def run_revision_playbook(
+        before_model,
+        after_model,
+        playbook,
+        request,
+        clients \\ %{},
+        opts \\ []
+      )
 
-  def run_revision_playbook(before_model, after_model, "revision_regression", request, clients, opts) do
+  def run_revision_playbook(
+        before_model,
+        after_model,
+        "revision_regression",
+        request,
+        clients,
+        opts
+      ) do
     with {:ok, definition} <- WriterRegistry.fetch("revision_regression"),
-         {:ok, result} <- run_revision(before_model, after_model, request, clients, shared_budget(opts)) do
+         {:ok, result} <-
+           run_revision(before_model, after_model, request, clients, shared_budget(opts)) do
       packet(after_model, definition, request, [result])
     end
   end
@@ -588,7 +628,8 @@ defmodule Fount.Intelligence.Playbooks.CapabilityRunner do
 
   defp validate_pair(_), do: {:error, :relationship_pair_required}
 
-  defp reader(model, family, request) when family in ~w(audience_reader_experience revision_intelligence) do
+  defp reader(model, family, request)
+       when family in ~w(audience_reader_experience revision_intelligence) do
     case Map.get(request, "reader_events") do
       nil -> {:ok, nil}
       events when is_list(events) -> Reader.reduce(model, events)
@@ -716,9 +757,20 @@ defmodule Fount.Intelligence.Playbooks.CapabilityRunner do
 
   defp packet_phase(results) do
     cond do
-      Enum.any?(results, &(&1.family in ~w(emotional_value_movement theme_meaning genre_lens_packs revision_intelligence))) -> 8
-      Enum.any?(results, &(&1.family in ~w(audience_reader_experience sequence_movement dialogue_interaction setup_payoff_motifs))) -> 7
-      true -> 6
+      Enum.any?(
+        results,
+        &(&1.family in ~w(emotional_value_movement theme_meaning genre_lens_packs revision_intelligence))
+      ) ->
+        8
+
+      Enum.any?(
+        results,
+        &(&1.family in ~w(audience_reader_experience sequence_movement dialogue_interaction setup_payoff_motifs))
+      ) ->
+        7
+
+      true ->
+        6
     end
   end
 
@@ -755,23 +807,17 @@ defmodule Fount.Intelligence.Playbooks.CapabilityRunner do
         {:error, :capability_playbook_not_supported}
 
       families ->
-        extra =
-          cond do
-            playbook == "character_trajectory" and is_map(request) and
-                request["include_emotional_value_movement"] == true ->
-              ["emotional_value_movement"]
-
-            playbook == "submission_read" and is_map(request) and
-                not is_nil(request["genre_pack"]) ->
-              ["genre_lens_packs"]
-
-            true ->
-              []
-          end
-
-        {:ok, Enum.uniq(families ++ extra)}
+        {:ok, Enum.uniq(families ++ extra_families(playbook, request))}
     end
   end
+
+  defp extra_families("character_trajectory", %{"include_emotional_value_movement" => true}),
+    do: ["emotional_value_movement"]
+
+  defp extra_families("submission_read", %{"genre_pack" => pack}) when not is_nil(pack),
+    do: ["genre_lens_packs"]
+
+  defp extra_families(_, _), do: []
 
   defp measure_prepared(provider, model, prepared, cap, opts) do
     with {:ok, report} <-
@@ -779,7 +825,12 @@ defmodule Fount.Intelligence.Playbooks.CapabilityRunner do
              provider,
              prepared.inputs,
              prepared.spec["questions"],
-             measurement_opts(opts, model, prepared.spec["lens_id"], min(cap, length(prepared.inputs)))
+             measurement_opts(
+               opts,
+               model,
+               prepared.spec["lens_id"],
+               min(cap, length(prepared.inputs))
+             )
            ) do
       {:ok, report, annotate_entries(report["entries"], prepared.inputs)}
     end
@@ -787,7 +838,10 @@ defmodule Fount.Intelligence.Playbooks.CapabilityRunner do
 
   defp revision_request(request, side) do
     prefix = if side == :before, do: "before", else: "after"
-    selection = request["#{prefix}_selection"] || request["selection"] || %{"whole_screenplay" => true}
+
+    selection =
+      request["#{prefix}_selection"] || request["selection"] || %{"whole_screenplay" => true}
+
     records = request["#{prefix}_story_world_records"] || request["story_world_records"] || []
     reader_events = request["#{prefix}_reader_events"]
 
@@ -809,7 +863,14 @@ defmodule Fount.Intelligence.Playbooks.CapabilityRunner do
     })
   end
 
-  defp revision_compare_opts(before_model, after_model, request, before_prepared, after_prepared, strategy) do
+  defp revision_compare_opts(
+         before_model,
+         after_model,
+         request,
+         before_prepared,
+         after_prepared,
+         strategy
+       ) do
     [
       intent: revision_intent(request),
       concern: request["concern"],
@@ -831,11 +892,23 @@ defmodule Fount.Intelligence.Playbooks.CapabilityRunner do
 
   defp strategy_contrast(model, request, provider, opts) do
     if strategy_request?(request) do
-      params = %{"brief" => request["strategy_brief"] || request["concern"] || "Revision strategy contrast", "strategies" => request["strategies"]}
+      params = %{
+        "brief" =>
+          request["strategy_brief"] || request["concern"] || "Revision strategy contrast",
+        "strategies" => request["strategies"]
+      }
 
       case StrategyContrast.run(model, params, %{observe: provider}, opts) do
-        {:ok, report} -> {:ok, report.data}
-        {:error, reason} -> {:ok, %{"status" => "unavailable", "reason" => if(is_atom(reason), do: to_string(reason), else: "provider_or_contract_error")}}
+        {:ok, report} ->
+          {:ok, report.data}
+
+        {:error, reason} ->
+          {:ok,
+           %{
+             "status" => "unavailable",
+             "reason" =>
+               if(is_atom(reason), do: to_string(reason), else: "provider_or_contract_error")
+           }}
       end
     else
       {:ok, %{"status" => "not_requested"}}

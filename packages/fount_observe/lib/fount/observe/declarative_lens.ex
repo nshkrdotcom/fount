@@ -21,7 +21,8 @@ defmodule Fount.Observe.DeclarativeLens do
          :ok <- calibration_refs(declaration["calibration_refs"] || []),
          {:ok, question} <- question(declaration),
          {:ok, lens_asset} <- lens_asset(declaration),
-         {:ok, canonical} <- CanonicalJSON.encode(canonical_declaration(declaration, question, lens_asset)),
+         {:ok, canonical} <-
+           CanonicalJSON.encode(canonical_declaration(declaration, question, lens_asset)),
          true <- byte_size(canonical) <= 65_536 do
       normalized = canonical_declaration(declaration, question, lens_asset)
       {:ok, Map.put(normalized, "sha256", CanonicalJSON.hash(normalized))}
@@ -58,7 +59,8 @@ defmodule Fount.Observe.DeclarativeLens do
          "question" => Question.specification(question),
          "lens" => lens_asset,
          "calibration_refs" => value["calibration_refs"],
-         "execution_options" => Map.new(execution_opts(value), fn {key, item} -> {to_string(key), item} end),
+         "execution_options" =>
+           Map.new(execution_opts(value), fn {key, item} -> {to_string(key), item} end),
          "enabled" => false
        }}
     end
@@ -89,6 +91,27 @@ defmodule Fount.Observe.DeclarativeLens do
 
   def fetch(_, _), do: {:error, :asset_not_installed}
 
+  @doc "Checks that a caller catalog entry is enabled and still matches a safe validated lens."
+  def installed_enabled?(catalog, id) when is_map(catalog) and is_binary(id) do
+    case catalog[id] do
+      %{"asset" => %{} = asset, "enabled" => true} ->
+        raw = Map.take(asset, @allowed)
+
+        case validate(raw) do
+          {:ok, validated} ->
+            asset["id"] == id and asset == validated
+
+          _ ->
+            false
+        end
+
+      _ ->
+        false
+    end
+  end
+
+  def installed_enabled?(_, _), do: false
+
   defp set_enabled(catalog, id, enabled) when is_map(catalog) and is_binary(id) do
     case catalog[id] do
       %{} = entry -> {:ok, Map.put(catalog, id, Map.put(entry, "enabled", enabled))}
@@ -107,9 +130,12 @@ defmodule Fount.Observe.DeclarativeLens do
   end
 
   defp required_keys(value) do
-    Enum.all?(~w(id description trust source kind instructions projection output_contract context_contract interpretation_policy resource_policy_request resource_class), fn key ->
-      Map.has_key?(value, key)
-    end) and is_binary(value["id"]) and value["id"] != "" and is_binary(value["description"]) and
+    Enum.all?(
+      ~w(id description trust source kind instructions projection output_contract context_contract interpretation_policy resource_policy_request resource_class),
+      fn key ->
+        Map.has_key?(value, key)
+      end
+    ) and is_binary(value["id"]) and value["id"] != "" and is_binary(value["description"]) and
       String.trim(value["description"]) != "" and is_binary(value["instructions"]) and
       String.trim(value["instructions"]) != ""
   end
@@ -121,14 +147,16 @@ defmodule Fount.Observe.DeclarativeLens do
     end)
   end
 
-  defp no_forbidden_nested_keys?(items) when is_list(items), do: Enum.all?(items, &no_forbidden_nested_keys?/1)
+  defp no_forbidden_nested_keys?(items) when is_list(items),
+    do: Enum.all?(items, &no_forbidden_nested_keys?/1)
+
   defp no_forbidden_nested_keys?(_), do: true
 
   defp source(%{"label" => label} = source) when is_binary(label) and label != "" do
     if Map.keys(source) -- ~w(label revision owner) == [] and
          Enum.all?(Map.values(source), &(is_nil(&1) or is_binary(&1))),
-      do: :ok,
-      else: {:error, :invalid_source}
+       do: :ok,
+       else: {:error, :invalid_source}
   end
 
   defp source(_), do: {:error, :invalid_source}
@@ -163,7 +191,6 @@ defmodule Fount.Observe.DeclarativeLens do
       "resource_policy_request" => declaration["resource_policy_request"]
     })
   end
-
 
   defp calibration_refs(refs) when is_list(refs) do
     if length(refs) == length(Enum.uniq(refs)) and Enum.all?(refs, &(&1 in @calibrations)),

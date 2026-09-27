@@ -3,7 +3,7 @@ defmodule Fount.Intelligence.Packs.GenrePack do
 
   alias Fount.Intelligence.Capabilities
   alias Fount.Intelligence.Playbooks.WriterRegistry
-  alias Fount.Observe.Registry
+  alias Fount.Observe.{DeclarativeLens, Registry}
   alias Fount.Writing.CanonicalJSON
 
   @allowed ~w(id description purpose trust source lenses capability_families playbooks diagnostic_salience writer_intent_prompts intent resource_policy_request)
@@ -19,7 +19,9 @@ defmodule Fount.Intelligence.Packs.GenrePack do
 
   @forbidden ~w(module function mfa command shell path file endpoint base_url url credentials credential api_key token headers http database query callback decoder adapter tool)
 
-  def validate(asset, opts \\ []) when is_map(asset) do
+  def validate(asset, opts \\ [])
+
+  def validate(asset, opts) when is_map(asset) do
     custom_lenses = Keyword.get(opts, :custom_lenses, %{})
     host_caps = Keyword.get(opts, :host_caps, @default_host_caps)
 
@@ -74,48 +76,48 @@ defmodule Fount.Intelligence.Packs.GenrePack do
   def host_caps, do: @default_host_caps
 
   defp exact_keys(asset) do
-    required = ~w(id description purpose trust source lenses capability_families playbooks diagnostic_salience writer_intent_prompts intent resource_policy_request)
+    required =
+      ~w(id description purpose trust source lenses capability_families playbooks diagnostic_salience writer_intent_prompts intent resource_policy_request)
 
     if Map.keys(asset) -- @allowed == [] and Enum.all?(required, &Map.has_key?(asset, &1)) and
-         valid_text(asset["id"]) and valid_text(asset["description"]) and valid_text(asset["purpose"]) and
+         valid_text(asset["id"]) and valid_text(asset["description"]) and
+         valid_text(asset["purpose"]) and
          no_forbidden_nested_keys?(asset),
-      do: :ok,
-      else: {:error, :invalid_keys}
+       do: :ok,
+       else: {:error, :invalid_keys}
   end
 
   defp registered_lenses(ids, custom) when is_map(custom) do
-    valid = Enum.all?(ids, &(Registry.lens?(&1) or enabled_custom_lens?(custom, &1)))
+    valid =
+      Enum.all?(ids, &(Registry.lens?(&1) or DeclarativeLens.installed_enabled?(custom, &1)))
+
     if valid, do: :ok, else: {:error, :unknown_lens}
   end
 
-  defp enabled_custom_lens?(custom, id) do
-    case custom[id] do
-      %{"asset" => %{}, "enabled" => true} -> true
-      %{"enabled" => true} -> true
-      _ -> false
-    end
-  end
-
   defp source(%{"label" => label} = value) when is_binary(label) and label != "" do
-    if Map.keys(value) -- ~w(label revision owner) == [] and Enum.all?(Map.values(value), &(is_nil(&1) or is_binary(&1))),
-      do: :ok,
-      else: {:error, :invalid_source}
+    if Map.keys(value) -- ~w(label revision owner) == [] and
+         Enum.all?(Map.values(value), &(is_nil(&1) or is_binary(&1))),
+       do: :ok,
+       else: {:error, :invalid_source}
   end
 
   defp source(_), do: {:error, :invalid_source}
 
   defp salience(value) when is_map(value) do
-    if Enum.all?(value, fn {key, weight} -> valid_text(key) and is_number(weight) and weight >= 0 and weight <= 1 end),
-      do: :ok,
-      else: {:error, :invalid_salience}
+    if Enum.all?(value, fn {key, weight} ->
+         valid_text(key) and is_number(weight) and weight >= 0 and weight <= 1
+       end),
+       do: :ok,
+       else: {:error, :invalid_salience}
   end
 
   defp salience(_), do: {:error, :invalid_salience}
 
   defp intent(value) when is_map(value) do
-    if Map.keys(value) -- @intent_keys == [] and Enum.all?(@intent_keys, fn key -> string_list(Map.get(value, key, [])) == :ok end),
-      do: :ok,
-      else: {:error, :invalid_intent}
+    if Map.keys(value) -- @intent_keys == [] and
+         Enum.all?(@intent_keys, fn key -> string_list(Map.get(value, key, [])) == :ok end),
+       do: :ok,
+       else: {:error, :invalid_intent}
   end
 
   defp intent(_), do: {:error, :invalid_intent}
@@ -128,14 +130,22 @@ defmodule Fount.Intelligence.Packs.GenrePack do
         Enum.all?(requested, fn {key, value} -> value <= Map.get(host_caps, key, 0) end)
 
     if valid,
-      do: {:ok, Map.new(@resource_keys, &{&1, min(Map.get(requested, &1, Map.fetch!(host_caps, &1)), Map.fetch!(host_caps, &1))})},
+      do:
+        {:ok,
+         Map.new(
+           @resource_keys,
+           &{&1,
+            min(Map.get(requested, &1, Map.fetch!(host_caps, &1)), Map.fetch!(host_caps, &1))}
+         )},
       else: {:error, :resource_policy_exceeds_host}
   end
 
   defp resource_policy(_, _), do: {:error, :invalid_resource_policy}
 
   defp string_list(value) when is_list(value) do
-    if Enum.all?(value, &valid_text/1) and length(value) == length(Enum.uniq(value)), do: :ok, else: {:error, :invalid_string_list}
+    if Enum.all?(value, &valid_text/1) and length(value) == length(Enum.uniq(value)),
+      do: :ok,
+      else: {:error, :invalid_string_list}
   end
 
   defp string_list(_), do: {:error, :invalid_string_list}
@@ -148,6 +158,8 @@ defmodule Fount.Intelligence.Packs.GenrePack do
     end)
   end
 
-  defp no_forbidden_nested_keys?(items) when is_list(items), do: Enum.all?(items, &no_forbidden_nested_keys?/1)
+  defp no_forbidden_nested_keys?(items) when is_list(items),
+    do: Enum.all?(items, &no_forbidden_nested_keys?/1)
+
   defp no_forbidden_nested_keys?(_), do: true
 end

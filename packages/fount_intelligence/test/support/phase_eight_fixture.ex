@@ -40,17 +40,7 @@ defmodule Fount.Intelligence.TestSupport.PhaseEightFixture do
 
     answers =
       Map.new(keys, fn key ->
-        answer =
-          case Map.get(choices, key) do
-            nil ->
-              status = if key in supported, do: "supported", else: "not_supported"
-              %{"status" => status, "probability" => if(status == "supported", do: 0.9, else: 0.1)}
-
-            choice ->
-              %{"status" => "supported", "choice" => choice, "probability" => 0.9}
-          end
-
-        {key, answer}
+        {key, answer_for(key, supported, choices)}
       end)
 
     %{
@@ -61,5 +51,17 @@ defmodule Fount.Intelligence.TestSupport.PhaseEightFixture do
       "observations" => [],
       "provenance" => %{"measurement_ids" => ["measurement:#{scene_id}"]}
     }
+  end
+
+  defp answer_for(key, supported, choices) do
+    case Map.get(choices, key) do
+      nil ->
+        if key in supported,
+          do: %{"status" => "supported", "probability" => 0.9},
+          else: %{"status" => "not_supported", "probability" => 0.1}
+
+      choice ->
+        %{"status" => "supported", "choice" => choice, "probability" => 0.9}
+    end
   end
 end

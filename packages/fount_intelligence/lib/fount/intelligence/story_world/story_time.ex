@@ -73,6 +73,37 @@ defmodule Fount.Intelligence.StoryWorld.StoryTime do
         do: {left, right}
   end
 
+  @doc "Returns the undirected constraint-connected region for existing seed nodes."
+  def connected_nodes(%Graph{} = graph, seed_ids) when is_list(seed_ids) do
+    seeds = seed_ids |> Enum.filter(&Map.has_key?(graph.nodes, &1)) |> Enum.uniq() |> Enum.sort()
+
+    adjacency =
+      graph.constraints
+      |> Map.values()
+      |> Enum.reduce(%{}, fn constraint, acc ->
+        acc
+        |> Map.update(constraint.left, MapSet.new([constraint.right]), &MapSet.put(&1, constraint.right))
+        |> Map.update(constraint.right, MapSet.new([constraint.left]), &MapSet.put(&1, constraint.left))
+      end)
+
+    connected_walk(adjacency, seeds, MapSet.new())
+    |> MapSet.to_list()
+    |> Enum.sort()
+  end
+
+  def connected_nodes(_graph, _seed_ids), do: []
+
+  defp connected_walk(_adjacency, [], seen), do: seen
+
+  defp connected_walk(adjacency, [current | rest], seen) do
+    if MapSet.member?(seen, current) do
+      connected_walk(adjacency, rest, seen)
+    else
+      next = Map.get(adjacency, current, MapSet.new()) |> MapSet.to_list() |> Enum.sort()
+      connected_walk(adjacency, rest ++ next, MapSet.put(seen, current))
+    end
+  end
+
   defp normalize_constraint(%StoryTimeConstraint{} = constraint) do
     relations =
       constraint.relations

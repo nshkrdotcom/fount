@@ -282,7 +282,7 @@ The current delivery surface is primarily for developers, agents, integrations, 
 |---|---|
 | [`fount`](packages/fount/README.md) | Canonical screenplay, Fountain/FDX/JSON interchange, typed edits, identity, exact selection/evidence, search and PostgreSQL persistence. |
 | [`fount_observe`](packages/fount_observe/README.md) | Atomic source-grounded measurements, native SDK boundary, deterministic Sandbox, explicit resource limits and L1 result reuse. |
-| [`fount_intelligence`](packages/fount_intelligence/README.md) | Read-only screenplay investigations, knowledge/reveal/continuity/dependency/dialogue/voice analyses, comparison and pure interpretation. |
+| [`fount_intelligence`](packages/fount_intelligence/README.md) | Read-only screenplay investigations plus pure StoryWorld, temporal and first-reader state: diegetic continuity, audience knowledge/reveal trajectories, dependencies, dialogue/voice analysis and comparison. |
 | [`fount_workshop`](packages/fount_workshop/README.md) | Actual generated/revised pages, candidates, review/acceptance, recovery, rehearsal and exports. |
 
 ## How the Pieces Fit Together
@@ -311,10 +311,11 @@ That separation allows the system to reason about a screenplay without turning e
 
 ## Development and Tests
 
-The root Mix project uses Blitz to operate the three package projects:
+The root Mix project uses Blitz to operate the four package projects:
 
 ```text
 packages/fount
+packages/fount_observe
 packages/fount_intelligence
 packages/fount_workshop
 ```

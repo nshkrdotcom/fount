@@ -56,6 +56,7 @@ defmodule Fount.Intelligence.MixProject do
         "guides/usage.md",
         "guides/verification.md",
         "guides/story-world.md",
+        "guides/temporal-and-reader.md",
         "guides/investigations-and-evidence.md",
         "guides/comparison-and-ablation.md",
         "guides/playbook-catalog.md",
@@ -75,7 +76,10 @@ defmodule Fount.Intelligence.MixProject do
         "Pure interpretation": [
           Fount.Intelligence.Capabilities.DecisionPolicy,
           Fount.Intelligence.Capabilities.Interpretation,
+          Fount.Intelligence.Reader,
+          Fount.Intelligence.Reader.Event,
           Fount.Intelligence.Reader.Reveal,
+          Fount.Intelligence.Temporal,
           Fount.Intelligence.StoryWorld,
           Fount.Intelligence.StoryWorld.Records
         ],

@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Phase 4 pure temporal views and forward Reader reduction in `fount_intelligence`, keeping presentation order, partial diegetic story time, private writer material and reader-visible state separate.
+
 ### Changed
 
 ### Deprecated

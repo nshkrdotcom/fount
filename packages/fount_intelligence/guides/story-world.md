@@ -70,7 +70,7 @@ A transition only applies when its event is the queried event or is safely estab
 
 ### Knowledge, belief and suspicion
 
-Use assertions with `epistemic_owner` for what a character knows/believes/suspects, and `story_time_refs` when the claim is event-qualified. `StoryWorld.knowledge_at/4` filters those claims without conflating them with audience knowledge; forward reader state belongs to Phase 4.
+Use assertions with `epistemic_owner` for what a character knows/believes/suspects, and `story_time_refs` when the claim is event-qualified. `StoryWorld.knowledge_at/4` filters those claims without conflating them with audience knowledge; `Fount.Intelligence.Reader` keeps the separate presentation-relative first-reader ledger described in `temporal-and-reader.md`.
 
 ### Reality scopes
 

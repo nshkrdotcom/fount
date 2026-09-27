@@ -1,4 +1,5 @@
 defmodule Fount.Intelligence.ContinuationVoiceTest do
+  alias Fount.Intelligence.Playbooks.Voice
   alias Fount.Screenplay.Model
   use ExUnit.Case, async: true
 
@@ -21,7 +22,7 @@ defmodule Fount.Intelligence.ContinuationVoiceTest do
     ids = Enum.map(Fount.Query.characters(model), & &1.id)
 
     assert {:ok, prepared} =
-             Fount.Intelligence.Playbooks.Voice.prepare(model, %{
+             Voice.prepare(model, %{
                "character_ids" => ids,
                "selection" => %{"whole_screenplay" => true}
              })
@@ -38,7 +39,7 @@ defmodule Fount.Intelligence.ContinuationVoiceTest do
     tests = [%{id: "t", actual: "voice_a"}]
 
     stats =
-      Fount.Intelligence.Playbooks.Voice.aggregate(
+      Voice.aggregate(
         tests,
         [%{"input_id" => "t", "status" => "error", "answers" => %{}}],
         ["voice_a", "voice_b"]

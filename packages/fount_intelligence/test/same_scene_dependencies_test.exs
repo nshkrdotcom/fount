@@ -1,4 +1,5 @@
 defmodule Fount.Intelligence.SameSceneDependenciesTest do
+  alias Fount.Intelligence.Playbooks.Dependencies
   use ExUnit.Case, async: true
 
   test "an evidenced setup can precede a use within the same scene" do
@@ -25,10 +26,16 @@ defmodule Fount.Intelligence.SameSceneDependenciesTest do
     ]
 
     assert [{first, second}] =
-             Fount.Intelligence.Playbooks.Dependencies.ordered_pairs(model, records, units, ["use"])
+             Dependencies.ordered_pairs(model, records, units, [
+               "use"
+             ])
 
     assert first["id"] == "setup"
     assert second["id"] == "use"
-    assert [] == Fount.Intelligence.Playbooks.Dependencies.ordered_pairs(model, records, units, ["setup"])
+
+    assert [] ==
+             Dependencies.ordered_pairs(model, records, units, [
+               "setup"
+             ])
   end
 end

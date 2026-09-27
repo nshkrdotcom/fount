@@ -1,13 +1,13 @@
 defmodule FountWorkshop.Session do
   @moduledoc "Durable writer sessions with immutable bases, saved successes and explicit pending/failed branch retries."
+  alias Fount.Intelligence.Reporting.Report
   alias Fount.Screenplay.Model
   alias Fount.Writing.CanonicalJSON
-  alias FountWorkshop.Writing.Budget
-  alias Fount.Intelligence.Reporting.Report
   alias FountWorkshop.Candidate
   alias FountWorkshop.Request
   alias FountWorkshop.Store
   alias FountWorkshop.Strategy
+  alias FountWorkshop.Writing.Budget
   alias FountWorkshop.Writing.Generation
   alias FountWorkshop.Writing.Preparation
 

@@ -23,7 +23,13 @@ defmodule Fount.Observe.MeasurementContractTest do
   end
 
   test "exact source evidence rejects stale revisions, invented excerpts and split UTF-8" do
-    model = Fount.Screenplay.new(scenes: [%{heading: "INT. CAFE - DAY", elements: [%{type: :action, text: "A caf\u00e9 closes."}]}])
+    model =
+      Fount.Screenplay.new(
+        scenes: [
+          %{heading: "INT. CAFE - DAY", elements: [%{type: :action, text: "A caf\u00e9 closes."}]}
+        ]
+      )
+
     {:ok, units} = Fount.Selection.select(model, %{"whole_screenplay" => true})
     unit = Enum.find(units, &(&1["type"] == "action"))
     [entry] = Fount.Selection.evidence([unit])
@@ -32,18 +38,40 @@ defmodule Fount.Observe.MeasurementContractTest do
     assert {:error, _} = EvidenceRef.from_source(model, Map.put(entry, "excerpt", "invented"))
     broken = put_in(entry, ["target", "span"], %{"byte_start" => 6, "byte_end" => 7})
     assert {:error, _} = EvidenceRef.from_source(model, broken)
-    assert {:ok, %TargetRef{revision_id: revision}} = TargetRef.from_source(model, %{"kind" => "element", "id" => unit["target"]["id"]})
+
+    assert {:ok, %TargetRef{revision_id: revision}} =
+             TargetRef.from_source(model, %{"kind" => "element", "id" => unit["target"]["id"]})
+
     assert revision == model.revision.id
   end
 
   test "context slots are closed, typed and deterministic; arbitrary structs never cross the boundary" do
-    contract = %{"required" => %{"facts" => %{"type" => "list", "items" => "fact"}}, "optional" => %{}, "allow_unknown" => false}
-    fact = %Fount.Observe.Context.Fact{subject: "key", predicate: "held_by", object: "Mara", stance: "asserted"}
+    contract = %{
+      "required" => %{"facts" => %{"type" => "list", "items" => "fact"}},
+      "optional" => %{},
+      "allow_unknown" => false
+    }
+
+    fact = %Fount.Observe.Context.Fact{
+      subject: "key",
+      predicate: "held_by",
+      object: "Mara",
+      stance: "asserted"
+    }
+
     assert :ok = Context.validate(%Context{slots: %{"facts" => [fact]}}, contract)
     assert {:error, _} = Context.validate(%Context{}, contract)
-    assert {:error, _} = Context.validate(%Context{slots: %{"facts" => [], "instructions" => "execute"}}, contract)
+
+    assert {:error, _} =
+             Context.validate(
+               %Context{slots: %{"facts" => [], "instructions" => "execute"}},
+               contract
+             )
+
     assert {:error, _} = Context.validate(%Context{slots: %{"facts" => [%URI{}]}}, contract)
-    assert Context.hash(%Context{slots: %{"facts" => [fact]}}) == Context.hash(%Context{slots: %{"facts" => [fact]}})
+
+    assert Context.hash(%Context{slots: %{"facts" => [fact]}}) ==
+             Context.hash(%Context{slots: %{"facts" => [fact]}})
   end
 
   test "request metadata and evidence do not enter the semantic input" do
@@ -54,10 +82,10 @@ defmodule Fount.Observe.MeasurementContractTest do
     assert {:error, _} = Request.new(model, "", %{})
     assert {:error, _} = Request.new(model, "r", %{not_json: true})
   end
+
   test "malformed distributions return typed errors rather than raising" do
     assert {:error, _} = Distribution.validate(%Distribution{kind: :choice, values: [:bad]})
     assert {:error, _} = Distribution.choice(%{"a" => 0.5, "b" => 0.5}, ["a", "b"], %{}, 0.8)
     assert_raise ArgumentError, fn -> Question.noul("Visible?", extra: %{"type" => "other"}) end
   end
-
 end

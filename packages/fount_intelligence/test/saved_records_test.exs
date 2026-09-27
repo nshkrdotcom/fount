@@ -1,4 +1,6 @@
 defmodule Fount.Intelligence.SavedRecordsTest do
+  alias Fount.Intelligence.Persistence.SavedRecords
+  alias Fount.Intelligence.Reporting.Report
   use ExUnit.Case, async: true
 
   test "reuses complete, current-revision extraction records without an inference client" do
@@ -6,14 +8,20 @@ defmodule Fount.Intelligence.SavedRecordsTest do
 
     reader = fn id ->
       if id == report.id,
-        do: {:ok, %{"payload" => Fount.Intelligence.Reporting.Report.to_map(report)}},
+        do: {:ok, %{"payload" => Report.to_map(report)}},
         else: {:error, :not_found}
     end
 
     assert {:ok, reused} =
-             Fount.Intelligence.Persistence.SavedRecords.resolve(model, params, %{}, [report_reader: reader], [
-               "events"
-             ])
+             SavedRecords.resolve(
+               model,
+               params,
+               %{},
+               [report_reader: reader],
+               [
+                 "events"
+               ]
+             )
 
     assert reused.data["records"] == report.data["records"]
     assert reused.coverage["reused_report_ids"] == [report.id]
@@ -23,20 +31,35 @@ defmodule Fount.Intelligence.SavedRecordsTest do
   test "rejects a report from another revision and an incomplete report" do
     {model, report, params} = fixture()
     wrong = %{report | primary_revision_id: Fount.ID.v4()}
-    reader = fn _ -> {:ok, %{"payload" => Fount.Intelligence.Reporting.Report.to_map(wrong)}} end
+    reader = fn _ -> {:ok, %{"payload" => Report.to_map(wrong)}} end
 
     assert {:error, :incompatible_saved_extraction} =
-             Fount.Intelligence.Persistence.SavedRecords.resolve(model, params, %{}, [report_reader: reader], [
-               "events"
-             ])
+             SavedRecords.resolve(
+               model,
+               params,
+               %{},
+               [report_reader: reader],
+               [
+                 "events"
+               ]
+             )
 
     incomplete = %{report | status: "partial"}
-    reader = fn _ -> {:ok, %{"payload" => Fount.Intelligence.Reporting.Report.to_map(incomplete)}} end
+
+    reader = fn _ ->
+      {:ok, %{"payload" => Report.to_map(incomplete)}}
+    end
 
     assert {:error, :incompatible_saved_extraction} =
-             Fount.Intelligence.Persistence.SavedRecords.resolve(model, params, %{}, [report_reader: reader], [
-               "events"
-             ])
+             SavedRecords.resolve(
+               model,
+               params,
+               %{},
+               [report_reader: reader],
+               [
+                 "events"
+               ]
+             )
   end
 
   test "rejects records with forged evidence and reports lacking selected scene coverage" do
@@ -47,20 +70,35 @@ defmodule Fount.Intelligence.SavedRecordsTest do
       | data: %{"records" => [Map.put(hd(report.data["records"]), "evidence_ids", ["forged"])]}
     }
 
-    reader = fn _ -> {:ok, %{"payload" => Fount.Intelligence.Reporting.Report.to_map(forged)}} end
+    reader = fn _ -> {:ok, %{"payload" => Report.to_map(forged)}} end
 
     assert {:error, :incompatible_saved_extraction} =
-             Fount.Intelligence.Persistence.SavedRecords.resolve(model, params, %{}, [report_reader: reader], [
-               "events"
-             ])
+             SavedRecords.resolve(
+               model,
+               params,
+               %{},
+               [report_reader: reader],
+               [
+                 "events"
+               ]
+             )
 
     uncovered = put_in(report.coverage["inspected_scene_ids"], [])
-    reader = fn _ -> {:ok, %{"payload" => Fount.Intelligence.Reporting.Report.to_map(uncovered)}} end
+
+    reader = fn _ ->
+      {:ok, %{"payload" => Report.to_map(uncovered)}}
+    end
 
     assert {:error, :incompatible_saved_extraction} =
-             Fount.Intelligence.Persistence.SavedRecords.resolve(model, params, %{}, [report_reader: reader], [
-               "events"
-             ])
+             SavedRecords.resolve(
+               model,
+               params,
+               %{},
+               [report_reader: reader],
+               [
+                 "events"
+               ]
+             )
   end
 
   defp fixture do
@@ -91,7 +129,7 @@ defmodule Fount.Intelligence.SavedRecordsTest do
     }
 
     report =
-      Fount.Intelligence.Reporting.Report.new(
+      Report.new(
         model,
         "extract_story",
         %{"selection" => selection, "kinds" => ["events"]},

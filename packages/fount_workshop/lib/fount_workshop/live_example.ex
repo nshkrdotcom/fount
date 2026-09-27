@@ -1,10 +1,12 @@
 defmodule FountWorkshop.LiveExample do
   @moduledoc false
   alias Fount.CLI.Support
+  alias Fount.Intelligence.Reporting.Report
   alias Fount.LiveArtifacts, as: A
   alias FountWorkshop.Candidate
   alias FountWorkshop.Session
   alias FountWorkshop.Store
+  alias FountWorkshop.Writing.Budget
   alias FountWorkshop.Writing.ChangeGroups
 
   @modes ~w(bridge alternatives propagate sequence_routes character_workspace grouped_notes pass_all recover_scene investigate)
@@ -25,7 +27,8 @@ defmodule FountWorkshop.LiveExample do
         renderer: FountWorkshop.Export.PDF
       }
 
-      budget = FountWorkshop.Writing.Budget.new(max_inference_calls: 40, max_measurement_states: 1500)
+      budget =
+        Budget.new(max_inference_calls: 40, max_measurement_states: 1500)
 
       opts = [
         budget: budget,
@@ -67,7 +70,7 @@ defmodule FountWorkshop.LiveExample do
         "packets" => packets,
         "details" => details,
         "decision" => decision,
-        "spent" => FountWorkshop.Writing.Budget.snapshot(budget)
+        "spent" => Budget.snapshot(budget)
       }
 
       A.write!(directory, "fixture-bindings.json", %{
@@ -259,7 +262,7 @@ defmodule FountWorkshop.LiveExample do
           A.write!(
             opts[:output_dir],
             candidate["id"] <> ".knowledge.json",
-            Fount.Intelligence.Reporting.Report.to_map(report)
+            Report.to_map(report)
           )
 
           %{

@@ -1,6 +1,8 @@
 defmodule FountWorkshop.InspectionCLI do
   @moduledoc "Catalog-validated inspection requests and literal/history search."
   alias Fount.CLI.Support, as: S
+  alias Fount.Intelligence.Playbooks.Request
+  alias Fount.Intelligence.Reporting.Report
 
   def run(command, argv) do
     case S.parse(argv,
@@ -89,7 +91,7 @@ defmodule FountWorkshop.InspectionCLI do
   end
 
   def validate_requests(model, requests) do
-    case Fount.Intelligence.Playbooks.Request.parse_many(model, requests) do
+    case Request.parse_many(model, requests) do
       {:ok, _} -> :ok
       error -> error
     end
@@ -98,13 +100,15 @@ defmodule FountWorkshop.InspectionCLI do
   def save(reports, repo, output) do
     Enum.reduce_while(reports, {:ok, []}, fn report, {:ok, acc} ->
       with {:ok, _} <-
-             Fount.Persistence.save_report(repo, Fount.Intelligence.Reporting.Report.persistence(report),
+             Fount.Persistence.save_report(
+               repo,
+               Report.persistence(report),
                source_models: report.transient_models
              ),
            {:ok, path} <-
              S.write_json(
                Path.join(output, report.id <> ".json"),
-               Fount.Intelligence.Reporting.Report.to_map(report)
+               Report.to_map(report)
              ) do
         {:cont, {:ok, acc ++ [%{"id" => report.id, "path" => path, "status" => report.status}]}}
       else

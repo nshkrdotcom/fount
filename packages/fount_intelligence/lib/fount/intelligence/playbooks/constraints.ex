@@ -1,10 +1,11 @@
 defmodule Fount.Intelligence.Playbooks.Constraints do
   @moduledoc "Writer constraints: exact protection is mechanical; semantic uncertainty is reviewable, never silently passed."
-  alias Fount.Writing.UTF8Span
   alias Fount.Intelligence.Acquisition.Measurements, as: Measurements
-  alias Fount.Observe.Projection
-  alias Fount.Intelligence.Reporting.Report
   alias Fount.Intelligence.Capabilities.DecisionPolicy
+  alias Fount.Intelligence.Reporting.Report
+  alias Fount.Observe.Projection
+  alias Fount.Observe.Question
+  alias Fount.Writing.UTF8Span
 
   @kinds ~w(pin_text retain_ids remove_ids relative_order word_limit scene_count page_goal semantic invention_policy)
   @semantic_keys ~w(proposition question_type question lens_id projection point at character_id expected allowed criteria levels probability_range selection)
@@ -418,7 +419,7 @@ defmodule Fount.Intelligence.Playbooks.Constraints do
              invention_inputs(facts, c, base, model, before_units, after_units),
              [
                supported:
-                 Fount.Observe.Question.noul(
+                 Question.noul(
                    "Does the supplied screenplay material establish this positive fact? Treat a character's claim, speculation, and private intent as distinct from established fact."
                  )
              ],
@@ -515,18 +516,18 @@ defmodule Fount.Intelligence.Playbooks.Constraints do
       question =
         case Map.get(spec, "question_type", "noul") do
           "noul" ->
-            Fount.Observe.Question.noul(
+            Question.noul(
               "Does the supplied material support the proposition? Assess the positive proposition, not the desired answer. Distinguish claims from facts."
             )
 
           "choice" ->
-            Fount.Observe.Question.choice(
+            Question.choice(
               "Classify the supplied material relative to the proposition.",
               spec["criteria"]
             )
 
           "score" ->
-            Fount.Observe.Question.score(
+            Question.score(
               "Describe the supplied material on this specific rubric, not overall quality.",
               spec["levels"]
             )
@@ -549,7 +550,10 @@ defmodule Fount.Intelligence.Playbooks.Constraints do
         )
       end
     else
-      case Fount.Selection.select(model, Map.get(spec, "selection", %{"targets" => [c["target"]]})) do
+      case Fount.Selection.select(
+             model,
+             Map.get(spec, "selection", %{"targets" => [c["target"]]})
+           ) do
         {:ok, units} when projection == "page_reader" ->
           {:ok,
            %{
@@ -569,7 +573,12 @@ defmodule Fount.Intelligence.Playbooks.Constraints do
 
   defp evaluate_semantic_state(c, client, opts, state, evidence, question) do
     with {:ok, result} <-
-           Measurements.evaluate(client, [%{"id" => c["id"], "state" => state, "evidence" => evidence}], [q: question], opts),
+           Measurements.evaluate(
+             client,
+             [%{"id" => c["id"], "state" => state, "evidence" => evidence}],
+             [q: question],
+             opts
+           ),
          [%{"status" => "complete", "answers" => %{"q" => answer}}] <- result["entries"] do
       interpreted = interpret(c, answer)
 

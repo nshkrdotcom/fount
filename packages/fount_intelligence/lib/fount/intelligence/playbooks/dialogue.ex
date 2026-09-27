@@ -1,11 +1,13 @@
 defmodule Fount.Intelligence.Playbooks.Dialogue do
   @moduledoc "Exact dialogue patterns and contextual lenses; repeated phrases are observations, not deletion orders."
   alias Fount.Intelligence.Acquisition.Measurements, as: Measurements
-  alias Fount.Observe.Projection
   alias Fount.Intelligence.Reporting.Report
+  alias Fount.Observe.Projection
+  alias Fount.Observe.Question
 
   def run(model, params, clients, opts \\ []) do
     opts = Keyword.put(opts, :source_model, model)
+
     with {:ok, units} <- Fount.Selection.select(model, params["selection"]),
          {:ok, whole} <- Fount.Selection.select(model, %{"whole_screenplay" => true}) do
       lines = Enum.filter(units, &(&1["type"] == "dialogue"))
@@ -21,9 +23,10 @@ defmodule Fount.Intelligence.Playbooks.Dialogue do
 
       contexts = turn_contexts(model, turns, whole)
 
-      inputs = Enum.map(contexts, fn {input, context_units} ->
-        Map.put(input, "evidence", Fount.Selection.evidence(context_units))
-      end)
+      inputs =
+        Enum.map(contexts, fn {input, context_units} ->
+          Map.put(input, "evidence", Fount.Selection.evidence(context_units))
+        end)
 
       context_evidence =
         contexts
@@ -177,7 +180,7 @@ defmodule Fount.Intelligence.Playbooks.Dialogue do
           qs ++
             [
               responsive:
-                Fount.Observe.Question.noul(
+                Question.noul(
                   "Does the current turn respond to the immediately preceding turn, including a playable refusal or deflection?"
                 )
             ],
@@ -189,7 +192,7 @@ defmodule Fount.Intelligence.Playbooks.Dialogue do
           qs ++
             [
               explicit_intention:
-                Fount.Observe.Question.noul(
+                Question.noul(
                   "Does this turn explicitly state the speaker's emotion or intention? Direct speech is allowed; this is descriptive."
                 )
             ],
@@ -201,9 +204,9 @@ defmodule Fount.Intelligence.Playbooks.Dialogue do
           qs ++
             [
               information:
-                Fount.Observe.Question.noul("Does this turn primarily communicate story information?"),
+                Question.noul("Does this turn primarily communicate story information?"),
               reason_to_say:
-                Fount.Observe.Question.noul(
+                Question.noul(
                   "Does the supplied scene show a specific reason for the speaker to say this now?"
                 )
             ],
@@ -215,7 +218,7 @@ defmodule Fount.Intelligence.Playbooks.Dialogue do
           qs ++
             [
               repeats:
-                Fount.Observe.Question.noul(
+                Question.noul(
                   "Does the current turn repeat the same audience information in the supplied prior turns without an evident new purpose?"
                 )
             ],
@@ -227,7 +230,7 @@ defmodule Fount.Intelligence.Playbooks.Dialogue do
           qs ++
             [
               tactic:
-                Fount.Observe.Question.noul(
+                Question.noul(
                   "Does the speaker use this turn to change the partner's action, belief or decision, including refusal or evasion? Describe the supplied exchange, not a requirement for all dialogue."
                 )
             ],

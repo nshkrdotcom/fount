@@ -1,7 +1,9 @@
 defmodule FountWorkshop.AnalysisExample do
   @moduledoc false
   alias Fount.CLI.Support
+  alias Fount.Intelligence.Acquisition.Views
   alias Fount.LiveArtifacts, as: A
+  alias FountWorkshop.Writing.Budget
 
   def run(mode, output) do
     A.run(mode, output, fn directory ->
@@ -18,7 +20,8 @@ defmodule FountWorkshop.AnalysisExample do
         error -> A.require!(error)
       end
 
-      budget = FountWorkshop.Writing.Budget.new(max_inference_calls: 40, max_measurement_states: 1500)
+      budget =
+        Budget.new(max_inference_calls: 40, max_measurement_states: 1500)
 
       reports =
         Fount.Intelligence.execute(model, requests, FountWorkshop.Services.analysis(clients),
@@ -40,7 +43,7 @@ defmodule FountWorkshop.AnalysisExample do
         "screenplay_id" => model.id,
         "revision_id" => model.revision.id,
         "reports" => written,
-        "spent" => FountWorkshop.Writing.Budget.snapshot(budget)
+        "spent" => Budget.snapshot(budget)
       }
 
       if Enum.any?(reports, &(&1.status != "complete")), do: throw({:live_failure, result})
@@ -152,7 +155,7 @@ defmodule FountWorkshop.AnalysisExample do
   def requests(_, _), do: raise(ArgumentError, "Unknown real Probe mode")
 
   def end_point(model, id) do
-    model |> Fount.Intelligence.Acquisition.Views.points(id) |> A.require!() |> List.last()
+    model |> Views.points(id) |> A.require!() |> List.last()
   end
 
   defp cast(model, name),

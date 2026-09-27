@@ -1,11 +1,13 @@
 defmodule Fount.Intelligence.Playbooks.Continuity do
   @moduledoc "Evidence-linked state transitions with explicit chronology uncertainty."
   alias Fount.Intelligence.Acquisition.Measurements, as: Measurements
-  alias Fount.Intelligence.Reporting.Report
   alias Fount.Intelligence.Persistence.SavedRecords
+  alias Fount.Intelligence.Reporting.Report
+  alias Fount.Observe.Question
 
   def run(model, params, clients, opts \\ []) do
     opts = Keyword.put(opts, :source_model, model)
+
     with {:ok, extracted} <-
            SavedRecords.resolve(
              model,
@@ -32,7 +34,7 @@ defmodule Fount.Intelligence.Playbooks.Continuity do
     } = prepared
 
     q =
-      Fount.Observe.Question.choice(
+      Question.choice(
         "How do these exact state observations relate? An unshown transfer or elapsed time may explain a change; heading differences alone are not contradictions.",
         contradiction: "Explicit states contradict",
         explained: "An explicit explanation supports the transition",
@@ -129,7 +131,10 @@ defmodule Fount.Intelligence.Playbooks.Continuity do
       Enum.with_index(pairs, fn {subject, a, b}, n ->
         %{
           "id" => "transition_#{n}",
-          "evidence" => Fount.Selection.evidence(Enum.filter(units, &(&1["evidence_id"] in (a["evidence_ids"] ++ b["evidence_ids"])))),
+          "evidence" =>
+            Fount.Selection.evidence(
+              Enum.filter(units, &(&1["evidence_id"] in (a["evidence_ids"] ++ b["evidence_ids"])))
+            ),
           "state" => %{
             "subject" => subject,
             "earlier" => excerpts(a, evidence),

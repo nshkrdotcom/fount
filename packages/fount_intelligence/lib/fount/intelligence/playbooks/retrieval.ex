@@ -2,6 +2,7 @@ defmodule Fount.Intelligence.Playbooks.Retrieval do
   @moduledoc "Revision-explicit lexical and semantic retrieval with honest inspected coverage."
   alias Fount.Intelligence.Acquisition.Measurements, as: Measurements
   alias Fount.Intelligence.Reporting.Report
+  alias Fount.Observe.Question
 
   def run(model, params, clients, opts \\ []) do
     opts = Keyword.put(opts, :source_model, model)
@@ -71,10 +72,11 @@ defmodule Fount.Intelligence.Playbooks.Retrieval do
      Report.new(model, "search", params, %{
        status: status,
        source_revision_ids: Enum.uniq([model.revision.id | sources]),
-       transient_models: Enum.flat_map(results, fn
-         {:ok, source, _, _, _} -> [source]
-         _ -> []
-       end),
+       transient_models:
+         Enum.flat_map(results, fn
+           {:ok, source, _, _, _} -> [source]
+           _ -> []
+         end),
        data: %{
          "hits" => Enum.take(sorted, limit),
          "matching_count" => length(hits),
@@ -138,6 +140,7 @@ defmodule Fount.Intelligence.Playbooks.Retrieval do
 
   defp semantic_search(source, candidate, query, clients, opts) do
     opts = Keyword.put(opts, :source_model, source)
+
     inputs =
       Enum.map(
         candidate,
@@ -149,7 +152,7 @@ defmodule Fount.Intelligence.Playbooks.Retrieval do
       )
 
     question =
-      Fount.Observe.Question.noul(
+      Question.noul(
         "Is this passage substantively relevant to the original writer query, rather than merely sharing a word?"
       )
 

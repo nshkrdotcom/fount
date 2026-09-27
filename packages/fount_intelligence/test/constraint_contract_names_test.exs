@@ -1,4 +1,5 @@
 defmodule Fount.Intelligence.ConstraintContractNamesTest do
+  alias Fount.Intelligence.Playbooks.Constraints
   use ExUnit.Case, async: true
 
   test "canonical numeric names and typed before/after targets are accepted" do
@@ -21,8 +22,10 @@ defmodule Fount.Intelligence.ConstraintContractNamesTest do
       "source" => "writer"
     }
 
-    assert :ok = Fount.Intelligence.Playbooks.Constraints.validate(c)
-    assert [%{"status" => "pass"}] = Fount.Intelligence.Playbooks.Constraints.deterministic(m, m, [c])
+    assert :ok = Constraints.validate(c)
+
+    assert [%{"status" => "pass"}] =
+             Constraints.deterministic(m, m, [c])
 
     c = %{
       c
@@ -31,8 +34,10 @@ defmodule Fount.Intelligence.ConstraintContractNamesTest do
         "spec" => %{"ids" => [%{"kind" => "scene", "id" => s.id}]}
     }
 
-    assert :ok = Fount.Intelligence.Playbooks.Constraints.validate(c)
-    assert [%{"status" => "pass"}] = Fount.Intelligence.Playbooks.Constraints.deterministic(m, m, [c])
+    assert :ok = Constraints.validate(c)
+
+    assert [%{"status" => "pass"}] =
+             Constraints.deterministic(m, m, [c])
   end
 
   test "a suggestion cannot become a required constraint without writer adoption" do
@@ -47,6 +52,7 @@ defmodule Fount.Intelligence.ConstraintContractNamesTest do
       "source" => "suggested"
     }
 
-    assert {:ok, [%{"severity" => "advisory"}]} = Fount.Intelligence.Playbooks.Constraints.resolve(m, [c])
+    assert {:ok, [%{"severity" => "advisory"}]} =
+             Constraints.resolve(m, [c])
   end
 end

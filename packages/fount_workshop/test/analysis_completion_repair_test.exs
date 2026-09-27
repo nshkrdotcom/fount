@@ -1,5 +1,6 @@
 defmodule FountWorkshop.AnalysisCompletionRepairTest do
   alias Fount.Writing.Schema
+  alias FountWorkshop.Writing.Completion
   use ExUnit.Case, async: true
 
   defmodule ScriptedAdapter do
@@ -33,7 +34,7 @@ defmodule FountWorkshop.AnalysisCompletionRepairTest do
     }
 
     assert {:ok, %{"value" => 42}, traces} =
-             FountWorkshop.Writing.Completion.complete(
+             Completion.complete(
                client,
                "ORIGINAL_MARKER: produce a value",
                schema,

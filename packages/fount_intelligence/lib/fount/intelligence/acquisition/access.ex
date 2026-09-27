@@ -1,10 +1,12 @@
 defmodule Fount.Intelligence.Acquisition.Access do
   @moduledoc "Proposes exact character-access fragments from a prefix, then evaluates each access relation."
+  alias Fount.Intelligence.Acquisition.Measurements, as: Measurements
+  alias Fount.Intelligence.Acquisition.Proposals, as: Completion
+  alias Fount.Intelligence.Capabilities.Interpretation
+  alias Fount.Observe.Projection
+  alias Fount.Observe.Question
   alias Fount.Writing.Schema
   alias Fount.Writing.UTF8Span
-  alias Fount.Intelligence.Acquisition.Proposals, as: Completion
-  alias Fount.Intelligence.Acquisition.Measurements, as: Measurements
-  alias Fount.Observe.Projection
 
   @schema %{
     "type" => "object",
@@ -31,6 +33,7 @@ defmodule Fount.Intelligence.Acquisition.Access do
 
   def build(model, point, character_ids, clients, opts \\ []) do
     opts = Keyword.put(opts, :source_model, model)
+
     with {:ok, state, evidence} <- Projection.at(model, point, "page_reader"),
          true <- not is_nil(clients[:propose]) do
       names = Map.new(character_ids, fn id -> {id, model.cast[id].display_name} end)
@@ -75,10 +78,11 @@ defmodule Fount.Intelligence.Acquisition.Access do
         locate_entry(entry, index, evidence, model, point)
       end)
 
-    inputs = Enum.map(entries, &(evaluation_input(&1, names, state) |> Map.put("evidence", evidence)))
+    inputs =
+      Enum.map(entries, &(evaluation_input(&1, names, state) |> Map.put("evidence", evidence)))
 
     question =
-      Fount.Observe.Question.choice(
+      Question.choice(
         "Does the supplied prefix support this character receiving this specific fragment through this channel? Presence alone is insufficient.",
         supported: "Explicitly supported access.",
         plausible: "Plausible but not established.",
@@ -128,7 +132,10 @@ defmodule Fount.Intelligence.Acquisition.Access do
              Keyword.put_new(opts, :lens_id, "knowledge.access_evidence")
            ) do
       by_id = Map.new(result["entries"], &{&1["input_id"], &1})
-      thresholds = Fount.Intelligence.Capabilities.Interpretation.threshold_options(result["lens_asset"])
+
+      thresholds =
+        Interpretation.threshold_options(result["lens_asset"])
+
       support_threshold = Keyword.get(thresholds, :supported, 0.8)
       confidence_threshold = Keyword.get(thresholds, :minimum_confidence, 0.7)
 

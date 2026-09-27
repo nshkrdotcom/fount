@@ -1,10 +1,10 @@
 defmodule Fount.Intelligence.Playbooks.Comparison do
   @moduledoc "Comparison and removal experiments return actual immutable model values, not accepted changes."
-  alias Fount.Screenplay.Model
   alias Fount.Intelligence.Playbooks.Constraints
   alias Fount.Intelligence.Playbooks.KnowledgeTrace
-  alias Fount.Observe.Projection
   alias Fount.Intelligence.Reporting.Report
+  alias Fount.Observe.Projection
+  alias Fount.Screenplay.Model
 
   def compare(model, params, clients, opts \\ []) do
     with {:ok, before} <- read(model, params["before_revision_id"], opts),
@@ -67,8 +67,7 @@ defmodule Fount.Intelligence.Playbooks.Comparison do
       {:ok,
        %{
          Report.relabel(result, "scene_lift", params)
-         |
-           transient_models: [experimental],
+         | transient_models: [experimental],
            data:
              Map.merge(result.data, %{
                "removed_scene_ids" => params["scene_ids"],

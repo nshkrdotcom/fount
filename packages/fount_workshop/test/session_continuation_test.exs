@@ -124,13 +124,13 @@ defmodule FountWorkshop.SessionContinuationTest do
              %{
                "source_candidate_id" => id,
                "round" => 1,
-               "error" => %{"code" => "Inference.Error", "reason" => reason}
+               "error" => %{"code" => "{:completion_provider_error, :provider_error}"}
              }
            ] =
              branch["repair_failures"]
 
     assert id == branch["candidate_id"]
-    assert is_binary(reason)
+    refute Map.has_key?(hd(branch["repair_failures"])["error"], "reason")
     assert ContinuationStore.head(store).revision.id == model.revision.id
   end
 

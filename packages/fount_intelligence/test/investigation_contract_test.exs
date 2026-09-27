@@ -1,4 +1,5 @@
 defmodule Fount.Intelligence.InvestigationContractTest do
+  alias Fount.Intelligence.Playbooks.Investigation
   use ExUnit.Case, async: true
 
   test "plan hypotheses are structured and cite known request IDs" do
@@ -17,16 +18,16 @@ defmodule Fount.Intelligence.InvestigationContractTest do
       "requests" => [request]
     }
 
-    assert :ok = Fount.Intelligence.Playbooks.Investigation.validate_plan(model, valid)
+    assert :ok = Investigation.validate_plan(model, valid)
 
     assert {:error, _} =
-             Fount.Intelligence.Playbooks.Investigation.validate_plan(
+             Investigation.validate_plan(
                model,
                put_in(valid, ["hypotheses", Access.at(0), "request_ids"], ["missing"])
              )
 
     assert {:error, _} =
-             Fount.Intelligence.Playbooks.Investigation.validate_plan(
+             Investigation.validate_plan(
                model,
                Map.put(valid, "hypotheses", ["loose prose"])
              )
@@ -69,24 +70,32 @@ defmodule Fount.Intelligence.InvestigationContractTest do
       ]
     }
 
-    assert :ok = Fount.Intelligence.Playbooks.Investigation.validate_explanation(model, base, [], 1)
-    assert :ok = Fount.Intelligence.Playbooks.Investigation.validate_explanation(model, base, [], 1, ["h1"])
+    assert :ok =
+             Investigation.validate_explanation(model, base, [], 1)
+
+    assert :ok =
+             Investigation.validate_explanation(model, base, [], 1, [
+               "h1"
+             ])
 
     assert {:error, :unrevised_hypotheses} =
-             Fount.Intelligence.Playbooks.Investigation.validate_explanation(model, base, [], 1, ["h2"])
+             Investigation.validate_explanation(model, base, [], 1, [
+               "h2"
+             ])
 
     assert {:error, :invalid_hypothesis_ids} =
-             Fount.Intelligence.Playbooks.Investigation.validate_explanation(
+             Investigation.validate_explanation(
                model,
                Map.put(base, "revised_hypotheses", []),
                [],
                1
              )
 
-    assert {:error, _} = Fount.Intelligence.Playbooks.Investigation.validate_explanation(model, base, [], 0)
+    assert {:error, _} =
+             Investigation.validate_explanation(model, base, [], 0)
 
     assert {:error, _} =
-             Fount.Intelligence.Playbooks.Investigation.validate_explanation(
+             Investigation.validate_explanation(
                model,
                put_in(base, ["follow_up_requests", Access.at(0), "playbook"], "shell"),
                [],

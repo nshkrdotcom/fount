@@ -1,4 +1,5 @@
 defmodule Fount.Intelligence.SceneCountScopeTest do
+  alias Fount.Intelligence.Playbooks.Constraints
   use ExUnit.Case, async: true
 
   test "scene count follows the replaced selection instead of deleted scene IDs" do
@@ -50,7 +51,7 @@ defmodule Fount.Intelligence.SceneCountScopeTest do
     }
 
     assert [%{"status" => "pass", "measurements" => %{"scene_count" => 2}}] =
-             Fount.Intelligence.Playbooks.Constraints.deterministic(base, result, [constraint])
+             Constraints.deterministic(base, result, [constraint])
 
     assert Enum.map([first, last], & &1.id) == [
              hd(result.ir.scenes).id,

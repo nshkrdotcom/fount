@@ -1,4 +1,5 @@
 defmodule Fount.Intelligence.TypedConstraintTargetsTest do
+  alias Fount.Intelligence.Playbooks.Constraints
   use ExUnit.Case, async: true
 
   test "retain and remove checks honor the declared target kind" do
@@ -23,6 +24,9 @@ defmodule Fount.Intelligence.TypedConstraintTargetsTest do
     removed = %{retained | "id" => "remove", "kind" => "remove_ids"}
 
     assert [%{"status" => "fail"}, %{"status" => "pass"}] =
-             Fount.Intelligence.Playbooks.Constraints.deterministic(model, model, [retained, removed])
+             Constraints.deterministic(model, model, [
+               retained,
+               removed
+             ])
   end
 end

@@ -1,7 +1,7 @@
 defmodule Fount.Intelligence.StateTest do
   use ExUnit.Case, async: true
-  alias Fount.{Query, Screenplay}
   alias Fount.Intelligence.Acquisition.Views, as: Views
+  alias Fount.{Query, Screenplay}
 
   test "future scenes, notes and another speaker's scenes stay out of a perspective" do
     raw =

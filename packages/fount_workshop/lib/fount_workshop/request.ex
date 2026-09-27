@@ -1,5 +1,6 @@
 defmodule FountWorkshop.Request do
   @moduledoc "Closed writer request validation before persistence or paid calls."
+  alias Fount.Intelligence.Playbooks.Constraints
   alias Fount.Writing.Schema
   alias Fount.Writing.UTF8Span
 
@@ -34,7 +35,8 @@ defmodule FountWorkshop.Request do
            Map.keys(request["options"]) -- Map.get(@options, workflow, []) == [] or
              {:error, :unknown_workflow_option},
          {:ok, _} <- Fount.Selection.selected_ids(model, request["selection"]),
-         {:ok, constraints} <- Fount.Intelligence.Playbooks.Constraints.resolve(model, request["constraints"]),
+         {:ok, constraints} <-
+           Constraints.resolve(model, request["constraints"]),
          :ok <- options(model, workflow, request["options"]) do
       {:ok, Map.put(request, "constraints", constraints)}
     end

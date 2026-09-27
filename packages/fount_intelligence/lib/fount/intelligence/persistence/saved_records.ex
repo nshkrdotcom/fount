@@ -109,7 +109,8 @@ defmodule Fount.Intelligence.Persistence.SavedRecords do
   end
 
   defp valid_report_identity?(report, model) do
-    Report.compatible?(report) and report["playbook"] == "extract_story" and report["status"] == "complete" and
+    Report.compatible?(report) and report["playbook"] == "extract_story" and
+      report["status"] == "complete" and
       report["screenplay_id"] == model.id and
       report["primary_revision_id"] == model.revision.id and
       is_list(report["source_revision_ids"]) and

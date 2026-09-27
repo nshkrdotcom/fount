@@ -2,8 +2,9 @@ defmodule Fount.Intelligence.Playbooks.SceneMechanics do
   @moduledoc "Descriptive scene functions and choices, not a universal score for a good scene."
   alias Fount.Intelligence.Acquisition.Extraction
   alias Fount.Intelligence.Acquisition.Measurements, as: Measurements
-  alias Fount.Observe.Projection
   alias Fount.Intelligence.Reporting.Report
+  alias Fount.Observe.Projection
+  alias Fount.Observe.Question
 
   @dimensions [
     problem: "Does a new problem become active?",
@@ -16,6 +17,7 @@ defmodule Fount.Intelligence.Playbooks.SceneMechanics do
   ]
   def run(model, params, clients, opts \\ []) do
     opts = Keyword.put(opts, :source_model, model)
+
     with {:ok, units} <- Fount.Selection.select(model, params["selection"]),
          {:ok, extraction} <-
            Extraction.run(
@@ -39,7 +41,12 @@ defmodule Fount.Intelligence.Playbooks.SceneMechanics do
 
           %{
             "id" => id,
-            "evidence" => Enum.uniq_by(prior_evidence ++ Fount.Selection.evidence(Enum.filter(units, &(&1["scene_id"] == id))), & &1["evidence_id"]),
+            "evidence" =>
+              Enum.uniq_by(
+                prior_evidence ++
+                  Fount.Selection.evidence(Enum.filter(units, &(&1["scene_id"] == id))),
+                & &1["evidence_id"]
+              ),
             "state" => %{
               "scene" => Projection.compact(Enum.filter(units, &(&1["scene_id"] == id))),
               "prior" => before,
@@ -52,7 +59,7 @@ defmodule Fount.Intelligence.Playbooks.SceneMechanics do
       questions =
         Enum.map(@dimensions, fn {key, question} ->
           {key,
-           Fount.Observe.Question.noul(
+           Question.noul(
              question <> " Judge the supplied material, not whether this function is required."
            )}
         end)
@@ -68,7 +75,11 @@ defmodule Fount.Intelligence.Playbooks.SceneMechanics do
                else: "partial"
              ),
            data: %{"scenes" => result["entries"], "candidate_turns" => extraction.data["records"]},
-           evidence: Enum.uniq_by(Fount.Selection.evidence(units) ++ Enum.flat_map(inputs, & &1["evidence"]), & &1["evidence_id"]),
+           evidence:
+             Enum.uniq_by(
+               Fount.Selection.evidence(units) ++ Enum.flat_map(inputs, & &1["evidence"]),
+               & &1["evidence_id"]
+             ),
            coverage: %{"scene_ids" => scenes},
            provenance: %{"evaluation" => result, "extraction" => extraction.provenance},
            errors: extraction.errors
@@ -91,7 +102,7 @@ defmodule Fount.Intelligence.Playbooks.SceneMechanics do
       questions ++
         [
           tactic:
-            Fount.Observe.Question.choice(
+            Question.choice(
               "Which proposed objective or tactic most clearly organizes this scene?",
               options ++ [{"other", "Other or unclear"}]
             )

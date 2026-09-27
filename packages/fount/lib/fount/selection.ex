@@ -128,6 +128,7 @@ defmodule Fount.Selection do
   end
 
   defp resolved_target_ids(_, _, _), do: {:error, :nontext_selection}
+
   def evidence(units),
     do:
       Enum.map(

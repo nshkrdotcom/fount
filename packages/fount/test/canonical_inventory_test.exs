@@ -1,8 +1,8 @@
 defmodule Fount.InventoryTest do
   use ExUnit.Case, async: true
 
-  alias Fount.{Query, Screenplay}
   alias Fount.Inventory
+  alias Fount.{Query, Screenplay}
 
   test "inventory reports exact visible scenes and cast cues without notes" do
     raw =

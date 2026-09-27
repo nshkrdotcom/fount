@@ -1,4 +1,5 @@
 defmodule FountWorkshop.AnalysisCatalogContinuationTest do
+  alias FountWorkshop.Writing.Budget
   use ExUnit.Case, async: true
 
   test "invalid requests fail before any service is present" do
@@ -13,11 +14,15 @@ defmodule FountWorkshop.AnalysisCatalogContinuationTest do
   end
 
   test "shared limits reserve retries and never overspend" do
-    budget = FountWorkshop.Writing.Budget.new(max_inference_calls: 2, max_measurement_states: 3)
-    assert FountWorkshop.Writing.Budget.take(budget, :inference, 1) == 1
-    assert FountWorkshop.Writing.Budget.take(budget, :inference, 2) == 1
-    assert FountWorkshop.Writing.Budget.take(budget, :inference, 1) == 0
-    assert FountWorkshop.Writing.Budget.take(budget, :measurement_states, 5) == 3
-    assert FountWorkshop.Writing.Budget.snapshot(budget) == %{"inference" => 2, "measurement_states" => 3}
+    budget = Budget.new(max_inference_calls: 2, max_measurement_states: 3)
+    assert Budget.take(budget, :inference, 1) == 1
+    assert Budget.take(budget, :inference, 2) == 1
+    assert Budget.take(budget, :inference, 1) == 0
+    assert Budget.take(budget, :measurement_states, 5) == 3
+
+    assert Budget.snapshot(budget) == %{
+             "inference" => 2,
+             "measurement_states" => 3
+           }
   end
 end

@@ -1,4 +1,5 @@
 defmodule Fount.Intelligence.InventionPolicyTest do
+  alias Fount.Intelligence.Playbooks.Constraints
   use ExUnit.Case, async: true
 
   test "prohibited facts are unknown until candidate and base are semantically compared" do
@@ -16,12 +17,12 @@ defmodule Fount.Intelligence.InventionPolicyTest do
     }
 
     assert [%{"status" => "unknown", "evaluation" => "semantic"}] =
-             Fount.Intelligence.Playbooks.Constraints.deterministic(model, model, [constraint], inventions: [])
+             Constraints.deterministic(model, model, [constraint], inventions: [])
 
     strict = put_in(constraint, ["spec", "policy"], "none")
 
     assert [%{"status" => "fail"}] =
-             Fount.Intelligence.Playbooks.Constraints.deterministic(model, model, [strict],
+             Constraints.deterministic(model, model, [strict],
                inventions: [%{"category" => "forgery"}]
              )
   end

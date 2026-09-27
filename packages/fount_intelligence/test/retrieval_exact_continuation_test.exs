@@ -59,7 +59,8 @@ defmodule Fount.Intelligence.RetrievalExactContinuationTest do
           %{"include_notes" => "yes"},
           %{"location" => " "}
         ] do
-      assert {:error, _} = Fount.Intelligence.run(model, "search", Map.put(base, "filters", filters), %{})
+      assert {:error, _} =
+               Fount.Intelligence.run(model, "search", Map.put(base, "filters", filters), %{})
     end
   end
 end

@@ -1,8 +1,9 @@
 defmodule Fount.Intelligence.Playbooks.Voice do
   @moduledoc "Held-out blind voice attribution. Matrices describe recognizability, not writing quality."
-  alias Fount.Screenplay.Model
   alias Fount.Intelligence.Acquisition.Measurements, as: Measurements
   alias Fount.Intelligence.Reporting.Report
+  alias Fount.Observe.Question
+  alias Fount.Screenplay.Model
   @labels ~w(voice_a voice_b voice_c voice_d voice_e voice_f voice_g voice_h)
 
   def prepare(model, params) do
@@ -117,6 +118,7 @@ defmodule Fount.Intelligence.Playbooks.Voice do
 
   def run(model, params, clients, opts \\ []) do
     opts = Keyword.put(opts, :source_model, model)
+
     with {:ok, prepared} <- prepare(model, params) do
       if prepared.insufficient != [] do
         {:ok,
@@ -139,14 +141,23 @@ defmodule Fount.Intelligence.Playbooks.Voice do
       end)
 
     question =
-      Fount.Observe.Question.choice(
+      Question.choice(
         "Which anonymous voice profile best matches the unlabelled utterance? Use voice, not story identity.",
         criteria
       )
 
     profile_evidence = Enum.flat_map(prepared.profiles, fn {_, profile} -> profile.evidence end)
-    inputs = Enum.map(prepared.tests, &%{"id" => &1.id, "state" => &1.state,
-      "evidence" => Enum.uniq_by(&1.evidence ++ profile_evidence, fn item -> item["evidence_id"] end)})
+
+    inputs =
+      Enum.map(
+        prepared.tests,
+        &%{
+          "id" => &1.id,
+          "state" => &1.state,
+          "evidence" =>
+            Enum.uniq_by(&1.evidence ++ profile_evidence, fn item -> item["evidence_id"] end)
+        }
+      )
 
     with {:ok, result} <-
            Measurements.evaluate(

@@ -1,8 +1,9 @@
 defmodule Fount.Intelligence.Acquisition.Extraction do
   @moduledoc "Scene-level proposal acquisition; records remain derived and cite only inspected exact evidence."
-  alias Fount.Intelligence.StoryWorld.Records
   alias Fount.Intelligence.Acquisition.Proposals, as: Completion
   alias Fount.Intelligence.Reporting.Report
+  alias Fount.Intelligence.StoryWorld.Records
+
   def run(model, params, clients, opts \\ []) do
     opts = Keyword.put(opts, :source_model, model)
     kinds = params["kinds"] || Records.kinds()
@@ -27,7 +28,9 @@ defmodule Fount.Intelligence.Acquisition.Extraction do
     }
 
     {:ok, adjacent_units} =
-      if adjacent_ids == [], do: {:ok, []}, else: Fount.Selection.select(model, adjacent_selection)
+      if adjacent_ids == [],
+        do: {:ok, []},
+        else: Fount.Selection.select(model, adjacent_selection)
 
     limit = Keyword.get(opts, :max_completions, 12)
     {scheduled, pending} = Enum.split(scenes, max(limit, 0))
@@ -165,5 +168,4 @@ defmodule Fount.Intelligence.Acquisition.Extraction do
 
   defp nearby?(_index, nil, _radius), do: false
   defp nearby?(index, selected_index, radius), do: abs(index - selected_index) <= radius
-
 end

@@ -1,6 +1,7 @@
 defmodule Fount.Observe.CacheIntegrityTest do
   use ExUnit.Case, async: true
   alias Fount.Observe.{Cache, Question, Request, Sandbox}
+  alias Fount.Observe.Options
 
   test "LRU storage evicts the least recently read entry" do
     cache = start_supervised!({Cache.Memory, max_entries: 2})
@@ -26,11 +27,12 @@ defmodule Fount.Observe.CacheIntegrityTest do
     assert initial.cache_hits == 0
     assert {:ok, repeated} = Fount.Observe.evaluate(provider, [first], q, opts)
     assert repeated.cache_hits == 1
+
     for {request, questions, options} <- [
-      {changed, q, opts},
-      {first, [q: Question.noul("Does Mara leave?")], opts},
-      {first, q, Keyword.put(opts, :model, "different-model")}
-    ] do
+          {changed, q, opts},
+          {first, [q: Question.noul("Does Mara leave?")], opts},
+          {first, q, Keyword.put(opts, :model, "different-model")}
+        ] do
       assert {:ok, batch} = Fount.Observe.evaluate(provider, [request], questions, options)
       assert batch.cache_hits == 0
     end
@@ -38,6 +40,6 @@ defmodule Fount.Observe.CacheIntegrityTest do
 
   test "cache configuration requires an explicit privacy namespace" do
     cache = start_supervised!({Cache.Memory, []})
-    assert {:error, _} = Fount.Observe.Options.normalize(cache: {Cache.Memory, cache})
+    assert {:error, _} = Options.normalize(cache: {Cache.Memory, cache})
   end
 end

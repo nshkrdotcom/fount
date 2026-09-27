@@ -1,12 +1,13 @@
 defmodule FountWorkshop.Candidate do
   @moduledoc "Actual screenplay branches compiled from typed change groups, with explicit selection and source attribution."
   alias Fount.ID
+  alias Fount.Intelligence.Playbooks.Constraints
   alias Fount.Screenplay
   alias Fount.Screenplay.Model
+  alias Fount.SourceEvidence, as: Evidence
   alias Fount.Writing.LocalReferences
   alias Fount.Writing.Schema
   alias Fount.Writing.UTF8Span
-  alias Fount.SourceEvidence, as: Evidence
   alias FountWorkshop.Writing.ChangeGroups
   alias FountWorkshop.Writing.Footprint
   alias FountWorkshop.Writing.Layout
@@ -38,7 +39,7 @@ defmodule FountWorkshop.Candidate do
       constraints = Keyword.get(opts, :constraints, [])
 
       checks =
-        Fount.Intelligence.Playbooks.Constraints.deterministic(
+        Constraints.deterministic(
           base,
           draft,
           constraints,
@@ -326,7 +327,7 @@ defmodule FountWorkshop.Candidate do
       |> Keyword.put(:inventions, proposal(candidate)["inventions"])
 
     with {:ok, report} <-
-           Fount.Intelligence.Playbooks.Constraints.run(
+           Constraints.run(
              candidate["screenplay"],
              %{"constraints" => constraints},
              FountWorkshop.Store.clients(services),

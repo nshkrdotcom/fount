@@ -1,4 +1,5 @@
 defmodule Fount.Intelligence.ChangedContinuityTest do
+  alias Fount.Intelligence.Playbooks.Continuity
   use ExUnit.Case, async: true
 
   test "changed targets select transitions for affected subjects at and after the change" do
@@ -41,7 +42,9 @@ defmodule Fount.Intelligence.ChangedContinuityTest do
     target = %{"kind" => "element", "id" => middle["target"]["id"]}
 
     {affected, coverage} =
-      Fount.Intelligence.Playbooks.Continuity.affected_pairs(model, pairs, [a, b, c], units, [target])
+      Continuity.affected_pairs(model, pairs, [a, b, c], units, [
+        target
+      ])
 
     assert Enum.map(affected, fn {_, x, y} -> {x["id"], y["id"]} end) == [{"a", "b"}, {"b", "c"}]
     assert coverage["unmatched_changed_targets"] == []

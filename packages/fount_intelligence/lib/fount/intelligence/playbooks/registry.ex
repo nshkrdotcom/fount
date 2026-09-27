@@ -1,5 +1,7 @@
 defmodule Fount.Intelligence.Playbooks.Registry do
   @moduledoc "Closed screenplay playbook registry. No model-selected module, function, shell, or storage route."
+  alias Fount.Intelligence.Reporting.Report
+  alias Fount.Observe.Projection
   alias Fount.Writing.Schema
 
   @catalog %{
@@ -37,7 +39,7 @@ defmodule Fount.Intelligence.Playbooks.Registry do
         "required" => required,
         "optional" => optional,
         "input_schema" => schema(name),
-        "output_contract" => Fount.Intelligence.Reporting.Report.contract(),
+        "output_contract" => Report.contract(),
         "writes_screenplay" => false
       }
     end)
@@ -218,7 +220,7 @@ defmodule Fount.Intelligence.Playbooks.Registry do
   end
 
   defp invalid_points?(model, points),
-    do: Enum.any?(points, &(not match?({:ok, _}, Fount.Observe.Projection.cutoff(model, &1))))
+    do: Enum.any?(points, &(not match?({:ok, _}, Projection.cutoff(model, &1))))
 
   defp domain("search", p) do
     filters = Map.get(p, "filters", %{})

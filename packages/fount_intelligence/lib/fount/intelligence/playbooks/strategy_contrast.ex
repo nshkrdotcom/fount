@@ -1,5 +1,9 @@
 defmodule Fount.Intelligence.Playbooks.StrategyContrast do
   @moduledoc "Compares dramatic mechanisms without naming a best draft."
+  alias Fount.Intelligence.Acquisition.Measurements
+  alias Fount.Intelligence.Reporting.Report
+  alias Fount.Observe.Question
+
   def run(model, params, clients, opts \\ []) do
     opts = Keyword.put(opts, :source_model, model)
     strategies = params["strategies"]
@@ -23,20 +27,20 @@ defmodule Fount.Intelligence.Playbooks.StrategyContrast do
 
       questions = [
         different:
-          Fount.Observe.Question.noul(
+          Question.noul(
             "Do the approaches change the causal route, character choice, source of resistance or disclosure in materially different ways, rather than paraphrasing?"
           )
       ]
 
       with {:ok, result} <-
-             Fount.Intelligence.Acquisition.Measurements.evaluate(
+             Measurements.evaluate(
                clients[:observe],
                inputs,
                questions,
                Keyword.put_new(opts, :lens_id, "strategy.distinctness")
              ) do
         {:ok,
-         Fount.Intelligence.Reporting.Report.new(model, "strategy_contrast", params, %{
+         Report.new(model, "strategy_contrast", params, %{
            status: result["status"],
            data: %{"pairs" => result["entries"], "ranking" => nil},
            provenance: result

@@ -2,9 +2,11 @@ defmodule Fount.Intelligence.Playbooks.Action do
   @moduledoc "Action visibility and spatial description, with actual byte split sites and no invented printed density."
   alias Fount.Intelligence.Acquisition.Measurements, as: Measurements
   alias Fount.Intelligence.Reporting.Report
+  alias Fount.Observe.Question
 
   def run(model, params, clients, opts \\ []) do
     opts = Keyword.put(opts, :source_model, model)
+
     with {:ok, units} <- Fount.Selection.select(model, params["selection"]) do
       action = Enum.filter(units, &(&1["type"] == "action"))
 
@@ -20,7 +22,7 @@ defmodule Fount.Intelligence.Playbooks.Action do
 
       qs = [
         visibility:
-          Fount.Observe.Question.score(
+          Question.score(
             "How much of this action passage communicates visible behavior or audible events? This describes prose, not artistic quality.",
             [
               "Entirely explanatory interior information",
@@ -30,12 +32,12 @@ defmodule Fount.Intelligence.Playbooks.Action do
             ]
           ),
         spatial:
-          Fount.Observe.Question.noul(
+          Question.noul(
             "Is the spatial relationship or sequence of physical actions unclear in this supplied passage?"
           ),
-        camera: Fount.Observe.Question.noul("Does the passage explicitly instruct the camera or lens?"),
+        camera: Question.noul("Does the passage explicitly instruct the camera or lens?"),
         interior:
-          Fount.Observe.Question.noul(
+          Question.noul(
             "Does the passage communicate private thought or explanation not shown by an observable action?"
           )
       ]
@@ -63,7 +65,8 @@ defmodule Fount.Intelligence.Playbooks.Action do
            }, []}
 
         id ->
-          case measure_layout(clients[:layout],
+          case measure_layout(
+                 clients[:layout],
                  model,
                  action,
                  id,
@@ -105,6 +108,7 @@ defmodule Fount.Intelligence.Playbooks.Action do
 
   defp measure_layout(service, model, units, id, reader) when is_function(service, 4),
     do: service.(model, units, id, reader)
+
   defp measure_layout(_, _, _, _, _), do: {:error, :missing_layout_service}
 
   defp sentence_splits(unit) do

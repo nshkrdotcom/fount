@@ -1,8 +1,18 @@
 defmodule Fount.Observe.Batch do
   @moduledoc "A request-ordered acquisition result; partial coverage and actual state counts are explicit."
-  defstruct entries: [], errors: [], status: :complete, requested: 0, scheduled: 0,
-    received: 0, cache_hits: 0, elapsed_ms: 0, lens_asset: nil,
-    measurement_spec_sha256: nil, measurement_spec: %{}, provider_batches: 0
+  defstruct entries: [],
+            errors: [],
+            status: :complete,
+            requested: 0,
+            scheduled: 0,
+            received: 0,
+            cache_hits: 0,
+            elapsed_ms: 0,
+            lens_asset: nil,
+            measurement_spec_sha256: nil,
+            measurement_spec: %{},
+            provider_batches: 0
+
   @type t :: %__MODULE__{}
 end
 

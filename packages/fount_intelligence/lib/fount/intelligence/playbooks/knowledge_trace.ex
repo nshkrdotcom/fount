@@ -2,13 +2,17 @@ defmodule Fount.Intelligence.Playbooks.KnowledgeTrace do
   @moduledoc "Exhaustive requested prefix checks with distinct establishment, inference, belief and suspicion questions."
   alias Fount.Intelligence.Acquisition.Access
   alias Fount.Intelligence.Acquisition.Measurements, as: Measurements
-  alias Fount.Intelligence.Playbooks.KnowledgeTrace.Behavior
-  alias Fount.Observe.Projection
-  alias Fount.Intelligence.Reporting.Report
   alias Fount.Intelligence.Capabilities.DecisionPolicy
+  alias Fount.Intelligence.Capabilities.Interpretation
+  alias Fount.Intelligence.Playbooks.KnowledgeTrace.Behavior
+  alias Fount.Intelligence.Reader.Reveal
+  alias Fount.Intelligence.Reporting.Report
+  alias Fount.Observe.Projection
+  alias Fount.Observe.Question
 
   def run(model, params, clients, opts \\ []) do
     opts = Keyword.put(opts, :source_model, model)
+
     with :ok <- validate_points(model, params["points"]),
          :ok <- validate_subjects(model, params["subjects"]) do
       contexts =
@@ -21,15 +25,15 @@ defmodule Fount.Intelligence.Playbooks.KnowledgeTrace do
 
       questions = [
         established:
-          Fount.Observe.Question.noul(
+          Question.noul(
             "Does the accessible evidence establish the positive proposition? A statement may be a lie; intentions are not established facts."
           ),
         could_infer:
-          Fount.Observe.Question.noul(
+          Question.noul(
             "Could this subject reasonably infer the proposition from this accessible material? Do not use outside or later information."
           ),
         believes:
-          Fount.Observe.Question.noul(
+          Question.noul(
             "Does the accessible material support this subject believing the proposition? Belief and truth are separate; for a reader/audience assess the invited belief."
           )
       ]
@@ -40,7 +44,7 @@ defmodule Fount.Intelligence.Playbooks.KnowledgeTrace do
             questions ++
               [
                 suspicion:
-                  Fount.Observe.Question.score(
+                  Question.score(
                     "How much does the accessible material invite suspicion of the proposition?",
                     [
                       "No supporting indication",
@@ -65,7 +69,9 @@ defmodule Fount.Intelligence.Playbooks.KnowledgeTrace do
              questions,
              Keyword.put_new(opts, :lens_id, "knowledge.epistemic_trace")
            ) do
-      policy_opts = Fount.Intelligence.Capabilities.Interpretation.threshold_options(result["lens_asset"])
+      policy_opts =
+        Interpretation.threshold_options(result["lens_asset"])
+
       reveal_threshold = Keyword.get(policy_opts, :supported, 0.8)
       by_id = Map.new(result["entries"], &{&1["input_id"], &1})
 
@@ -83,7 +89,7 @@ defmodule Fount.Intelligence.Playbooks.KnowledgeTrace do
               }
             )
 
-          {:ok, boundary} = Fount.Intelligence.Reader.Reveal.boundary(curve, reveal_threshold)
+          {:ok, boundary} = Reveal.boundary(curve, reveal_threshold)
           {subject_key(subject), boundary}
         end)
 

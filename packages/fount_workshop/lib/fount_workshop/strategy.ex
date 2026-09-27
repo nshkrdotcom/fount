@@ -1,9 +1,9 @@
 defmodule FountWorkshop.Strategy do
   @moduledoc "Dramatic alternatives are stored separately from pages and can be materialized after writer selection."
   alias Fount.Writing.Schema
-  alias FountWorkshop.Writing.Completion
   alias FountWorkshop.Session
   alias FountWorkshop.Store
+  alias FountWorkshop.Writing.Completion
   alias FountWorkshop.Writing.Context
   @strings ~w(id title premise_of_change dramatic_mechanism entry_state exit_state)
   @arrays ~w(beats preserves changes inventions consequences evidence_ids open_questions)

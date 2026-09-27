@@ -2,10 +2,13 @@ defmodule Fount.Intelligence.Playbooks.KnowledgeTrace.Behavior do
   @moduledoc "Checks whether selected behavior presupposes a belief unsupported by prior accessible material."
   alias Fount.Intelligence.Acquisition.Access
   alias Fount.Intelligence.Acquisition.Measurements, as: Measurements
+  alias Fount.Intelligence.Capabilities.Interpretation
   alias Fount.Observe.Projection
+  alias Fount.Observe.Question
 
   def run(model, ids, subjects, proposition, clients, opts) do
     opts = Keyword.put(opts, :source_model, model)
+
     with {:ok, inputs, errors} <- prepare(model, ids, subjects, proposition, clients, opts),
          {:ok, result} <-
            Measurements.evaluate(
@@ -13,18 +16,21 @@ defmodule Fount.Intelligence.Playbooks.KnowledgeTrace.Behavior do
              Enum.map(inputs, &Map.take(&1, ~w(id state evidence))),
              [
                requires_belief:
-                 Fount.Observe.Question.noul(
+                 Question.noul(
                    "Does this selected behavior require the subject already to believe the proposition? Judge the behavior, not whether the proposition is true."
                  ),
                prior_belief:
-                 Fount.Observe.Question.noul(
+                 Question.noul(
                    "Does the supplied prior accessible material support this subject already believing the proposition? Exclude the selected behavior itself and later text."
                  )
              ],
              Keyword.put_new(opts, :lens_id, "knowledge.behavior_support")
            ) do
       by_id = Map.new(result["entries"], &{&1["input_id"], &1})
-      thresholds = Fount.Intelligence.Capabilities.Interpretation.threshold_options(result["lens_asset"])
+
+      thresholds =
+        Interpretation.threshold_options(result["lens_asset"])
+
       supported = Keyword.get(thresholds, :supported, 0.8)
       unsupported = Keyword.get(thresholds, :unsupported, 0.2)
 

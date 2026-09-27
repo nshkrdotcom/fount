@@ -12,8 +12,16 @@ defmodule Fount.Intelligence.InterpretationThresholdTest do
   end
 
   test "invalid policy thresholds cannot masquerade as a lens policy" do
-    assert Lens.valid_thresholds?(%{"support_probability" => 0.6, "unsupported_probability" => 0.2})
-    refute Lens.valid_thresholds?(%{"support_probability" => 0.1, "unsupported_probability" => 0.2})
+    assert Lens.valid_thresholds?(%{
+             "support_probability" => 0.6,
+             "unsupported_probability" => 0.2
+           })
+
+    refute Lens.valid_thresholds?(%{
+             "support_probability" => 0.1,
+             "unsupported_probability" => 0.2
+           })
+
     refute Lens.valid_thresholds?(%{"support_probability" => 1.5})
   end
 end

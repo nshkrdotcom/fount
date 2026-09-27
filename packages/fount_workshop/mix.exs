@@ -28,8 +28,8 @@ defmodule FountWorkshop.MixProject do
 
   defp deps do
     [
-      {:fount_intelligence, path: "../fount_intelligence"},
-      {:fount, "~> 0.1.0", path: "../fount"},
+      workspace_dep(:fount_intelligence, "~> 0.1.0", "../fount_intelligence"),
+      workspace_dep(:fount, "~> 0.1.0", "../fount"),
       {:inference, "~> 0.4.0"},
       {:agent_session_manager, "~> 0.16.0"},
       {:jason, "~> 1.4"},
@@ -37,6 +37,12 @@ defmodule FountWorkshop.MixProject do
       {:dialyxir, "~> 1.4", only: :dev, runtime: false},
       {:ex_doc, "~> 0.40", only: :dev, runtime: false}
     ]
+  end
+
+  defp workspace_dep(name, version, path) do
+    if System.get_env("FOUNT_PACKAGE_BUILD") == "1",
+      do: {name, version},
+      else: {name, version, path: path}
   end
 
   defp docs do

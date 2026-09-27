@@ -1,6 +1,7 @@
 defmodule Fount.Intelligence.Acquisition.Views do
   @moduledoc "Convenience views backed by the exact access-aware projection."
-  def points(model, scene_id), do: Fount.Observe.Projection.points(model, scene_id)
+  alias Fount.Observe.Projection
+  def points(model, scene_id), do: Projection.points(model, scene_id)
 
   def audience_before(model, scene_id), do: view(model, scene_id, "audience_estimate", [])
 
@@ -10,7 +11,7 @@ defmodule Fount.Intelligence.Acquisition.Views do
   defp view(model, scene_id, projection, opts) do
     point = %{"scene_id" => scene_id, "through_element_id" => nil}
 
-    with {:ok, state, evidence} <- Fount.Observe.Projection.at(model, point, projection, opts) do
+    with {:ok, state, evidence} <- Projection.at(model, point, projection, opts) do
       by_evidence = Map.new(state["material"], &{&1["evidence_id"], &1})
 
       scenes =

@@ -37,5 +37,4 @@ defmodule Fount.Intelligence.Reader.Reveal do
          }}
     end
   end
-
 end

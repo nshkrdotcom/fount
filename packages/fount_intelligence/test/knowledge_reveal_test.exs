@@ -1,4 +1,6 @@
 defmodule Fount.Intelligence.KnowledgeRevealTest do
+  alias Fount.Intelligence.Playbooks.KnowledgeTrace
+  alias Fount.Observe.Projection
   use ExUnit.Case, async: true
 
   test "compares first supported point with an intended reveal only when the curve is complete" do
@@ -16,7 +18,7 @@ defmodule Fount.Intelligence.KnowledgeRevealTest do
       )
 
     [scene] = model.ir.scenes
-    {:ok, [entry, first, second]} = Fount.Observe.Projection.points(model, scene.id)
+    {:ok, [entry, first, second]} = Projection.points(model, scene.id)
 
     curves = %{
       "reader" => %{
@@ -27,11 +29,13 @@ defmodule Fount.Intelligence.KnowledgeRevealTest do
       "audience" => %{"status" => "incomplete", "first_crossing" => nil, "curve" => []}
     }
 
-    result = Fount.Intelligence.Playbooks.KnowledgeTrace.assess_reveal(model, curves, second)
+    result = KnowledgeTrace.assess_reveal(model, curves, second)
     assert result["reader"]["status"] == "observed_before_intended"
     assert result["audience"]["status"] == "unknown"
 
-    assert Fount.Intelligence.Playbooks.KnowledgeTrace.assess_reveal(model, curves, first)["reader"]["status"] ==
+    assert KnowledgeTrace.assess_reveal(model, curves, first)[
+             "reader"
+           ]["status"] ==
              "at_intended"
   end
 
@@ -42,7 +46,7 @@ defmodule Fount.Intelligence.KnowledgeRevealTest do
       )
 
     [scene] = model.ir.scenes
-    {:ok, points} = Fount.Observe.Projection.points(model, scene.id)
+    {:ok, points} = Projection.points(model, scene.id)
 
     params = %{
       "proposition" => "Mara knows",

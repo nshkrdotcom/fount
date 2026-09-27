@@ -1,7 +1,7 @@
 defmodule FountWorkshop.Writing.Preparation do
   @moduledoc false
-  alias Fount.Screenplay.Model
   alias Fount.Intelligence.Reporting.Report
+  alias Fount.Screenplay.Model
   alias FountWorkshop.Store
   alias FountWorkshop.Writing.Context
   alias FountWorkshop.Writing.NoteConflicts
@@ -414,7 +414,8 @@ defmodule FountWorkshop.Writing.Preparation do
              clients,
              Keyword.put(probe_opts, :selection, context.selection)
            ),
-         {:ok, reports} <- Fount.Intelligence.execute(model, plan.data["requests"], clients, probe_opts),
+         {:ok, reports} <-
+           Fount.Intelligence.execute(model, plan.data["requests"], clients, probe_opts),
          {:ok, first_explanation} <-
            Fount.Intelligence.explain(
              model,

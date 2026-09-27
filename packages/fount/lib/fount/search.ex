@@ -80,8 +80,7 @@ defmodule Fount.Search do
        mode: :literal_phrase,
        inspected_element_count: length(eligible),
        returned_hit_count: length(hits),
-       truncated?:
-         Enum.count(eligible, &String.contains?(String.downcase(&1.text), needle)) > limit,
+       truncated?: Enum.count(eligible, &String.contains?(String.downcase(&1.text), needle)) > limit,
        hits: hits
      }}
   end

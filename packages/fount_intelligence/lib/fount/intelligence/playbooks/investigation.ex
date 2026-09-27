@@ -1,15 +1,18 @@
 defmodule Fount.Intelligence.Playbooks.Investigation do
   @moduledoc "Finite, screenplay-specific investigation plans and evidence-backed hypothesis revision. Does not execute model-supplied code."
+  alias Fount.Intelligence.Acquisition.Proposals, as: Completion
+  alias Fount.Intelligence.Playbooks.Registry, as: Registry
+  alias Fount.Intelligence.Reporting.Report
   alias Fount.Screenplay.Model
   alias Fount.Writing.Schema
-  alias Fount.Intelligence.Playbooks.Registry, as: Registry
-  alias Fount.Intelligence.Acquisition.Proposals, as: Completion
-  alias Fount.Intelligence.Reporting.Report
 
   def plan(model, concern, clients, opts \\ []) do
     with true <- (is_binary(concern) and String.trim(concern) != "") or {:error, :empty_concern},
          {:ok, units} <-
-           Fount.Selection.select(model, Keyword.get(opts, :selection, %{"whole_screenplay" => true})) do
+           Fount.Selection.select(
+             model,
+             Keyword.get(opts, :selection, %{"whole_screenplay" => true})
+           ) do
       plan_selected(model, concern, clients, opts, units)
     end
   end

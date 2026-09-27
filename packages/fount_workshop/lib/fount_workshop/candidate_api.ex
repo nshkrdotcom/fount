@@ -1,5 +1,6 @@
 defmodule FountWorkshop.CandidateAPI do
   @moduledoc false
+  alias Fount.Intelligence.Reporting.Report
   alias Fount.Screenplay.Model
   alias Fount.Writing.LocalReferences
   alias Fount.Writing.Schema
@@ -7,6 +8,7 @@ defmodule FountWorkshop.CandidateAPI do
   alias FountWorkshop.Session
   alias FountWorkshop.Store
   alias FountWorkshop.Writing.ChangeGroups
+  alias FountWorkshop.Writing.Completion
   alias FountWorkshop.Writing.ProposalGuide
 
   def select(id, group_ids, services, opts \\ []) do
@@ -89,14 +91,19 @@ defmodule FountWorkshop.CandidateAPI do
 
   defp save_join_source(base, combined, session_id, _, services) do
     report =
-      Fount.Intelligence.Reporting.Report.new(combined["screenplay"], "combination_source", %{}, %{
-        source_revision_ids: [base.revision.id, combined["screenplay"].revision.id],
-        data: %{
-          "lineage" => combined["lineage"],
-          "purpose" =>
-            "Immutable intermediate source for writer-selected passages before connective writing"
+      Report.new(
+        combined["screenplay"],
+        "combination_source",
+        %{},
+        %{
+          source_revision_ids: [base.revision.id, combined["screenplay"].revision.id],
+          data: %{
+            "lineage" => combined["lineage"],
+            "purpose" =>
+              "Immutable intermediate source for writer-selected passages before connective writing"
+          }
         }
-      })
+      )
 
     case Session.save_reports([report], session_id, services, [base, combined["screenplay"]]) do
       {:ok, _} -> :ok
@@ -141,7 +148,7 @@ defmodule FountWorkshop.CandidateAPI do
         })
 
     with {:ok, joins, traces} <-
-           FountWorkshop.Writing.Completion.complete(
+           Completion.complete(
              services[:inference],
              prompt,
              schema,

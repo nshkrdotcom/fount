@@ -1,5 +1,6 @@
 defmodule FountWorkshop.Writing.Layout do
   @moduledoc false
+  alias Fount.Intelligence.Reporting.Report
   alias Fount.Screenplay.Model
 
   def compare(base, candidate, services, opts) do
@@ -40,7 +41,7 @@ defmodule FountWorkshop.Writing.Layout do
       }
 
       report =
-        Fount.Intelligence.Reporting.Report.new(candidate["screenplay"], "layout_compare", %{}, %{
+        Report.new(candidate["screenplay"], "layout_compare", %{}, %{
           source_revision_ids: [base.revision.id, candidate["screenplay"].revision.id],
           data: data,
           status: if(same, do: "complete", else: "partial"),

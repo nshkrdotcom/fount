@@ -1,12 +1,14 @@
 defmodule Fount.Intelligence.Playbooks.Dependencies do
   @moduledoc "Tests proposed setup/use edges, including alternative support in an actually ablated context."
   alias Fount.Intelligence.Acquisition.Measurements, as: Measurements
-  alias Fount.Observe.Projection
-  alias Fount.Intelligence.Reporting.Report
   alias Fount.Intelligence.Persistence.SavedRecords
+  alias Fount.Intelligence.Reporting.Report
+  alias Fount.Observe.Projection
+  alias Fount.Observe.Question
 
   def run(model, params, clients, opts \\ []) do
     opts = Keyword.put(opts, :source_model, model)
+
     with {:ok, extracted} <-
            SavedRecords.resolve(
              model,
@@ -27,24 +29,28 @@ defmodule Fount.Intelligence.Playbooks.Dependencies do
         Enum.with_index(pairs, fn {a, b}, n ->
           %{
             "id" => "edge_#{n}",
-            "evidence" => Fount.Selection.evidence(Enum.filter(units, &(&1["evidence_id"] in (a["evidence_ids"] ++ b["evidence_ids"])))),
+            "evidence" =>
+              Fount.Selection.evidence(
+                Enum.filter(
+                  units,
+                  &(&1["evidence_id"] in (a["evidence_ids"] ++ b["evidence_ids"]))
+                )
+              ),
             "state" => %{"a" => quoted(a, registry), "b" => quoted(b, registry)}
           }
         end)
 
       questions = [
         establishes:
-          Fount.Observe.Question.noul(
-            "Does A establish the object, ability, information or rule used by B?"
-          ),
+          Question.noul("Does A establish the object, ability, information or rule used by B?"),
         enables:
-          Fount.Observe.Question.noul(
+          Question.noul(
             "Does the material in A make the event in B possible or motivate its choice?"
           ),
         purpose:
-          Fount.Observe.Question.noul("Does A serve an immediate local dramatic purpose independent of B?"),
+          Question.noul("Does A serve an immediate local dramatic purpose independent of B?"),
         relation:
-          Fount.Observe.Question.choice("What best describes the supported relation from A to B?",
+          Question.choice("What best describes the supported relation from A to B?",
             cause: "Brings B about",
             enable: "Makes B possible",
             motivate: "Gives a reason for B",
@@ -153,7 +159,7 @@ defmodule Fount.Intelligence.Playbooks.Dependencies do
         removed_inputs,
         [
           other_support:
-            Fount.Observe.Question.noul(
+            Question.noul(
               "Does the remaining prior material establish sufficient independent support for the use? The removed setup is unavailable."
             )
         ],
@@ -177,7 +183,13 @@ defmodule Fount.Intelligence.Playbooks.Dependencies do
 
     %{
       "id" => "edge_#{n}",
-      "evidence" => Fount.Selection.evidence(Enum.uniq_by(prior ++ Enum.map(b["evidence_ids"], &Map.fetch!(registry, &1)), & &1["evidence_id"])),
+      "evidence" =>
+        Fount.Selection.evidence(
+          Enum.uniq_by(
+            prior ++ Enum.map(b["evidence_ids"], &Map.fetch!(registry, &1)),
+            & &1["evidence_id"]
+          )
+        ),
       "state" => %{
         "remaining_prior_material" => Projection.compact(prior),
         "use" => quoted(b, registry)

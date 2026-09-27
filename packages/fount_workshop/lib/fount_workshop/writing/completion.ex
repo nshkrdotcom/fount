@@ -6,6 +6,7 @@ defmodule FountWorkshop.Writing.Completion do
   as structured responses, permits only a whole JSON value/code fence, and never
   searches an arbitrary provider response for a convenient JSON substring.
   """
+  alias FountWorkshop.Writing.Budget
 
   def complete(client, prompt, schema, validator, opts \\ [])
       when is_binary(prompt) and is_map(schema) and is_function(validator, 1) do
@@ -197,7 +198,7 @@ defmodule FountWorkshop.Writing.Completion do
       byte_size(request) + schema_bytes > Keyword.get(state.opts, :max_context_bytes, 100_000) ->
         {:error, :context_limit}
 
-      FountWorkshop.Writing.Budget.take(Keyword.get(state.opts, :budget), :inference, 1) == 0 ->
+      Budget.take(Keyword.get(state.opts, :budget), :inference, 1) == 0 ->
         {:error, :session_inference_limit}
 
       true ->
@@ -205,11 +206,23 @@ defmodule FountWorkshop.Writing.Completion do
     end
   end
 
-  defp safe_provider_error(%Inference.Error{category: category}) when category in [
-    :invalid, :missing_dependency, :missing_credentials, :timeout, :rate_limited,
-    :invalid_response, :unsupported_capability, :adapter_exception, :provider_error
-  ], do: {:completion_provider_error, category}
-  defp safe_provider_error(reason) when reason in [:context_limit, :session_inference_limit], do: reason
+  defp safe_provider_error(%Inference.Error{category: category})
+       when category in [
+              :invalid,
+              :missing_dependency,
+              :missing_credentials,
+              :timeout,
+              :rate_limited,
+              :invalid_response,
+              :unsupported_capability,
+              :adapter_exception,
+              :provider_error
+            ],
+       do: {:completion_provider_error, category}
+
+  defp safe_provider_error(reason) when reason in [:context_limit, :session_inference_limit],
+    do: reason
+
   defp safe_provider_error(_), do: {:completion_provider_error, :provider_error}
 
   defp hash(text), do: :crypto.hash(:sha256, text) |> Base.encode16(case: :lower)

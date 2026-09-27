@@ -12,9 +12,13 @@ defmodule Fount.Intelligence.ArchitectureTest do
       "def run(m), do: m.execute()",
       "def run, do: :erlang.system_time()"
     ]
+
     for body <- bad do
       source = "defmodule Fount.Intelligence.Reader.Bad do\n#{body}\nend"
-      assert Architecture.source_violations(source, "packages/fount_intelligence/lib/bad.ex") != [], body
+
+      assert Architecture.source_violations(source, "packages/fount_intelligence/lib/bad.ex") !=
+               [],
+             body
     end
   end
 
@@ -25,15 +29,25 @@ defmodule Fount.Intelligence.ArchitectureTest do
       def run(%D{values: values}), do: Enum.sort(values)
     end
     """
-    assert Architecture.source_violations(source, "packages/fount_intelligence/lib/example.ex") == []
+
+    assert Architecture.source_violations(source, "packages/fount_intelligence/lib/example.ex") ==
+             []
   end
 
   test "provider-native structs cannot move into Intelligence or an Observe leaf" do
-    for file <- ["packages/fount_intelligence/lib/bad.ex", "packages/fount_observe/lib/fount/observe/distribution.ex"] do
+    for file <- [
+          "packages/fount_intelligence/lib/bad.ex",
+          "packages/fount_observe/lib/fount/observe/distribution.ex"
+        ] do
       source = "defmodule Bad do\ndef run(x), do: SystemOneSDK.evaluate(x, %{}, [])\nend"
-      assert Enum.any?(Architecture.source_violations(source, file), &(&1["rule"] == "native_provider_boundary"))
+
+      assert Enum.any?(
+               Architecture.source_violations(source, file),
+               &(&1["rule"] == "native_provider_boundary")
+             )
     end
   end
+
   test "nested modules keep their owning namespace and restore the parent's aliases" do
     source = """
     defmodule Fount.Intelligence.Reader.Outer do
@@ -44,7 +58,10 @@ defmodule Fount.Intelligence.ArchitectureTest do
       def read, do: Disk.read!("private")
     end
     """
-    violations = Architecture.source_violations(source, "packages/fount_intelligence/lib/nested.ex")
+
+    violations =
+      Architecture.source_violations(source, "packages/fount_intelligence/lib/nested.ex")
+
     assert Enum.any?(violations, &String.contains?(&1["dependency"], "System.get_env"))
     assert Enum.any?(violations, &String.contains?(&1["dependency"], "File.read!"))
   end
@@ -56,7 +73,8 @@ defmodule Fount.Intelligence.ArchitectureTest do
       def run(value), do: value
     end
     """
-    assert Architecture.source_violations(source, "packages/fount_intelligence/lib/local.ex") == []
-  end
 
+    assert Architecture.source_violations(source, "packages/fount_intelligence/lib/local.ex") ==
+             []
+  end
 end

@@ -3,6 +3,7 @@ defmodule FountWorkshop.Writing.Generation do
   alias Fount.Writing.CanonicalJSON
   alias Fount.Writing.Schema
   alias FountWorkshop.Candidate
+  alias FountWorkshop.Writing.Completion
   alias FountWorkshop.Writing.Context
   alias FountWorkshop.Writing.ProposalGuide
   alias FountWorkshop.Writing.RecoveryCopy
@@ -46,7 +47,7 @@ defmodule FountWorkshop.Writing.Generation do
         })
 
     with {:ok, proposal, traces} <-
-           FountWorkshop.Writing.Completion.complete(
+           Completion.complete(
              services[:inference],
              prompt,
              schema,

@@ -1,4 +1,5 @@
 defmodule Fount.Observe.SelectionBoundaryContinuationTest do
+  alias Fount.Observe.Projection
   use ExUnit.Case, async: true
 
   test "a scene selection does not widen a separate element span" do
@@ -32,9 +33,9 @@ defmodule Fount.Observe.SelectionBoundaryContinuationTest do
     scene = hd(model.ir.scenes)
 
     assert {:ok, point} =
-             Fount.Observe.Projection.resolve_point(model, %{"kind" => "scene", "id" => scene.id})
+             Projection.resolve_point(model, %{"kind" => "scene", "id" => scene.id})
 
-    assert {:ok, _} = Fount.Observe.Projection.cutoff(model, point)
+    assert {:ok, _} = Projection.cutoff(model, point)
     assert point["through_element_id"] == List.last(scene.element_ids)
   end
 end

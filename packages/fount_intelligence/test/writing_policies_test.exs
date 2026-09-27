@@ -1,8 +1,11 @@
 defmodule Fount.Intelligence.WritingPoliciesTest do
   use ExUnit.Case, async: true
   alias Fount.Intelligence.Capabilities.DecisionPolicy
-  alias Fount.SourceEvidence, as: Evidence
+  alias Fount.Intelligence.Reader.Reveal
   alias Fount.Observe.Association, as: Association
+  alias Fount.Observe.Error
+  alias Fount.Observe.Request
+  alias Fount.SourceEvidence, as: Evidence
 
   test "negative intent uses complement and missing values never become zero" do
     assert {:ok, %{"status" => "pass", "allowed_mass" => mass}} =
@@ -20,7 +23,7 @@ defmodule Fount.Intelligence.WritingPoliciesTest do
       for {p, i} <- Enum.with_index([0.1, 0.9, 0.2, 0.95]),
           do: %{"point" => i, "probability" => p}
 
-    assert {:ok, result} = Fount.Intelligence.Reader.Reveal.boundary(curve)
+    assert {:ok, result} = Reveal.boundary(curve)
     assert result["first_crossing"] == 1
     assert result["crossings"] == [1, 3]
     assert result["drops"] == [2]
@@ -28,19 +31,26 @@ defmodule Fount.Intelligence.WritingPoliciesTest do
 
   test "unordered responses are associated with their input indices" do
     model = Fount.Screenplay.new()
-    requests = for id <- ["a", "b", "c"] do
-      {:ok, request} = Fount.Observe.Request.new(model, id, %{"passage" => id})
-      request
-    end
-    {entries, errors} = Association.assemble(requests, [
-      %Fount.Observe.ProviderResult{batch_index: 2, answers: %{}},
-      %Fount.Observe.ProviderResult{batch_index: 0, error: Fount.Observe.Error.new(:provider_timeout)},
-      %Fount.Observe.ProviderResult{batch_index: 1, answers: %{}}
-    ])
+
+    requests =
+      for id <- ["a", "b", "c"] do
+        {:ok, request} = Request.new(model, id, %{"passage" => id})
+        request
+      end
+
+    {entries, errors} =
+      Association.assemble(requests, [
+        %Fount.Observe.ProviderResult{batch_index: 2, answers: %{}},
+        %Fount.Observe.ProviderResult{
+          batch_index: 0,
+          error: Error.new(:provider_timeout)
+        },
+        %Fount.Observe.ProviderResult{batch_index: 1, answers: %{}}
+      ])
+
     assert Enum.map(entries, fn {request, _} -> request.id end) == ["a", "b", "c"]
     assert elem(hd(entries), 1).error.class == :provider_timeout
-    assert [%Fount.Observe.Error{request_id: "a", class: :provider_timeout}] = errors
-
+    assert [%Error{request_id: "a", class: :provider_timeout}] = errors
   end
 
   test "score labels and empty allowed regions are not silently coerced" do

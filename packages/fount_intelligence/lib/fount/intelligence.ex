@@ -1,7 +1,9 @@
 defmodule Fount.Intelligence do
   @moduledoc "Screenplay-specific inspection, comparison and investigation. All observations retain exact source identity."
   alias Fount.Intelligence.Acquisition.Extraction
+  alias Fount.Intelligence.Capabilities
   alias Fount.Intelligence.Playbooks.Action
+  alias Fount.Intelligence.Playbooks.CapabilityRunner
   alias Fount.Intelligence.Playbooks.Comparison
   alias Fount.Intelligence.Playbooks.Constraints
   alias Fount.Intelligence.Playbooks.Continuity
@@ -15,7 +17,8 @@ defmodule Fount.Intelligence do
   alias Fount.Intelligence.Playbooks.SceneMechanics
   alias Fount.Intelligence.Playbooks.StrategyContrast
   alias Fount.Intelligence.Playbooks.Voice
-  alias Fount.Intelligence.Playbooks.{CapabilityRunner, WriterRegistry, WriterRunner}
+  alias Fount.Intelligence.Playbooks.WriterRegistry
+  alias Fount.Intelligence.Playbooks.WriterRunner
   alias Fount.Intelligence.Reporting.{Renderer, Report, WriterPacket}
   alias Fount.Intelligence.Runner.{Resources, ResultValidation}
   alias Fount.Screenplay.Model
@@ -33,7 +36,7 @@ defmodule Fount.Intelligence do
     do: WriterRunner.run(model, playbook, request, clients, opts)
 
   @doc "Lists the four installed Phase-6 capability families."
-  def capability_families, do: Fount.Intelligence.Capabilities.families()
+  def capability_families, do: Capabilities.families()
 
   @doc "Provider-free preflight for one Phase-6 screenplay capability."
   def preflight_capability(model, family, request, opts \\ []),

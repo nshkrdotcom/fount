@@ -58,6 +58,7 @@ defmodule Fount.Intelligence.MixProject do
         "guides/story-world.md",
         "guides/temporal-and-reader.md",
         "guides/diagnosis-and-playbooks.md",
+        "guides/capabilities-a.md",
         "guides/investigations-and-evidence.md",
         "guides/comparison-and-ablation.md",
         "guides/playbook-catalog.md",

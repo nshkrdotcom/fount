@@ -18,14 +18,19 @@ defmodule Fount.Intelligence.Capabilities.SceneEngine do
       source_revision: world.revision_id,
       subject: Model.plain(subject),
       status: result_status(measurement_entries),
-      evidence: Support.merge_evidence([Support.evidence(objects), Support.measurement_evidence(measurement_entries)]),
+      evidence:
+        Support.merge_evidence([
+          Support.evidence(objects),
+          Support.measurement_evidence(measurement_entries)
+        ]),
       measurements: %{
         "keys" => Enum.map(@keys, &to_string/1),
         "entries" => measurement_entries
       },
       derived_state: %{"scenes" => scenes},
       trajectories: %{
-        "presentation" => Enum.map(scenes, &Map.take(&1, ~w(scene_id event_id entry_exit_delta handoff_pressure))),
+        "presentation" =>
+          Enum.map(scenes, &Map.take(&1, ~w(scene_id event_id entry_exit_delta handoff_pressure))),
         "story_time" => scene_story_links(world, scene_ids)
       },
       diagnoses: diagnoses,
@@ -37,24 +42,57 @@ defmodule Fount.Intelligence.Capabilities.SceneEngine do
         "Causal descendants and state changes come only from the supplied frozen StoryWorld; absent records remain unknown.",
         "Presentation order is not treated as diegetic chronology."
       ],
-      metadata: %{"family_version" => 1, "scene_count" => length(scene_ids), "options" => safe_options(opts)}
+      metadata: %{
+        "family_version" => 1,
+        "scene_count" => length(scene_ids),
+        "options" => safe_options(opts)
+      }
     }
   end
 
   defp scene_state(world, scene_id, entries) do
     event_id = Support.event_id_for_scene(scene_id)
+    event_ids = Support.event_ids_for_scene(world, scene_id)
     relevant = Support.relevant_entries(entries, scene_id)
-    beats = world.beats |> Map.values() |> Enum.filter(&(&1.scene_id == scene_id)) |> Enum.sort_by(& &1.id)
-    interactions = world.interactions |> Map.values() |> Enum.filter(&(&1.event_id == event_id)) |> Enum.sort_by(& &1.id)
-    transitions = world.state_transitions |> Map.values() |> Enum.filter(&(&1.event_id == event_id)) |> Enum.sort_by(& &1.id)
-    goals = world.goals |> Map.values() |> Enum.filter(&Support.active_at?(&1.active_at, event_id)) |> Enum.sort_by(& &1.id)
-    outgoing = Support.outgoing_edges(world, [event_id])
-    descendants = StoryWorld.causal_descendants(world, event_id)
+
+    beats =
+      world.beats
+      |> Map.values()
+      |> Enum.filter(&(&1.scene_id == scene_id))
+      |> Enum.sort_by(& &1.id)
+
+    interactions =
+      world.interactions
+      |> Map.values()
+      |> Enum.filter(&(&1.event_id == event_id))
+      |> Enum.sort_by(& &1.id)
+
+    transitions =
+      world.state_transitions
+      |> Map.values()
+      |> Enum.filter(&(&1.event_id in event_ids))
+      |> Enum.sort_by(& &1.id)
+
+    goals =
+      world.goals
+      |> Map.values()
+      |> Enum.filter(&Support.active_at?(&1.active_at, event_id))
+      |> Enum.sort_by(& &1.id)
+
+    outgoing = Support.outgoing_edges(world, event_ids)
+
+    descendants =
+      event_ids
+      |> Enum.flat_map(&StoryWorld.causal_descendants(world, &1))
+      |> Enum.uniq()
+      |> Enum.sort()
 
     source_state = %{
       "objective_records" =>
-        Enum.map(beats, & &1.objective) |> Enum.reject(&is_nil/1) ++ Enum.map(goals, & &1.description),
-      "tactic_records" => Enum.flat_map(beats, &List.wrap(&1.tactic)) ++ Enum.flat_map(interactions, & &1.tactics),
+        Enum.reject(Enum.map(beats, & &1.objective), &is_nil/1) ++
+          Enum.map(goals, & &1.description),
+      "tactic_records" =>
+        Enum.flat_map(beats, &List.wrap(&1.tactic)) ++ Enum.flat_map(interactions, & &1.tactics),
       "information_changes" => Enum.map(beats, & &1.information_change) |> Enum.reject(&is_nil/1),
       "outcomes" => Enum.map(beats, & &1.outcome) |> Enum.reject(&is_nil/1),
       "state_transition_ids" => Support.source_ids(transitions),
@@ -68,14 +106,15 @@ defmodule Fount.Intelligence.Capabilities.SceneEngine do
     %{
       "scene_id" => scene_id,
       "event_id" => event_id,
+      "event_ids" => event_ids,
       "measurements" => measurements,
       "source_state" => source_state,
       "entry_exit_delta" => entry_exit_delta(transitions, beats),
       "turn_candidates" => turn_candidates(relevant, beats),
       "surrounding_sequence_contribution" =>
-        surrounding_sequence_contribution(world, event_id, transitions, outgoing, descendants),
+        surrounding_sequence_contribution(world, event_ids, transitions, outgoing, descendants),
       "handoff_pressure" => handoff_pressure(relevant, descendants, transitions),
-      "counterfactual_support" => Model.plain(StoryWorld.counterfactual_remove(world, [event_id])),
+      "counterfactual_support" => Model.plain(StoryWorld.counterfactual_remove(world, event_ids)),
       "evidence_ids" =>
         Support.merge_evidence([
           Support.evidence(beats ++ interactions ++ transitions ++ goals ++ outgoing),
@@ -119,10 +158,20 @@ defmodule Fount.Intelligence.Capabilities.SceneEngine do
       |> Enum.flat_map(fn beat ->
         [
           if(not is_nil(beat.information_change),
-            do: %{"source" => "story_world", "kind" => "information_change", "beat_id" => beat.id, "value" => Model.plain(beat.information_change)}
+            do: %{
+              "source" => "story_world",
+              "kind" => "information_change",
+              "beat_id" => beat.id,
+              "value" => Model.plain(beat.information_change)
+            }
           ),
           if(not is_nil(beat.transition_reason),
-            do: %{"source" => "story_world", "kind" => "transition_reason", "beat_id" => beat.id, "value" => Model.plain(beat.transition_reason)}
+            do: %{
+              "source" => "story_world",
+              "kind" => "transition_reason",
+              "beat_id" => beat.id,
+              "value" => Model.plain(beat.transition_reason)
+            }
           )
         ]
       end)
@@ -131,15 +180,15 @@ defmodule Fount.Intelligence.Capabilities.SceneEngine do
     measured ++ recorded
   end
 
-  defp surrounding_sequence_contribution(world, event_id, transitions, outgoing, descendants) do
-    incoming = Support.incoming_edges(world, [event_id])
+  defp surrounding_sequence_contribution(world, event_ids, transitions, outgoing, descendants) do
+    incoming = Support.incoming_edges(world, event_ids)
 
     %{
       "incoming_causal_edge_ids" => Support.source_ids(incoming),
       "outgoing_causal_edge_ids" => Support.source_ids(outgoing),
       "downstream_event_ids" => descendants,
       "recorded_state_change_count" => length(transitions),
-      "counterfactual_support" => Model.plain(StoryWorld.counterfactual_remove(world, [event_id]))
+      "counterfactual_support" => Model.plain(StoryWorld.counterfactual_remove(world, event_ids))
     }
   end
 
@@ -161,7 +210,7 @@ defmodule Fount.Intelligence.Capabilities.SceneEngine do
 
     []
     |> maybe_diag(
-      weak?(m["objective"]) and state["objective_records"] == [],
+      unclear_objective?(m, state),
       Support.diagnosis(
         "scene.unclear_objective:#{scene["scene_id"]}",
         "The scene objective may be hard to read.",
@@ -170,7 +219,7 @@ defmodule Fount.Intelligence.Capabilities.SceneEngine do
       )
     )
     |> maybe_diag(
-      weak?(m["consequence"]) and state["causal_descendant_ids"] == [] and state["state_transition_ids"] == [],
+      unclear_consequence?(m, state),
       Support.diagnosis(
         "scene.weak_or_unclear_consequence:#{scene["scene_id"]}",
         "The scene may not establish a consequential exit change.",
@@ -179,17 +228,19 @@ defmodule Fount.Intelligence.Capabilities.SceneEngine do
       )
     )
     |> maybe_diag(
-      supported?(m["tactic"]) and weak?(m["tactic_shift"]),
+      repeated_tactic?(m),
       Support.diagnosis(
         "scene.repeated_tactic:#{scene["scene_id"]}",
         "The scene may hold the same tactic after resistance.",
         "A tactic is visible but a responsive tactic shift is not established.",
         support,
-        limitations: ["Repetition may be intentional rhythm, pressure, comedy, or characterization."]
+        limitations: [
+          "Repetition may be intentional rhythm, pressure, comedy, or characterization."
+        ]
       )
     )
     |> maybe_diag(
-      weak?(m["value_delta"]) and weak?(m["relationship_delta"]) and state["state_transition_ids"] == [],
+      static_state?(m, state),
       Support.diagnosis(
         "scene.static_state_candidate:#{scene["scene_id"]}",
         "The scene may leave tracked state largely unchanged.",
@@ -199,7 +250,7 @@ defmodule Fount.Intelligence.Capabilities.SceneEngine do
       )
     )
     |> maybe_diag(
-      supported?(m["preamble_candidate"]) or supported?(m["linger_candidate"]),
+      entry_exit_candidate?(m),
       Support.diagnosis(
         "scene.entry_exit_economy_candidate:#{scene["scene_id"]}",
         "The scene boundary may admit a later entry or earlier exit.",
@@ -209,8 +260,7 @@ defmodule Fount.Intelligence.Capabilities.SceneEngine do
       )
     )
     |> maybe_diag(
-      (supported?(m["decision"]) or supported?(m["tactic_shift"]) or supported?(m["reveal"])) and
-        weak?(m["consequence"]) and state["causal_descendant_ids"] == [],
+      unsupported_turn?(m, state),
       Support.diagnosis(
         "scene.unsupported_turn_candidate:#{scene["scene_id"]}",
         "A local turn may not yet have an established downstream consequence.",
@@ -219,17 +269,47 @@ defmodule Fount.Intelligence.Capabilities.SceneEngine do
       )
     )
     |> maybe_diag(
-      locally_functional?(m) and state["causal_descendant_ids"] == [] and state["state_transition_ids"] == [],
+      redundant_candidate?(m, state),
       Support.diagnosis(
         "scene.locally_functional_but_redundant_candidate:#{scene["scene_id"]}",
         "The scene may work locally while contributing little recorded downstream dependency.",
         "Objective/tactic evidence is present, but the current StoryWorld records show no downstream causal reach or tracked state change.",
         support,
         uncertainty: "high",
-        limitations: ["Missing StoryWorld records can create this pattern; use scene-lift or sequence evidence before revising."]
+        limitations: [
+          "Missing StoryWorld records can create this pattern; use scene-lift or sequence evidence before revising."
+        ]
       )
     )
   end
+
+  defp unclear_objective?(m, state),
+    do: weak?(m["objective"]) and state["objective_records"] == []
+
+  defp unclear_consequence?(m, state),
+    do:
+      weak?(m["consequence"]) and state["causal_descendant_ids"] == [] and
+        state["state_transition_ids"] == []
+
+  defp repeated_tactic?(m), do: supported?(m["tactic"]) and weak?(m["tactic_shift"])
+
+  defp static_state?(m, state),
+    do:
+      weak?(m["value_delta"]) and weak?(m["relationship_delta"]) and
+        state["state_transition_ids"] == []
+
+  defp entry_exit_candidate?(m),
+    do: supported?(m["preamble_candidate"]) or supported?(m["linger_candidate"])
+
+  defp unsupported_turn?(m, state) do
+    turn? = supported?(m["decision"]) or supported?(m["tactic_shift"]) or supported?(m["reveal"])
+    turn? and weak?(m["consequence"]) and state["causal_descendant_ids"] == []
+  end
+
+  defp redundant_candidate?(m, state),
+    do:
+      locally_functional?(m) and state["causal_descendant_ids"] == [] and
+        state["state_transition_ids"] == []
 
   defp scene_story_links(world, scene_ids) do
     events =
@@ -242,9 +322,13 @@ defmodule Fount.Intelligence.Capabilities.SceneEngine do
   end
 
   defp source_objects(world, scene_ids) do
-    event_ids = MapSet.new(Enum.map(scene_ids, &Support.event_id_for_scene/1))
+    event_ids =
+      scene_ids |> Enum.flat_map(&Support.event_ids_for_scene(world, &1)) |> MapSet.new()
 
-    Enum.filter(Map.values(world.beats), fn beat -> is_binary(beat.scene_id) and MapSet.member?(event_ids, Support.event_id_for_scene(beat.scene_id)) end) ++
+    Enum.filter(Map.values(world.beats), fn beat ->
+      is_binary(beat.scene_id) and
+        MapSet.member?(event_ids, Support.event_id_for_scene(beat.scene_id))
+    end) ++
       Enum.filter(Map.values(world.interactions), &MapSet.member?(event_ids, &1.event_id)) ++
       Enum.filter(Map.values(world.state_transitions), &MapSet.member?(event_ids, &1.event_id)) ++
       Enum.filter(Map.values(world.goals), fn goal ->
@@ -260,7 +344,11 @@ defmodule Fount.Intelligence.Capabilities.SceneEngine do
         entry <- Support.relevant_entries(entries, scene_id),
         key <- @keys,
         Support.status(entry, key) in ["uncertain", "insufficient_evidence", "unavailable"] do
-      %{"scene_id" => scene_id, "measurement" => to_string(key), "status" => Support.status(entry, key)}
+      %{
+        "scene_id" => scene_id,
+        "measurement" => to_string(key),
+        "status" => Support.status(entry, key)
+      }
     end
   end
 
@@ -268,10 +356,17 @@ defmodule Fount.Intelligence.Capabilities.SceneEngine do
     diagnoses
     |> Enum.map(fn diagnosis ->
       case diagnosis["id"] do
-        "scene.unclear_objective:" <> _ -> "Compare the scene objective against character goals active before and after the scene."
-        "scene.weak_or_unclear_consequence:" <> _ -> "Trace scene-lift and downstream dependency effects before changing the exit."
-        "scene.entry_exit_economy_candidate:" <> _ -> "Audition later-entry and earlier-exit variants while protecting required setup and payoff."
-        _ -> "Inspect the cited source and counterevidence before selecting a rewrite strategy."
+        "scene.unclear_objective:" <> _ ->
+          "Compare the scene objective against character goals active before and after the scene."
+
+        "scene.weak_or_unclear_consequence:" <> _ ->
+          "Trace scene-lift and downstream dependency effects before changing the exit."
+
+        "scene.entry_exit_economy_candidate:" <> _ ->
+          "Audition later-entry and earlier-exit variants while protecting required setup and payoff."
+
+        _ ->
+          "Inspect the cited source and counterevidence before selecting a rewrite strategy."
       end
     end)
     |> Enum.uniq()
@@ -282,13 +377,27 @@ defmodule Fount.Intelligence.Capabilities.SceneEngine do
   defp scene_ids(_subject, entries), do: Support.measurement_scenes(entries)
 
   defp weak?(nil), do: true
-  defp weak?(%{"status" => status}), do: status in ["not_supported", "insufficient_evidence", "uncertain", "error"]
+
+  defp weak?(%{"status" => status}),
+    do: status in ["not_supported", "insufficient_evidence", "uncertain", "error"]
+
   defp weak?(_), do: true
   defp supported?(%{"status" => "supported"}), do: true
   defp supported?(_), do: false
   defp locally_functional?(m), do: supported?(m["objective"]) and supported?(m["tactic"])
   defp maybe_diag(list, true, diagnosis), do: list ++ [diagnosis]
   defp maybe_diag(list, false, _diagnosis), do: list
-  defp result_status(entries), do: if(entries != [] and Enum.all?(entries, &(&1["status"] == "complete")), do: "complete", else: "partial")
-  defp safe_options(opts), do: opts |> Keyword.take([:scope_id]) |> Map.new(fn {k, v} -> {to_string(k), Model.plain(v)} end)
+
+  defp result_status(entries),
+    do:
+      if(entries != [] and Enum.all?(entries, &(&1["status"] == "complete")),
+        do: "complete",
+        else: "partial"
+      )
+
+  defp safe_options(opts),
+    do:
+      opts
+      |> Keyword.take([:scope_id])
+      |> Map.new(fn {k, v} -> {to_string(k), Model.plain(v)} end)
 end

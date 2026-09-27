@@ -427,13 +427,13 @@ Existing live Workshop workflows remain in `packages/fount_workshop/examples/liv
 
 ## Current Development Status
 
-The current source delivery is **Phase 6 — Capabilities A: Scene / Agency / Character / Relationship**, implemented offline against the supplied post-Phase-5 Fount snapshot and awaiting Codex runtime QC. Phases 1–5 are complete in the accompanying progress record; Phase 7 and later work are not included.
+**Phase 6 — Capabilities A: Scene / Agency / Character / Relationship** has passed runtime engineering QC on the applied checkout. Phases 1–5 remain complete in the accompanying progress record; Phase 7 and later work are not included. The command evidence and remaining optional human validation debt are recorded in the docset's `handoffs/PHASE_06_RUNTIME_QC_REPORT.md`.
 
 Phase 6 adds source-grounded measurement/reasoning slices for scene objective/opposition/stakes/urgency/tactics/turns/decisions/consequences/entry-exit, character agency and causal reach/latency, non-linear character trajectories without requiring transformation, and directional pair/group relationship state. The writer-facing integrations remain investigative: they return evidence, derived state, diagnoses and next investigations, while actual candidate-page generation and canonical acceptance remain Workshop responsibilities.
 
 Elixir/Erlang/Mix are unavailable in this source-writing environment, so compilation, ExUnit, architecture AST/BEAM checks, package gates, database/PDF preservation and runtime provider behavior are **not claimed passed**. The complete current docset records the source checks that were actually run and the exact Codex exit criteria. Optional human/domain review is validation debt unless real participants and records exist.
 
-The supplied System One SDK snapshot exposes version 0.6.0 APIs. Phase 6 reaches it only through the existing `Fount.Observe` provider boundary; it adds no direct SystemOneSDK, Inference, or ASM dependency to pure Intelligence. Codex must verify the actual dependency resolution and run the repository-native runtime/QC ladder after application.
+The supplied System One SDK snapshot exposes version 0.6.0 APIs. Phase 6 reaches it only through the existing `Fount.Observe` provider boundary; it adds no direct SystemOneSDK, Inference, or ASM dependency to pure Intelligence. Runtime QC used the local SDK checkout through `FOUNT_SYSTEM_ONE_SDK_PATH` without changing package declarations.
 
 ---
 

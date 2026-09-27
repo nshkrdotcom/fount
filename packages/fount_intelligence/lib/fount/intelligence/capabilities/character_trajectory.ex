@@ -31,7 +31,11 @@ defmodule Fount.Intelligence.Capabilities.CharacterTrajectory do
       source_revision: world.revision_id,
       subject: Model.plain(subject),
       status: result_status(measurement_entries),
-      evidence: Support.merge_evidence([Support.evidence(source_objects), Support.measurement_evidence(measurement_entries)]),
+      evidence:
+        Support.merge_evidence([
+          Support.evidence(source_objects),
+          Support.measurement_evidence(measurement_entries)
+        ]),
       measurements: %{
         "keys" => Enum.map(@keys, &to_string/1),
         "entries" => measurement_entries
@@ -87,7 +91,8 @@ defmodule Fount.Intelligence.Capabilities.CharacterTrajectory do
     world.commitments
     |> Map.values()
     |> Enum.filter(fn commitment ->
-      is_nil(character) or Support.subject_equal?(commitment.from, character) or Support.subject_equal?(commitment.to, character)
+      is_nil(character) or Support.subject_equal?(commitment.from, character) or
+        Support.subject_equal?(commitment.to, character)
     end)
     |> Enum.sort_by(& &1.id)
   end
@@ -102,7 +107,9 @@ defmodule Fount.Intelligence.Capabilities.CharacterTrajectory do
   defp character_interactions(world, character) do
     world.interactions
     |> Map.values()
-    |> Enum.filter(&(is_nil(character) or Support.character_in_value?(&1.participants, character)))
+    |> Enum.filter(
+      &(is_nil(character) or Support.character_in_value?(&1.participants, character))
+    )
     |> Enum.sort_by(&Support.event_presentation_key(world, &1.event_id))
   end
 
@@ -118,18 +125,44 @@ defmodule Fount.Intelligence.Capabilities.CharacterTrajectory do
       %{
         "decision" => Model.plain(event),
         "causal_descendant_ids" => StoryWorld.causal_descendants(world, event.id),
-        "counterfactual_support" => Model.plain(StoryWorld.counterfactual_remove(world, [event.id]))
+        "counterfactual_support" =>
+          Model.plain(StoryWorld.counterfactual_remove(world, [event.id]))
       }
     end)
   end
 
   defp goal_pursuit_map(goals, interactions, entries) do
     %{
-      "goals" => Enum.map(goals, &%{"id" => &1.id, "description" => &1.description, "level" => &1.level, "status" => &1.status, "active_at" => Model.plain(&1.active_at)}),
+      "goals" =>
+        Enum.map(
+          goals,
+          &%{
+            "id" => &1.id,
+            "description" => &1.description,
+            "level" => &1.level,
+            "status" => &1.status,
+            "active_at" => Model.plain(&1.active_at)
+          }
+        ),
       "interaction_objectives" =>
-        Enum.map(interactions, &%{"interaction_id" => &1.id, "event_id" => &1.event_id, "objectives" => Model.plain(&1.objectives), "tactics" => Model.plain(&1.tactics)}),
+        Enum.map(
+          interactions,
+          &%{
+            "interaction_id" => &1.id,
+            "event_id" => &1.event_id,
+            "objectives" => Model.plain(&1.objectives),
+            "tactics" => Model.plain(&1.tactics)
+          }
+        ),
       "presentation_measurements" =>
-        Enum.map(entries, &%{"scene_id" => &1["scene_id"], "active_goal" => Support.answer(&1, :active_goal), "tactic_change" => Support.answer(&1, :tactic_change)})
+        Enum.map(
+          entries,
+          &%{
+            "scene_id" => &1["scene_id"],
+            "active_goal" => Support.answer(&1, :active_goal),
+            "tactic_change" => Support.answer(&1, :tactic_change)
+          }
+        )
     }
   end
 
@@ -137,15 +170,25 @@ defmodule Fount.Intelligence.Capabilities.CharacterTrajectory do
     entries
     |> Enum.flat_map(fn entry ->
       case Support.choice(entry, :arc_pattern) do
-        nil -> []
-        choice -> [%{"pattern" => choice, "scene_id" => entry["scene_id"], "answer" => Support.answer(entry, :arc_pattern)}]
+        nil ->
+          []
+
+        choice ->
+          [
+            %{
+              "pattern" => choice,
+              "scene_id" => entry["scene_id"],
+              "answer" => Support.answer(entry, :arc_pattern)
+            }
+          ]
       end
     end)
     |> Enum.group_by(& &1["pattern"])
     |> Enum.map(fn {pattern, items} ->
       %{
         "pattern" => pattern,
-        "supporting_scene_ids" => items |> Enum.map(& &1["scene_id"]) |> Enum.reject(&is_nil/1) |> Enum.uniq(),
+        "supporting_scene_ids" =>
+          items |> Enum.map(& &1["scene_id"]) |> Enum.reject(&is_nil/1) |> Enum.uniq(),
         "support_count" => length(items),
         "status" => "hypothesis"
       }
@@ -160,7 +203,8 @@ defmodule Fount.Intelligence.Capabilities.CharacterTrajectory do
 
     []
     |> maybe_diag(
-      failures != [] and entries != [] and Support.all_not_supported?(entries, :adapts_after_failure),
+      failures != [] and entries != [] and
+        Support.all_not_supported?(entries, :adapts_after_failure),
       Support.diagnosis(
         "character.adaptation_gap_candidate",
         "The character may repeat a response after recorded failure without a visible adaptation.",
@@ -176,12 +220,15 @@ defmodule Fount.Intelligence.Capabilities.CharacterTrajectory do
         "A recurring defensive response appears across the selected trajectory.",
         "At least one scene-level repeated-defense measurement is supported.",
         ids,
-        limitations: ["A repeated defense can be a meaningful character pattern rather than a defect."]
+        limitations: [
+          "A repeated defense can be a meaningful character pattern rather than a defect."
+        ]
       )
     )
     |> maybe_diag(
       intended_change in ["change", "transform", "adapt"] and transitions == [] and
-        Support.all_not_supported?(entries, :belief_change) and Support.all_not_supported?(entries, :value_change),
+        Support.all_not_supported?(entries, :belief_change) and
+        Support.all_not_supported?(entries, :value_change),
       Support.diagnosis(
         "character.intent_change_gap",
         "The current evidence may not yet establish the character change named in writer intent.",
@@ -199,14 +246,20 @@ defmodule Fount.Intelligence.Capabilities.CharacterTrajectory do
       for entry <- entries,
           key <- @keys,
           Support.status(entry, key) in ["uncertain", "insufficient_evidence", "unavailable"] do
-        %{"scene_id" => entry["scene_id"], "measurement" => to_string(key), "status" => Support.status(entry, key)}
+        %{
+          "scene_id" => entry["scene_id"],
+          "measurement" => to_string(key),
+          "status" => Support.status(entry, key)
+        }
       end
 
     chronology =
       trajectory["adjacent_story_time_relations"]
       |> Enum.filter(fn link ->
         relation = link["story_time_relation"]
-        relation == "unknown" or match?(%{"status" => status} when status in ["ambiguous", "contradiction"], relation)
+
+        relation == "unknown" or
+          match?(%{"status" => status} when status in ["ambiguous", "contradiction"], relation)
       end)
       |> Enum.map(&Map.put(&1, "kind", "story_time_uncertainty"))
 
@@ -217,15 +270,28 @@ defmodule Fount.Intelligence.Capabilities.CharacterTrajectory do
     base =
       Enum.map(diagnoses, fn diagnosis ->
         case diagnosis["id"] do
-          "character.adaptation_gap_candidate" -> "Compare the failure, next tactic, and next consequential decision before rewriting motivation."
-          "character.repeated_defense_pattern" -> "Decide whether the repeated defense is meant to persist, escalate, fracture, or finally fail."
-          "character.intent_change_gap" -> "Locate the intended transition point and test belief, value, commitment, and relationship evidence separately."
-          _ -> "Inspect cited evidence and competing arc hypotheses before selecting a change."
+          "character.adaptation_gap_candidate" ->
+            "Compare the failure, next tactic, and next consequential decision before rewriting motivation."
+
+          "character.repeated_defense_pattern" ->
+            "Decide whether the repeated defense is meant to persist, escalate, fracture, or finally fail."
+
+          "character.intent_change_gap" ->
+            "Locate the intended transition point and test belief, value, commitment, and relationship evidence separately."
+
+          _ ->
+            "Inspect cited evidence and competing arc hypotheses before selecting a change."
         end
       end)
 
     if trajectory["non_linear_presentation"],
-      do: Enum.uniq(base ++ ["Compare reader-visible presentation order against established story-time order before diagnosing an arc discontinuity."]),
+      do:
+        Enum.uniq(
+          base ++
+            [
+              "Compare reader-visible presentation order against established story-time order before diagnosing an arc discontinuity."
+            ]
+        ),
       else: Enum.uniq(base)
   end
 
@@ -236,7 +302,7 @@ defmodule Fount.Intelligence.Capabilities.CharacterTrajectory do
 
   defp measurement_ids(entries) do
     entries
-    |> Enum.flat_map(&get_in(&1, ["provenance", "measurement_ids"]) || [])
+    |> Enum.flat_map(&(get_in(&1, ["provenance", "measurement_ids"]) || []))
     |> Enum.uniq()
     |> Enum.sort()
   end
@@ -245,6 +311,13 @@ defmodule Fount.Intelligence.Capabilities.CharacterTrajectory do
   defp intent_value(_, _), do: nil
   defp maybe_diag(list, true, diagnosis), do: list ++ [diagnosis]
   defp maybe_diag(list, false, _diagnosis), do: list
-  defp result_status(entries), do: if(entries != [] and Enum.all?(entries, &(&1["status"] == "complete")), do: "complete", else: "partial")
+
+  defp result_status(entries),
+    do:
+      if(entries != [] and Enum.all?(entries, &(&1["status"] == "complete")),
+        do: "complete",
+        else: "partial"
+      )
+
   defp safe_options(opts), do: %{"intent" => Model.plain(Keyword.get(opts, :intent, %{}))}
 end

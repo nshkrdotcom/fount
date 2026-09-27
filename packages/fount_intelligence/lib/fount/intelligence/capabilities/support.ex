@@ -71,6 +71,17 @@ defmodule Fount.Intelligence.Capabilities.Support do
   def event_id_for_scene(scene_id) when is_binary(scene_id), do: "scene:" <> scene_id
   def event_id_for_scene(_), do: nil
 
+  def event_ids_for_scene(world, scene_id) do
+    world.events
+    |> Map.values()
+    |> Enum.filter(fn event ->
+      Enum.any?(event.presentation_points, &(&1.scene_id == scene_id))
+    end)
+    |> Enum.map(& &1.id)
+    |> Enum.uniq()
+    |> Enum.sort()
+  end
+
   def event_presentation_key(world, event_id) do
     case world.events[event_id] do
       %{presentation_points: [point | _]} ->
@@ -108,7 +119,8 @@ defmodule Fount.Intelligence.Capabilities.Support do
     %{
       "presentation_order" => Enum.map(ordered, & &1.id),
       "adjacent_story_time_relations" => links,
-      "non_linear_presentation" => Enum.any?(links, & &1["presentation_conflicts_with_known_story_time"])
+      "non_linear_presentation" =>
+        Enum.any?(links, & &1["presentation_conflicts_with_known_story_time"])
     }
   end
 
@@ -132,7 +144,13 @@ defmodule Fount.Intelligence.Capabilities.Support do
       sources = edges |> Enum.map(& &1.from) |> Enum.uniq() |> Enum.sort()
 
       if length(sources) > 1,
-        do: [%{"target" => target, "sources" => sources, "edge_ids" => Enum.map(edges, & &1.id) |> Enum.sort()}],
+        do: [
+          %{
+            "target" => target,
+            "sources" => sources,
+            "edge_ids" => Enum.map(edges, & &1.id) |> Enum.sort()
+          }
+        ],
         else: []
     end)
     |> Enum.sort_by(& &1["target"])
@@ -219,12 +237,14 @@ defmodule Fount.Intelligence.Capabilities.Support do
   def relevant_entries(entries, _), do: entries
 
   defp reverse_relation?(%{status: :known, relations: relations}), do: "after" in relations
-  defp reverse_relation?(%{"status" => "known", "relations" => relations}), do: "after" in relations
+
   defp reverse_relation?(_), do: false
 
   defp same_members?(left, right) do
     left = Enum.reject(left, &is_nil/1)
-    length(left) == length(right) and MapSet.new(Enum.map(left, &value_key/1)) == MapSet.new(Enum.map(right, &value_key/1))
+
+    length(left) == length(right) and
+      MapSet.new(Enum.map(left, &value_key/1)) == MapSet.new(Enum.map(right, &value_key/1))
   end
 
   defp value_key(value), do: CanonicalJSON.hash(Model.plain(value))

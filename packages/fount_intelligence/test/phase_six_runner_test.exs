@@ -9,6 +9,7 @@ defmodule Fount.Intelligence.PhaseSixRunnerTest do
   test "scene doctor runs one source-visible measurement per selected scene and returns writer packet" do
     screenplay = PhaseSixFixture.screenplay()
     scene = hd(screenplay.ir.scenes)
+
     request = %{
       "selection" => %{"targets" => [%{"kind" => "scene", "id" => scene.id}]},
       "subject" => %{"scene_id" => scene.id},
@@ -34,6 +35,8 @@ defmodule Fount.Intelligence.PhaseSixRunnerTest do
     assert packet.candidate == nil
     assert packet.evidence != []
     assert Map.has_key?(packet.derived_state, "scene_engine")
+    assert {:ok, markdown} = Intelligence.render_packet(packet, :markdown)
+    assert String.contains?(markdown, "Inspect source evidence")
   end
 
   test "preflight dispatches no provider and reports selected source coverage" do
@@ -55,6 +58,42 @@ defmodule Fount.Intelligence.PhaseSixRunnerTest do
     assert preflight["coverage"]["selected_scene_count"] == 1
     assert preflight["estimate"]["provider_requests_before_retries_estimate"] >= 0
   end
+
+  test "selection and provider caps report partial coverage" do
+    screenplay = PhaseSixFixture.screenplay()
+    scenes = Enum.take(screenplay.ir.scenes, 2)
+    selection = %{"targets" => Enum.map(scenes, &%{"kind" => "scene", "id" => &1.id})}
+    request = %{"selection" => selection, "subject" => %{"scene_id" => hd(scenes).id}}
+
+    {:ok, preflight} =
+      Intelligence.preflight_capability(screenplay, "scene_engine", request,
+        max_capability_scenes: 1,
+        max_capability_fragments_per_scene: 1
+      )
+
+    assert preflight["coverage"]["scene_cap_reached"]
+    assert preflight["coverage"]["fragment_cap_reached_scene_ids"] != []
+
+    {:ok, spec} = CapabilityMeasurements.fetch("scene_engine")
+
+    fixtures =
+      Map.new(
+        scenes,
+        &{"capability:scene_engine:scene:#{&1.id}", sandbox_answers(spec["questions"])}
+      )
+
+    {:ok, result} =
+      Intelligence.run_capability(
+        screenplay,
+        "scene_engine",
+        request,
+        %{observe: Sandbox.new!(fixtures)},
+        max_capability_provider_requests: 1
+      )
+
+    assert result.status == "partial"
+  end
+
   test "character and relationship writer playbooks cover all remaining Phase-6 families through Sandbox" do
     screenplay = PhaseSixFixture.screenplay()
     scene = hd(screenplay.ir.scenes)
@@ -115,19 +154,19 @@ defmodule Fount.Intelligence.PhaseSixRunnerTest do
     Map.new(questions, fn {key, question} ->
       value =
         case question.kind do
-          :noul ->
-            0.9
-
-          :choice ->
-            labels = Enum.map(question.criteria, &elem(&1, 0))
-            selected = hd(labels)
-            remainder = if length(labels) > 1, do: 0.1 / (length(labels) - 1), else: 0.0
-            probabilities = Map.new(labels, &{&1, if(&1 == selected, do: 0.9, else: remainder)})
-            %{"probabilities" => probabilities, "choice" => selected, "confidence" => 0.9}
+          :noul -> 0.9
+          :choice -> sandbox_choice(question)
         end
 
       {to_string(key), value}
     end)
   end
 
+  defp sandbox_choice(question) do
+    labels = Enum.map(question.criteria, &elem(&1, 0))
+    selected = hd(labels)
+    remainder = if length(labels) > 1, do: 0.1 / (length(labels) - 1), else: 0.0
+    probabilities = Map.new(labels, &{&1, if(&1 == selected, do: 0.9, else: remainder)})
+    %{"probabilities" => probabilities, "choice" => selected, "confidence" => 0.9}
+  end
 end

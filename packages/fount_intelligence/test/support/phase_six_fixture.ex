@@ -12,7 +12,10 @@ defmodule Fount.Intelligence.TestSupport.PhaseSixFixture do
         %{
           heading: "INT. SERVICE OFFICE - NIGHT",
           elements: [
-            %{type: :action, text: "Mara asks Dan for the archive ledger before the morning audit."},
+            %{
+              type: :action,
+              text: "Mara asks Dan for the archive ledger before the morning audit."
+            },
             %{type: :dialogue, character: "MARA", text: "I need the ledger tonight."},
             %{type: :action, text: "Dan keeps the archive key in his palm instead of answering."}
           ]
@@ -20,21 +23,30 @@ defmodule Fount.Intelligence.TestSupport.PhaseSixFixture do
         %{
           heading: "INT. SERVICE CORRIDOR - YEARS EARLIER",
           elements: [
-            %{type: :action, text: "Dan refuses to open the archive. Mara takes the spare key herself."},
+            %{
+              type: :action,
+              text: "Dan refuses to open the archive. Mara takes the spare key herself."
+            },
             %{type: :dialogue, character: "DAN", text: "Not for you."}
           ]
         },
         %{
           heading: "INT. ARCHIVE - LATER",
           elements: [
-            %{type: :action, text: "Mara gives Dan the key and chooses to let him open the cabinet."},
+            %{
+              type: :action,
+              text: "Mara gives Dan the key and chooses to let him open the cabinet."
+            },
             %{type: :action, text: "Dan opens it. The ledger is inside."}
           ]
         },
         %{
           heading: "EXT. LOADING DOCK - PRE-DAWN",
           elements: [
-            %{type: :action, text: "Dan gives the ledger to the waiting investigator before Mara can take it."},
+            %{
+              type: :action,
+              text: "Dan gives the ledger to the waiting investigator before Mara can take it."
+            },
             %{type: :dialogue, character: "MARA", text: "You already chose."}
           ]
         },
@@ -106,22 +118,38 @@ defmodule Fount.Intelligence.TestSupport.PhaseSixFixture do
         "status" => "active",
         "active_at" => [scene_1, scene_3, scene_4]
       }),
-      interaction("office-negotiation", a1, scene_1, ["Mara", "Dan"],
+      interaction(
+        "office-negotiation",
+        a1,
+        scene_1,
+        ["Mara", "Dan"],
         ["Mara wants the ledger", "Dan wants to control access"],
         ["direct request", "withholding"],
         %{"leverage" => "Dan retains the key"}
       ),
-      interaction("flashback-refusal", a3, scene_2, ["Mara", "Dan"],
+      interaction(
+        "flashback-refusal",
+        a3,
+        scene_2,
+        ["Mara", "Dan"],
         ["Mara wants access", "Dan refuses access"],
         ["refusal", "self-help"],
         %{"trust" => "guarded"}
       ),
-      interaction("archive-trust", a4, scene_3, ["Mara", "Dan"],
+      interaction(
+        "archive-trust",
+        a4,
+        scene_3,
+        ["Mara", "Dan"],
         ["Mara tests trust", "Dan opens the cabinet"],
         ["delegation", "cooperation"],
         %{"trust" => "tentative"}
       ),
-      interaction("dock-betrayal", a6, scene_4, ["Mara", "Dan"],
+      interaction(
+        "dock-betrayal",
+        a6,
+        scene_4,
+        ["Mara", "Dan"],
         ["Dan hands off the ledger", "Mara confronts the choice"],
         ["preemption", "recognition"],
         %{"trust" => "broken", "leverage" => "investigator controls evidence"}
@@ -158,16 +186,96 @@ defmodule Fount.Intelligence.TestSupport.PhaseSixFixture do
         "value_delta" => "Mara loses control of the evidence",
         "outcome" => "The investigator receives the ledger."
       }),
-      transition("mara-plan-self-help", a3, "Mara", "plan.archive_access", "ask Dan", "take spare key", "mara-takes-key"),
-      transition("mara-belief-dan-maybe-trustworthy", a4, "Mara", "belief.Dan", "guarded", "tentatively trustworthy", "mara-trust-decision"),
-      transition("mara-belief-dan-betrayed", a6, "Mara", "belief.Dan", "tentatively trustworthy", "betrayed trust", "dan-handoff"),
-      transition("trust-flashback", a3, %{"from" => "Mara", "to" => "Dan"}, "relationship.trust", "open", "guarded", "mara-takes-key"),
-      transition("trust-office", a1, %{"from" => "Mara", "to" => "Dan"}, "relationship.trust", "guarded", "transactional", "mara-asks"),
-      transition("trust-archive", a4, %{"from" => "Mara", "to" => "Dan"}, "relationship.trust", "transactional", "tentative", "mara-trust-decision"),
-      transition("trust-dock", a6, %{"from" => "Mara", "to" => "Dan"}, "relationship.trust", "tentative", "broken", "dan-handoff"),
-      transition("leverage-office", a2, %{"from" => "Dan", "to" => "Mara"}, "relationship.leverage", "medium", "high", "mara-asks"),
-      transition("leverage-dock", a6, %{"from" => "Dan", "to" => "Mara"}, "relationship.leverage", "high", "low", "dan-handoff"),
-      transition("obligation-archive", a4, %{"from" => "Mara", "to" => "Dan"}, "relationship.obligation", "none", "owes trust", "mara-trust-decision"),
+      transition(
+        "mara-plan-self-help",
+        a3,
+        "Mara",
+        "plan.archive_access",
+        "ask Dan",
+        "take spare key",
+        "mara-takes-key"
+      ),
+      transition(
+        "mara-belief-dan-maybe-trustworthy",
+        a4,
+        "Mara",
+        "belief.Dan",
+        "guarded",
+        "tentatively trustworthy",
+        "mara-trust-decision"
+      ),
+      transition(
+        "mara-belief-dan-betrayed",
+        a6,
+        "Mara",
+        "belief.Dan",
+        "tentatively trustworthy",
+        "betrayed trust",
+        "dan-handoff"
+      ),
+      transition(
+        "trust-flashback",
+        a3,
+        %{"from" => "Mara", "to" => "Dan"},
+        "relationship.trust",
+        "open",
+        "guarded",
+        "mara-takes-key"
+      ),
+      transition(
+        "trust-office",
+        a1,
+        %{"from" => "Mara", "to" => "Dan"},
+        "relationship.trust",
+        "guarded",
+        "transactional",
+        "mara-asks"
+      ),
+      transition(
+        "trust-archive",
+        a4,
+        %{"from" => "Mara", "to" => "Dan"},
+        "relationship.trust",
+        "transactional",
+        "tentative",
+        "mara-trust-decision"
+      ),
+      transition(
+        "trust-dock",
+        a6,
+        %{"from" => "Mara", "to" => "Dan"},
+        "relationship.trust",
+        "tentative",
+        "broken",
+        "dan-handoff"
+      ),
+      transition(
+        "leverage-office",
+        a2,
+        %{"from" => "Dan", "to" => "Mara"},
+        "relationship.leverage",
+        "medium",
+        "high",
+        "mara-asks"
+      ),
+      transition(
+        "leverage-dock",
+        a6,
+        %{"from" => "Dan", "to" => "Mara"},
+        "relationship.leverage",
+        "high",
+        "low",
+        "dan-handoff"
+      ),
+      transition(
+        "obligation-archive",
+        a4,
+        %{"from" => "Mara", "to" => "Dan"},
+        "relationship.obligation",
+        "none",
+        "owes trust",
+        "mara-trust-decision"
+      ),
       record("commitment", "dan-ledger-promise", a5, %{
         "kind" => "promise",
         "from" => "Dan",

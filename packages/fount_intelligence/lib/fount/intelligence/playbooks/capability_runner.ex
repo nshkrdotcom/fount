@@ -29,7 +29,12 @@ defmodule Fount.Intelligence.Playbooks.CapabilityRunner do
            Measurements.preflight(
              prepared.inputs,
              prepared.spec["questions"],
-             measurement_opts(opts, model, prepared.spec["lens_id"], min(cap, length(prepared.inputs)))
+             measurement_opts(
+               opts,
+               model,
+               prepared.spec["lens_id"],
+               min(cap, length(prepared.inputs))
+             )
            ) do
       {:ok,
        %{
@@ -57,7 +62,12 @@ defmodule Fount.Intelligence.Playbooks.CapabilityRunner do
              provider,
              prepared.inputs,
              prepared.spec["questions"],
-             measurement_opts(opts, model, prepared.spec["lens_id"], min(cap, length(prepared.inputs)))
+             measurement_opts(
+               opts,
+               model,
+               prepared.spec["lens_id"],
+               min(cap, length(prepared.inputs))
+             )
            ),
          entries = annotate_entries(report["entries"], prepared.inputs),
          {:ok, result} <-
@@ -92,25 +102,28 @@ defmodule Fount.Intelligence.Playbooks.CapabilityRunner do
 
   def preflight_playbook(model, playbook, request, opts \\ []) do
     with {:ok, families} <- families_for_playbook(playbook) do
-      Enum.reduce_while(families, {:ok, []}, fn family, {:ok, acc} ->
-        case preflight(model, family, request, opts) do
-          {:ok, result} -> {:cont, {:ok, acc ++ [result]}}
-          error -> {:halt, error}
-        end
-      end)
-      |> case do
-        {:ok, results} -> {:ok, %{"playbook" => playbook, "families" => results}}
-        error -> error
+      preflight_families(model, playbook, request, opts, families)
+    end
+  end
+
+  defp preflight_families(model, playbook, request, opts, families) do
+    Enum.reduce_while(families, {:ok, []}, fn family, {:ok, acc} ->
+      case preflight(model, family, request, opts) do
+        {:ok, result} -> {:cont, {:ok, acc ++ [result]}}
+        error -> {:halt, error}
       end
+    end)
+    |> case do
+      {:ok, results} -> {:ok, %{"playbook" => playbook, "families" => results}}
+      error -> error
     end
   end
 
   def run_playbook(model, playbook, request, clients \\ %{}, opts \\ []) do
     with {:ok, definition} <- WriterRegistry.fetch(playbook),
          {:ok, families} <- families_for_playbook(playbook),
-         {:ok, results} <- run_families(model, families, request, clients, shared_budget(opts)),
-         {:ok, packet} <- packet(model, definition, request, results) do
-      {:ok, packet}
+         {:ok, results} <- run_families(model, families, request, clients, shared_budget(opts)) do
+      packet(model, definition, request, results)
     end
   end
 
@@ -148,14 +161,18 @@ defmodule Fount.Intelligence.Playbooks.CapabilityRunner do
 
   defp source_inputs(units, opts) do
     scene_cap = Keyword.get(opts, :max_capability_scenes, @default_scene_cap)
-    fragment_cap = Keyword.get(opts, :max_capability_fragments_per_scene, @default_fragments_per_scene)
+
+    fragment_cap =
+      Keyword.get(opts, :max_capability_fragments_per_scene, @default_fragments_per_scene)
 
     if valid_positive_cap?(scene_cap) and valid_positive_cap?(fragment_cap) do
       grouped =
         units
         |> Enum.reject(&is_nil(&1["scene_id"]))
         |> Enum.group_by(& &1["scene_id"])
-        |> Enum.sort_by(fn {_scene_id, scene_units} -> Enum.min(Enum.map(scene_units, & &1["ordinal"])) end)
+        |> Enum.sort_by(fn {_scene_id, scene_units} ->
+          Enum.min(Enum.map(scene_units, & &1["ordinal"]))
+        end)
 
       selected_groups = Enum.take(grouped, scene_cap)
 
@@ -214,19 +231,32 @@ defmodule Fount.Intelligence.Playbooks.CapabilityRunner do
   defp selection(_), do: {:error, :capability_selection_required}
 
   defp subject("scene_engine", %{"subject" => subject}, _source), do: {:ok, subject}
+
   defp subject("scene_engine", request, source) do
-    scene_id = request["scene_id"] || (source.groups |> List.first() |> elem(0))
+    scene_id = request["scene_id"] || source.groups |> List.first() |> elem(0)
     {:ok, %{"scene_id" => scene_id}}
   end
 
-  defp subject("agency_causality", %{"subject" => subject}, _source), do: validate_character(subject)
-  defp subject("character_trajectory", %{"subject" => subject}, _source), do: validate_character(subject)
-  defp subject("relationship_dynamics", %{"subject" => subject}, _source), do: validate_pair(subject)
+  defp subject("agency_causality", %{"subject" => subject}, _source),
+    do: validate_character(subject)
+
+  defp subject("character_trajectory", %{"subject" => subject}, _source),
+    do: validate_character(subject)
+
+  defp subject("relationship_dynamics", %{"subject" => subject}, _source),
+    do: validate_pair(subject)
+
   defp subject(_, _, _), do: {:error, :capability_subject_required}
 
-  defp validate_character(%{"character" => character} = subject) when is_binary(character) and character != "", do: {:ok, subject}
-  defp validate_character(%{"character_id" => character} = subject) when is_binary(character) and character != "", do: {:ok, subject}
-  defp validate_character(character) when is_binary(character) and character != "", do: {:ok, character}
+  defp validate_character(%{"character" => character} = subject)
+       when is_binary(character) and character != "", do: {:ok, subject}
+
+  defp validate_character(%{"character_id" => character} = subject)
+       when is_binary(character) and character != "", do: {:ok, subject}
+
+  defp validate_character(character) when is_binary(character) and character != "",
+    do: {:ok, character}
+
   defp validate_character(_), do: {:error, :character_subject_required}
 
   defp validate_pair(%{"characters" => [left, right | _] = characters} = subject)
@@ -237,13 +267,17 @@ defmodule Fount.Intelligence.Playbooks.CapabilityRunner do
        when not is_nil(left) and not is_nil(right),
        do: {:ok, Map.put(subject, "pair", characters)}
 
-  defp validate_pair([left, right | _] = characters) when not is_nil(left) and not is_nil(right), do: {:ok, characters}
+  defp validate_pair([left, right | _] = characters) when not is_nil(left) and not is_nil(right),
+    do: {:ok, characters}
+
   defp validate_pair(_), do: {:error, :relationship_pair_required}
 
   defp story_world_records(request) do
     case Map.get(request, "story_world_records", []) do
       records when is_list(records) ->
-        if Enum.all?(records, &is_map/1), do: {:ok, records}, else: {:error, :invalid_story_world_records}
+        if Enum.all?(records, &is_map/1),
+          do: {:ok, records},
+          else: {:error, :invalid_story_world_records}
 
       _ ->
         {:error, :invalid_story_world_records}
@@ -271,7 +305,10 @@ defmodule Fount.Intelligence.Playbooks.CapabilityRunner do
       normalize_concern(request),
       %{
         status: status,
-        scope: %{"selection" => request["selection"], "subject" => Model.plain(request["subject"])},
+        scope: %{
+          "selection" => request["selection"],
+          "subject" => Model.plain(request["subject"])
+        },
         intent: Map.get(request, "intent", %{}),
         finding: concise_finding(definition, diagnoses),
         coverage: %{
@@ -280,18 +317,23 @@ defmodule Fount.Intelligence.Playbooks.CapabilityRunner do
         },
         evidence: evidence,
         derived_state: Map.new(maps, &{&1["family"], &1["derived_state"]}),
-        trajectory: Enum.flat_map(maps, &[%{"family" => &1["family"], "trajectories" => &1["trajectories"]}]),
+        trajectory:
+          Enum.flat_map(
+            maps,
+            &[%{"family" => &1["family"], "trajectories" => &1["trajectories"]}]
+          ),
         diagnoses: diagnoses,
         uncertainty: Enum.flat_map(maps, & &1["uncertainty"]),
         protected_strengths: List.wrap(request["protected_strengths"] || []),
         next_investigations: maps |> Enum.flat_map(& &1["next_investigations"]) |> Enum.uniq(),
         strategies: List.wrap(request["strategies"] || []),
         resource_usage: combined_usage(results),
-        errors: maps |> Enum.flat_map(&get_in(&1, ["metadata", "measurement_errors"]) || []),
+        errors: maps |> Enum.flat_map(&(get_in(&1, ["metadata", "measurement_errors"]) || [])),
         provenance: %{
           "phase" => 6,
           "capability_families" => Enum.map(results, & &1.family),
-          "measurement_spec_sha256" => Map.new(results, &{&1.family, &1.metadata["measurement_spec_sha256"]}),
+          "measurement_spec_sha256" =>
+            Map.new(results, &{&1.family, &1.metadata["measurement_spec_sha256"]}),
           "playbook_definition" => definition
         },
         limitations:
@@ -309,21 +351,32 @@ defmodule Fount.Intelligence.Playbooks.CapabilityRunner do
   end
 
   defp normalize_concern(%{"concern" => %{} = concern}), do: concern
-  defp normalize_concern(%{"concern" => concern}) when is_binary(concern), do: %{"summary" => concern}
-  defp normalize_concern(_), do: %{"summary" => "Inspect the selected screenplay material using the requested Phase-6 capability families."}
+
+  defp normalize_concern(%{"concern" => concern}) when is_binary(concern),
+    do: %{"summary" => concern}
+
+  defp normalize_concern(_),
+    do: %{
+      "summary" =>
+        "Inspect the selected screenplay material using the requested Phase-6 capability families."
+    }
 
   defp concise_finding(definition, []),
-    do: "#{definition["label"]} found no diagnosis that crossed its current evidence rules; inspect uncertainty and missing StoryWorld records before treating this as a clean bill of health."
+    do:
+      "#{definition["label"]} found no diagnosis that crossed its current evidence rules; inspect uncertainty and missing StoryWorld records before treating this as a clean bill of health."
 
   defp concise_finding(definition, diagnoses) do
     labels = diagnoses |> Enum.take(3) |> Enum.map_join(", ", & &1["id"])
     remainder = max(length(diagnoses) - 3, 0)
     suffix = if remainder > 0, do: " (+#{remainder} more)", else: ""
+
     "#{definition["label"]} surfaced source-grounded diagnosis candidates: #{labels}#{suffix}. They remain hypotheses until the writer inspects the cited evidence and alternatives."
   end
 
   defp combined_usage(results) do
-    usages = Enum.map(results, & &1.metadata["measurement_resource_usage"]) |> Enum.reject(&is_nil/1)
+    usages =
+      Enum.map(results, & &1.metadata["measurement_resource_usage"]) |> Enum.reject(&is_nil/1)
+
     %{"capability_runs" => usages, "family_count" => length(results)}
   end
 
@@ -345,7 +398,10 @@ defmodule Fount.Intelligence.Playbooks.CapabilityRunner do
 
   defp provider_cap(opts) do
     value = Keyword.get(opts, :max_capability_provider_requests, @default_provider_cap)
-    if is_integer(value) and value >= 0 and value <= 10_000, do: {:ok, value}, else: {:error, :invalid_resource_cap}
+
+    if is_integer(value) and value >= 0 and value <= 10_000,
+      do: {:ok, value},
+      else: {:error, :invalid_resource_cap}
   end
 
   defp families_for_playbook(playbook) do
@@ -356,12 +412,18 @@ defmodule Fount.Intelligence.Playbooks.CapabilityRunner do
   end
 
   defp shared_budget(opts) do
-    if Resources.from_options(opts), do: opts, else: Keyword.put(opts, :analysis_budget, Resources.new(opts))
+    if Resources.from_options(opts),
+      do: opts,
+      else: Keyword.put(opts, :analysis_budget, Resources.new(opts))
   end
 
   defp combined_status(result_status, report_status, coverage) do
-    complete_coverage = not coverage["scene_cap_reached"] and coverage["fragment_cap_reached_scene_ids"] == []
-    if result_status == "complete" and report_status == "complete" and complete_coverage, do: "complete", else: "partial"
+    complete_coverage =
+      not coverage["scene_cap_reached"] and coverage["fragment_cap_reached_scene_ids"] == []
+
+    if result_status == "complete" and report_status == "complete" and complete_coverage,
+      do: "complete",
+      else: "partial"
   end
 
   defp valid_positive_cap?(value), do: is_integer(value) and value > 0 and value <= 10_000

@@ -9,7 +9,10 @@ screenplay =
       %{
         heading: "INT. SERVICE OFFICE - NIGHT",
         elements: [
-          %{type: :action, text: "Mara asks Dan for the archive ledger before the morning audit."},
+          %{
+            type: :action,
+            text: "Mara asks Dan for the archive ledger before the morning audit."
+          },
           %{type: :action, text: "Dan keeps the archive key in his palm instead of answering."}
         ]
       }
@@ -24,7 +27,9 @@ provider = Sandbox.new!(%{"capability:scene_engine:scene:#{scene.id}" => answers
 request = %{
   "selection" => %{"targets" => [%{"kind" => "scene", "id" => scene.id}]},
   "subject" => %{"scene_id" => scene.id},
-  "concern" => %{"summary" => "Does the office scene hand off enough pressure to justify the next scene?"},
+  "concern" => %{
+    "summary" => "Does the office scene hand off enough pressure to justify the next scene?"
+  },
   "intent" => %{"desired_effect" => "urgent bargaining"},
   "protected_strengths" => ["Dan's quiet control of the key"]
 }
@@ -37,4 +42,5 @@ request = %{
     %{observe: provider}
   )
 
-IO.puts(Intelligence.render_packet(packet, :markdown))
+{:ok, markdown} = Intelligence.render_packet(packet, :markdown)
+IO.puts(markdown)

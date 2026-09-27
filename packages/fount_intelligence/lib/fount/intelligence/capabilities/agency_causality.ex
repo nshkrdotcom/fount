@@ -20,17 +20,26 @@ defmodule Fount.Intelligence.Capabilities.AgencyCausality do
     chains = build_chains(world, decisions, actions, consequences)
     reach = Enum.map(decisions, &Support.causal_reach(world, &1.id))
     alternates = Support.alternate_support(world)
-    counterfactuals = Enum.map(decisions, &Model.plain(StoryWorld.counterfactual_remove(world, [&1.id])))
+
+    counterfactuals =
+      Enum.map(decisions, &Model.plain(StoryWorld.counterfactual_remove(world, [&1.id])))
+
     consequence_latency = consequence_latency(world, events, chains, measurement_entries)
     diagnoses = diagnoses(character, measurement_entries, decisions, chains, alternates, opts)
-    source_objects = events ++ goals ++ character_commitments(world, character) ++ causal_objects(world, events)
+
+    source_objects =
+      events ++ goals ++ character_commitments(world, character) ++ causal_objects(world, events)
 
     %Result{
       family: "agency_causality",
       source_revision: world.revision_id,
       subject: Model.plain(subject),
       status: result_status(measurement_entries),
-      evidence: Support.merge_evidence([Support.evidence(source_objects), Support.measurement_evidence(measurement_entries)]),
+      evidence:
+        Support.merge_evidence([
+          Support.evidence(source_objects),
+          Support.measurement_evidence(measurement_entries)
+        ]),
       measurements: %{
         "keys" => Enum.map(@keys, &to_string/1),
         "entries" => measurement_entries
@@ -107,7 +116,8 @@ defmodule Fount.Intelligence.Capabilities.AgencyCausality do
         %{
           "decision_id" => decision_id,
           "consequence_id" => consequence_id,
-          "story_time_relation" => Model.plain(StoryWorld.story_time_relation(world, decision_id, consequence_id)),
+          "story_time_relation" =>
+            Model.plain(StoryWorld.story_time_relation(world, decision_id, consequence_id)),
           "presentation_event_distance" =>
             if(is_integer(left) and is_integer(right), do: right - left, else: nil),
           "delayed_consequence_measurement_scene_ids" => measured_scene_ids
@@ -139,12 +149,18 @@ defmodule Fount.Intelligence.Capabilities.AgencyCausality do
   defp character_commitments(world, character) do
     world.commitments
     |> Map.values()
-    |> Enum.filter(&(Support.subject_equal?(&1.from, character) or Support.subject_equal?(&1.to, character)))
+    |> Enum.filter(
+      &(Support.subject_equal?(&1.from, character) or Support.subject_equal?(&1.to, character))
+    )
   end
 
   defp causal_objects(world, events) do
     event_ids = MapSet.new(Enum.map(events, & &1.id))
-    Enum.filter(Support.causal_edges(world), &(MapSet.member?(event_ids, &1.from) or MapSet.member?(event_ids, &1.to)))
+
+    Enum.filter(
+      Support.causal_edges(world),
+      &(MapSet.member?(event_ids, &1.from) or MapSet.member?(event_ids, &1.to))
+    )
   end
 
   defp diagnoses(character, entries, decisions, chains, alternates, opts) do
@@ -153,17 +169,21 @@ defmodule Fount.Intelligence.Capabilities.AgencyCausality do
 
     []
     |> maybe_diag(
-      entries != [] and Support.all_not_supported?(entries, :initiating_choice) and Support.any_supported?(entries, :reactive_only),
+      entries != [] and Support.all_not_supported?(entries, :initiating_choice) and
+        Support.any_supported?(entries, :reactive_only),
       Support.diagnosis(
         "agency.reactive_pattern",
         "The selected character may spend the sampled material reacting rather than initiating new goal-directed choices.",
         "Reactive-only evidence appears while initiating-choice evidence does not cross the support threshold.",
         support_ids,
-        limitations: ["A reactive pattern can be fully intentional; compare against the writer's intended agency mode."]
+        limitations: [
+          "A reactive pattern can be fully intentional; compare against the writer's intended agency mode."
+        ]
       )
     )
     |> maybe_diag(
-      Support.any_supported?(entries, :initiating_choice) and Support.all_not_supported?(entries, :causal_support),
+      Support.any_supported?(entries, :initiating_choice) and
+        Support.all_not_supported?(entries, :causal_support),
       Support.diagnosis(
         "agency.unsupported_causal_jump",
         "A consequential choice may not yet have visible causal support for its downstream effect.",
@@ -180,7 +200,9 @@ defmodule Fount.Intelligence.Capabilities.AgencyCausality do
         "Neither active-goal pursuit nor motive support is established by the current measurements.",
         support_ids,
         uncertainty: "high",
-        limitations: ["Subtext, withholding, or deliberate opacity may make motivation intentionally indirect."]
+        limitations: [
+          "Subtext, withholding, or deliberate opacity may make motivation intentionally indirect."
+        ]
       )
     )
     |> maybe_diag(
@@ -190,7 +212,9 @@ defmodule Fount.Intelligence.Capabilities.AgencyCausality do
         "At least one downstream event may have independent causal support beyond the selected action.",
         "The causal graph contains multiple support paths and the alternate-support measurement is positive.",
         support_ids ++ Enum.flat_map(alternates, & &1["edge_ids"]),
-        limitations: ["Redundant support can improve robustness, inevitability, or thematic layering."]
+        limitations: [
+          "Redundant support can improve robustness, inevitability, or thematic layering."
+        ]
       )
     )
     |> maybe_diag(
@@ -222,7 +246,11 @@ defmodule Fount.Intelligence.Capabilities.AgencyCausality do
     for entry <- entries,
         key <- @keys,
         Support.status(entry, key) in ["uncertain", "insufficient_evidence", "unavailable"] do
-      %{"scene_id" => entry["scene_id"], "measurement" => to_string(key), "status" => Support.status(entry, key)}
+      %{
+        "scene_id" => entry["scene_id"],
+        "measurement" => to_string(key),
+        "status" => Support.status(entry, key)
+      }
     end
   end
 
@@ -230,10 +258,17 @@ defmodule Fount.Intelligence.Capabilities.AgencyCausality do
     diagnoses
     |> Enum.map(fn diagnosis ->
       case diagnosis["id"] do
-        "agency.reactive_pattern" -> "Map the character's choices against active goals and ask which downstream events disappear if those choices are removed."
-        "agency.unsupported_causal_jump" -> "Trace decision -> action -> consequence evidence and inspect missing intermediate support."
-        "agency.motivation_gap_candidate" -> "Compare motive, knowledge, relationship pressure, and commitment evidence before proposing exposition."
-        _ -> "Inspect causal ancestors, descendants, and alternate support before selecting a revision strategy."
+        "agency.reactive_pattern" ->
+          "Map the character's choices against active goals and ask which downstream events disappear if those choices are removed."
+
+        "agency.unsupported_causal_jump" ->
+          "Trace decision -> action -> consequence evidence and inspect missing intermediate support."
+
+        "agency.motivation_gap_candidate" ->
+          "Compare motive, knowledge, relationship pressure, and commitment evidence before proposing exposition."
+
+        _ ->
+          "Inspect causal ancestors, descendants, and alternate support before selecting a revision strategy."
       end
     end)
     |> Enum.uniq()
@@ -246,15 +281,24 @@ defmodule Fount.Intelligence.Capabilities.AgencyCausality do
 
   defp measurement_ids(entries) do
     entries
-    |> Enum.flat_map(&get_in(&1, ["provenance", "measurement_ids"]) || [])
+    |> Enum.flat_map(&(get_in(&1, ["provenance", "measurement_ids"]) || []))
     |> Enum.uniq()
     |> Enum.sort()
   end
 
-  defp intent_value(intent, "agency") when is_map(intent), do: Map.get(intent, "agency") || Map.get(intent, :agency)
+  defp intent_value(intent, "agency") when is_map(intent),
+    do: Map.get(intent, "agency") || Map.get(intent, :agency)
+
   defp intent_value(_, _), do: nil
   defp maybe_diag(list, true, diagnosis), do: list ++ [diagnosis]
   defp maybe_diag(list, false, _diagnosis), do: list
-  defp result_status(entries), do: if(entries != [] and Enum.all?(entries, &(&1["status"] == "complete")), do: "complete", else: "partial")
+
+  defp result_status(entries),
+    do:
+      if(entries != [] and Enum.all?(entries, &(&1["status"] == "complete")),
+        do: "complete",
+        else: "partial"
+      )
+
   defp safe_options(opts), do: %{"intent" => Model.plain(Keyword.get(opts, :intent, %{}))}
 end

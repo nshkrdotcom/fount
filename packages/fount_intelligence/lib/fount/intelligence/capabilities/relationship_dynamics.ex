@@ -2,7 +2,6 @@ defmodule Fount.Intelligence.Capabilities.RelationshipDynamics do
   @moduledoc "Pure Phase-6 relationship reasoning with directional state, interaction events, and separate presentation/story-time views."
 
   alias Fount.Intelligence.Capabilities.{Result, Support}
-  alias Fount.Intelligence.StoryWorld
   alias Fount.Screenplay.Model
 
   @dimensions ~w(trust intimacy allegiance leverage status dependency attraction resentment obligation concealment knowledge_asymmetry)
@@ -16,15 +15,25 @@ defmodule Fount.Intelligence.Capabilities.RelationshipDynamics do
     transition_trajectory = Support.story_order_links(world, transitions, & &1.event_id)
     interaction_trajectory = Support.story_order_links(world, interactions, & &1.event_id)
     dimensions = dimensions(transitions)
-    diagnoses = diagnoses(parties, world, measurement_entries, transitions, interactions, commitments)
-    source_objects = transitions ++ interactions ++ commitments ++ related_causal_edges(world, transitions, interactions, commitments)
+
+    diagnoses =
+      diagnoses(parties, world, measurement_entries, transitions, interactions, commitments)
+
+    source_objects =
+      transitions ++
+        interactions ++
+        commitments ++ related_causal_edges(world, transitions, interactions, commitments)
 
     %Result{
       family: "relationship_dynamics",
       source_revision: world.revision_id,
       subject: Model.plain(subject),
       status: result_status(measurement_entries),
-      evidence: Support.merge_evidence([Support.evidence(source_objects), Support.measurement_evidence(measurement_entries)]),
+      evidence:
+        Support.merge_evidence([
+          Support.evidence(source_objects),
+          Support.measurement_evidence(measurement_entries)
+        ]),
       measurements: %{
         "keys" => Enum.map(@keys, &to_string/1),
         "entries" => measurement_entries
@@ -39,11 +48,13 @@ defmodule Fount.Intelligence.Capabilities.RelationshipDynamics do
         "asymmetric_state" => asymmetric_state(transitions)
       },
       trajectories: %{
-        "reader_visible_presentation" => Support.measurement_trajectory(measurement_entries, @keys),
+        "reader_visible_presentation" =>
+          Support.measurement_trajectory(measurement_entries, @keys),
         "diegetic_relationship_changes" => transition_trajectory,
         "interaction_story_time" => interaction_trajectory,
         "non_linear_presentation" =>
-          transition_trajectory["non_linear_presentation"] or interaction_trajectory["non_linear_presentation"]
+          transition_trajectory["non_linear_presentation"] or
+            interaction_trajectory["non_linear_presentation"]
       },
       diagnoses: diagnoses,
       uncertainty: uncertainty(measurement_entries, transition_trajectory),
@@ -61,7 +72,9 @@ defmodule Fount.Intelligence.Capabilities.RelationshipDynamics do
   defp relationship_transitions(world, parties) do
     world.state_transitions
     |> Map.values()
-    |> Enum.filter(&(Support.relationship_transition?(&1) and relationship_subject_within?(&1.subject, parties)))
+    |> Enum.filter(
+      &(Support.relationship_transition?(&1) and relationship_subject_within?(&1.subject, parties))
+    )
     |> Enum.sort_by(&Support.transition_presentation_key(world, &1))
   end
 
@@ -99,6 +112,7 @@ defmodule Fount.Intelligence.Capabilities.RelationshipDynamics do
     end)
     |> Enum.map(fn {{from, to, attribute}, values} ->
       last = List.last(values)
+
       %{
         "from" => from,
         "to" => to,
@@ -109,7 +123,6 @@ defmodule Fount.Intelligence.Capabilities.RelationshipDynamics do
     end)
     |> Enum.sort_by(&{to_string(&1["from"]), to_string(&1["to"]), &1["attribute"]})
   end
-
 
   defp relationship_direction(subject) do
     case Model.plain(subject) do
@@ -158,12 +171,23 @@ defmodule Fount.Intelligence.Capabilities.RelationshipDynamics do
       |> Kernel.++(Enum.map(commitments, & &1.id))
       |> MapSet.new()
 
-    Enum.filter(Support.causal_edges(world), &(MapSet.member?(ids, &1.from) or MapSet.member?(ids, &1.to)))
+    Enum.filter(
+      Support.causal_edges(world),
+      &(MapSet.member?(ids, &1.from) or MapSet.member?(ids, &1.to))
+    )
   end
 
   defp diagnoses(parties, world, entries, transitions, interactions, commitments) do
-    support_ids = measurement_ids(entries) ++ Enum.map(transitions, & &1.id) ++ Enum.map(interactions, & &1.id)
-    payoff_edges = Enum.filter(related_causal_edges(world, transitions, interactions, commitments), &(&1.type == "pays_off"))
+    support_ids =
+      measurement_ids(entries) ++
+        Enum.map(transitions, & &1.id) ++ Enum.map(interactions, & &1.id)
+
+    payoff_edges =
+      Enum.filter(
+        related_causal_edges(world, transitions, interactions, commitments),
+        &(&1.type == "pays_off")
+      )
+
     change_measurements = Enum.map(@dimensions, &(&1 <> "_change"))
     measured_change = Enum.any?(change_measurements, &Support.any_supported?(entries, &1))
 
@@ -176,7 +200,9 @@ defmodule Fount.Intelligence.Capabilities.RelationshipDynamics do
         "Several consequential encounters may repeat relationship state without a recorded transition.",
         "At least three interaction records are present while neither frozen relationship transitions nor measured relationship change are established.",
         support_ids,
-        limitations: ["Stable relationships can be intentional; compare against the writer's desired pressure and payoff. "]
+        limitations: [
+          "Stable relationships can be intentional; compare against the writer's desired pressure and payoff. "
+        ]
       )
     )
     |> maybe_diag(
@@ -187,7 +213,9 @@ defmodule Fount.Intelligence.Capabilities.RelationshipDynamics do
         "A dimension reverses direction while preparation evidence does not cross the support threshold.",
         support_ids,
         uncertainty: "high",
-        limitations: ["A surprise reversal can be intentional; inspect concealed information and reader knowledge before revising."]
+        limitations: [
+          "A surprise reversal can be intentional; inspect concealed information and reader knowledge before revising."
+        ]
       )
     )
     |> maybe_diag(
@@ -201,7 +229,8 @@ defmodule Fount.Intelligence.Capabilities.RelationshipDynamics do
       )
     )
     |> maybe_diag(
-      interactions != [] and transitions == [] and related_causal_edges(world, transitions, interactions, commitments) == [],
+      interactions != [] and transitions == [] and
+        related_causal_edges(world, transitions, interactions, commitments) == [],
       Support.diagnosis(
         "relationship.consequence_missing_candidate",
         "The selected interactions may have limited recorded relationship consequence.",
@@ -231,14 +260,17 @@ defmodule Fount.Intelligence.Capabilities.RelationshipDynamics do
       Enum.any?(values, fn later ->
         Enum.any?(values, fn earlier ->
           earlier.id != later.id and not is_nil(earlier.from) and not is_nil(earlier.to) and
-            Support.subject_equal?(earlier.from, later.to) and Support.subject_equal?(earlier.to, later.from)
+            Support.subject_equal?(earlier.from, later.to) and
+            Support.subject_equal?(earlier.to, later.from)
         end)
       end)
     end)
   end
 
   defp weak_preparation?([]), do: false
-  defp weak_preparation?(entries), do: Support.all_not_supported?(entries, :betrayal_or_payoff_prepared)
+
+  defp weak_preparation?(entries),
+    do: Support.all_not_supported?(entries, :betrayal_or_payoff_prepared)
 
   defp repetitive_scene_count(entries),
     do: Enum.count(entries, &Support.supported?(&1, :repetitive_negotiation))
@@ -248,14 +280,20 @@ defmodule Fount.Intelligence.Capabilities.RelationshipDynamics do
       for entry <- entries,
           key <- @keys,
           Support.status(entry, key) in ["uncertain", "insufficient_evidence", "unavailable"] do
-        %{"scene_id" => entry["scene_id"], "measurement" => to_string(key), "status" => Support.status(entry, key)}
+        %{
+          "scene_id" => entry["scene_id"],
+          "measurement" => to_string(key),
+          "status" => Support.status(entry, key)
+        }
       end
 
     chronology =
       trajectory["adjacent_story_time_relations"]
       |> Enum.filter(fn link ->
         relation = link["story_time_relation"]
-        relation == "unknown" or match?(%{"status" => status} when status in ["ambiguous", "contradiction"], relation)
+
+        relation == "unknown" or
+          match?(%{"status" => status} when status in ["ambiguous", "contradiction"], relation)
       end)
       |> Enum.map(&Map.put(&1, "kind", "story_time_uncertainty"))
 
@@ -266,19 +304,34 @@ defmodule Fount.Intelligence.Capabilities.RelationshipDynamics do
     base =
       Enum.map(diagnoses, fn diagnosis ->
         case diagnosis["id"] do
-          "relationship.long_stasis_candidate" -> "Compare each encounter's trust, leverage, obligation, concealment, and status deltas before rewriting dialogue."
-          "relationship.unsupported_reversal_candidate" -> "Trace setup, concealed information, and causal preparation for the reversal in both presentation and story time."
-          "relationship.repetitive_negotiation_candidate" -> "Compare tactic, leverage, information, and consequence across the repeated negotiations."
-          _ -> "Inspect directional state and cited interaction evidence before selecting a relationship revision."
+          "relationship.long_stasis_candidate" ->
+            "Compare each encounter's trust, leverage, obligation, concealment, and status deltas before rewriting dialogue."
+
+          "relationship.unsupported_reversal_candidate" ->
+            "Trace setup, concealed information, and causal preparation for the reversal in both presentation and story time."
+
+          "relationship.repetitive_negotiation_candidate" ->
+            "Compare tactic, leverage, information, and consequence across the repeated negotiations."
+
+          _ ->
+            "Inspect directional state and cited interaction evidence before selecting a relationship revision."
         end
       end)
 
     if trajectory["non_linear_presentation"],
-      do: Enum.uniq(base ++ ["Compare relationship movement in reader-visible presentation order against established diegetic order."]),
+      do:
+        Enum.uniq(
+          base ++
+            [
+              "Compare relationship movement in reader-visible presentation order against established diegetic order."
+            ]
+        ),
       else: Enum.uniq(base)
   end
 
-  defp parties(%{"characters" => characters}) when is_list(characters), do: unique_parties(characters)
+  defp parties(%{"characters" => characters}) when is_list(characters),
+    do: unique_parties(characters)
+
   defp parties(%{"pair" => characters}) when is_list(characters), do: unique_parties(characters)
   defp parties({left, right}), do: unique_parties([left, right])
   defp parties(characters) when is_list(characters), do: unique_parties(characters)
@@ -313,13 +366,20 @@ defmodule Fount.Intelligence.Capabilities.RelationshipDynamics do
 
   defp measurement_ids(entries) do
     entries
-    |> Enum.flat_map(&get_in(&1, ["provenance", "measurement_ids"]) || [])
+    |> Enum.flat_map(&(get_in(&1, ["provenance", "measurement_ids"]) || []))
     |> Enum.uniq()
     |> Enum.sort()
   end
 
   defp maybe_diag(list, true, diagnosis), do: list ++ [diagnosis]
   defp maybe_diag(list, false, _diagnosis), do: list
-  defp result_status(entries), do: if(entries != [] and Enum.all?(entries, &(&1["status"] == "complete")), do: "complete", else: "partial")
+
+  defp result_status(entries),
+    do:
+      if(entries != [] and Enum.all?(entries, &(&1["status"] == "complete")),
+        do: "complete",
+        else: "partial"
+      )
+
   defp safe_options(opts), do: %{"intent" => Model.plain(Keyword.get(opts, :intent, %{}))}
 end

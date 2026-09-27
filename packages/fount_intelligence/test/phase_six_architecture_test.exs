@@ -8,8 +8,10 @@ defmodule Fount.Intelligence.PhaseSixArchitectureTest do
       root
       |> Path.join("*.ex")
       |> Path.wildcard()
-      |> Enum.reject(&String.ends_with?(&1, "/interpretation.ex"))
-      |> Enum.reject(&String.ends_with?(&1, "/decision_policy.ex"))
+      |> Enum.reject(fn path ->
+        String.ends_with?(path, "/interpretation.ex") or
+          String.ends_with?(path, "/decision_policy.ex")
+      end)
       |> Enum.map_join("\n", &File.read!/1)
 
     for forbidden <- [

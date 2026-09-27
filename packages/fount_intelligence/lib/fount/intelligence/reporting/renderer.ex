@@ -100,9 +100,13 @@ defmodule Fount.Intelligence.Reporting.Renderer do
         "- Supporting evidence records: #{support}\n" <>
         "- Counterevidence records: #{counter}\n" <>
         "- Inspect source evidence: " <>
-        Enum.map_join(Map.get(diagnosis, "support", []), ", ", &"`#{&1["id"]}`")
+        Enum.map_join(Map.get(diagnosis, "support", []), ", ", &"`#{support_id(&1)}`")
     end)
   end
+
+  defp support_id(%{"id" => id}), do: id
+  defp support_id(id) when is_binary(id), do: id
+  defp support_id(value), do: inspect(value)
 
   defp evidence([]), do: "- No source evidence was available."
 

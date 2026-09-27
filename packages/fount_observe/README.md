@@ -29,3 +29,18 @@ New Elixir code and tests are **written, not executed** in this delivery. See [v
 ## License
 
 [MIT](LICENSE) - Copyright (c) 2026 nshkrdotcom.
+
+## Phase 2: an inspectable scene question
+
+Ask a concrete scene question with `Fount.Observe.SceneQuestion.ask/5`, inspect the
+exact passages supplied for each answer, and receive an honest unavailable result
+when acquisition fails. This path never changes the draft.
+
+The measurement substrate also provides typed context roundtrips, canonical output
+contracts, separate raw/calibrated views, a private LRU/TTL ETS cache, resource
+preflight, partial-result retention, data-only fixture files, and human/deterministic
+recordings. See [Measurement substrate](guides/measurement-substrate.md).
+
+Run `mix run examples/phase_two.exs` after dependency setup. Its fixed fixture
+answers are workflow demonstrations, not live or human validation. Phase 2 runtime
+verification is pending; the current handoff lists the checks Codex must run.

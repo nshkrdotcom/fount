@@ -46,7 +46,7 @@ defmodule Fount.Observe.Question do
         String.valid?(q.instructions) and is_map(q.extra) and
         match?({:ok, _}, CanonicalJSON.encode(q.extra)) and
         Enum.all?(Map.keys(q.extra), &(&1 not in ["type", "instructions", "criteria"])) and
-        valid_shape?(q)
+        Fount.Observe.Options.safe_extra?(q.extra) and valid_shape?(q)
 
     if valid, do: :ok, else: {:error, Error.at(:invalid_request, ["question"])}
   end
@@ -71,19 +71,9 @@ defmodule Fount.Observe.Question do
     Enum.map(pairs, fn {key, q} -> Map.put(specification(q), "key", to_string(key)) end)
   end
 
-  def output_contract(%__MODULE__{} = q) do
-    %{
-      "id" => "observe.distribution",
-      "family" => to_string(q.kind),
-      "probabilities" => "finite_numbers_in_0_1_with_total_within_tolerance",
-      "domain" => domain(q),
-      "confidence" => if(q.kind == :noul, do: "absent", else: "provider_reported_0_1"),
-      "scalar" =>
-        if(q.kind == :score, do: "provider_reported_expected_value_not_modal", else: "absent")
-    }
-  end
+  def output_contract(%__MODULE__{} = q), do: Fount.Observe.OutputContract.for_question(q)
+  def output_digest(%__MODULE__{} = q), do: output_contract(q)["sha256"]
 
-  def output_digest(q), do: CanonicalJSON.hash(output_contract(q))
   def domain(%__MODULE__{kind: :noul}), do: ["true", "false"]
   def domain(%__MODULE__{kind: :choice, criteria: criteria}), do: Enum.map(criteria, &elem(&1, 0))
 

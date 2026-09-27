@@ -13,5 +13,8 @@ defmodule Fount.Observe do
   def evaluate(provider, requests, questions, opts \\ []),
     do: Executor.evaluate(provider, requests, questions, opts)
 
+  @doc "Estimates semantic work without calling a provider, cache or budget."
+  def preflight(requests, questions, opts \\ []), do: Fount.Observe.Resources.preflight(requests, questions, opts)
+
   def provider(opts \\ []), do: SystemOne.new(opts)
 end

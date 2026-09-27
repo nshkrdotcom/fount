@@ -15,12 +15,19 @@ defmodule Fount.Observe.Registry do
   def adapter("sandbox"), do: {:ok, Fount.Observe.Sandbox}
   def adapter(_), do: {:error, Error.at(:invalid_request, ["sensor"])}
 
-  def projection_digest(id) when id in @projections do
-    CanonicalJSON.hash(%{
-      "id" => id,
-      "input" => "explicit_canonical_json",
-      "context" => "closed_observe_context",
-      "revision_envelope" => "excluded_from_model_input"
-    })
+
+  def projection_contract(id) when id in @projections do
+    policy = case id do
+      "explicit_state" -> "exact_caller_json_no_heuristic_removal"
+      "page_reader" -> "performed_page_fragments_through_legal_cutoff_no_hidden_notes"
+      "audience_estimate" -> "spoken_dialogue_and_explicit_observable_fragments_only"
+      "character_access" -> "own_behavior_and_declared_or_evidenced_access_not_presence"
+    end
+    %{"id" => id, "policy" => policy, "context" => "closed_typed_semantic_slots",
+      "provenance" => "revision_targets_spans_and_evidence_pointers_not_provider_input"}
   end
+  def projection_contract(_), do: {:error, Error.new(:invalid_projection)}
+
+  def projection_digest(id) when id in @projections,
+    do: id |> projection_contract() |> CanonicalJSON.hash()
 end

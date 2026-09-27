@@ -1,7 +1,7 @@
 defmodule Fount.Observe.Providers.SystemOne do
   @moduledoc "SystemOneSDK adapter. All SDK-native questions, clients, responses and errors terminate here."
   @behaviour Fount.Observe.Provider
-  alias Fount.Observe.{Context, Distribution, Error, Provider, ProviderResult, Question}
+  alias Fount.Observe.{Distribution, Error, Provider, ProviderCall, ProviderResult, Question, Request}
   alias Fount.Writing.CanonicalJSON
   @client_options [:api_key, :base_url, :model, :timeout_ms, :retry]
   @request_options [
@@ -51,6 +51,8 @@ defmodule Fount.Observe.Providers.SystemOne do
            "provider" => "system_one",
            "endpoint_kind" => to_string(kind),
            "model" => client.default_model,
+           "endpoint_sha256" => CanonicalJSON.hash(client.base_url),
+           "sdk_version" => SystemOneSDK.version(),
            "stability" => "mutable_alias_or_unknown",
            "session" => Fount.ID.v4()
          }
@@ -81,7 +83,11 @@ defmodule Fount.Observe.Providers.SystemOne do
 
         states = Enum.map(requests, &semantic_input/1)
         results = SystemOneSDK.evaluate_stream(state.client, states, prepared, sdk_opts)
-        {:ok, Enum.map(results, &normalize(&1, questions))}
+        {:ok, Enum.map(results, fn result ->
+          normalized = normalize(result, questions)
+          ProviderCall.deliver(opts, normalized)
+          normalized
+        end)}
 
       {:error, error} ->
         {:error, normalize_error(error)}
@@ -93,13 +99,7 @@ defmodule Fount.Observe.Providers.SystemOne do
   end
 
   @doc false
-  def semantic_input(request) do
-    # Hashing uses this exact envelope too: nothing visible to the model is dropped.
-    CanonicalJSON.encode!(%{
-      "state" => request.input,
-      "context" => Context.to_map(request.context)
-    })
-  end
+  def semantic_input(request), do: Request.semantic_input(request)
 
   defp native_question(%Question{kind: :noul} = q),
     do: SystemOneSDK.noul(q.instructions, extra: q.extra)
@@ -176,7 +176,10 @@ defmodule Fount.Observe.Providers.SystemOne do
       "model" => text(response.model),
       "request_id" => text(response.request_id),
       "usage" => usage(response.usage),
-      "prepared_fingerprint" => text(response.prepared_fingerprint)
+      "prepared_fingerprint" => text(response.prepared_fingerprint),
+      "retries" => response.retries,
+      "elapsed_ms" => response.elapsed_ms,
+      "runtime_elapsed_ms" => response.runtime_elapsed_ms
     }
   end
 
@@ -192,7 +195,7 @@ defmodule Fount.Observe.Providers.SystemOne do
   end
 
   defp usage(_), do: %{}
-  defp text(value) when is_binary(value), do: value
+  defp text(value) when is_binary(value) and byte_size(value) <= 256, do: value
   defp text(_), do: nil
 
   defp normalize_error(%SystemOneSDK.Error{} = error) do
@@ -204,6 +207,9 @@ defmodule Fount.Observe.Providers.SystemOne do
         :cancelled ->
           :provider_cancelled
 
+        :request_too_large ->
+          :state_too_large
+
         type when type in [:authentication, :permission_denied, :configuration] ->
           :provider_unconfigured
 
@@ -213,7 +219,6 @@ defmodule Fount.Observe.Providers.SystemOne do
         type
         when type in [
                :invalid_request,
-               :request_too_large,
                :bad_request,
                :model_not_found,
                :unprocessable_entity

@@ -39,3 +39,11 @@ A shared budget counts newly scheduled states, not cache hits. Cache use require
 `Cancellation.cancel(token)` stops the owner task. The SDK owns its internal task/transport cleanup; runtime QC must verify cancellation and timeout cleanup against the actual resolved SDK. It is not a claim that every remote server operation can be undone.
 
 Noul has probability and no confidence field. Choice retains its declared option order. Score retains the provider-reported expected value rather than rounding it to the most likely level. Pure interpretation in Intelligence applies thresholds without changing these recorded raw values.
+
+## Hardening and non-model paths
+
+See [Measurement substrate](measurement-substrate.md) for scene-question packets,
+closed context decoding, safe project lens declarations, output digests, separate
+calibration, ETS reuse, request caps, partial results, fixture loading and
+`Recording.record/3` / `Recording.import_record/3`. Existing raw `evaluate/4` calls
+and fixed `Sandbox.new!/2` playbooks remain available.

@@ -67,6 +67,7 @@ defmodule Fount.Observe.MixProject do
         "LICENSE",
         "guides/architecture.md",
         "guides/usage.md",
+        "guides/measurement-substrate.md",
         "guides/verification.md",
         {"examples/README.md", filename: "examples"}
       ],
@@ -78,6 +79,7 @@ defmodule Fount.Observe.MixProject do
       groups_for_modules: [
         Contracts: [
           Fount.Observe.Question,
+          Fount.Observe.OutputContract,
           Fount.Observe.Request,
           Fount.Observe.MeasurementResult,
           Fount.Observe.Observation,
@@ -90,6 +92,9 @@ defmodule Fount.Observe.MixProject do
         Execution: [
           Fount.Observe,
           Fount.Observe.Executor,
+          Fount.Observe.SceneQuestion,
+          Fount.Observe.Recording,
+          Fount.Observe.Resources,
           Fount.Observe.Budget,
           Fount.Observe.Cancellation
         ],
@@ -98,8 +103,8 @@ defmodule Fount.Observe.MixProject do
           Fount.Observe.Sandbox,
           Fount.Observe.Providers.SystemOne
         ],
-        Assets: [Fount.Observe.Lens, Fount.Observe.Registry, Fount.Observe.Projection],
-        Cache: [Fount.Observe.Cache, Fount.Observe.Cache.Memory]
+        Assets: [Fount.Observe.Lens, Fount.Observe.Registry, Fount.Observe.Projection, Fount.Observe.Calibration],
+        Cache: [Fount.Observe.Cache, Fount.Observe.Cache.Memory, Fount.Observe.Cache.ETS]
       ]
     ]
   end

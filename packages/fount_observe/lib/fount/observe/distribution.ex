@@ -32,6 +32,7 @@ defmodule Fount.Observe.Distribution do
     order = Enum.map(0..(length(labels) - 1), &to_string/1)
 
     with {:ok, values} <- values(probabilities, order),
+         true <- Enum.all?(labels, &(is_binary(&1) and String.valid?(&1) and String.trim(&1) != "")),
          true <- is_number(scalar) and scalar >= 0 and scalar <= length(labels) - 1,
          true <- probability?(confidence) do
       {:ok,
@@ -52,7 +53,10 @@ defmodule Fount.Observe.Distribution do
   def validate(%__MODULE__{
         kind: :noul,
         values: [{"true", p}, {"false", complement}],
-        confidence: nil
+        confidence: nil,
+        selected: nil,
+        scalar: nil,
+        labels: []
       }) do
     if probability?(p) and probability?(complement) and abs(p + complement - 1) < 1.0e-9,
       do: :ok,
@@ -60,7 +64,11 @@ defmodule Fount.Observe.Distribution do
   end
 
   def validate(%__MODULE__{kind: kind} = d) when kind in [:choice, :score] do
-    if pair_values?(d.values) do
+    shape_valid = case kind do
+      :choice -> is_nil(d.scalar) and d.labels == []
+      :score -> is_nil(d.selected)
+    end
+    if shape_valid and pair_values?(d.values) do
       case kind do
         :choice ->
           valid_result(

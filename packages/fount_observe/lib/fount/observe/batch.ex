@@ -11,7 +11,8 @@ defmodule Fount.Observe.Batch do
             lens_asset: nil,
             measurement_spec_sha256: nil,
             measurement_spec: %{},
-            provider_batches: 0
+            provider_batches: 0,
+            resource_usage: %{}
 
   @type t :: %__MODULE__{}
 end

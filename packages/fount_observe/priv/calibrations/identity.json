@@ -1,0 +1,6 @@
+{
+  "id": "observe.identity",
+  "method": "identity",
+  "validation": "identity_not_empirical",
+  "description": "A derived normalized view only. No empirical calibration is claimed."
+}

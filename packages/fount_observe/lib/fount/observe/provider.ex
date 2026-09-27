@@ -2,7 +2,7 @@ defmodule Fount.Observe.Provider do
   @moduledoc "Opaque installed-provider handle. Native SDK state is not an analysis contract and is never persisted."
   alias Fount.Observe.{Error, Registry}
   @enforce_keys [:sensor_id, :state, :fingerprint]
-  @derive {Inspect, only: [:sensor_id, :fingerprint]}
+  @derive {Inspect, only: [:sensor_id]}
   defstruct [:sensor_id, :state, :fingerprint]
   @opaque t :: %__MODULE__{}
 

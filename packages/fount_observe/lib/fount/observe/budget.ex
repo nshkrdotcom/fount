@@ -29,5 +29,6 @@ defmodule Fount.Observe.Budget do
   end
 
   def spent(%__MODULE__{counter: counter}), do: :atomics.get(counter, 1)
+  def snapshot(nil), do: nil
   def snapshot(%__MODULE__{} = budget), do: %{"limit" => budget.limit, "spent" => spent(budget)}
 end

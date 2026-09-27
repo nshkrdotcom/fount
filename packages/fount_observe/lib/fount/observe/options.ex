@@ -5,6 +5,8 @@ defmodule Fount.Observe.Options do
 
   @defaults [
     max_states: 500,
+    max_questions: 255,
+    max_question_bytes: 65_536,
     max_context_bytes: 100_000,
     max_concurrency: 4,
     task_timeout_ms: 40_000,
@@ -12,6 +14,11 @@ defmodule Fount.Observe.Options do
     cache_policy: :stable_only
   ]
   @allowed [
+    :lens,
+    :calibration,
+    :max_questions,
+    :max_question_bytes,
+    :max_provider_requests,
     :model,
     :extra_body,
     :retry,
@@ -63,6 +70,8 @@ defmodule Fount.Observe.Options do
 
   defp valid_limits?(opts) do
     nonnegative?(opts[:max_states]) and positive?(opts[:max_context_bytes]) and
+      positive?(opts[:max_question_bytes]) and is_integer(opts[:max_questions]) and opts[:max_questions] in 1..255 and
+      (is_nil(opts[:max_provider_requests]) or nonnegative?(opts[:max_provider_requests])) and
       is_integer(opts[:max_concurrency]) and opts[:max_concurrency] in 1..1024 and
       is_integer(opts[:max_pending]) and opts[:max_pending] >= opts[:max_concurrency] and
       opts[:max_pending] <= 10_000
@@ -79,6 +88,9 @@ defmodule Fount.Observe.Options do
 
   defp valid_semantics?(opts) do
     valid_model?(opts[:model]) and
+      safe_extra?(opts[:extra_body]) and
+      (is_nil(opts[:max_provider_requests]) or opts[:retry] != true) and
+      (is_nil(opts[:lens]) or is_nil(opts[:lens_id])) and
       match?({:ok, _}, CanonicalJSON.encode(semantic(opts))) and
       (is_nil(opts[:retry]) or is_boolean(opts[:retry])) and
       valid_tolerance?(opts[:probability_tolerance])
@@ -93,7 +105,7 @@ defmodule Fount.Observe.Options do
     (is_nil(opts[:budget]) or match?(%Budget{}, opts[:budget])) and
       (is_nil(opts[:cancellation]) or match?(%Cancellation{}, opts[:cancellation])) and
       (is_nil(opts[:run_id]) or (is_binary(opts[:run_id]) and opts[:run_id] != "")) and
-      opts[:cache_policy] in [:stable_only, :session] and valid_cache?(opts)
+      opts[:cache_policy] in [:stable_only, :session, :durable] and valid_cache?(opts)
   end
 
   defp valid_cache?(opts) do
@@ -108,6 +120,16 @@ defmodule Fount.Observe.Options do
         false
     end
   end
+
+  def safe_extra?(nil), do: true
+  def safe_extra?(map) when is_map(map) do
+    forbidden = ~w(api_key apikey authorization token access_token refresh_token password secret headers base_url endpoint provider credentials)
+    Enum.all?(map, fn {key, value} ->
+      is_binary(key) and String.downcase(key) not in forbidden and safe_extra?(value)
+    end)
+  end
+  def safe_extra?(items) when is_list(items), do: Enum.all?(items, &safe_extra?/1)
+  def safe_extra?(value), do: is_binary(value) or is_number(value) or is_boolean(value)
 
   defp positive?(value), do: is_integer(value) and value > 0
   defp nonnegative?(value), do: is_integer(value) and value >= 0

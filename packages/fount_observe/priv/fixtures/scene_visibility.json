@@ -1,0 +1,19 @@
+{
+  "id": "scene.visibility",
+  "fixtures": [
+    {
+      "input_sha256": "a1a0be03c38b9a4db7635fc49bcc8184c5f5f41a70f1e9a34ee79a91e228954a",
+      "questions_sha256": "ca87ce386fa96eaf4404c3e804ea173b54a5791a9523630825ac8beedbf03b03",
+      "projection_id": "explicit_state",
+      "answers": {
+        "visible": 0.9
+      },
+      "output_contracts": [
+        {
+          "key": "visible",
+          "sha256": "79b0afc9ef4518c7a2834a6ffddbb42812724cd371a691d8152e1c032de87c9b"
+        }
+      ]
+    }
+  ]
+}

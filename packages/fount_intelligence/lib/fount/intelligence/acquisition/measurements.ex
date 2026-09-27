@@ -69,7 +69,7 @@ defmodule Fount.Intelligence.Acquisition.Measurements do
                {request.id,
                 CanonicalJSON.hash(%{
                   "state" => request.input,
-                  "context" => Context.to_map(request.context)
+                  "context" => Context.semantic_map(request.context)
                 })}
              end)
          }}

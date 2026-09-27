@@ -21,6 +21,7 @@ defmodule Fount.Observe.MeasurementResult do
     :input_sha256,
     :provider_fingerprint,
     :semantic_execution_sha256,
+    calibration: nil,
     normalized_raw: nil,
     metadata: %{}
   ]

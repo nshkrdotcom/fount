@@ -3,10 +3,18 @@ defmodule Fount.Intelligence.StoryWorld.Inspection do
 
   alias Fount.Intelligence.StoryWorld.{Query, StoryTime}
   alias Fount.Screenplay.Model
+  alias Fount.Writing.CanonicalJSON
 
   def packet(world, opts \\ []) do
     focus_ids = Keyword.get(opts, :focus_ids, []) |> List.wrap() |> Enum.map(&to_string/1)
-    question = Keyword.get(opts, :question, "What does the current source-grounded story-world model establish, leave ambiguous, or leave unknown?")
+
+    question =
+      Keyword.get(
+        opts,
+        :question,
+        "What does the current source-grounded story-world model establish, leave ambiguous, or leave unknown?"
+      )
+
     protected_strengths = Keyword.get(opts, :protected_strengths, []) |> List.wrap()
     selected = select_objects(world, focus_ids)
 
@@ -110,10 +118,8 @@ defmodule Fount.Intelligence.StoryWorld.Inspection do
 
   defp uncertainty(world) do
     %{
-      "ambiguous_story_time" =>
-        direct_temporal(world, :ambiguous),
-      "contradictory_story_time" =>
-        direct_temporal(world, :contradiction),
+      "ambiguous_story_time" => direct_temporal(world, :ambiguous),
+      "contradictory_story_time" => direct_temporal(world, :contradiction),
       "unknown_story_time_pairs" =>
         StoryTime.unresolved_pairs(world.story_time)
         |> Enum.map(fn {left, right} -> %{"left" => left, "right" => right} end),
@@ -128,7 +134,14 @@ defmodule Fount.Intelligence.StoryWorld.Inspection do
     |> Enum.flat_map(fn {{left, right}, _constraints} ->
       case StoryTime.relation(world.story_time, left, right) do
         %{status: ^status} = packet ->
-          [%{"left" => left, "right" => right, "relations" => packet.relations, "constraint_ids" => packet.constraint_ids}]
+          [
+            %{
+              "left" => left,
+              "right" => right,
+              "relations" => packet.relations,
+              "constraint_ids" => packet.constraint_ids
+            }
+          ]
 
         _ ->
           []
@@ -141,7 +154,9 @@ defmodule Fount.Intelligence.StoryWorld.Inspection do
   defp competing_assertions(world) do
     world.assertions
     |> Map.values()
-    |> Enum.group_by(fn assertion -> {assertion.predicate, assertion.scope_id, key(assertion.subject)} end)
+    |> Enum.group_by(fn assertion ->
+      {assertion.predicate, assertion.scope_id, key(assertion.subject)}
+    end)
     |> Enum.flat_map(fn {{predicate, scope, _subject_key}, assertions} ->
       objects = Enum.uniq_by(assertions, &key(&1.object))
 
@@ -161,7 +176,7 @@ defmodule Fount.Intelligence.StoryWorld.Inspection do
   end
 
   defp plain_values(map), do: map |> Map.values() |> Enum.sort_by(& &1.id) |> Model.plain()
-  defp key(value), do: Fount.Writing.CanonicalJSON.hash(Model.plain(value))
+  defp key(value), do: CanonicalJSON.hash(Model.plain(value))
 
   defp uniq_evidence(evidence),
     do: evidence |> Enum.uniq_by(& &1.id) |> Enum.sort_by(& &1.id)

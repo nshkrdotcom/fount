@@ -3,6 +3,7 @@ defmodule Fount.Intelligence.StoryWorldReferenceTest do
 
   alias Fount.Intelligence.StoryWorld
   alias Fount.Intelligence.TestSupport.StoryWorldFixture, as: Fixture
+  alias Fount.Screenplay.Model
 
   test "compile and reference rendering are deterministic for the same canonical revision and frozen observations" do
     screenplay = Fixture.screenplay()
@@ -25,11 +26,15 @@ defmodule Fount.Intelligence.StoryWorldReferenceTest do
 
     assert {:ok, first} = StoryWorld.compile(screenplay, [observation], records: records)
     assert {:ok, second} = StoryWorld.compile(screenplay, [observation], records: records)
-    assert Fount.Screenplay.Model.plain(first) == Fount.Screenplay.Model.plain(second)
+    assert Model.plain(first) == Model.plain(second)
     assert StoryWorld.render_json(first) == StoryWorld.render_json(second)
     assert StoryWorld.render_markdown(first) == StoryWorld.render_markdown(second)
 
-    packet = StoryWorld.inspection_packet(first, protected_strengths: ["keep the key reveal understated"])
+    packet =
+      StoryWorld.inspection_packet(first,
+        protected_strengths: ["keep the key reveal understated"]
+      )
+
     assert packet["claim_class"] == "derived_narrative_state"
     assert packet["diagnoses"] == []
     assert packet["strategies"] == []

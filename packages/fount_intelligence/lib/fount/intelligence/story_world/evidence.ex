@@ -2,10 +2,21 @@ defmodule Fount.Intelligence.StoryWorld.Evidence do
   @moduledoc "Pure, serializable source evidence retained by StoryWorld values and domain-review renderers."
 
   alias Fount.Intelligence.StoryWorld.Evidence
-  alias Fount.Observe.{EvidenceRef, TargetRef}
+  alias Fount.Observe.EvidenceRef
+  alias Fount.Observe.TargetRef
 
   @enforce_keys [:id, :screenplay_id, :revision_id, :target]
-  defstruct [:id, :screenplay_id, :revision_id, :target, :excerpt, :excerpt_sha256, :role, metadata: %{}]
+  defstruct [
+    :id,
+    :screenplay_id,
+    :revision_id,
+    :target,
+    :excerpt,
+    :excerpt_sha256,
+    :role,
+    metadata: %{}
+  ]
+
   @type t :: %__MODULE__{}
 
   def from_observe(%EvidenceRef{} = ref) do
@@ -22,8 +33,10 @@ defmodule Fount.Intelligence.StoryWorld.Evidence do
 
   def from_source_map(model, %{} = entry) do
     with id when is_binary(id) and id != "" <- entry["evidence_id"] || entry[:evidence_id],
-         screenplay_id when screenplay_id == model.id <- entry["screenplay_id"] || entry[:screenplay_id],
-         revision_id when revision_id == model.revision.id <- entry["revision_id"] || entry[:revision_id],
+         screenplay_id when screenplay_id == model.id <-
+           entry["screenplay_id"] || entry[:screenplay_id],
+         revision_id when revision_id == model.revision.id <-
+           entry["revision_id"] || entry[:revision_id],
          %{} = target <- entry["target"] || entry[:target],
          excerpt when is_binary(excerpt) <- entry["excerpt"] || entry[:excerpt],
          :ok <- validate_source(model, screenplay_id, revision_id, target, excerpt) do

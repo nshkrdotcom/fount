@@ -48,8 +48,8 @@ defmodule Fount.Intelligence.StoryWorld.DependencyIndex do
     dependencies
     |> List.wrap()
     |> Enum.map(&to_string/1)
-    |> walk(index, MapSet.new(), MapSet.new())
-    |> MapSet.to_list()
+    |> walk(index, %{}, %{})
+    |> Map.keys()
     |> Enum.sort()
   end
 
@@ -59,18 +59,18 @@ defmodule Fount.Intelligence.StoryWorld.DependencyIndex do
   defp walk([], _index, _seen_dependencies, affected), do: affected
 
   defp walk([dependency | rest], index, seen_dependencies, affected) do
-    if MapSet.member?(seen_dependencies, dependency) do
+    if Map.has_key?(seen_dependencies, dependency) do
       walk(rest, index, seen_dependencies, affected)
     else
       directly_affected = Map.get(index.by_dependency, dependency, MapSet.new())
-      new_ids = MapSet.difference(directly_affected, affected) |> MapSet.to_list()
+      new_ids = directly_affected |> MapSet.to_list() |> Enum.reject(&Map.has_key?(affected, &1))
       next_dependencies = Enum.map(new_ids, &"story:#{&1}")
 
       walk(
         rest ++ next_dependencies,
         index,
-        MapSet.put(seen_dependencies, dependency),
-        Enum.reduce(new_ids, affected, &MapSet.put(&2, &1))
+        Map.put(seen_dependencies, dependency, true),
+        Enum.reduce(new_ids, affected, &Map.put(&2, &1, true))
       )
     end
   end

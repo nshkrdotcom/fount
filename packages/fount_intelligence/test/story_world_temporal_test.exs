@@ -9,10 +9,17 @@ defmodule Fount.Intelligence.StoryWorldTemporalTest do
     observation = Fixture.frozen_observation(screenplay)
     [present, flashback, later] = Fixture.scene_events(screenplay)
 
-    %{screenplay: screenplay, observation: observation, present: present, flashback: flashback, later: later}
+    %{
+      screenplay: screenplay,
+      observation: observation,
+      present: present,
+      flashback: flashback,
+      later: later
+    }
   end
 
-  test "flashback does not inherit later-presented state and event-qualified death/possession stay temporal", ctx do
+  test "flashback does not inherit later-presented state and event-qualified death/possession stay temporal",
+       ctx do
     records = [
       Fixture.record("story_time_constraint", "flashback-before-present", ctx.screenplay, 1, %{
         "left" => ctx.flashback,
@@ -50,9 +57,15 @@ defmodule Fount.Intelligence.StoryWorldTemporalTest do
     assert {:ok, world} = StoryWorld.compile(ctx.screenplay, [ctx.observation], records: records)
     assert :unknown == StoryWorld.state_at(world, "brass-key", "possessor", ctx.flashback)
     assert :unknown == StoryWorld.state_at(world, "Mara", "life_status", ctx.flashback)
-    assert {:known, %{value: "Mara"}} = StoryWorld.state_at(world, "brass-key", "possessor", ctx.present)
-    assert {:known, %{value: "alive"}} = StoryWorld.state_at(world, "Mara", "life_status", ctx.present)
-    assert {:known, %{value: "dead"}} = StoryWorld.state_at(world, "Mara", "life_status", ctx.later)
+
+    assert {:known, %{value: "Mara"}} =
+             StoryWorld.state_at(world, "brass-key", "possessor", ctx.present)
+
+    assert {:known, %{value: "alive"}} =
+             StoryWorld.state_at(world, "Mara", "life_status", ctx.present)
+
+    assert {:known, %{value: "dead"}} =
+             StoryWorld.state_at(world, "Mara", "life_status", ctx.later)
   end
 
   test "overlap, ambiguity, and unknown chronology do not manufacture a total order", ctx do
@@ -70,8 +83,13 @@ defmodule Fount.Intelligence.StoryWorldTemporalTest do
     ]
 
     assert {:ok, world} = StoryWorld.compile(ctx.screenplay, [ctx.observation], records: records)
-    assert %{status: :known, relations: ["overlaps"]} = StoryWorld.story_time_relation(world, ctx.present, ctx.flashback)
-    assert %{status: :ambiguous, relations: ["before", "overlaps"]} = StoryWorld.story_time_relation(world, ctx.present, ctx.later)
+
+    assert %{status: :known, relations: ["overlaps"]} =
+             StoryWorld.story_time_relation(world, ctx.present, ctx.flashback)
+
+    assert %{status: :ambiguous, relations: ["before", "overlaps"]} =
+             StoryWorld.story_time_relation(world, ctx.present, ctx.later)
+
     assert :unknown == StoryWorld.story_time_relation(world, ctx.flashback, ctx.later)
   end
 
@@ -95,6 +113,39 @@ defmodule Fount.Intelligence.StoryWorldTemporalTest do
     assert Enum.sort(conflict.involved_ids) |> Enum.member?("c-before")
     assert Enum.sort(conflict.involved_ids) |> Enum.member?("c-after")
     assert length(conflict.evidence) == 2
-    assert %{status: :contradiction, relations: []} = StoryWorld.story_time_relation(world, ctx.present, ctx.later)
+
+    assert %{status: :contradiction, relations: []} =
+             StoryWorld.story_time_relation(world, ctx.present, ctx.later)
+  end
+
+  test "strict precedence cycles retain the supporting constraint IDs", ctx do
+    records = [
+      Fixture.record("story_time_constraint", "cycle-a", ctx.screenplay, 0, %{
+        "left" => ctx.present,
+        "right" => ctx.flashback,
+        "relations" => ["before"]
+      }),
+      Fixture.record("story_time_constraint", "cycle-b", ctx.screenplay, 1, %{
+        "left" => ctx.flashback,
+        "right" => ctx.later,
+        "relations" => ["before"]
+      }),
+      Fixture.record("story_time_constraint", "cycle-c", ctx.screenplay, 2, %{
+        "left" => ctx.later,
+        "right" => ctx.present,
+        "relations" => ["before"]
+      })
+    ]
+
+    assert {:ok, world} = StoryWorld.compile(ctx.screenplay, [ctx.observation], records: records)
+
+    assert Enum.any?(world.conflicts, fn conflict ->
+             Enum.all?(["cycle-a", "cycle-b", "cycle-c"], &(&1 in conflict.involved_ids))
+           end)
+
+    assert %{status: :contradiction, constraint_ids: ids} =
+             StoryWorld.story_time_relation(world, ctx.present, ctx.flashback)
+
+    assert Enum.all?(["cycle-a", "cycle-b", "cycle-c"], &(&1 in ids))
   end
 end

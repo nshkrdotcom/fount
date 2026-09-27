@@ -11,7 +11,10 @@ defmodule Fount.Intelligence.StoryWorldScopeCausalityTest do
 
     records = [
       %{"record_type" => "scope", "id" => "dream-mara", "kind" => "dream", "parent_id" => "base"},
-      Fixture.record("event", "dream-event", screenplay, 1, %{"scope_id" => "dream-mara", "kind" => "dream_image"}),
+      Fixture.record("event", "dream-event", screenplay, 1, %{
+        "scope_id" => "dream-mara",
+        "kind" => "dream_image"
+      }),
       Fixture.record("state_transition", "base-key", screenplay, 0, %{
         "subject" => "brass-key",
         "attribute" => "possessor",
@@ -33,8 +36,14 @@ defmodule Fount.Intelligence.StoryWorldScopeCausalityTest do
     ]
 
     assert {:ok, world} = StoryWorld.compile(screenplay, [observation], records: records)
-    assert {:known, %{value: "Mara"}} = StoryWorld.state_at(world, "brass-key", "possessor", later)
-    assert {:known, %{value: "Dan"}} = StoryWorld.state_at(world, "brass-key", "possessor", "dream-event", scope: "dream-mara")
+
+    assert {:known, %{value: "Mara"}} =
+             StoryWorld.state_at(world, "brass-key", "possessor", later)
+
+    assert {:known, %{value: "Dan"}} =
+             StoryWorld.state_at(world, "brass-key", "possessor", "dream-event",
+               scope: "dream-mara"
+             )
   end
 
   test "causal direction remains independent from presentation and story-time direction" do
@@ -56,7 +65,10 @@ defmodule Fount.Intelligence.StoryWorldScopeCausalityTest do
     ]
 
     assert {:ok, world} = StoryWorld.compile(screenplay, [observation], records: records)
-    assert %{status: :known, relations: ["before"]} = StoryWorld.story_time_relation(world, present, later)
+
+    assert %{status: :known, relations: ["before"]} =
+             StoryWorld.story_time_relation(world, present, later)
+
     assert StoryWorld.causal_descendants(world, later) == [present]
     assert StoryWorld.causal_ancestors(world, present) == [later]
   end

@@ -2,6 +2,7 @@ defmodule Fount.Intelligence.StoryWorld.Compiler do
   @moduledoc false
 
   alias Fount.Intelligence.StoryWorld
+
   alias Fount.Intelligence.StoryWorld.{
     Assertion,
     Beat,
@@ -25,8 +26,12 @@ defmodule Fount.Intelligence.StoryWorld.Compiler do
     StoryTimeNode
   }
 
-  alias Fount.Observe.{EvidenceRef, MeasurementResult, Observation, TargetRef}
+  alias Fount.Observe.EvidenceRef
+  alias Fount.Observe.MeasurementResult
+  alias Fount.Observe.Observation
+  alias Fount.Observe.TargetRef
   alias Fount.Screenplay.Model
+  alias Fount.Writing.CanonicalJSON
 
   @record_types ~w(entity event interaction assertion goal commitment state_transition beat motif story_time_node story_time_constraint causal_relation scope)
   @legacy_types %{
@@ -40,44 +45,48 @@ defmodule Fount.Intelligence.StoryWorld.Compiler do
     "timeline" => "assertion"
   }
 
-  def compile(%Fount.Screenplay{} = screenplay, observations, opts) when is_list(observations) and is_list(opts) do
+  def compile(%Fount.Screenplay{} = screenplay, observations, opts)
+      when is_list(observations) and is_list(opts) do
     with {:ok, observation_state} <- normalize_observations(screenplay, observations),
-         {:ok, supplied_evidence} <- normalize_supplied_evidence(screenplay, Keyword.get(opts, :evidence_registry, [])),
+         {:ok, supplied_evidence} <-
+           normalize_supplied_evidence(screenplay, Keyword.get(opts, :evidence_registry, [])),
          record_sources <- collect_record_sources(observations, Keyword.get(opts, :records, [])),
-         {:ok, scopes} <- collect_scopes(screenplay, record_sources, observation_state, supplied_evidence),
+         {:ok, scopes} <-
+           collect_scopes(screenplay, record_sources, observation_state, supplied_evidence),
          {:ok, state} <- scaffold(screenplay, scopes, observation_state, supplied_evidence),
          {:ok, state} <- ingest_observation_assertions(state, observations),
          {:ok, state} <- ingest_records(state, record_sources),
-         :ok <- validate_references(state),
-         {:ok, world} <- finish(state) do
-      {:ok, world}
+         :ok <- validate_references(state) do
+      finish(state)
     end
   end
 
   def compile(_screenplay, _observations, _opts), do: {:error, :invalid_story_world_input}
 
   defp normalize_observations(screenplay, observations) do
-    Enum.reduce_while(observations, {:ok, %{by_id: %{}, evidence: %{}}}, fn observation, {:ok, acc} ->
+    Enum.reduce_while(observations, {:ok, %{by_id: %{}, evidence: %{}}}, fn observation,
+                                                                            {:ok, acc} ->
       case validate_observation(screenplay, observation) do
-        :ok ->
-          evidence = Enum.map(observation.evidence, &Evidence.from_observe/1)
-          evidence_map = Map.new(evidence, &{&1.id, &1})
-
-          if Map.has_key?(acc.by_id, observation.id) do
-            {:halt, {:error, {:duplicate_observation_id, observation.id}}}
-          else
-            {:cont,
-             {:ok,
-              %{
-                by_id: Map.put(acc.by_id, observation.id, observation),
-                evidence: Map.merge(acc.evidence, evidence_map)
-              }}}
-          end
-
-        {:error, reason} ->
-          {:halt, {:error, reason}}
+        :ok -> insert_observation(acc, observation)
+        error -> {:halt, error}
       end
     end)
+  end
+
+  defp insert_observation(acc, observation) do
+    if Map.has_key?(acc.by_id, observation.id) do
+      {:halt, {:error, {:duplicate_observation_id, observation.id}}}
+    else
+      evidence = Enum.map(observation.evidence, &Evidence.from_observe/1)
+      evidence_map = Map.new(evidence, &{&1.id, &1})
+
+      {:cont,
+       {:ok,
+        %{
+          by_id: Map.put(acc.by_id, observation.id, observation),
+          evidence: Map.merge(acc.evidence, evidence_map)
+        }}}
+    end
   end
 
   defp validate_observation(
@@ -90,25 +99,10 @@ defmodule Fount.Intelligence.StoryWorld.Compiler do
          }
        )
        when is_binary(id) and id != "" and is_list(evidence) do
-    target_current? = target.screenplay_id == screenplay.id and target.revision_id == screenplay.revision.id
-
-    target_exists? =
-      target.kind == "semantic_subject" or
-        match?({:ok, _}, Fount.Target.resolve(screenplay, TargetRef.to_map(target)))
-
-    evidence_current? =
-      Enum.all?(evidence, fn
-        %EvidenceRef{screenplay_id: sid, revision_id: rid} = ref ->
-          sid == screenplay.id and rid == screenplay.revision.id and
-            match?({:ok, %Evidence{}}, Evidence.from_source_map(screenplay, EvidenceRef.to_map(ref)))
-
-        _ ->
-          false
-      end)
-
-    if target_current? and target_exists? and evidence_current?,
-      do: :ok,
-      else: {:error, {:stale_or_invalid_observation, id}}
+    if current_target?(screenplay, target) and
+         Enum.all?(evidence, &current_evidence?(screenplay, &1)),
+       do: :ok,
+       else: {:error, {:stale_or_invalid_observation, id}}
   end
 
   defp validate_observation(_screenplay, observation) do
@@ -116,23 +110,38 @@ defmodule Fount.Intelligence.StoryWorld.Compiler do
     {:error, {:invalid_observation, id}}
   end
 
+  defp current_target?(screenplay, target) do
+    target.screenplay_id == screenplay.id and target.revision_id == screenplay.revision.id and
+      (target.kind == "semantic_subject" or
+         match?({:ok, _}, Fount.Target.resolve(screenplay, TargetRef.to_map(target))))
+  end
+
+  defp current_evidence?(screenplay, %EvidenceRef{} = ref) do
+    ref.screenplay_id == screenplay.id and ref.revision_id == screenplay.revision.id and
+      match?({:ok, %Evidence{}}, Evidence.from_source_map(screenplay, EvidenceRef.to_map(ref)))
+  end
+
+  defp current_evidence?(_screenplay, _ref), do: false
+
   defp normalize_supplied_evidence(screenplay, entries) when is_list(entries) do
     Enum.reduce_while(entries, {:ok, %{}}, fn entry, {:ok, acc} ->
       case normalize_evidence_item(screenplay, entry) do
-        {:ok, evidence} ->
-          case Map.get(acc, evidence.id) do
-            nil -> {:cont, {:ok, Map.put(acc, evidence.id, evidence)}}
-            ^evidence -> {:cont, {:ok, acc}}
-            _other -> {:halt, {:error, {:conflicting_evidence_id, evidence.id}}}
-          end
-
-        {:error, reason} ->
-          {:halt, {:error, reason}}
+        {:ok, evidence} -> insert_supplied_evidence(acc, evidence)
+        error -> {:halt, error}
       end
     end)
   end
 
-  defp normalize_supplied_evidence(_screenplay, _entries), do: {:error, :invalid_evidence_registry}
+  defp normalize_supplied_evidence(_screenplay, _entries),
+    do: {:error, :invalid_evidence_registry}
+
+  defp insert_supplied_evidence(acc, evidence) do
+    case Map.get(acc, evidence.id) do
+      nil -> {:cont, {:ok, Map.put(acc, evidence.id, evidence)}}
+      ^evidence -> {:cont, {:ok, acc}}
+      _other -> {:halt, {:error, {:conflicting_evidence_id, evidence.id}}}
+    end
+  end
 
   defp collect_record_sources(observations, explicit_records) do
     embedded =
@@ -152,8 +161,11 @@ defmodule Fount.Intelligence.StoryWorld.Compiler do
 
     value_records =
       case observation.result.value do
-        %{} = value -> Map.get(value, "story_world_records") || Map.get(value, :story_world_records) || []
-        _ -> []
+        %{} = value ->
+          Map.get(value, "story_world_records") || Map.get(value, :story_world_records) || []
+
+        _ ->
+          []
       end
 
     List.wrap(metadata_records) ++ List.wrap(value_records)
@@ -168,28 +180,16 @@ defmodule Fount.Intelligence.StoryWorld.Compiler do
       Enum.reduce_while(record_sources, {:ok, initial}, fn {raw, observation_id}, {:ok, scopes} ->
         record = normalize_legacy(raw)
 
-        candidates =
-          case record_type(record) do
-            "scope" -> [record]
-            _ -> if(is_map(field(record, "scope")), do: [field(record, "scope")], else: [])
-          end
-
-        Enum.reduce_while(candidates, {:ok, scopes}, fn candidate, {:ok, inner} ->
-          case build_scope(screenplay, candidate, observation_id, observation_state, registry) do
-            {:ok, scope} ->
-              case Map.get(inner, scope.id) do
-                nil -> {:cont, {:ok, Map.put(inner, scope.id, scope)}}
-                ^scope -> {:cont, {:ok, inner}}
-                _other -> {:halt, {:error, {:conflicting_scope_definition, scope.id}}}
-              end
-
-            {:error, reason} ->
-              {:halt, {:error, reason}}
-          end
-        end)
-        |> case do
-          {:ok, scopes} -> {:cont, {:ok, scopes}}
-          {:error, reason} -> {:halt, {:error, reason}}
+        case merge_scope_candidates(
+               screenplay,
+               scope_candidates(record),
+               observation_id,
+               observation_state,
+               registry,
+               scopes
+             ) do
+          {:ok, next} -> {:cont, {:ok, next}}
+          error -> {:halt, error}
         end
       end)
 
@@ -199,13 +199,53 @@ defmodule Fount.Intelligence.StoryWorld.Compiler do
     end
   end
 
-  defp build_scope(screenplay, candidate, observation_id, observation_state, registry) when is_map(candidate) do
+  defp scope_candidates(record) do
+    case record_type(record) do
+      "scope" -> [record]
+      _ -> if(is_map(field(record, "scope")), do: [field(record, "scope")], else: [])
+    end
+  end
+
+  defp merge_scope_candidates(
+         screenplay,
+         candidates,
+         observation_id,
+         observation_state,
+         registry,
+         scopes
+       ) do
+    Enum.reduce_while(candidates, {:ok, scopes}, fn candidate, {:ok, inner} ->
+      case build_scope(screenplay, candidate, observation_id, observation_state, registry) do
+        {:ok, scope} -> put_scope(inner, scope)
+        error -> {:halt, error}
+      end
+    end)
+  end
+
+  defp put_scope(scopes, scope) do
+    case Map.get(scopes, scope.id) do
+      nil -> {:cont, {:ok, Map.put(scopes, scope.id, scope)}}
+      ^scope -> {:cont, {:ok, scopes}}
+      _other -> {:halt, {:error, {:conflicting_scope_definition, scope.id}}}
+    end
+  end
+
+  defp build_scope(screenplay, candidate, observation_id, observation_state, registry)
+       when is_map(candidate) do
     id = field(candidate, "id")
     kind = scalar_string(field(candidate, "scope_kind") || field(candidate, "kind"))
 
     with true <- is_binary(id) and id != "",
          true <- kind in NarrativeScope.kinds(),
-         {:ok, evidence} <- record_evidence(screenplay, candidate, observation_id, observation_state, registry, false) do
+         {:ok, evidence} <-
+           record_evidence(
+             screenplay,
+             candidate,
+             observation_id,
+             observation_state,
+             registry,
+             false
+           ) do
       parent = field(candidate, "parent_id") || if(kind == "base", do: nil, else: "base")
 
       {:ok,
@@ -213,7 +253,9 @@ defmodule Fount.Intelligence.StoryWorld.Compiler do
          id: id,
          kind: kind,
          parent_id: parent,
-         claim_status: field(candidate, "claim_status") || if(kind == "base", do: "established", else: "claimed"),
+         claim_status:
+           field(candidate, "claim_status") ||
+             if(kind == "base", do: "established", else: "claimed"),
          evidence: evidence,
          metadata: plain_map(field(candidate, "metadata") || %{})
        }}
@@ -254,9 +296,8 @@ defmodule Fount.Intelligence.StoryWorld.Compiler do
       causal_edges: %{}
     }
 
-    with {:ok, state} <- scaffold_characters(state),
-         {:ok, state} <- scaffold_scenes(state) do
-      {:ok, state}
+    with {:ok, state} <- scaffold_characters(state) do
+      scaffold_scenes(state)
     end
   end
 
@@ -299,7 +340,11 @@ defmodule Fount.Intelligence.StoryWorld.Compiler do
 
   defp canonical_mention(screenplay, entity_id, mention) do
     element = Fount.Query.node(screenplay, mention.element_id)
-    evidence = if element, do: [Evidence.canonical_element(screenplay, element, "canonical_mention")], else: []
+
+    evidence =
+      if element,
+        do: [Evidence.canonical_element(screenplay, element, "canonical_mention")],
+        else: []
 
     %Mention{
       id: mention.id,
@@ -317,7 +362,8 @@ defmodule Fount.Intelligence.StoryWorld.Compiler do
     }
   end
 
-  defp mention_sort_key(screenplay, mention), do: {element_ordinal(screenplay, mention.element_id), mention.byte_start, mention.id}
+  defp mention_sort_key(screenplay, mention),
+    do: {element_ordinal(screenplay, mention.element_id), mention.byte_start, mention.id}
 
   defp scaffold_scenes(state) do
     screenplay = state.screenplay
@@ -327,7 +373,12 @@ defmodule Fount.Intelligence.StoryWorld.Compiler do
     |> Enum.reduce_while({:ok, state}, fn {scene, scene_ordinal}, {:ok, acc} ->
       heading = Fount.Query.node(screenplay, scene.heading_id)
       event_id = "scene:" <> scene.id
-      evidence = if heading, do: [Evidence.canonical_element(screenplay, heading, "scene_heading")], else: []
+
+      evidence =
+        if heading,
+          do: [Evidence.canonical_element(screenplay, heading, "scene_heading")],
+          else: []
+
       point = presentation_point(screenplay, scene.heading_id, scene_ordinal)
 
       participant_ids =
@@ -399,7 +450,9 @@ defmodule Fount.Intelligence.StoryWorld.Compiler do
       if Map.has_key?(acc.world.assertions, id) do
         {:halt, {:error, {:duplicate_story_world_id, id}}}
       else
-        {:cont, {:ok, %{acc | world: %{acc.world | assertions: Map.put(acc.world.assertions, id, assertion)}}}}
+        {:cont,
+         {:ok,
+          %{acc | world: %{acc.world | assertions: Map.put(acc.world.assertions, id, assertion)}}}}
       end
     end)
   end
@@ -417,25 +470,31 @@ defmodule Fount.Intelligence.StoryWorld.Compiler do
   end
 
   defp ingest_record(state, {record, observation_id}) when is_map(record) do
-    case record_type(record) do
-      "entity" -> build_entity(state, record, observation_id)
-      "event" -> build_event(state, record, observation_id)
-      "interaction" -> build_interaction(state, record, observation_id)
-      "assertion" -> build_assertion(state, record, observation_id)
-      "goal" -> build_goal(state, record, observation_id)
-      "commitment" -> build_commitment(state, record, observation_id)
-      "state_transition" -> build_state_transition(state, record, observation_id)
-      "beat" -> build_beat(state, record, observation_id)
-      "motif" -> build_motif(state, record, observation_id)
-      "story_time_node" -> build_story_time_node(state, record, observation_id)
-      "story_time_constraint" -> build_story_time_constraint(state, record, observation_id)
-      "causal_relation" -> build_causal_relation(state, record, observation_id)
-      nil -> {:error, {:unknown_story_world_record_type, field(record, "kind")}}
-      other -> {:error, {:unknown_story_world_record_type, other}}
+    builders = %{
+      "entity" => &build_entity/3,
+      "event" => &build_event/3,
+      "interaction" => &build_interaction/3,
+      "assertion" => &build_assertion/3,
+      "goal" => &build_goal/3,
+      "commitment" => &build_commitment/3,
+      "state_transition" => &build_state_transition/3,
+      "beat" => &build_beat/3,
+      "motif" => &build_motif/3,
+      "story_time_node" => &build_story_time_node/3,
+      "story_time_constraint" => &build_story_time_constraint/3,
+      "causal_relation" => &build_causal_relation/3
+    }
+
+    type = record_type(record)
+
+    case Map.fetch(builders, type) do
+      {:ok, builder} -> builder.(state, record, observation_id)
+      :error -> {:error, {:unknown_story_world_record_type, type || field(record, "kind")}}
     end
   end
 
-  defp ingest_record(_state, {record, _observation_id}), do: {:error, {:invalid_story_world_record, inspect(record)}}
+  defp ingest_record(_state, {record, _observation_id}),
+    do: {:error, {:invalid_story_world_record, inspect(record)}}
 
   defp build_entity(state, record, observation_id) do
     id = record_id(state.screenplay, record, "entity")
@@ -530,37 +589,43 @@ defmodule Fount.Intelligence.StoryWorld.Compiler do
       }
 
       with {:ok, state} <- put_world(state, :interactions, interaction) do
-        if Map.has_key?(state.world.events, event_id) do
-          {:ok, state}
-        else
-          event = %Event{
-            id: event_id,
-            kind: "interaction",
-            label: field(record, "label") || field(record, "claim"),
-            scope_id: scope_id,
-            story_time_node_id: event_id,
-            participants: %{"characters" => interaction.participants},
-            presentation_points: interaction.presentation_points,
-            evidence: evidence,
-            certainty: interaction.confidence,
-            alternatives: interaction.alternatives,
-            dependencies: interaction.dependencies,
-            metadata: %{"interaction_id" => id}
-          }
+        ensure_interaction_event(state, record, interaction)
+      end
+    end
+  end
 
-          node = %StoryTimeNode{
-            id: event_id,
-            event_id: event_id,
-            kind: "event",
-            scope_id: scope_id,
-            evidence: evidence,
-            dependencies: ["story:#{event_id}"] ++ interaction.dependencies
-          }
+  defp ensure_interaction_event(state, record, interaction) do
+    event_id = interaction.event_id
 
-          with {:ok, state} <- put_world(state, :events, event) do
-            {:ok, %{state | nodes: Map.put(state.nodes, event_id, node)}}
-          end
-        end
+    if Map.has_key?(state.world.events, event_id) do
+      {:ok, state}
+    else
+      event = %Event{
+        id: event_id,
+        kind: "interaction",
+        label: field(record, "label") || field(record, "claim"),
+        scope_id: interaction.scope_id,
+        story_time_node_id: event_id,
+        participants: %{"characters" => interaction.participants},
+        presentation_points: interaction.presentation_points,
+        evidence: interaction.evidence,
+        certainty: interaction.confidence,
+        alternatives: interaction.alternatives,
+        dependencies: interaction.dependencies,
+        metadata: %{"interaction_id" => interaction.id}
+      }
+
+      node = %StoryTimeNode{
+        id: event_id,
+        event_id: event_id,
+        kind: "event",
+        scope_id: interaction.scope_id,
+        evidence: interaction.evidence,
+        dependencies: ["story:#{event_id}"] ++ interaction.dependencies
+      }
+
+      with {:ok, state} <- put_world(state, :events, event) do
+        {:ok, %{state | nodes: Map.put(state.nodes, event_id, node)}}
       end
     end
   end
@@ -581,7 +646,8 @@ defmodule Fount.Intelligence.StoryWorld.Compiler do
         epistemic_owner: field(record, "epistemic_owner"),
         scope_id: scope_id,
         lifecycle: field(record, "lifecycle") || "supported",
-        story_time_refs: plain_list(field(record, "story_time_refs") || field(record, "active_at")),
+        story_time_refs:
+          plain_list(field(record, "story_time_refs") || field(record, "active_at")),
         presentation_points: record_presentation_points(state.screenplay, record, evidence),
         evidence: evidence,
         confidence: confidence(record),
@@ -635,7 +701,8 @@ defmodule Fount.Intelligence.StoryWorld.Compiler do
         id: id,
         kind: semantic_kind(record, "commitment"),
         scope_id: scope_id,
-        from: Model.plain(field(record, "from") || List.first(plain_list(field(record, "subjects")))),
+        from:
+          Model.plain(field(record, "from") || List.first(plain_list(field(record, "subjects")))),
         to: Model.plain(field(record, "to")),
         terms: field(record, "terms") || field(record, "claim"),
         status: field(record, "status") || "active",
@@ -768,6 +835,7 @@ defmodule Fount.Intelligence.StoryWorld.Compiler do
     id = record_id(state.screenplay, record, "story_time_constraint")
     left = field(record, "left")
     right = field(record, "right")
+
     relations =
       record
       |> field("relations")
@@ -790,7 +858,8 @@ defmodule Fount.Intelligence.StoryWorld.Compiler do
         evidence: evidence,
         confidence: confidence(record),
         alternatives: plain_list(field(record, "alternatives")),
-        dependencies: dependencies(record, observation_id, evidence) ++ ["story:#{left}", "story:#{right}"],
+        dependencies:
+          dependencies(record, observation_id, evidence) ++ ["story:#{left}", "story:#{right}"],
         metadata: plain_map(field(record, "metadata") || %{})
       }
 
@@ -820,7 +889,8 @@ defmodule Fount.Intelligence.StoryWorld.Compiler do
         evidence: evidence,
         confidence: confidence(record),
         alternatives: plain_list(field(record, "alternatives")),
-        dependencies: dependencies(record, observation_id, evidence) ++ ["story:#{from}", "story:#{to}"],
+        dependencies:
+          dependencies(record, observation_id, evidence) ++ ["story:#{from}", "story:#{to}"],
         metadata: plain_map(field(record, "metadata") || %{})
       }
 
@@ -838,7 +908,8 @@ defmodule Fount.Intelligence.StoryWorld.Compiler do
     if Map.has_key?(collection, value.id) do
       {:error, {:duplicate_story_world_id, value.id}}
     else
-      {:ok, %{state | world: Map.put(state.world, field_name, Map.put(collection, value.id, value))}}
+      {:ok,
+       %{state | world: Map.put(state.world, field_name, Map.put(collection, value.id, value))}}
     end
   end
 
@@ -865,7 +936,9 @@ defmodule Fount.Intelligence.StoryWorld.Compiler do
     unknown_causal =
       state.causal_edges
       |> Map.values()
-      |> Enum.flat_map(fn edge -> Enum.reject([edge.from, edge.to], &MapSet.member?(known_objects, &1)) end)
+      |> Enum.flat_map(fn edge ->
+        Enum.reject([edge.from, edge.to], &MapSet.member?(known_objects, &1))
+      end)
       |> Enum.uniq()
       |> Enum.sort()
 
@@ -878,7 +951,8 @@ defmodule Fount.Intelligence.StoryWorld.Compiler do
   end
 
   defp story_object_ids(state) do
-    fields = ~w(entities events interactions assertions goals commitments state_transitions beats motifs)a
+    fields =
+      ~w(entities events interactions assertions goals commitments state_transitions beats motifs)a
 
     fields
     |> Enum.flat_map(&(state.world |> Map.fetch!(&1) |> Map.keys()))
@@ -889,7 +963,14 @@ defmodule Fount.Intelligence.StoryWorld.Compiler do
   defp finish(state) do
     story_time = StoryTime.build(Map.values(state.nodes), Map.values(state.constraints))
     causal = Causal.build(Map.values(state.causal_edges))
-    world = %{state.world | story_time: story_time, causal: causal, conflicts: story_time.conflicts}
+
+    world = %{
+      state.world
+      | story_time: story_time,
+        causal: causal,
+        conflicts: story_time.conflicts
+    }
+
     conflicts = world.conflicts ++ Consistency.check(world)
     world = %{world | conflicts: Enum.uniq_by(conflicts, & &1.id) |> Enum.sort_by(& &1.id)}
     index = DependencyIndex.build(world)
@@ -918,7 +999,10 @@ defmodule Fount.Intelligence.StoryWorld.Compiler do
 
         ids != [] ->
           missing = Enum.reject(ids, &Map.has_key?(registry, &1))
-          if missing == [], do: {:ok, Enum.map(ids, &Map.fetch!(registry, &1))}, else: {:error, {:unknown_evidence_ids, missing}}
+
+          if missing == [],
+            do: {:ok, Enum.map(ids, &Map.fetch!(registry, &1))},
+            else: {:error, {:unknown_evidence_ids, missing}}
 
         is_binary(observation_id) ->
           observation = Map.fetch!(observation_state.by_id, observation_id)
@@ -930,7 +1014,10 @@ defmodule Fount.Intelligence.StoryWorld.Compiler do
 
     with {:ok, evidence} <- result do
       evidence = uniq_evidence(evidence)
-      if required? and evidence == [], do: {:error, :missing_story_world_evidence}, else: {:ok, evidence}
+
+      if required? and evidence == [],
+        do: {:error, :missing_story_world_evidence},
+        else: {:ok, evidence}
     end
   end
 
@@ -1009,8 +1096,10 @@ defmodule Fount.Intelligence.StoryWorld.Compiler do
     end
   end
 
-  defp presentation_from_evidence(screenplay, %Evidence{target: %{"kind" => "element", "id" => id}}),
-    do: presentation_from_element(screenplay, id)
+  defp presentation_from_evidence(screenplay, %Evidence{
+         target: %{"kind" => "element", "id" => id}
+       }),
+       do: presentation_from_element(screenplay, id)
 
   defp presentation_from_evidence(_screenplay, _evidence), do: nil
 
@@ -1082,7 +1171,9 @@ defmodule Fount.Intelligence.StoryWorld.Compiler do
     legacy = scalar_string(field(record, "kind"))
 
     case Map.get(@legacy_types, legacy) do
-      nil -> record
+      nil ->
+        record
+
       type ->
         record
         |> Map.put("record_type", type)
@@ -1100,27 +1191,30 @@ defmodule Fount.Intelligence.StoryWorld.Compiler do
   end
 
   defp semantic_kind(record, default) do
-    explicit =
-      field(record, "event_type") || field(record, "commitment_type") || field(record, "causal_type") ||
-        field(record, "semantic_kind") || field(record, "subtype")
-
-    kind =
-      cond do
-        explicit -> explicit
-        field(record, "record_type") -> field(record, "kind")
-        true -> nil
-      end
-
-    kind = scalar_string(kind)
-    kind = if kind in @record_types or (is_binary(kind) and Map.has_key?(@legacy_types, kind)), do: nil, else: kind
-    if is_nil(kind), do: default, else: kind
+    kind = scalar_string(explicit_semantic_kind(record) || fallback_semantic_kind(record))
+    if record_type_name?(kind), do: default, else: kind || default
   end
 
-  defp record_id(screenplay, record, type) do
+  defp explicit_semantic_kind(record) do
+    Enum.find_value(
+      ~w(event_type commitment_type causal_type semantic_kind subtype),
+      &field(record, &1)
+    )
+  end
+
+  defp fallback_semantic_kind(record) do
+    if field(record, "record_type"), do: field(record, "kind"), else: nil
+  end
+
+  defp record_type_name?(kind), do: kind in @record_types or Map.has_key?(@legacy_types, kind)
+
+  defp record_id(_screenplay, record, type) do
     case field(record, "id") do
-      id when is_binary(id) and id != "" -> id
+      id when is_binary(id) and id != "" ->
+        id
+
       _ ->
-        digest = record |> Model.plain() |> Fount.Writing.CanonicalJSON.hash()
+        digest = record |> Model.plain() |> CanonicalJSON.hash()
         "sw_#{type}_" <> String.slice(digest, 0, 24)
     end
   end
@@ -1132,12 +1226,15 @@ defmodule Fount.Intelligence.StoryWorld.Compiler do
       |> plain_list()
       |> Enum.map(&scalar_string/1)
       |> Enum.reject(&is_nil/1)
+
     observation = if is_binary(observation_id), do: ["observation:#{observation_id}"], else: []
     evidence_deps = Enum.map(evidence, &"evidence:#{&1.id}")
     Enum.sort(Enum.uniq(explicit ++ observation ++ evidence_deps))
   end
 
-  defp distribution_confidence(%{confidence: confidence}) when is_number(confidence), do: confidence
+  defp distribution_confidence(%{confidence: confidence}) when is_number(confidence),
+    do: confidence
+
   defp distribution_confidence(_distribution), do: nil
 
   defp confidence(record) do
@@ -1160,17 +1257,17 @@ defmodule Fount.Intelligence.StoryWorld.Compiler do
         value
 
       :error ->
-        Enum.reduce_while(map, nil, fn
-          {atom_key, value}, _acc when is_atom(atom_key) ->
-            if Atom.to_string(atom_key) == key, do: {:halt, value}, else: {:cont, nil}
-
-          _entry, _acc ->
-            {:cont, nil}
-        end)
+        Enum.reduce_while(map, nil, &find_atom_field(&1, &2, key))
     end
   end
 
   defp field(_map, _key), do: nil
+
+  defp find_atom_field({atom_key, value}, _acc, key) when is_atom(atom_key) do
+    if Atom.to_string(atom_key) == key, do: {:halt, value}, else: {:cont, nil}
+  end
+
+  defp find_atom_field(_entry, _acc, _key), do: {:cont, nil}
 
   defp scalar_string(value) when is_binary(value), do: value
   defp scalar_string(value) when is_atom(value) and not is_nil(value), do: Atom.to_string(value)

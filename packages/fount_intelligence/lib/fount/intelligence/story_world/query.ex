@@ -2,6 +2,8 @@ defmodule Fount.Intelligence.StoryWorld.Query do
   @moduledoc "Pure StoryWorld query operations. Unknown chronology stays unknown and never inherits presentation order."
 
   alias Fount.Intelligence.StoryWorld.{Causal, DependencyIndex, StoryTime}
+  alias Fount.Screenplay.Model
+  alias Fount.Writing.CanonicalJSON
 
   def story_time_relation(%{story_time: story_time}, left, right),
     do: StoryTime.relation(story_time, left, right)
@@ -14,7 +16,8 @@ defmodule Fount.Intelligence.StoryWorld.Query do
       |> Map.values()
       |> Enum.filter(fn transition ->
         transition.scope_id == scope_id and transition.attribute == attribute and
-          same_value?(transition.subject, subject) and applicable?(world, transition.event_id, event_id)
+          same_value?(transition.subject, subject) and
+          applicable?(world, transition.event_id, event_id)
       end)
 
     latest = maximal_transitions(world, candidates)
@@ -67,10 +70,12 @@ defmodule Fount.Intelligence.StoryWorld.Query do
 
     world.assertions
     |> Map.values()
-    |> Enum.filter(&(&1.scope_id == scope_id))
-    |> Enum.filter(&(is_nil(predicate) or &1.predicate == predicate))
-    |> Enum.filter(&(subject == :any or same_value?(&1.subject, subject)))
-    |> Enum.filter(&assertion_applicable?(world, &1, event_id))
+    |> Enum.filter(fn assertion ->
+      assertion.scope_id == scope_id and
+        (is_nil(predicate) or assertion.predicate == predicate) and
+        (subject == :any or same_value?(assertion.subject, subject)) and
+        assertion_applicable?(world, assertion, event_id)
+    end)
     |> Enum.sort_by(& &1.id)
   end
 
@@ -121,7 +126,9 @@ defmodule Fount.Intelligence.StoryWorld.Query do
   defp assertion_applicable?(_world, %{story_time_refs: []}, _event_id), do: true
 
   defp assertion_applicable?(world, assertion, event_id) do
-    Enum.any?(assertion.story_time_refs, fn reference -> applicable?(world, reference, event_id) end)
+    Enum.any?(assertion.story_time_refs, fn reference ->
+      applicable?(world, reference, event_id)
+    end)
   end
 
   defp applicable?(_world, event_id, event_id), do: true
@@ -154,7 +161,7 @@ defmodule Fount.Intelligence.StoryWorld.Query do
   end
 
   defp same_value?(left, right), do: value_key(left) == value_key(right)
-  defp value_key(value), do: Fount.Writing.CanonicalJSON.hash(Fount.Screenplay.Model.plain(value))
+  defp value_key(value), do: CanonicalJSON.hash(Model.plain(value))
 
   defp uniq_evidence(evidence),
     do: evidence |> Enum.uniq_by(& &1.id) |> Enum.sort_by(& &1.id)

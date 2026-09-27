@@ -5,16 +5,30 @@ alias Fount.Screenplay
 screenplay =
   Screenplay.new(
     scenes: [
-      %{heading: "INT. SERVICE CORRIDOR - NIGHT", elements: [%{type: :action, text: "Mara pockets the brass key."}]},
-      %{heading: "INT. SERVICE CORRIDOR - YEARS EARLIER", elements: [%{type: :action, text: "The key hangs behind glass."}]},
-      %{heading: "EXT. LOADING DOCK - DAWN", elements: [%{type: :action, text: "Mara leaves the key beside Dan."}]}
+      %{
+        heading: "INT. SERVICE CORRIDOR - NIGHT",
+        elements: [%{type: :action, text: "Mara pockets the brass key."}]
+      },
+      %{
+        heading: "INT. SERVICE CORRIDOR - YEARS EARLIER",
+        elements: [%{type: :action, text: "The key hangs behind glass."}]
+      },
+      %{
+        heading: "EXT. LOADING DOCK - DAWN",
+        elements: [%{type: :action, text: "Mara leaves the key beside Dan."}]
+      }
     ]
   )
 
 [first_scene, flashback_scene, later_scene] = screenplay.ir.scenes
 first_action = Enum.find(screenplay.ir.elements, &(&1.type == :action))
 
-target = %TargetRef{screenplay_id: screenplay.id, revision_id: screenplay.revision.id, kind: "element", id: first_action.id}
+target = %TargetRef{
+  screenplay_id: screenplay.id,
+  revision_id: screenplay.revision.id,
+  kind: "element",
+  id: first_action.id
+}
 
 evidence = %EvidenceRef{
   id: "demo-evidence-1",
@@ -57,15 +71,56 @@ flashback_event = "scene:" <> flashback_scene.id
 later_event = "scene:" <> later_scene.id
 
 records = [
-  %{"record_type" => "story_time_constraint", "id" => "flashback-before-first", "left" => flashback_event, "right" => first_event, "relations" => ["before"], "evidence" => evidence_at.(flashback_scene)},
-  %{"record_type" => "story_time_constraint", "id" => "first-before-later", "left" => first_event, "right" => later_event, "relations" => ["before"], "evidence" => evidence_at.(first_scene)},
-  %{"record_type" => "state_transition", "id" => "key-taken", "subject" => "brass-key", "attribute" => "possessor", "to" => "Mara", "event_id" => first_event, "evidence" => evidence_at.(first_scene)},
-  %{"record_type" => "causal_relation", "id" => "key-enables-dock", "causal_type" => "enables", "from" => first_event, "to" => later_event, "evidence" => evidence_at.(later_scene)}
+  %{
+    "record_type" => "story_time_constraint",
+    "id" => "flashback-before-first",
+    "left" => flashback_event,
+    "right" => first_event,
+    "relations" => ["before"],
+    "evidence" => evidence_at.(flashback_scene)
+  },
+  %{
+    "record_type" => "story_time_constraint",
+    "id" => "first-before-later",
+    "left" => first_event,
+    "right" => later_event,
+    "relations" => ["before"],
+    "evidence" => evidence_at.(first_scene)
+  },
+  %{
+    "record_type" => "state_transition",
+    "id" => "key-taken",
+    "subject" => "brass-key",
+    "attribute" => "possessor",
+    "to" => "Mara",
+    "event_id" => first_event,
+    "evidence" => evidence_at.(first_scene)
+  },
+  %{
+    "record_type" => "causal_relation",
+    "id" => "key-enables-dock",
+    "causal_type" => "enables",
+    "from" => first_event,
+    "to" => later_event,
+    "evidence" => evidence_at.(later_scene)
+  }
 ]
 
 {:ok, world} = StoryWorld.compile(screenplay, [observation], records: records)
 
-IO.puts("flashback key possession: #{inspect(StoryWorld.state_at(world, "brass-key", "possessor", flashback_event))}")
-IO.puts("later key possession: #{inspect(StoryWorld.state_at(world, "brass-key", "possessor", later_event))}")
+IO.puts(
+  "flashback key possession: #{inspect(StoryWorld.state_at(world, "brass-key", "possessor", flashback_event))}"
+)
+
+IO.puts(
+  "later key possession: #{inspect(StoryWorld.state_at(world, "brass-key", "possessor", later_event))}"
+)
+
 IO.puts("causal descendants: #{inspect(StoryWorld.causal_descendants(world, first_event))}")
-IO.puts("\n" <> StoryWorld.render_markdown(world, question: "What is established about the key across the non-linear sequence?"))
+
+IO.puts(
+  "\n" <>
+    StoryWorld.render_markdown(world,
+      question: "What is established about the key across the non-linear sequence?"
+    )
+)

@@ -14,7 +14,7 @@ defmodule Fount.Intelligence.StoryWorld.StoryTime do
   }
 
   defmodule Graph do
-    @moduledoc false
+    @moduledoc "Compiled partial story-time graph with source-backed conflicts."
     defstruct nodes: %{}, constraints: %{}, conflicts: []
     @type t :: %__MODULE__{}
   end
@@ -41,14 +41,25 @@ defmodule Fount.Intelligence.StoryWorld.StoryTime do
         %{status: :known, relations: ["same_time"], evidence: [], constraint_ids: []}
 
       true ->
-        case direct_packet(graph, left, right) do
-          nil -> propagated_relation(graph, left, right)
-          packet -> packet
-        end
+        relation_packet(graph, left, right)
     end
   end
 
   def relation(_graph, _left, _right), do: :unknown
+
+  defp relation_packet(graph, left, right) do
+    direct = direct_packet(graph, left, right)
+
+    packet =
+      if match?(%{status: :contradiction}, direct),
+        do: direct,
+        else: cyclic_packet(graph, left, right) || direct
+
+    case packet do
+      nil -> propagated_relation(graph, left, right)
+      result -> result
+    end
+  end
 
   @doc "Strict precedence ancestors. Only unambiguous before/after constraints participate."
   def before?(%Graph{} = graph, left, right), do: reachable?(strict_edges(graph), left, right)
@@ -119,6 +130,23 @@ defmodule Fount.Intelligence.StoryWorld.StoryTime do
   defp relation_status([_]), do: :known
   defp relation_status(_), do: :ambiguous
 
+  defp cyclic_packet(graph, left, right) do
+    case {strict_path(graph, left, right), strict_path(graph, right, left)} do
+      {{:ok, forward}, {:ok, reverse}} ->
+        constraints = forward ++ reverse
+
+        %{
+          status: :contradiction,
+          relations: [],
+          evidence: constraints |> Enum.flat_map(& &1.evidence) |> uniq_evidence(),
+          constraint_ids: constraints |> Enum.map(& &1.id) |> Enum.uniq() |> Enum.sort()
+        }
+
+      _ ->
+        nil
+    end
+  end
+
   defp propagated_relation(graph, left, right) do
     case strict_path(graph, left, right) do
       {:ok, constraints} ->
@@ -160,7 +188,7 @@ defmodule Fount.Intelligence.StoryWorld.StoryTime do
           acc
       end)
 
-    path_walk(adjacency, [{from, []}], MapSet.new(), to)
+    path_walk(adjacency, [{from, []}], %{}, to)
   end
 
   defp path_walk(_adjacency, [], _seen, _target), do: :none
@@ -170,7 +198,7 @@ defmodule Fount.Intelligence.StoryWorld.StoryTime do
       current == target and path != [] ->
         {:ok, Enum.reverse(path)}
 
-      MapSet.member?(seen, current) ->
+      Map.has_key?(seen, current) ->
         path_walk(adjacency, rest, seen, target)
 
       true ->
@@ -180,7 +208,7 @@ defmodule Fount.Intelligence.StoryWorld.StoryTime do
           |> Enum.sort_by(fn {node, constraint} -> {node, constraint.id} end)
           |> Enum.map(fn {node, constraint} -> {node, [constraint | path]} end)
 
-        path_walk(adjacency, rest ++ next, MapSet.put(seen, current), target)
+        path_walk(adjacency, rest ++ next, Map.put(seen, current, true), target)
     end
   end
 
@@ -199,21 +227,21 @@ defmodule Fount.Intelligence.StoryWorld.StoryTime do
     end)
   end
 
-  defp reachable?(edges, from, to), do: walk(edges, [from], MapSet.new(), to)
+  defp reachable?(edges, from, to), do: walk(edges, [from], %{}, to)
 
   defp walk(_edges, [], _seen, _target), do: false
 
   defp walk(edges, [current | rest], seen, target) do
     cond do
-      current == target and MapSet.size(seen) > 0 ->
+      current == target and map_size(seen) > 0 ->
         true
 
-      MapSet.member?(seen, current) ->
+      Map.has_key?(seen, current) ->
         walk(edges, rest, seen, target)
 
       true ->
         next = Map.get(edges, current, MapSet.new()) |> MapSet.to_list()
-        walk(edges, next ++ rest, MapSet.put(seen, current), target)
+        walk(edges, next ++ rest, Map.put(seen, current, true), target)
     end
   end
 
@@ -238,7 +266,9 @@ defmodule Fount.Intelligence.StoryWorld.StoryTime do
 
   defp cycle_conflicts(%Graph{} = graph) do
     edges = strict_edges(graph)
-    cycle_nodes = graph.nodes |> Map.keys() |> Enum.filter(&reachable?(edges, &1, &1)) |> Enum.sort()
+
+    cycle_nodes =
+      graph.nodes |> Map.keys() |> Enum.filter(&reachable?(edges, &1, &1)) |> Enum.sort()
 
     if cycle_nodes == [] do
       []
@@ -247,14 +277,17 @@ defmodule Fount.Intelligence.StoryWorld.StoryTime do
         graph.constraints
         |> Map.values()
         |> Enum.filter(&(&1.relations in [["before"], ["after"]]))
+        |> Enum.sort_by(& &1.id)
+
+      involved_ids = cycle_nodes ++ Enum.map(strict_constraints, & &1.id)
 
       [
         %Conflict{
-          id: conflict_id("strict_cycle", cycle_nodes),
+          id: conflict_id("strict_cycle", involved_ids),
           kind: "temporal_contradiction",
           message: "Strict story-time precedence contains a cycle.",
           severity: "error",
-          involved_ids: cycle_nodes,
+          involved_ids: involved_ids,
           evidence: strict_constraints |> Enum.flat_map(& &1.evidence) |> uniq_evidence(),
           dependencies: Enum.map(strict_constraints, &"story:#{&1.id}")
         }
@@ -262,7 +295,8 @@ defmodule Fount.Intelligence.StoryWorld.StoryTime do
     end
   end
 
-  defp conflict_id(kind, ids), do: "sw_conflict_" <> Fount.ID.hash([kind, ":", Enum.join(ids, "|")])
+  defp conflict_id(kind, ids),
+    do: "sw_conflict_" <> Fount.ID.hash([kind, ":", Enum.join(ids, "|")])
 
   defp uniq_evidence(evidence) do
     evidence

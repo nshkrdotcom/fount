@@ -14,7 +14,10 @@ defmodule Fount.Intelligence.StoryWorldArchitectureTest do
     ]
 
     for source <- samples do
-      assert Architecture.source_violations(source, "packages/fount_intelligence/lib/fount/intelligence/story_world/bad.ex") != []
+      assert Architecture.source_violations(
+               source,
+               "packages/fount_intelligence/lib/fount/intelligence/story_world/bad.ex"
+             ) != []
     end
   end
 end

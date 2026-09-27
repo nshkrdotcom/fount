@@ -10,8 +10,14 @@ defmodule Fount.Intelligence.StoryWorldRecordsTest do
     [present, _flashback, later] = Fixture.scene_events(screenplay)
 
     records = [
-      Fixture.record("entity", "key-entity", screenplay, 0, %{"kind" => "prop", "name" => "brass key"}),
-      Fixture.record("event", "handoff-event", screenplay, 2, %{"kind" => "handoff", "label" => "Mara leaves the key"}),
+      Fixture.record("entity", "key-entity", screenplay, 0, %{
+        "kind" => "prop",
+        "name" => "brass key"
+      }),
+      Fixture.record("event", "handoff-event", screenplay, 2, %{
+        "kind" => "handoff",
+        "label" => "Mara leaves the key"
+      }),
       Fixture.record("interaction", "handoff-interaction", screenplay, 2, %{
         "event_id" => "handoff-event",
         "participants" => ["Mara", "Dan"],
@@ -69,7 +75,9 @@ defmodule Fount.Intelligence.StoryWorldRecordsTest do
     assert world.beats["corridor-beat"].outcome == "key acquired"
     assert world.motifs["key-motif"].occurrences == [present, later]
 
-    assert [%{id: "mara-knows-key"}] = StoryWorld.knowledge_at(world, "Mara", later, predicate: "location_known")
+    assert [%{id: "mara-knows-key"}] =
+             StoryWorld.knowledge_at(world, "Mara", later, predicate: "location_known")
+
     assert StoryWorld.causal_descendants(world, present) == ["handoff-event"]
     assert StoryWorld.evidence_for(world, "key-entity") != []
     assert "taking-enables-handoff" in StoryWorld.affected_by(world, ["story:key-entity"])

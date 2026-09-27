@@ -17,20 +17,34 @@ defmodule Fount.Intelligence.StoryWorld.Renderer do
 
     [
       "# Story World Reference\n\n",
-      "Source revision: `", packet["source_revision"], "`\n\n",
-      "## Writer question\n\n", packet["question"], "\n\n",
+      "Source revision: `",
+      packet["source_revision"],
+      "`\n\n",
+      "## Writer question\n\n",
+      packet["question"],
+      "\n\n",
       "## What this reference contains\n\n",
       summary_table(packet["summary"]),
-      "\n## Narrative scopes\n\n", render_collection(reference, "scopes", &scope_line/1),
-      "\n## Events\n\n", render_collection(reference, "events", &event_line/1),
-      "\n## Assertions and facts\n\n", render_collection(reference, "assertions", &assertion_line/1),
-      "\n## State changes\n\n", render_collection(reference, "state_transitions", &transition_line/1),
-      "\n## Story-time constraints\n\n", render_collection(reference, "story_time_constraints", &constraint_line/1),
-      "\n## Causal relations\n\n", render_collection(reference, "causal_relations", &causal_line/1),
-      "\n## Conflicts\n\n", render_collection(reference, "conflicts", &conflict_line/1),
-      "\n## Evidence\n\n", render_evidence(packet["evidence"]),
-      "\n## Uncertainty retained\n\n", render_uncertainty(packet["uncertainty"]),
-      "\n## Limitations\n\n", bullets(packet["limitations"])
+      "\n## Narrative scopes\n\n",
+      render_collection(reference, "scopes", &scope_line/1),
+      "\n## Events\n\n",
+      render_collection(reference, "events", &event_line/1),
+      "\n## Assertions and facts\n\n",
+      render_collection(reference, "assertions", &assertion_line/1),
+      "\n## State changes\n\n",
+      render_collection(reference, "state_transitions", &transition_line/1),
+      "\n## Story-time constraints\n\n",
+      render_collection(reference, "story_time_constraints", &constraint_line/1),
+      "\n## Causal relations\n\n",
+      render_collection(reference, "causal_relations", &causal_line/1),
+      "\n## Conflicts\n\n",
+      render_collection(reference, "conflicts", &conflict_line/1),
+      "\n## Evidence\n\n",
+      render_evidence(packet["evidence"]),
+      "\n## Uncertainty retained\n\n",
+      render_uncertainty(packet["uncertainty"]),
+      "\n## Limitations\n\n",
+      bullets(packet["limitations"])
     ]
     |> :erlang.iolist_to_binary()
   end
@@ -48,7 +62,8 @@ defmodule Fount.Intelligence.StoryWorld.Renderer do
     end
   end
 
-  defp render_collection(_reference, _key, _formatter), do: "_Focused packet; see JSON for selected values._\n"
+  defp render_collection(_reference, _key, _formatter),
+    do: "_Focused packet; see JSON for selected values._\n"
 
   defp scope_line(item), do: "`#{item["id"]}` — #{item["kind"]}#{parent_suffix(item)}"
 
@@ -69,7 +84,9 @@ defmodule Fount.Intelligence.StoryWorld.Renderer do
     "`#{item["id"]}` — `#{item["left"]}` -> `#{item["right"]}`: #{Enum.join(item["relations"] || [], " | ")}"
   end
 
-  defp causal_line(item), do: "`#{item["id"]}` — `#{item["from"]}` #{item["type"]} `#{item["to"]}`"
+  defp causal_line(item),
+    do: "`#{item["id"]}` — `#{item["from"]}` #{item["type"]} `#{item["to"]}`"
+
   defp conflict_line(item), do: "**#{item["kind"]}** — #{item["message"]} (`#{item["id"]}`)"
 
   defp render_evidence([]), do: "_No evidence in this packet._\n"
@@ -86,10 +103,18 @@ defmodule Fount.Intelligence.StoryWorld.Renderer do
 
   defp render_uncertainty(uncertainty) do
     [
-      "- Unknown story-time pairs: ", Integer.to_string(length(uncertainty["unknown_story_time_pairs"] || [])), "\n",
-      "- Ambiguous direct story-time relations: ", Integer.to_string(length(uncertainty["ambiguous_story_time"] || [])), "\n",
-      "- Contradictory direct story-time relations: ", Integer.to_string(length(uncertainty["contradictory_story_time"] || [])), "\n",
-      "- Competing assertion groups: ", Integer.to_string(length(uncertainty["competing_assertions"] || [])), "\n"
+      "- Unknown story-time pairs: ",
+      Integer.to_string(length(uncertainty["unknown_story_time_pairs"] || [])),
+      "\n",
+      "- Ambiguous direct story-time relations: ",
+      Integer.to_string(length(uncertainty["ambiguous_story_time"] || [])),
+      "\n",
+      "- Contradictory direct story-time relations: ",
+      Integer.to_string(length(uncertainty["contradictory_story_time"] || [])),
+      "\n",
+      "- Competing assertion groups: ",
+      Integer.to_string(length(uncertainty["competing_assertions"] || [])),
+      "\n"
     ]
   end
 

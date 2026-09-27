@@ -27,23 +27,25 @@ defmodule Fount.Intelligence.StoryWorld.Causal do
   defp traverse(graph, id, direction) do
     adjacency =
       Enum.reduce(graph.edges, %{}, fn {_edge_id, %CausalRelation{} = edge}, acc ->
-        {from, to} = if direction == :descendants, do: {edge.from, edge.to}, else: {edge.to, edge.from}
+        {from, to} =
+          if direction == :descendants, do: {edge.from, edge.to}, else: {edge.to, edge.from}
+
         Map.update(acc, from, MapSet.new([to]), &MapSet.put(&1, to))
       end)
 
-    walk(adjacency, Map.get(adjacency, id, MapSet.new()) |> MapSet.to_list(), MapSet.new())
-    |> MapSet.to_list()
+    walk(adjacency, Map.get(adjacency, id, MapSet.new()) |> MapSet.to_list(), %{})
+    |> Map.keys()
     |> Enum.sort()
   end
 
   defp walk(_adjacency, [], seen), do: seen
 
   defp walk(adjacency, [current | rest], seen) do
-    if MapSet.member?(seen, current) do
+    if Map.has_key?(seen, current) do
       walk(adjacency, rest, seen)
     else
       next = Map.get(adjacency, current, MapSet.new()) |> MapSet.to_list()
-      walk(adjacency, next ++ rest, MapSet.put(seen, current))
+      walk(adjacency, next ++ rest, Map.put(seen, current, true))
     end
   end
 end

@@ -32,6 +32,7 @@ defmodule Fount.Intelligence.StoryWorld.Entity do
     dependencies: [],
     metadata: %{}
   ]
+
   @type t :: %__MODULE__{}
 end
 
@@ -61,6 +62,7 @@ defmodule Fount.Intelligence.StoryWorld.Event do
     dependencies: [],
     metadata: %{}
   ]
+
   @type t :: %__MODULE__{}
 end
 
@@ -82,6 +84,7 @@ defmodule Fount.Intelligence.StoryWorld.Interaction do
     dependencies: [],
     metadata: %{}
   ]
+
   @type t :: %__MODULE__{}
 end
 
@@ -105,6 +108,7 @@ defmodule Fount.Intelligence.StoryWorld.Assertion do
     dependencies: [],
     metadata: %{}
   ]
+
   @type t :: %__MODULE__{}
 end
 
@@ -125,6 +129,7 @@ defmodule Fount.Intelligence.StoryWorld.Goal do
     dependencies: [],
     metadata: %{}
   ]
+
   @type t :: %__MODULE__{}
 end
 
@@ -148,6 +153,7 @@ defmodule Fount.Intelligence.StoryWorld.Commitment do
     dependencies: [],
     metadata: %{}
   ]
+
   @type t :: %__MODULE__{}
 end
 
@@ -170,6 +176,7 @@ defmodule Fount.Intelligence.StoryWorld.StateTransition do
     dependencies: [],
     metadata: %{}
   ]
+
   @type t :: %__MODULE__{}
 end
 
@@ -196,20 +203,43 @@ defmodule Fount.Intelligence.StoryWorld.Beat do
     dependencies: [],
     metadata: %{}
   ]
+
   @type t :: %__MODULE__{}
 end
 
 defmodule Fount.Intelligence.StoryWorld.Motif do
   @moduledoc "Recurring story-world image, object, phrase, behavior, sound, place, gesture, or concept."
   @enforce_keys [:id, :label]
-  defstruct [:id, :label, :kind, occurrences: [], evidence: [], confidence: nil, dependencies: [], metadata: %{}]
+  defstruct [
+    :id,
+    :label,
+    :kind,
+    occurrences: [],
+    evidence: [],
+    confidence: nil,
+    dependencies: [],
+    metadata: %{}
+  ]
+
   @type t :: %__MODULE__{}
 end
 
 defmodule Fount.Intelligence.StoryWorld.StoryTimeNode do
   @moduledoc "Event or interval node in a partial diegetic time graph."
   @enforce_keys [:id, :scope_id]
-  defstruct [:id, :scope_id, :event_id, :kind, :exact, :anchor, :duration, evidence: [], dependencies: [], metadata: %{}]
+  defstruct [
+    :id,
+    :scope_id,
+    :event_id,
+    :kind,
+    :exact,
+    :anchor,
+    :duration,
+    evidence: [],
+    dependencies: [],
+    metadata: %{}
+  ]
+
   @type t :: %__MODULE__{}
 end
 
@@ -227,19 +257,41 @@ defmodule Fount.Intelligence.StoryWorld.StoryTimeConstraint do
     dependencies: [],
     metadata: %{}
   ]
+
   @type t :: %__MODULE__{}
 end
 
 defmodule Fount.Intelligence.StoryWorld.CausalRelation do
   @moduledoc "Typed causal relation, deliberately independent from presentation and story-time ordering."
   @enforce_keys [:id, :type, :from, :to]
-  defstruct [:id, :type, :from, :to, evidence: [], confidence: nil, alternatives: [], dependencies: [], metadata: %{}]
+  defstruct [
+    :id,
+    :type,
+    :from,
+    :to,
+    evidence: [],
+    confidence: nil,
+    alternatives: [],
+    dependencies: [],
+    metadata: %{}
+  ]
+
   @type t :: %__MODULE__{}
 end
 
 defmodule Fount.Intelligence.StoryWorld.Conflict do
   @moduledoc "Source-grounded local inconsistency or unsupported transition. Ambiguity is not itself a conflict."
   @enforce_keys [:id, :kind, :message]
-  defstruct [:id, :kind, :message, severity: "warning", involved_ids: [], evidence: [], dependencies: [], metadata: %{}]
+  defstruct [
+    :id,
+    :kind,
+    :message,
+    severity: "warning",
+    involved_ids: [],
+    evidence: [],
+    dependencies: [],
+    metadata: %{}
+  ]
+
   @type t :: %__MODULE__{}
 end

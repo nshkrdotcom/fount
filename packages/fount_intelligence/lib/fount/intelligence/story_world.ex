@@ -38,11 +38,19 @@ defmodule Fount.Intelligence.StoryWorld do
 
   @type t :: %__MODULE__{}
 
-  def compile(screenplay, observations, opts \\ []), do: Compiler.compile(screenplay, observations, opts)
+  def compile(screenplay, observations, opts \\ []),
+    do: Compiler.compile(screenplay, observations, opts)
+
   def story_time_relation(world, left, right), do: Query.story_time_relation(world, left, right)
-  def state_at(world, subject, attribute, event_id, opts \\ []), do: Query.state_at(world, subject, attribute, event_id, opts)
+
+  def state_at(world, subject, attribute, event_id, opts \\ []),
+    do: Query.state_at(world, subject, attribute, event_id, opts)
+
   def facts_at(world, opts \\ []), do: Query.facts_at(world, opts)
-  def knowledge_at(world, owner, event_id, opts \\ []), do: Query.knowledge_at(world, owner, event_id, opts)
+
+  def knowledge_at(world, owner, event_id, opts \\ []),
+    do: Query.knowledge_at(world, owner, event_id, opts)
+
   def causal_ancestors(world, id), do: Query.causal_ancestors(world, id)
   def causal_descendants(world, id), do: Query.causal_descendants(world, id)
   def affected_by(world, changed_dependencies), do: Query.affected_by(world, changed_dependencies)
@@ -51,5 +59,4 @@ defmodule Fount.Intelligence.StoryWorld do
   def render_markdown(world, opts \\ []), do: Renderer.markdown(world, opts)
   def render_json(world, opts \\ []), do: Renderer.json(world, opts)
   def counterfactual_remove(world, ids), do: Counterfactual.remove(world, ids)
-
 end

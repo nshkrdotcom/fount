@@ -2,10 +2,18 @@ defmodule Fount.Intelligence.StoryWorld.Counterfactual do
   @moduledoc "Counterfactual impact primitives for writer exploration. They report support changes without pretending to simulate a rewritten film."
 
   alias Fount.Intelligence.StoryWorld.Query
+  alias Fount.Screenplay.Model
+  alias Fount.Writing.CanonicalJSON
 
   def remove(world, ids) do
     ids = ids |> List.wrap() |> Enum.map(&to_string/1) |> Enum.uniq() |> Enum.sort()
-    dependencies = Enum.flat_map(ids, &["story:#{&1}", "canonical:#{&1}", "observation:#{&1}", "evidence:#{&1}"])
+
+    dependencies =
+      Enum.flat_map(
+        ids,
+        &["story:#{&1}", "canonical:#{&1}", "observation:#{&1}", "evidence:#{&1}"]
+      )
+
     affected = Query.affected_by(world, dependencies) |> Enum.reject(&(&1 in ids))
 
     %{
@@ -44,7 +52,8 @@ defmodule Fount.Intelligence.StoryWorld.Counterfactual do
     world.assertions
     |> Map.values()
     |> Enum.group_by(fn assertion ->
-      {value_key(assertion.subject), assertion.predicate, value_key(assertion.object), assertion.scope_id}
+      {value_key(assertion.subject), assertion.predicate, value_key(assertion.object),
+       assertion.scope_id}
     end)
     |> Enum.flat_map(fn {_claim, assertions} ->
       removed_assertions = Enum.filter(assertions, &MapSet.member?(removed, &1.id))
@@ -69,5 +78,5 @@ defmodule Fount.Intelligence.StoryWorld.Counterfactual do
     Enum.any?(ids, fn id -> "story:#{id}" in dependencies end)
   end
 
-  defp value_key(value), do: Fount.Writing.CanonicalJSON.hash(Fount.Screenplay.Model.plain(value))
+  defp value_key(value), do: CanonicalJSON.hash(Model.plain(value))
 end

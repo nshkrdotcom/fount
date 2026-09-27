@@ -30,8 +30,8 @@ defmodule FountWorkshop.MixProject do
     [
       workspace_dep(:fount_intelligence, "~> 0.1.0", "../fount_intelligence"),
       workspace_dep(:fount, "~> 0.1.0", "../fount"),
-      {:inference, "~> 0.4.0"},
-      {:agent_session_manager, "~> 0.17.0"},
+      {:inference, "~> 0.5.0"},
+      {:agent_session_manager, "~> 0.17.1"},
       {:jason, "~> 1.4"},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.4", only: :dev, runtime: false},

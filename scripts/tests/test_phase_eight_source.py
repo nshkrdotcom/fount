@@ -178,7 +178,10 @@ class PhaseEightSourceTests(unittest.TestCase):
         self.assertIn(
             '"character_trajectory" => ~w(character_trajectory agency_causality),', runner
         )
-        self.assertIn('request["include_emotional_value_movement"] == true', runner)
+        self.assertIn(
+            'extra_families("character_trajectory", %{"include_emotional_value_movement" => true})',
+            runner,
+        )
 
     def test_pure_phase_eight_sources_have_no_effect_dependencies(self) -> None:
         names = [

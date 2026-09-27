@@ -5,9 +5,9 @@ defmodule FountWorkshop.Writing.Generation do
   alias FountWorkshop.Candidate
   alias FountWorkshop.Writing.Completion
   alias FountWorkshop.Writing.Context
+  alias FountWorkshop.Writing.Intelligence
   alias FountWorkshop.Writing.ProposalGuide
   alias FountWorkshop.Writing.RecoveryCopy
-  alias FountWorkshop.Writing.Intelligence
   def propose(base, request, strategy, context, services, opts \\ [])
 
   def propose(
@@ -27,7 +27,10 @@ defmodule FountWorkshop.Writing.Generation do
       Context.compile_options(base, request, context, opts)
       |> Keyword.put(:strategy, strategy)
       |> Keyword.put(:label, strategy["title"])
-      |> Keyword.put(:intelligence_lineage, Intelligence.candidate_lineage(request, strategy, context))
+      |> Keyword.put(
+        :intelligence_lineage,
+        Intelligence.candidate_lineage(request, strategy, context)
+      )
 
     validate = fn proposal ->
       with true <- proposal["strategy_id"] == strategy["id"] or {:error, :wrong_strategy_id},

@@ -59,7 +59,8 @@ defmodule FountWorkshop.Audition do
          "analysis" => %{
            "writer_packet_id" =>
              get_in(candidate, ["provenance", "intelligence_lineage", "pre_analysis_packet_id"]),
-           "revision_packet_id" => get_in(candidate, ["provenance", "revision_intelligence", "id"]),
+           "revision_packet_id" =>
+             get_in(candidate, ["provenance", "revision_intelligence", "id"]),
            "strategy_lineage" =>
              get_in(candidate, ["provenance", "intelligence_lineage", "strategy_lineage"]) || %{},
            "resource_usage" => candidate["provenance"]["resource_usage"] || %{}

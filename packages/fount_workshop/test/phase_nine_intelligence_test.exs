@@ -83,6 +83,7 @@ defmodule FountWorkshop.PhaseNineIntelligenceTest do
       })
 
     assert {:ok, validated} = Request.validate(model, request)
+
     assert get_in(validated, ["options", "protected_strengths"]) ==
              ["Mara's refusal remains quiet rather than triumphant."]
   end
@@ -133,7 +134,8 @@ defmodule FountWorkshop.PhaseNineIntelligenceTest do
       "selection" => %{"targets" => [%{"kind" => "scene", "id" => scene.id}]},
       "constraints" => [],
       "alternatives" => 2,
-      "options" => if(workflow == "notes", do: %{"note_ids" => [], "external_notes" => []}, else: %{})
+      "options" =>
+        if(workflow == "notes", do: %{"note_ids" => [], "external_notes" => []}, else: %{})
     }
   end
 

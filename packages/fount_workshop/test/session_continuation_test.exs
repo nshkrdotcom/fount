@@ -142,7 +142,8 @@ defmodule FountWorkshop.SessionContinuationTest do
             "id" => id,
             "title" => id,
             "premise_of_change" => "Opposing the closure",
-            "dramatic_mechanism" => "A visible choice",
+            "dramatic_mechanism" =>
+              if(id == "a", do: "A visible choice", else: "An outside interruption"),
             "entry_state" => "Outside",
             "exit_state" => "Inside",
             "beats" => ["Stop the door"],

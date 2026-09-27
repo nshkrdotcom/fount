@@ -10,6 +10,7 @@ defmodule FountWorkshop.Writing.Intelligence do
   alias Fount.Screenplay.Model
   alias Fount.Writing.CanonicalJSON
   alias FountWorkshop.Store
+  alias FountWorkshop.Writing.Context
 
   @playbooks %{
     "alternatives" => "scene_doctor",
@@ -141,6 +142,14 @@ defmodule FountWorkshop.Writing.Intelligence do
   def link_strategies(strategies, context) when is_list(strategies) do
     packet = context.data["writer_intelligence"] || %{}
 
+    if packet["status"] in ["complete", "partial"] do
+      attach_strategy_lineage(strategies, packet)
+    else
+      strategies
+    end
+  end
+
+  defp attach_strategy_lineage(strategies, packet) do
     lineage = %{
       "playbook" => packet["playbook"],
       "packet_id" => packet["id"],
@@ -217,7 +226,7 @@ defmodule FountWorkshop.Writing.Intelligence do
   end
 
   defp selection(model, request, nil),
-    do: FountWorkshop.Writing.Context.editable_selection(model, request)
+    do: Context.editable_selection(model, request)
 
   defp selection(_model, _request, context), do: context.selection
 
@@ -355,7 +364,8 @@ defmodule FountWorkshop.Writing.Intelligence do
   defp story_world_records(nil, _), do: []
 
   defp story_world_records(context, side) do
-    get_in(context.data, ["story_world_records", side]) || context.data["story_world_records"] || []
+    get_in(context.data, ["story_world_records", side]) || context.data["story_world_records"] ||
+      []
   end
 
   defp diagnosis_ids(packet) when is_map(packet) do

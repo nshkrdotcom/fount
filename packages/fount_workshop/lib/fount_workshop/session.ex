@@ -86,7 +86,8 @@ defmodule FountWorkshop.Session do
 
         list ->
           writer_packet =
-            get_in(session, ["progress", "preparation", "context", "data", "writer_intelligence"]) || %{}
+            get_in(session, ["progress", "preparation", "context", "data", "writer_intelligence"]) ||
+              %{}
 
           {:ok,
            session

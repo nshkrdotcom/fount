@@ -61,7 +61,6 @@ defmodule FountWorkshop.Writing.Context do
     |> Map.update("writer_intelligence", %{}, &compact_writer_packet/1)
   end
 
-
   defp compact_writer_packet(packet) when is_map(packet) do
     Map.take(
       packet,

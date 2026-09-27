@@ -20,32 +20,47 @@ defmodule FountWorkshop.Review do
       original = Screenplay.to_fountain(base)
       proposed = Screenplay.to_fountain(draft)
 
-      {:ok,
-       %{
-         "candidate_id" => candidate_id,
-         "base_revision_id" => base.revision.id,
-         "result_revision_id" => draft.revision.id,
-         "content_hash" => draft.revision.content_hash,
-         "original_fountain" => original,
-         "proposed_fountain" => proposed,
-         "source_diff" => String.myers_difference(original, proposed),
-         "structural_diff" => Screenplay.diff(base, draft),
-         "change_groups" => candidate["change_groups"],
-         "lineage" => candidate["lineage"],
-         "provenance" => candidate["provenance"],
-         "checks" => candidate["provenance"]["checks"] || [],
-         "report_ids" => candidate["provenance"]["report_ids"] || [],
-         "writer_packet" => get_in(candidate, ["provenance", "intelligence_lineage", "pre_analysis_packet"]) || %{},
-         "revision_packet" => candidate["provenance"]["revision_intelligence"] || %{},
-         "strategy_lineage" => get_in(candidate, ["provenance", "intelligence_lineage", "strategy_lineage"]) || %{},
-         "note_triage" => get_in(candidate, ["provenance", "intelligence_lineage", "note_triage"]) || [],
-         "resource_usage" => candidate["provenance"]["resource_usage"] || %{},
-         "consequence_proposals" =>
-           get_in(candidate, ["provenance", "intelligence_lineage", "consequence_proposals"]) || [],
-         "causal_ripple" =>
-           get_in(candidate, ["provenance", "revision_intelligence", "revision_comparison", "causal_ripple"]) || %{}
-       }}
+      packet = %{
+        "candidate_id" => candidate_id,
+        "base_revision_id" => base.revision.id,
+        "result_revision_id" => draft.revision.id,
+        "content_hash" => draft.revision.content_hash,
+        "original_fountain" => original,
+        "proposed_fountain" => proposed,
+        "source_diff" => String.myers_difference(original, proposed),
+        "structural_diff" => Screenplay.diff(base, draft),
+        "change_groups" => candidate["change_groups"],
+        "lineage" => candidate["lineage"],
+        "provenance" => candidate["provenance"],
+        "checks" => candidate["provenance"]["checks"] || [],
+        "report_ids" => candidate["provenance"]["report_ids"] || []
+      }
+
+      {:ok, Map.merge(packet, intelligence_fields(candidate))}
     end
+  end
+
+  defp intelligence_fields(candidate) do
+    %{
+      "writer_packet" =>
+        get_in(candidate, ["provenance", "intelligence_lineage", "pre_analysis_packet"]) || %{},
+      "revision_packet" => candidate["provenance"]["revision_intelligence"] || %{},
+      "strategy_lineage" =>
+        get_in(candidate, ["provenance", "intelligence_lineage", "strategy_lineage"]) || %{},
+      "note_triage" =>
+        get_in(candidate, ["provenance", "intelligence_lineage", "note_triage"]) || [],
+      "resource_usage" => candidate["provenance"]["resource_usage"] || %{},
+      "consequence_proposals" =>
+        get_in(candidate, ["provenance", "intelligence_lineage", "consequence_proposals"]) ||
+          [],
+      "causal_ripple" =>
+        get_in(candidate, [
+          "provenance",
+          "revision_intelligence",
+          "revision_comparison",
+          "causal_ripple"
+        ]) || %{}
+    }
   end
 
   @doc "Accepts only after the writer supplies a review matching exact candidate content."

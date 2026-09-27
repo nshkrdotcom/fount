@@ -208,7 +208,8 @@ defmodule FountWorkshop.Candidate do
           %{
             "candidate_id" => candidate["id"],
             "intelligence_lineage" => candidate["provenance"]["intelligence_lineage"] || %{},
-            "revision_packet_id" => get_in(candidate, ["provenance", "revision_intelligence", "id"])
+            "revision_packet_id" =>
+              get_in(candidate, ["provenance", "revision_intelligence", "id"])
           }
         end)
     }
@@ -324,18 +325,7 @@ defmodule FountWorkshop.Candidate do
   @doc "Checks the actual branch and, when requested, compares two real same-settings PDF files."
   def check(base, candidate, services, opts \\ []) do
     constraints = candidate["provenance"]["constraints"] || []
-
-    {layout, layout_reports, layout_errors} =
-      case Layout.compare(base, candidate, services, opts) do
-        {:ok, nil, nil} ->
-          {nil, [], []}
-
-        {:ok, data, report} ->
-          {data, [report], []}
-
-        {:error, reason} ->
-          {nil, [], [%{"code" => "layout_unavailable", "reason" => inspect(reason, limit: 10)}]}
-      end
+    {layout, layout_reports, layout_errors} = layout_result(base, candidate, services, opts)
 
     options =
       opts
@@ -362,22 +352,7 @@ defmodule FountWorkshop.Candidate do
 
       base_checks = report.data["checks"] ++ application_checks
 
-      {:ok, revision_packet} =
-        case {Keyword.get(opts, :workshop_request), Keyword.get(opts, :workshop_context)} do
-          {%{} = request, %{} = context} ->
-            Intelligence.revision_packet(
-              base,
-              candidate,
-              request,
-              candidate["strategy"] || %{},
-              context,
-              services,
-              opts
-            )
-
-          _ ->
-            {:ok, Intelligence.not_run("workshop_phase9_context_not_supplied", "revision_regression")}
-        end
+      {:ok, revision_packet} = revision_result(base, candidate, services, opts)
 
       provenance =
         candidate["provenance"]
@@ -385,11 +360,48 @@ defmodule FountWorkshop.Candidate do
         |> Map.put("report_ids", Enum.map(reports, & &1.id))
         |> Map.put("revision_intelligence", revision_packet)
         |> Map.put("resource_usage", %{
-          "pre_analysis" => get_in(candidate, ["provenance", "intelligence_lineage", "pre_analysis_packet", "resource_usage"]) || %{},
+          "pre_analysis" =>
+            get_in(candidate, [
+              "provenance",
+              "intelligence_lineage",
+              "pre_analysis_packet",
+              "resource_usage"
+            ]) || %{},
           "revision_analysis" => revision_packet["resource_usage"] || %{}
         })
 
       {:ok, Map.put(candidate, "provenance", provenance), reports}
+    end
+  end
+
+  defp layout_result(base, candidate, services, opts) do
+    case Layout.compare(base, candidate, services, opts) do
+      {:ok, nil, nil} ->
+        {nil, [], []}
+
+      {:ok, data, report} ->
+        {data, [report], []}
+
+      {:error, reason} ->
+        {nil, [], [%{"code" => "layout_unavailable", "reason" => inspect(reason, limit: 10)}]}
+    end
+  end
+
+  defp revision_result(base, candidate, services, opts) do
+    case {Keyword.get(opts, :workshop_request), Keyword.get(opts, :workshop_context)} do
+      {%{} = request, %{} = context} ->
+        Intelligence.revision_packet(
+          base,
+          candidate,
+          request,
+          candidate["strategy"] || %{},
+          context,
+          services,
+          opts
+        )
+
+      _ ->
+        {:ok, Intelligence.not_run("workshop_phase9_context_not_supplied", "revision_regression")}
     end
   end
 

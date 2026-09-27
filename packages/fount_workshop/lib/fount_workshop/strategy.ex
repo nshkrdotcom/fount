@@ -67,7 +67,6 @@ defmodule FountWorkshop.Strategy do
     )
   end
 
-
   defp distinct_strategies?(strategies) do
     signatures =
       Enum.map(strategies, fn strategy ->

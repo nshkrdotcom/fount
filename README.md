@@ -427,13 +427,9 @@ Existing live Workshop workflows remain in `packages/fount_workshop/examples/liv
 
 ## Current Development Status
 
-**Phases 1–6 are complete on recorded runtime engineering QC. Phase 7 — Capabilities B: Audience / Sequence / Dialogue / Setup-Payoff — is source-implemented and awaiting runtime QC/repair. Phase 8 and later work are not included.** The completed Phase-6 evidence remains in the docset's `handoffs/PHASE_06_RUNTIME_QC_REPORT.md`; the current source-delivery evidence and Codex gate are in `handoffs/PHASE_07_*`.
+**Phases 1–9 are complete on recorded engineering QC. Phase 10 has not started.** Phase 9 connects optional Observe-backed prewrite and revision analysis to Workshop sessions, with diagnosis and strategy lineage, separate writer packets, advisory checks, and explicit writer acceptance. Store and Inference-only hosts retain their generation path with analysis marked `not_run`.
 
-Phase 7 adds four writer-facing investigative capabilities. Audience/Reader Experience keeps first-exposure questions, expectations, threats, suspense, curiosity, surprise, comprehension risk and handoff pressure separate and can reuse the strict-forward Reader reducer without later-page leakage. Sequence Movement reports objective/constraint/stakes/knowledge/relationship/choice/tactic/reversal/outcome movement while preserving presentation order separately from partial story time. Dialogue Interaction analyzes adjacent canonical turns with exact cue/dialogue evidence and closed typed context. Setup/Payoff + Motifs traces lifecycle and callback function while keeping later presentation distinct from earlier diegetic chronology. These return evidence, derived state, diagnoses and next investigations; actual candidate-page generation and canonical acceptance remain Workshop responsibilities.
-
-Elixir/Erlang/Mix are unavailable in this source-writing environment, so compilation, ExUnit, architecture AST/BEAM checks, package gates, database/PDF preservation and runtime provider behavior are **not claimed passed** for Phase 7. The complete current docset records the source checks that were actually run and the exact Codex exit criteria. Optional human/domain review is validation debt unless real participants and records exist.
-
-The supplied System One SDK snapshot exposes version 0.6.0 APIs. Phase 7 adds no direct SystemOneSDK, Inference, or ASM dependency to pure Intelligence: semantic acquisition stays behind `Fount.Observe`, while creative completion remains Workshop/Inference-owned.
+The Phase 9 runtime evidence is in the docset's `handoffs/PHASE_09_RUNTIME_QC_REPORT.md`. It includes a deterministic Observe Sandbox and scripted Inference session backed by PostgreSQL, full workspace CI, and writer/PDF/table-read preservation. The optional human workflow review was skipped under D046 and remains validation debt; no human usefulness claim is made. System One remains behind Observe, while creative completion remains Workshop/Inference-owned.
 
 ---
 

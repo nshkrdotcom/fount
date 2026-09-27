@@ -34,7 +34,8 @@ defmodule FountWorkshop.Request do
          true <-
            request["base_revision_id"] == model.revision.id or {:error, :request_base_mismatch},
          true <-
-           Map.keys(request["options"]) -- (Map.get(@options, workflow, []) ++ @common_options) == [] or
+           Map.keys(request["options"]) -- (Map.get(@options, workflow, []) ++ @common_options) ==
+             [] or
              {:error, :unknown_workflow_option},
          {:ok, _} <- Fount.Selection.selected_ids(model, request["selection"]),
          {:ok, constraints} <-
@@ -49,7 +50,6 @@ defmodule FountWorkshop.Request do
   defp default_alternatives(%{"mode" => "explore"}), do: 3
   defp default_alternatives(%{"workflow" => "pass"}), do: 1
   defp default_alternatives(_), do: 2
-
 
   defp common_options(opts) do
     strengths = Map.get(opts, "protected_strengths", [])

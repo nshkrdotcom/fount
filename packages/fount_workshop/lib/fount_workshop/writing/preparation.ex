@@ -37,9 +37,8 @@ defmodule FountWorkshop.Writing.Preparation do
 
       context = Map.put(context, :reports, reports)
 
-      with {:ok, context} <- maybe_investigate(model, request, context, services, opts),
-           {:ok, context} <- Intelligence.enrich_preparation(model, request, context, services, opts) do
-        {:ok, context}
+      with {:ok, context} <- maybe_investigate(model, request, context, services, opts) do
+        Intelligence.enrich_preparation(model, request, context, services, opts)
       end
     end
   end
@@ -466,8 +465,14 @@ defmodule FountWorkshop.Writing.Preparation do
     end
   end
 
-  defp maybe_investigate(model, %{"workflow" => "investigate"} = request, context, services, opts),
-    do: investigate(model, request, context, services, opts)
+  defp maybe_investigate(
+         model,
+         %{"workflow" => "investigate"} = request,
+         context,
+         services,
+         opts
+       ),
+       do: investigate(model, request, context, services, opts)
 
   defp maybe_investigate(_model, _request, context, _services, _opts), do: {:ok, context}
 

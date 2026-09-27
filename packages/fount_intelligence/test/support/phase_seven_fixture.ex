@@ -15,7 +15,8 @@ defmodule Fount.Intelligence.TestSupport.PhaseSevenFixture do
           elements: [
             %{
               type: :action,
-              text: "Mara turns a cracked silver watch over. The initials D.R. are cut into the back."
+              text:
+                "Mara turns a cracked silver watch over. The initials D.R. are cut into the back."
             },
             %{type: :character, text: "MARA"},
             %{type: :dialogue, text: "You said you threw it out."},
@@ -23,7 +24,8 @@ defmodule Fount.Intelligence.TestSupport.PhaseSevenFixture do
             %{type: :dialogue, text: "I said it was gone."},
             %{
               type: :action,
-              text: "Dan watches her thumb stop on the initials, then looks at the locked archive door."
+              text:
+                "Dan watches her thumb stop on the initials, then looks at the locked archive door."
             }
           ]
         },
@@ -32,7 +34,8 @@ defmodule Fount.Intelligence.TestSupport.PhaseSevenFixture do
           elements: [
             %{
               type: :action,
-              text: "Dan presses the same uncracked watch into Mara's palm before she gets on the bus."
+              text:
+                "Dan presses the same uncracked watch into Mara's palm before she gets on the bus."
             },
             %{type: :character, text: "DAN"},
             %{type: :dialogue, text: "If I lose it, you keep it."},
@@ -43,7 +46,10 @@ defmodule Fount.Intelligence.TestSupport.PhaseSevenFixture do
         %{
           heading: "INT. ARCHIVE CORRIDOR - NIGHT",
           elements: [
-            %{type: :action, text: "Mara blocks Dan from the archive door with the watch in her fist."},
+            %{
+              type: :action,
+              text: "Mara blocks Dan from the archive door with the watch in her fist."
+            },
             %{type: :character, text: "MARA"},
             %{type: :dialogue, text: "What does D.R. open?"},
             %{type: :character, text: "DAN"},
@@ -63,7 +69,8 @@ defmodule Fount.Intelligence.TestSupport.PhaseSevenFixture do
             },
             %{
               type: :action,
-              text: "The false hinge releases. Inside is the missing audit ledger wrapped in Dan's old bus map."
+              text:
+                "The false hinge releases. Inside is the missing audit ledger wrapped in Dan's old bus map."
             },
             %{type: :character, text: "MARA"},
             %{type: :dialogue, text: "Gone."}
@@ -74,7 +81,8 @@ defmodule Fount.Intelligence.TestSupport.PhaseSevenFixture do
           elements: [
             %{
               type: :action,
-              text: "Mara leaves the watch on the ledger and pushes both toward the waiting investigator."
+              text:
+                "Mara leaves the watch on the ledger and pushes both toward the waiting investigator."
             },
             %{type: :character, text: "DAN"},
             %{type: :dialogue, text: "You could keep one thing."},
@@ -144,7 +152,10 @@ defmodule Fount.Intelligence.TestSupport.PhaseSevenFixture do
         ["Mara", "Dan"],
         ["Mara tests Dan's denial", "Dan keeps the watch's purpose concealed"],
         ["accusation", "semantic dodge"],
-        %{"knowledge_asymmetry" => "Dan still knows what D.R. means", "status" => "Dan holds information"}
+        %{
+          "knowledge_asymmetry" => "Dan still knows what D.R. means",
+          "status" => "Dan holds information"
+        }
       ),
       interaction(
         "corridor-locker-exchange",
@@ -182,7 +193,8 @@ defmodule Fount.Intelligence.TestSupport.PhaseSevenFixture do
       beat("beat-locker", a6, Enum.at(screenplay.ir.scenes, 3).id, %{
         "objective" => "Use the watch clue to find the ledger.",
         "tactic" => "test the watch against locker nineteen",
-        "information_change" => "the watch is a physical key and the ledger is hidden behind the false hinge.",
+        "information_change" =>
+          "the watch is a physical key and the ledger is hidden behind the false hinge.",
         "relationship_delta" => nil,
         "value_delta" => "Mara obtains the missing ledger",
         "outcome" => "the sequence objective is achieved."
@@ -226,7 +238,8 @@ defmodule Fount.Intelligence.TestSupport.PhaseSevenFixture do
         "kind" => "reader_setup",
         "from" => "screenplay",
         "to" => "reader",
-        "terms" => "The D.R. watch has an origin and significance that the screenplay will clarify.",
+        "terms" =>
+          "The D.R. watch has an origin and significance that the screenplay will clarify.",
         "active_at" => ["watch-initials-seen"]
       }),
       record("commitment", "locker-access-setup", a4, %{
@@ -315,7 +328,9 @@ defmodule Fount.Intelligence.TestSupport.PhaseSevenFixture do
       ),
       event("locker-reveal", "reveal", "explicit", a6, screenplay,
         key: "watch-function-reveal",
-        data: %{"proposition" => "The watch stem releases the false hinge and exposes the ledger."}
+        data: %{
+          "proposition" => "The watch stem releases the false hinge and exposes the ledger."
+        }
       ),
       event("locker-question-resolve", "question", "resolve", a6, screenplay,
         key: "what-does-dr-open",
@@ -324,7 +339,14 @@ defmodule Fount.Intelligence.TestSupport.PhaseSevenFixture do
       event("corridor-suspense-resolve", "suspense", "resolve", a6, screenplay,
         key: "locker-pressure",
         claim_class: "model_estimated_reader_interpretation",
-        data: %{"outcome" => "Mara finds the ledger."}
+        data: %{
+          "components" => %{
+            "desired_outcome" => "Mara reaches the ledger before investigators arrive",
+            "threat" => "Dan can still withhold the access clue",
+            "uncertainty" => "whether he will disclose it"
+          },
+          "outcome" => "Mara finds the ledger."
+        }
       ),
       event("dock-forward-resolve", "forward_pull", "resolve", a7, screenplay,
         key: "watch-forward",
@@ -347,8 +369,7 @@ defmodule Fount.Intelligence.TestSupport.PhaseSevenFixture do
         "action" => action,
         "point" => element.id,
         "key" => Keyword.get(opts, :key),
-        "claim_class" =>
-          Keyword.get(opts, :claim_class, "deterministic_derived_narrative_state"),
+        "claim_class" => Keyword.get(opts, :claim_class, "deterministic_derived_narrative_state"),
         "visibility" => Keyword.get(opts, :visibility, "reader_visible"),
         "data" => Keyword.get(opts, :data, %{}),
         "evidence" => [evidence(screenplay, element)],

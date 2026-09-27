@@ -1,6 +1,8 @@
 defmodule Fount.Intelligence.PhaseSevenArchitectureTest do
   use ExUnit.Case, async: true
 
+  alias Fount.Intelligence.Capabilities
+
   test "Phase-7 pure capability modules do not acquire, persist, generate, or read runtime state" do
     root = Path.expand("../lib/fount/intelligence/capabilities", __DIR__)
 
@@ -25,7 +27,7 @@ defmodule Fount.Intelligence.PhaseSevenArchitectureTest do
   end
 
   test "Phase-7 capability catalog stops before Phase-8 families" do
-    assert Fount.Intelligence.Capabilities.families() == [
+    assert Capabilities.families() == [
              "scene_engine",
              "agency_causality",
              "character_trajectory",
@@ -36,9 +38,9 @@ defmodule Fount.Intelligence.PhaseSevenArchitectureTest do
              "setup_payoff_motifs"
            ]
 
-    refute Fount.Intelligence.Capabilities.member?("emotional_value_movement")
-    refute Fount.Intelligence.Capabilities.member?("theme_meaning")
-    refute Fount.Intelligence.Capabilities.member?("genre_lens_packs")
-    refute Fount.Intelligence.Capabilities.member?("revision_intelligence")
+    refute Capabilities.member?("emotional_value_movement")
+    refute Capabilities.member?("theme_meaning")
+    refute Capabilities.member?("genre_lens_packs")
+    refute Capabilities.member?("revision_intelligence")
   end
 end

@@ -33,8 +33,17 @@ defmodule Fount.Intelligence.PhaseSevenCapabilitiesTest do
     scenes = Enum.take(screenplay.ir.scenes, 4)
 
     entries =
-      Enum.map(scenes, fn scene ->
-        entry(scene.id, [:objective_active, :objective_progress, :knowledge_change, :handoff_pressure])
+      scenes
+      |> Enum.with_index()
+      |> Enum.map(fn {scene, index} ->
+        keys = [
+          :objective_active,
+          :objective_progress,
+          :knowledge_change,
+          :handoff_pressure
+        ]
+
+        entry(scene.id, if(index < 2, do: [:repeated_function | keys], else: keys))
       end)
 
     {:ok, result} =
@@ -50,6 +59,12 @@ defmodule Fount.Intelligence.PhaseSevenCapabilitiesTest do
     assert result.trajectories["story_time"]["semantics"] == "diegetic_story_time_partial"
     assert result.derived_state["movement_density"]["scene_count"] == 4
     assert is_map(result.derived_state["escalation_dimensions"])
+
+    assert Enum.map(result.derived_state["sequence_state_vector"], & &1["measurement_ids"]) ==
+             Enum.map(scenes, &["measurement:#{&1.id}"])
+
+    expected_support = scenes |> Enum.map(&"measurement:#{&1.id}") |> Enum.sort()
+    assert Enum.any?(result.diagnoses, &(&1["support"] == expected_support))
   end
 
   test "dialogue family keeps turn-pair, tactic, status, exposition and context evidence distinct" do
@@ -58,7 +73,15 @@ defmodule Fount.Intelligence.PhaseSevenCapabilitiesTest do
     scene = Enum.at(screenplay.ir.scenes, 2)
 
     entries = [
-      entry(scene.id, [:responds, :evades, :exposition, :tactic_shift, :status_shift, :exchange_changes_state, :voice_distinction])
+      entry(scene.id, [
+        :responds,
+        :evades,
+        :exposition,
+        :tactic_shift,
+        :status_shift,
+        :exchange_changes_state,
+        :voice_distinction
+      ])
       |> Map.put("pair_ordinal", 1)
       |> Map.put("turn_pair", %{
         "previous" => %{"speaker" => "MARA", "text" => "What does D.R. open?"},
@@ -101,7 +124,16 @@ defmodule Fount.Intelligence.PhaseSevenCapabilitiesTest do
       |> Enum.flat_map(&(&1["payoffs"] || []))
 
     assert Enum.any?(payoffs, & &1["presentation_story_time_diverge"])
-    assert Enum.any?(result.derived_state["motif_occurrences"], &(&1["callback_candidate"] == true))
+
+    origin = Enum.find(payoffs, &(&1["payoff_event_id"] == "watch-gift-origin"))
+    assert origin["setup_event_id"] == "watch-initials-seen"
+    assert origin["presentation_relation"] == "before"
+    assert origin["story_time_relation"]["relations"] == ["after"]
+
+    assert Enum.any?(
+             result.derived_state["motif_occurrences"],
+             &(&1["callback_candidate"] == true)
+           )
   end
 
   defp entry(scene_id, supported_keys) do
@@ -112,7 +144,9 @@ defmodule Fount.Intelligence.PhaseSevenCapabilitiesTest do
         ~w(open_question expectation visible_threat valued_uncertainty curiosity_gap surprise_candidate comprehension_risk intentional_ambiguity reveal_changes_inference forward_pull objective_active objective_progress constraint_escalation stakes_escalation knowledge_change relationship_change choice_change tactic_shift reversal local_outcome repeated_function handoff_pressure responds evades redirects attacks bargains reveals conceals subtext exposition exposition_dramatic_work status_shift knowledge_asymmetry repetition exchange_changes_state voice_distinction setup_signal reinforcement transformation payoff subversion abandonment unsupported_payoff orphaned_setup motif_callback motif_function_change over_signaled revision_break_candidate),
         fn key ->
           status = if MapSet.member?(supported, key), do: "supported", else: "not_supported"
-          {key, %{"status" => status, "probability" => if(status == "supported", do: 0.9, else: 0.1)}}
+
+          {key,
+           %{"status" => status, "probability" => if(status == "supported", do: 0.9, else: 0.1)}}
         end
       )
 

@@ -2,6 +2,7 @@ defmodule Fount.Intelligence.Capabilities.SequenceMovement do
   @moduledoc "Pure Phase-7 sequence movement reasoning with explicit presentation and partial story-time views."
 
   alias Fount.Intelligence.Capabilities.{Result, Support}
+  alias Fount.Intelligence.StoryWorld
   alias Fount.Intelligence.Temporal
   alias Fount.Screenplay.Model
 
@@ -110,21 +111,34 @@ defmodule Fount.Intelligence.Capabilities.SequenceMovement do
       "handoff" => %{
         "measurement" => first_answer(relevant, :handoff_pressure),
         "downstream_event_ids" =>
-          event_ids |> Enum.flat_map(&Fount.Intelligence.StoryWorld.causal_descendants(world, &1)) |> Enum.uniq() |> Enum.sort()
+          event_ids
+          |> Enum.flat_map(&StoryWorld.causal_descendants(world, &1))
+          |> Enum.uniq()
+          |> Enum.sort()
       }
     }
   end
 
   defp movement_components(entries, beats, transitions, interactions) do
-    measured = Enum.filter(@movement_keys, &Support.any_supported?(entries, &1)) |> Enum.map(&to_string/1)
+    measured =
+      Enum.filter(@movement_keys, &Support.any_supported?(entries, &1)) |> Enum.map(&to_string/1)
 
     recorded =
       []
       |> maybe_component(transitions != [], "recorded_state_change")
       |> maybe_component(Enum.any?(beats, &(not is_nil(&1.outcome))), "recorded_outcome")
-      |> maybe_component(Enum.any?(beats, &(not is_nil(&1.information_change))), "recorded_information_change")
-      |> maybe_component(Enum.any?(beats, &(not is_nil(&1.relationship_delta))), "recorded_relationship_change")
-      |> maybe_component(Enum.any?(interactions, &(&1.tactics != [])), "recorded_interaction_tactics")
+      |> maybe_component(
+        Enum.any?(beats, &(not is_nil(&1.information_change))),
+        "recorded_information_change"
+      )
+      |> maybe_component(
+        Enum.any?(beats, &(not is_nil(&1.relationship_delta))),
+        "recorded_relationship_change"
+      )
+      |> maybe_component(
+        Enum.any?(interactions, &(&1.tactics != [])),
+        "recorded_interaction_tactics"
+      )
 
     Enum.uniq(measured ++ recorded)
   end
@@ -141,7 +155,8 @@ defmodule Fount.Intelligence.Capabilities.SequenceMovement do
   end
 
   defp escalation_dimensions(vector) do
-    for key <- ~w(constraint_escalation stakes_escalation knowledge_change relationship_change choice_change tactic_shift),
+    for key <-
+          ~w(constraint_escalation stakes_escalation knowledge_change relationship_change choice_change tactic_shift),
         scenes = Enum.filter(vector, &supported_in?(&1, key)),
         scenes != [],
         into: %{} do
@@ -163,7 +178,9 @@ defmodule Fount.Intelligence.Capabilities.SequenceMovement do
         "Several scenes may repeat substantially the same dramatic function without a new consequence.",
         "Repeated-function measurement is supported in at least two selected scenes.",
         support,
-        limitations: ["Repetition can be intentional; compare objective, cost, strategy, information, relationship, and consequence before cutting or compressing anything."]
+        limitations: [
+          "Repetition can be intentional; compare objective, cost, strategy, information, relationship, and consequence before cutting or compressing anything."
+        ]
       )
     )
     |> maybe_diag(
@@ -195,7 +212,11 @@ defmodule Fount.Intelligence.Capabilities.SequenceMovement do
       for entry <- entries,
           key <- @keys,
           Support.status(entry, key) in ["uncertain", "insufficient_evidence", "unavailable"] do
-        %{"scene_id" => entry["scene_id"], "measurement" => to_string(key), "status" => Support.status(entry, key)}
+        %{
+          "scene_id" => entry["scene_id"],
+          "measurement" => to_string(key),
+          "status" => Support.status(entry, key)
+        }
       end
 
     chronology =
@@ -203,7 +224,12 @@ defmodule Fount.Intelligence.Capabilities.SequenceMovement do
         %{"relations" => relations} ->
           Enum.filter(relations, fn item ->
             relation = item["relation"]
-            relation == "unknown" or match?(%{"status" => status} when status in ["ambiguous", "contradiction"], relation)
+
+            relation == "unknown" or
+              match?(
+                %{"status" => status} when status in ["ambiguous", "contradiction"],
+                relation
+              )
           end)
           |> Enum.map(&Map.put(&1, "kind", "story_time_uncertainty"))
 
@@ -230,7 +256,13 @@ defmodule Fount.Intelligence.Capabilities.SequenceMovement do
       end)
 
     if story_time_has_non_linear?(story_time),
-      do: Enum.uniq(base ++ ["Compare movement in reader-visible presentation order with known diegetic relations so a flashback or intercut is not diagnosed as chronological stasis."]),
+      do:
+        Enum.uniq(
+          base ++
+            [
+              "Compare movement in reader-visible presentation order with known diegetic relations so a flashback or intercut is not diagnosed as chronological stasis."
+            ]
+        ),
       else: Enum.uniq(base)
   end
 
@@ -245,13 +277,20 @@ defmodule Fount.Intelligence.Capabilities.SequenceMovement do
 
   defp sequence_objects(world, scene_ids, event_ids) do
     beats = world.beats |> Map.values() |> Enum.filter(&(&1.scene_id in scene_ids))
-    transitions = world.state_transitions |> Map.values() |> Enum.filter(&(&1.event_id in event_ids))
+
+    transitions =
+      world.state_transitions |> Map.values() |> Enum.filter(&(&1.event_id in event_ids))
+
     interactions = world.interactions |> Map.values() |> Enum.filter(&(&1.event_id in event_ids))
     beats ++ transitions ++ interactions
   end
 
-  defp scene_ids(%{"scene_ids" => scene_ids}, _entries) when is_list(scene_ids), do: clean_scene_ids(scene_ids)
-  defp scene_ids(%{"scenes" => scene_ids}, _entries) when is_list(scene_ids), do: clean_scene_ids(scene_ids)
+  defp scene_ids(%{"scene_ids" => scene_ids}, _entries) when is_list(scene_ids),
+    do: clean_scene_ids(scene_ids)
+
+  defp scene_ids(%{"scenes" => scene_ids}, _entries) when is_list(scene_ids),
+    do: clean_scene_ids(scene_ids)
+
   defp scene_ids(_subject, entries), do: Support.measurement_scenes(entries)
   defp clean_scene_ids(ids), do: ids |> Enum.filter(&(is_binary(&1) and &1 != "")) |> Enum.uniq()
 

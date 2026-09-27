@@ -32,7 +32,11 @@ defmodule Fount.Observe.PhaseSevenLensAssetsTest do
                      }
                    ],
                    "prior_turns" => [
-                     %{"speaker" => "Mara", "text" => "You said it was gone.", "channel" => "dialogue"}
+                     %{
+                       "speaker" => "Mara",
+                       "text" => "You said it was gone.",
+                       "channel" => "dialogue"
+                     }
                    ]
                  }
                },

@@ -10,13 +10,19 @@ screenplay =
       %{
         heading: "INT. SERVICE OFFICE - NIGHT",
         elements: [
-          %{type: :action, text: "Mara turns a cracked watch over. The initials D.R. are cut into the back."}
+          %{
+            type: :action,
+            text: "Mara turns a cracked watch over. The initials D.R. are cut into the back."
+          }
         ]
       },
       %{
         heading: "EXT. SERVICE ROAD - YEARS EARLIER",
         elements: [
-          %{type: :action, text: "Years earlier, Dan presses the uncracked watch into Mara's palm."}
+          %{
+            type: :action,
+            text: "Years earlier, Dan presses the uncracked watch into Mara's palm."
+          }
         ]
       }
     ]
@@ -79,7 +85,8 @@ provider =
         ]
       },
       "reader_events" => reader_events,
-      "concern" => "Does the watch create a first-exposure question that the later flashback answers?"
+      "concern" =>
+        "Does the watch create a first-exposure question that the later flashback answers?"
     },
     %{observe: provider}
   )

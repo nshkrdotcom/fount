@@ -149,8 +149,13 @@ defmodule Fount.Intelligence.Capabilities.DialogueInteraction do
 
     repetitive = Enum.filter(pairs, &supported_in?(&1, "repetition"))
     static = Enum.filter(pairs, &(not supported_in?(&1, "exchange_changes_state")))
+
     exposition_only =
-      Enum.filter(pairs, &(supported_in?(&1, "exposition") and not supported_in?(&1, "exposition_dramatic_work")))
+      Enum.filter(
+        pairs,
+        &(supported_in?(&1, "exposition") and not supported_in?(&1, "exposition_dramatic_work"))
+      )
+
     indistinct = Enum.filter(pairs, &not_supported_in?(&1, "voice_distinction"))
 
     []
@@ -161,7 +166,9 @@ defmodule Fount.Intelligence.Capabilities.DialogueInteraction do
         "The exchange may continue without changing tactic, knowledge, goal, relationship, status, leverage, pressure, commitment, or available action.",
         "At least two measured turn pairs lack supported state change and no tactic shift is supported in the supplied exchange.",
         support,
-        limitations: ["Stillness, refusal, silence, ritual, deadlock, and comic repetition can be intentional; inspect desired scene behavior before revising."]
+        limitations: [
+          "Stillness, refusal, silence, ritual, deadlock, and comic repetition can be intentional; inspect desired scene behavior before revising."
+        ]
       )
     )
     |> maybe_diag(
@@ -171,7 +178,9 @@ defmodule Fount.Intelligence.Capabilities.DialogueInteraction do
         "Several turn pairs may repeat substantially the same information, tactic, or demand.",
         "Repetition measurement is supported in multiple turn pairs.",
         support,
-        limitations: ["Repeated language can accumulate pressure, rhythm, intimacy, coercion, or comedy; repetition alone is not a defect."]
+        limitations: [
+          "Repeated language can accumulate pressure, rhythm, intimacy, coercion, or comedy; repetition alone is not a defect."
+        ]
       )
     )
     |> maybe_diag(
@@ -192,7 +201,9 @@ defmodule Fount.Intelligence.Capabilities.DialogueInteraction do
         "Voice-distinction measurement is unsupported for multiple turn pairs.",
         support,
         uncertainty: "high",
-        limitations: ["Shared vocabulary or stripped-down speech can be intentional; compare tactics, syntax, rhythm, references, and worldview rather than forcing catchphrases."]
+        limitations: [
+          "Shared vocabulary or stripped-down speech can be intentional; compare tactics, syntax, rhythm, references, and worldview rather than forcing catchphrases."
+        ]
       )
     )
     |> Enum.sort_by(& &1["id"])

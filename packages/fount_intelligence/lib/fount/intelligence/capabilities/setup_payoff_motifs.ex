@@ -108,10 +108,16 @@ defmodule Fount.Intelligence.Capabilities.SetupPayoffMotifs do
 
   defp story_time_relation(_world, nil, _right), do: "unknown"
   defp story_time_relation(_world, _left, nil), do: "unknown"
-  defp story_time_relation(world, left, right), do: world |> StoryWorld.story_time_relation(left, right) |> Model.plain()
 
-  defp diverge?("before", %{"status" => "known", "relations" => relations}), do: "after" in relations
-  defp diverge?("after", %{"status" => "known", "relations" => relations}), do: "before" in relations
+  defp story_time_relation(world, left, right),
+    do: world |> StoryWorld.story_time_relation(left, right) |> Model.plain()
+
+  defp diverge?("before", %{"status" => "known", "relations" => relations}),
+    do: "after" in relations
+
+  defp diverge?("after", %{"status" => "known", "relations" => relations}),
+    do: "before" in relations
+
   defp diverge?(_, _), do: false
 
   defp motif_packets(world) do
@@ -147,21 +153,25 @@ defmodule Fount.Intelligence.Capabilities.SetupPayoffMotifs do
       end
 
     recorded =
-      lifecycle
-      |> Enum.flat_map(fn item ->
-        Enum.flat_map(item["payoffs"] || [], fn payoff ->
-          if payoff["type"] in ["complicates", "resolves", "pays_off"],
-            do: [%{"source" => "story_world", "setup_id" => item["setup_id"], "edge" => payoff}],
-            else: []
-        end)
-      end)
+      Enum.flat_map(lifecycle, &recorded_transformation_links/1)
 
     motif_links =
       for motif <- motifs, motif["callback_candidate"] do
-        %{"source" => "motif", "motif_id" => motif["id"], "occurrence_count" => motif["occurrence_count"]}
+        %{
+          "source" => "motif",
+          "motif_id" => motif["id"],
+          "occurrence_count" => motif["occurrence_count"]
+        }
       end
 
     measured ++ recorded ++ motif_links
+  end
+
+  defp recorded_transformation_links(item) do
+    for payoff <- item["payoffs"] || [],
+        payoff["type"] in ["complicates", "resolves", "pays_off"] do
+      %{"source" => "story_world", "setup_id" => item["setup_id"], "edge" => payoff}
+    end
   end
 
   defp broken_chain_candidates(entries, lifecycle) do
@@ -198,7 +208,9 @@ defmodule Fount.Intelligence.Capabilities.SetupPayoffMotifs do
         "Orphaned-setup measurement is supported and the frozen setup/payoff ledger contains one or more open commitments.",
         support ++ Enum.map(open, & &1["setup_id"]),
         uncertainty: "high",
-        limitations: ["An open setup may intentionally survive beyond the selected scope or remain unresolved by design."]
+        limitations: [
+          "An open setup may intentionally survive beyond the selected scope or remain unresolved by design."
+        ]
       )
     )
     |> maybe_diag(
@@ -218,7 +230,9 @@ defmodule Fount.Intelligence.Capabilities.SetupPayoffMotifs do
         "A setup or recurring motif may be signaled strongly enough that its later use becomes easy to anticipate.",
         "Over-signaled measurement is supported in the selected material.",
         support,
-        limitations: ["Prediction can be desirable when the intended pleasure is dread, inevitability, dramatic irony, recognition, or comic setup."]
+        limitations: [
+          "Prediction can be desirable when the intended pleasure is dread, inevitability, dramatic irony, recognition, or comic setup."
+        ]
       )
     )
     |> maybe_diag(
@@ -232,14 +246,17 @@ defmodule Fount.Intelligence.Capabilities.SetupPayoffMotifs do
       )
     )
     |> maybe_diag(
-      Enum.any?(motifs, &(&1["occurrence_count"] >= 4)) and Support.any_supported?(entries, :motif_callback),
+      Enum.any?(motifs, &(&1["occurrence_count"] >= 4)) and
+        Support.any_supported?(entries, :motif_callback),
       Support.diagnosis(
         "setup_payoff.motif_recurrence_for_writer_inspection",
         "A recurring motif has enough visible occurrences to merit checking how its function changes rather than merely counting repetition.",
         "The frozen motif record has at least four occurrences and motif-callback measurement is supported.",
         support,
         uncertainty: "medium",
-        limitations: ["Occurrence count is not a defect threshold; the writer should inspect function, placement, and transformation."]
+        limitations: [
+          "Occurrence count is not a defect threshold; the writer should inspect function, placement, and transformation."
+        ]
       )
     )
     |> Enum.sort_by(& &1["id"])
@@ -250,14 +267,29 @@ defmodule Fount.Intelligence.Capabilities.SetupPayoffMotifs do
       for entry <- entries,
           key <- @keys,
           Support.status(entry, key) in ["uncertain", "insufficient_evidence", "unavailable"] do
-        %{"scene_id" => entry["scene_id"], "measurement" => to_string(key), "status" => Support.status(entry, key)}
+        %{
+          "scene_id" => entry["scene_id"],
+          "measurement" => to_string(key),
+          "status" => Support.status(entry, key)
+        }
       end
 
     chronology =
       lifecycle
       |> Enum.flat_map(&(&1["payoffs"] || []))
-      |> Enum.filter(&(&1["story_time_relation"] == "unknown" or match?(%{"status" => status} when status in ["ambiguous", "contradiction"], &1["story_time_relation"])))
-      |> Enum.map(&Map.take(&1, ~w(setup_event_id payoff_event_id presentation_relation story_time_relation)))
+      |> Enum.filter(
+        &(&1["story_time_relation"] == "unknown" or
+            match?(
+              %{"status" => status} when status in ["ambiguous", "contradiction"],
+              &1["story_time_relation"]
+            ))
+      )
+      |> Enum.map(
+        &Map.take(
+          &1,
+          ~w(setup_event_id payoff_event_id presentation_relation story_time_relation)
+        )
+      )
 
     measured ++ chronology
   end
@@ -280,9 +312,17 @@ defmodule Fount.Intelligence.Capabilities.SetupPayoffMotifs do
         end
       end)
 
-    if Enum.any?(lifecycle, fn item -> Enum.any?(item["payoffs"] || [], & &1["presentation_story_time_diverge"]) end),
-      do: Enum.uniq(base ++ ["For the non-linear payoff, inspect what the reader learns at the later presentation point separately from when the depicted event occurs in story time."]),
-      else: Enum.uniq(base)
+    if Enum.any?(lifecycle, fn item ->
+         Enum.any?(item["payoffs"] || [], & &1["presentation_story_time_diverge"])
+       end),
+       do:
+         Enum.uniq(
+           base ++
+             [
+               "For the non-linear payoff, inspect what the reader learns at the later presentation point separately from when the depicted event occurs in story time."
+             ]
+         ),
+       else: Enum.uniq(base)
   end
 
   defp measurement_ids(entries) do

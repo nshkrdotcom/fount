@@ -203,7 +203,8 @@ defmodule Fount.Intelligence.Playbooks.CapabilityRunner do
            "selected_scene_count" => length(groups),
            "source_scene_count" => length(grouped),
            "scene_cap_reached" => length(grouped) > length(groups),
-           "fragment_cap_reached_scene_ids" => for({scene, _items, true, _units} <- groups, do: scene),
+           "fragment_cap_reached_scene_ids" =>
+             for({scene, _items, true, _units} <- groups, do: scene),
            "evidence_fragment_count" => length(evidence)
          }
        }}
@@ -219,28 +220,10 @@ defmodule Fount.Intelligence.Playbooks.CapabilityRunner do
            pairs <- dialogue_pairs(units),
            true <- pairs != [] do
         inputs =
-          Enum.map(pairs, fn pair ->
-            evidence = pair["evidence"]
-
-            %{
-              "id" => "capability:#{family}:scene:#{scene_id}:pair:#{pair["ordinal"]}",
-              "scene_id" => scene_id,
-              "pair_ordinal" => pair["ordinal"],
-              "turn_pair" => Map.take(pair, ~w(previous current)),
-              "context_slot_names" => context.slots |> Map.keys() |> Enum.sort(),
-              "context" => context,
-              "state" => %{
-                "family" => family,
-                "subject" => Model.plain(subject),
-                "writer_intent" => Model.plain(Map.get(request, "intent", %{})),
-                "turn_pair" => Map.take(pair, ~w(previous current)),
-                "source" => Enum.map(evidence, &Map.take(&1, ~w(evidence_id excerpt target role))),
-                "source_truncated_for_host_limit" => truncated?
-              },
-              "target" => %{"kind" => "scene", "id" => scene_id},
-              "evidence" => evidence
-            }
-          end)
+          Enum.map(
+            pairs,
+            &dialogue_input(&1, family, scene_id, subject, request, context, truncated?)
+          )
 
         {:cont, {:ok, acc ++ inputs}}
       else
@@ -271,6 +254,30 @@ defmodule Fount.Intelligence.Playbooks.CapabilityRunner do
      end)}
   end
 
+  defp dialogue_input(pair, family, scene_id, subject, request, context, truncated?) do
+    evidence = pair["evidence"]
+    turn_pair = Map.take(pair, ~w(previous current))
+
+    %{
+      "id" => "capability:#{family}:scene:#{scene_id}:pair:#{pair["ordinal"]}",
+      "scene_id" => scene_id,
+      "pair_ordinal" => pair["ordinal"],
+      "turn_pair" => turn_pair,
+      "context_slot_names" => context.slots |> Map.keys() |> Enum.sort(),
+      "context" => context,
+      "state" => %{
+        "family" => family,
+        "subject" => Model.plain(subject),
+        "writer_intent" => Model.plain(Map.get(request, "intent", %{})),
+        "turn_pair" => turn_pair,
+        "source" => Enum.map(evidence, &Map.take(&1, ~w(evidence_id excerpt target role))),
+        "source_truncated_for_host_limit" => truncated?
+      },
+      "target" => %{"kind" => "scene", "id" => scene_id},
+      "evidence" => evidence
+    }
+  end
+
   defp dialogue_pairs(units) do
     turns = dialogue_turns(units)
 
@@ -284,7 +291,8 @@ defmodule Fount.Intelligence.Playbooks.CapabilityRunner do
             "ordinal" => ordinal,
             "previous" => Map.drop(previous, ["evidence"]),
             "current" => Map.drop(current, ["evidence"]),
-            "evidence" => Enum.uniq_by(previous["evidence"] ++ current["evidence"], & &1["evidence_id"])
+            "evidence" =>
+              Enum.uniq_by(previous["evidence"] ++ current["evidence"], & &1["evidence_id"])
           }
         end)
 
@@ -306,37 +314,43 @@ defmodule Fount.Intelligence.Playbooks.CapabilityRunner do
   end
 
   defp dialogue_turns(units) do
-    {turns, cue} =
+    {turns, _cue} =
       Enum.reduce(units, {[], nil}, fn unit, {turns, cue} ->
         case unit["type"] do
           "character" ->
-            cue = %{
-              "speaker" => String.trim(unit["text"] || unit["excerpt"] || ""),
-              "evidence" => Fount.Selection.evidence([unit])
-            }
+            {turns, dialogue_cue(unit)}
 
-            {turns, cue}
+          "dialogue" when is_map(cue) ->
+            {[dialogue_turn(unit, cue) | turns], cue}
 
-          "dialogue" ->
-            dialogue_evidence = Fount.Selection.evidence([unit])
-            cue_evidence = if is_map(cue), do: cue["evidence"] || [], else: []
-
-            turn = %{
-              "speaker" => if(is_map(cue), do: cue["speaker"], else: "UNKNOWN"),
-              "text" => unit["text"] || unit["excerpt"],
-              "element_id" => get_in(unit, ["target", "id"]),
-              "evidence" => Enum.uniq_by(cue_evidence ++ dialogue_evidence, & &1["evidence_id"])
-            }
-
-            {turns ++ [turn], cue}
+          "action" ->
+            {turns, nil}
 
           _ ->
             {turns, cue}
         end
       end)
 
-    _ = cue
-    turns
+    Enum.reverse(turns)
+  end
+
+  defp dialogue_cue(unit) do
+    speaker = String.trim(unit["text"] || unit["excerpt"] || "")
+
+    if speaker == "",
+      do: nil,
+      else: %{"speaker" => speaker, "evidence" => Fount.Selection.evidence([unit])}
+  end
+
+  defp dialogue_turn(unit, cue) do
+    evidence = Fount.Selection.evidence([unit])
+
+    %{
+      "speaker" => cue["speaker"],
+      "text" => unit["text"] || unit["excerpt"],
+      "element_id" => get_in(unit, ["target", "id"]),
+      "evidence" => Enum.uniq_by(cue["evidence"] ++ evidence, & &1["evidence_id"])
+    }
   end
 
   defp dialogue_context(request, scene_id) do
@@ -345,9 +359,14 @@ defmodule Fount.Intelligence.Playbooks.CapabilityRunner do
 
     slots =
       cond do
-        is_map(by_scene) and is_map(by_scene[scene_id]) -> Map.merge(global_if_map(global), by_scene[scene_id])
-        is_map(global) -> global
-        true -> :invalid
+        is_map(by_scene) and is_map(by_scene[scene_id]) ->
+          Map.merge(global_if_map(global), by_scene[scene_id])
+
+        is_map(global) ->
+          global
+
+        true ->
+          :invalid
       end
 
     case slots do
@@ -549,9 +568,12 @@ defmodule Fount.Intelligence.Playbooks.CapabilityRunner do
   end
 
   defp packet_phase(results) do
-    if Enum.any?(results, &(&1.family in ~w(audience_reader_experience sequence_movement dialogue_interaction setup_payoff_motifs))),
-      do: 7,
-      else: 6
+    if Enum.any?(
+         results,
+         &(&1.family in ~w(audience_reader_experience sequence_movement dialogue_interaction setup_payoff_motifs))
+       ),
+       do: 7,
+       else: 6
   end
 
   defp measurement_opts(opts, model, lens_id, cap) do

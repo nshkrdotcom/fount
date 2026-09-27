@@ -25,7 +25,8 @@ defmodule Fount.Intelligence.PhaseSevenRunnerTest do
           "selection" => %{"targets" => [%{"kind" => "scene", "id" => scene.id}]},
           "story_world_records" => PhaseSevenFixture.records(screenplay),
           "reader_events" => PhaseSevenFixture.reader_events(screenplay),
-          "concern" => "Does the first watch clue create a useful question without leaking the answer?"
+          "concern" =>
+            "Does the first watch clue create a useful question without leaking the answer?"
         },
         %{observe: provider}
       )
@@ -98,10 +99,15 @@ defmodule Fount.Intelligence.PhaseSevenRunnerTest do
               }
             ],
             "prior_turns" => [
-              %{"speaker" => "Mara", "text" => "You said you threw it out.", "channel" => "dialogue"}
+              %{
+                "speaker" => "Mara",
+                "text" => "You said you threw it out.",
+                "channel" => "dialogue"
+              }
             ]
           },
-          "concern" => "The corridor exchange may repeat the same pressure instead of changing leverage."
+          "concern" =>
+            "The corridor exchange may repeat the same pressure instead of changing leverage."
         },
         %{observe: Sandbox.new!(fixtures)}
       )
@@ -145,7 +151,8 @@ defmodule Fount.Intelligence.PhaseSevenRunnerTest do
         %{
           "selection" => %{"targets" => Enum.map(scenes, &%{"kind" => "scene", "id" => &1.id})},
           "story_world_records" => PhaseSevenFixture.records(screenplay),
-          "concern" => "Does the flashback clarify the watch without pretending it happened later?"
+          "concern" =>
+            "Does the flashback clarify the watch without pretending it happened later?"
         },
         %{observe: Sandbox.new!(fixtures)}
       )

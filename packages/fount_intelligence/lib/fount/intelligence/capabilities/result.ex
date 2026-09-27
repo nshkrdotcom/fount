@@ -1,5 +1,5 @@
 defmodule Fount.Intelligence.Capabilities.Result do
-  @moduledoc "Pure Phase-6 capability result. Source evidence, derived state, trajectories, diagnoses, and limitations stay separate."
+  @moduledoc "Pure capability result through Phase 7. Source evidence, derived state, trajectories, diagnoses, and limitations stay separate."
 
   alias Fount.Screenplay.Model
 

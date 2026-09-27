@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Implement the Phase-7 screenplay capability families 5–8 across Intelligence and Observe without advancing to Phase 8.
+
 ## Unreleased - Phase 6 offline implementation
 
 - Add the Scene Engine, Agency/Causality, Character Trajectory, and Relationship Dynamics capability families with source-grounded Observe measurements and pure Intelligence reducers.

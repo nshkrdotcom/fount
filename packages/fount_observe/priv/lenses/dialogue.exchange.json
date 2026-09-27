@@ -1,0 +1,29 @@
+{
+  "id": "dialogue.exchange",
+  "description": "Phase-7 dialogue interaction measurements over exact selected screenplay excerpts. Optional typed context supplies prior turns, known facts, speaker beliefs, and relationship state without importing Intelligence structs into Observe.",
+  "sensor": "system_one",
+  "projection": "explicit_state",
+  "context_contract": {
+    "required": {},
+    "optional": {
+      "known_facts": {"type": "list", "items": "fact"},
+      "speaker_beliefs": {"type": "list", "items": "belief"},
+      "relationship_state": {"type": "relation_summary"},
+      "prior_turns": {"type": "list", "items": "turn"}
+    },
+    "allow_unknown": false
+  },
+  "question_overrides": [],
+  "interpretation_policy": {
+    "support_probability": 0.8,
+    "unsupported_probability": 0.2,
+    "minimum_confidence": 0.7,
+    "minimum_margin": 0.15
+  },
+  "output_contract": "observe.answer_set",
+  "resource_policy_request": {
+    "max_states": 320,
+    "max_provider_requests": 320,
+    "max_questions": 32
+  }
+}

@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Add Phase-7 Audience / Reader Experience, Sequence Movement, Dialogue Interaction, and Setup / Payoff + Motifs capability families, writer-playbook mappings, strict-forward Reader composition, typed dialogue-context validation, non-linear payoff qualification, deterministic fixtures, and source tests.
+
 ## Unreleased - Phase 6 source delivery
 
 - add complete Scene Engine, Agency/Causality, Character Trajectory, and Relationship Dynamics analysis slices;

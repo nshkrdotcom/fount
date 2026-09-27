@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Add closed Phase-7 measurement lenses for audience/reader experience, sequence movement, typed-context dialogue exchange, and setup/payoff + motifs.
+
 ## Unreleased - Phase 6 source delivery
 
 - install closed declarative lens assets for `scene.engine`, `agency.causality`, `character.trajectory`, and `relationship.dynamics`;

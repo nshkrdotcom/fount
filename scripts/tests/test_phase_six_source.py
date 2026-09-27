@@ -98,16 +98,6 @@ class PhaseSixSourceTests(unittest.TestCase):
         self.assertIn('defp parties(', relationship)
         self.assertIn('character and relationship writer playbooks cover all remaining Phase-6 families through Sandbox', runner_test)
 
-    def test_phase_seven_is_not_implemented(self) -> None:
-        phase_seven_modules = [
-            "audience_reader_experience.ex",
-            "sequence_movement.ex",
-            "dialogue_interaction.ex",
-            "setup_payoff_motifs.ex",
-        ]
-        capability_dir = INTEL / "lib/fount/intelligence/capabilities"
-        for name in phase_seven_modules:
-            self.assertFalse((capability_dir / name).exists(), name)
 
     def test_docs_do_not_claim_unrun_runtime_or_human_checks(self) -> None:
         guide = self.read("packages/fount_intelligence/guides/capabilities-a.md")

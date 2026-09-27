@@ -22,6 +22,7 @@ defmodule Fount.Intelligence.Playbooks.WriterRegistry do
         "Diagnose exchange-level problems while preserving character intent, subtext, and useful asymmetry.",
       "foundational_tools" => ~w(dialogue voice knowledge_trace),
       "future_capability_families" => ~w(dialogue_interaction relationship_dynamics),
+      "phase_7_capability_families" => ~w(dialogue_interaction relationship_dynamics),
       "writer_questions" => [
         "Where does an exchange stop changing tactic, leverage, knowledge, or status?",
         "Which apparent repetition is intentional rhythm rather than a defect?"
@@ -60,6 +61,7 @@ defmodule Fount.Intelligence.Playbooks.WriterRegistry do
         "Inspect what the reader knows, expects, fears, and waits for without treating surprise or suspense as universally desirable.",
       "foundational_tools" => ~w(knowledge_trace locate_boundary),
       "future_capability_families" => ~w(audience_reader_experience),
+      "phase_7_capability_families" => ~w(audience_reader_experience),
       "writer_questions" => [
         "Which open question or threat carries forward at each checkpoint?",
         "Where is uncertainty intentional versus accidentally collapsed?"
@@ -72,6 +74,7 @@ defmodule Fount.Intelligence.Playbooks.WriterRegistry do
         "Diagnose repeated dramatic function, stalled strategy, and weak handoffs across a sequence while preserving intentional stillness.",
       "foundational_tools" => ~w(scene_mechanics dependencies continuity),
       "future_capability_families" => ~w(sequence_movement),
+      "phase_7_capability_families" => ~w(sequence_movement),
       "writer_questions" => [
         "What changes at each scene exit?",
         "Where do cost, strategy, information, or consequence fail to change?"
@@ -84,6 +87,7 @@ defmodule Fount.Intelligence.Playbooks.WriterRegistry do
         "Inspect explicit setup, reinforcement, transformation, payoff, subversion, or abandonment without requiring every setup to pay conventionally.",
       "foundational_tools" => ~w(dependencies continuity),
       "future_capability_families" => ~w(setup_payoff_motifs),
+      "phase_7_capability_families" => ~w(setup_payoff_motifs),
       "writer_questions" => [
         "What promise does the screenplay create and when can a first-time reader carry it?",
         "Is the later use a payoff, transformation, subversion, or deliberate abandonment?"

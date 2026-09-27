@@ -24,7 +24,9 @@ Phase 4 provides qualified temporal views and a strict forward-only Reader reduc
 
 Phase 6 adds source-grounded Scene Engine, Agency/Causality, Character Trajectory, and Relationship Dynamics capabilities through `Fount.Intelligence.run_capability/5`, plus Scene Doctor, Character Trajectory, and Relationship Pass packet integrations through `run_capability_playbook/5`. Character and relationship views keep reader-visible presentation order separate from explicit diegetic story time, and no transformation arc is required. See [Capabilities A](guides/capabilities-a.md) and `mix run examples/phase_six.exs`.
 
-The Phase 6 source/tests/example in this delivery are written against the supplied post-Phase-5 snapshot but are not runtime-verified in this source-writing environment because Elixir/Erlang/Mix are unavailable here. Codex must format, compile, test and repair this same phase after the overlay is applied. Optional human/domain review remains validation debt unless actually performed. Phase 7 is not included.
+Phase 7 adds Audience / Reader Experience, Sequence Movement, Dialogue Interaction, and Setup / Payoff + Motifs. `suspense_audit` uses the existing strict-forward Reader when source-backed `reader_events` are supplied; `sequence_momentum` reports presentation and partial story-time views separately; `dialogue_pass` measures adjacent canonical turn pairs with optional closed typed context and composes the existing relationship family; `setup_payoff` qualifies reader-visible payoff placement separately from diegetic chronology. See [Capabilities B](guides/capabilities-b.md) and `mix run examples/phase_seven.exs`.
+
+The Phase-7 source/tests/example in this delivery are written against the supplied post-Phase-6-QC snapshot. Elixir/Erlang/Mix are unavailable in this source-writing environment, so Phase-7 formatting, compilation, ExUnit and repository runtime gates are not claimed here. Codex must run and repair Phase 7 after the overlay is applied. Optional human/domain review remains validation debt unless actually performed. Phase 8 is not included.
 
 ## License
 

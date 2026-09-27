@@ -18,4 +18,8 @@ The historical Phase 1 writing preservation demonstration remains `packages/foun
 
 ## Phase 6 capability demonstration
 
-`mix run examples/phase_six.exs` builds one screenplay scene, creates deterministic `Fount.Observe.Sandbox` answers for the installed Scene Engine measurement contract, and runs the Phase-6 Scene Doctor integration. The packet contains source-grounded capability state and diagnoses only; it does not generate or accept screenplay pages. Runtime execution remains for Codex QC in this source delivery.
+`mix run examples/phase_six.exs` builds one screenplay scene, creates deterministic `Fount.Observe.Sandbox` answers for the installed Scene Engine measurement contract, and runs the Phase-6 Scene Doctor integration. The packet contains source-grounded capability state and diagnoses only; it does not generate or accept screenplay pages.
+
+## Phase 7 audience/reader demonstration
+
+`mix run examples/phase_seven.exs` builds a two-scene non-linear watch setup, supplies source-backed strict-forward Reader events, creates deterministic `Fount.Observe.Sandbox` answers for the Audience / Reader Experience lens, and runs the `suspense_audit` writer playbook. The later-presented flashback resolves the question only when it is actually presented. Runtime execution of the new Phase-7 source remains for Codex QC in this source delivery.

@@ -11,44 +11,14 @@ defmodule Fount.Intelligence.Acquisition.Planner do
 
   def plan(%Fount.Screenplay{} = model, request, opts) when is_map(request) and is_list(opts) do
     with true <- Keyword.keyword?(opts),
-         {:ok, concern} <- Concern.new(request["concern"] || request[:concern]),
+         {:ok, concern} <- Concern.new(field(request, "concern")),
          {:ok, evidence, evidence_scope} <- evidence(model, request, opts),
          {:ok, hypotheses} <- hypotheses(request, evidence),
          true <- hypotheses != [] do
-      base_inputs =
-        Enum.map(evidence, fn source ->
-          %{
-            "id" => "base:" <> source["evidence_id"],
-            "state" => %{
-              "concern" => Concern.to_map(concern),
-              "evidence" => %{
-                "id" => source["evidence_id"],
-                "excerpt" => source["excerpt"],
-                "target" => source["target"]
-              }
-            },
-            "target" => source["target"],
-            "evidence" => [source]
-          }
-        end)
-
-      {:ok,
-       %{
-         "concern" => concern,
-         "evidence" => evidence,
-         "evidence_scope" => evidence_scope,
-         "hypotheses" => hypotheses,
-         "base_inputs" => base_inputs,
-         "selection" => request["selection"] || request[:selection] || %{"whole_screenplay" => true},
-         "intent" => request["intent"] || request[:intent] || %{},
-         "strategies" => request["strategies"] || request[:strategies] || [],
-         "revision_comparison" => request["revision_comparison"] || request[:revision_comparison],
-         "source_revision" => model.revision.id
-       }}
+      {:ok, build_plan(model, request, concern, evidence, evidence_scope, hypotheses)}
     else
       false -> {:error, :invalid_playbook_request}
       {:error, _} = error -> error
-      _ -> {:error, :invalid_playbook_request}
     end
   rescue
     _ -> {:error, :invalid_playbook_request}
@@ -56,28 +26,52 @@ defmodule Fount.Intelligence.Acquisition.Planner do
 
   def plan(_, _, _), do: {:error, :invalid_playbook_request}
 
+  defp build_plan(model, request, concern, evidence, evidence_scope, hypotheses) do
+    %{
+      "concern" => concern,
+      "evidence" => evidence,
+      "evidence_scope" => evidence_scope,
+      "hypotheses" => hypotheses,
+      "base_inputs" => Enum.map(evidence, &base_input(&1, concern)),
+      "selection" => field(request, "selection") || %{"whole_screenplay" => true},
+      "intent" => field(request, "intent") || %{},
+      "strategies" => field(request, "strategies") || [],
+      "revision_comparison" => field(request, "revision_comparison"),
+      "source_revision" => model.revision.id
+    }
+  end
+
+  defp base_input(source, concern) do
+    %{
+      "id" => "base:" <> source["evidence_id"],
+      "state" => %{
+        "concern" => Concern.to_map(concern),
+        "evidence" => %{
+          "id" => source["evidence_id"],
+          "excerpt" => source["excerpt"],
+          "target" => source["target"]
+        }
+      },
+      "target" => source["target"],
+      "evidence" => [source]
+    }
+  end
+
+  defp field(request, key), do: Map.get(request, key) || Map.get(request, String.to_atom(key))
+
   defp evidence(model, request, opts) do
-    selection = request["selection"] || request[:selection] || %{"whole_screenplay" => true}
+    selection = field(request, "selection") || %{"whole_screenplay" => true}
     limit = Keyword.get(opts, :max_evidence_fragments, @default_max_evidence)
 
     with true <- is_integer(limit) and limit > 0 and limit <= 500,
          {:ok, units} <- Fount.Selection.select(model, selection) do
       all = Fount.Selection.evidence(units)
-      requested_ids = request["evidence_ids"] || request[:evidence_ids]
+      requested_ids = field(request, "evidence_ids")
 
       explicit? = is_list(requested_ids) and requested_ids != []
 
-      selected =
-        if explicit? do
-          index = Map.new(all, &{&1["evidence_id"], &1})
-          Enum.map(requested_ids, &Map.get(index, &1))
-        else
-          Enum.take(all, limit)
-        end
-
-      valid =
-        selected != [] and length(selected) <= limit and Enum.all?(selected, &is_map/1) and
-          length(Enum.uniq_by(selected, & &1["evidence_id"])) == length(selected)
+      selected = select_evidence(all, requested_ids, explicit?, limit)
+      valid = valid_selection?(selected, limit)
 
       if valid do
         {:ok, selected,
@@ -96,42 +90,53 @@ defmodule Fount.Intelligence.Acquisition.Planner do
     end
   end
 
+  defp select_evidence(all, requested_ids, true, _limit) do
+    index = Map.new(all, &{&1["evidence_id"], &1})
+    Enum.map(requested_ids, &Map.get(index, &1))
+  end
+
+  defp select_evidence(all, _requested_ids, false, limit), do: Enum.take(all, limit)
+
+  defp valid_selection?(selected, limit) do
+    selected != [] and length(selected) <= limit and Enum.all?(selected, &is_map/1) and
+      length(Enum.uniq_by(selected, & &1["evidence_id"])) == length(selected)
+  end
+
   defp hypotheses(request, evidence) do
-    values = request["hypotheses"] || request[:hypotheses]
+    values = field(request, "hypotheses")
     evidence_ids = Enum.map(evidence, & &1["evidence_id"])
 
     if is_list(values) and values != [] do
-      normalized =
-        Enum.map(values, fn value ->
-          value = stringify(value)
-          ids = if value["evidence_ids"] in [nil, []], do: evidence_ids, else: value["evidence_ids"]
-          value = Map.put(value, "evidence_ids", ids)
-          id =
-            value["id"] ||
-              "hypothesis-" <>
-                String.slice(
-                  CanonicalJSON.hash(%{
-                    "code" => value["code"] || "writer_hypothesis",
-                    "hypothesis" => value["hypothesis"],
-                    "evidence_ids" => ids
-                  }),
-                  0,
-                  24
-                )
-          Map.put(value, "id", id)
-        end)
+      normalized = Enum.map(values, &normalize_hypothesis(&1, evidence_ids))
 
       selected = MapSet.new(evidence_ids)
 
-      if Enum.all?(normalized, fn hypothesis ->
-           valid_hypothesis?(hypothesis) and
-             Enum.all?(hypothesis["evidence_ids"], &MapSet.member?(selected, &1))
-         end),
+      if Enum.all?(normalized, &selected_hypothesis?(&1, selected)),
         do: {:ok, normalized},
         else: {:error, :invalid_hypotheses}
     else
       {:error, :hypotheses_required}
     end
+  end
+
+  defp normalize_hypothesis(value, evidence_ids) do
+    value = stringify(value)
+    ids = if is_nil(value["evidence_ids"]), do: evidence_ids, else: value["evidence_ids"]
+    value = Map.put(value, "evidence_ids", ids)
+
+    identity = %{
+      "code" => value["code"] || "writer_hypothesis",
+      "hypothesis" => value["hypothesis"],
+      "evidence_ids" => ids
+    }
+
+    id = value["id"] || "hypothesis-" <> String.slice(CanonicalJSON.hash(identity), 0, 24)
+    Map.put(value, "id", id)
+  end
+
+  defp selected_hypothesis?(hypothesis, selected) do
+    valid_hypothesis?(hypothesis) and
+      Enum.all?(hypothesis["evidence_ids"], &MapSet.member?(selected, &1))
   end
 
   defp valid_hypothesis?(value) do

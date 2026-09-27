@@ -81,7 +81,10 @@ defmodule Fount.Intelligence.Reporting.WriterPacket do
   def contract_digest, do: CanonicalJSON.hash(@contract)
 
   def new(playbook, source_revision, concern, attrs \\ %{})
-      when is_binary(playbook) and is_binary(source_revision) and is_map(concern) and is_map(attrs) do
+
+  def new(playbook, source_revision, concern, attrs)
+      when is_binary(playbook) and is_binary(source_revision) and is_map(concern) and
+             is_map(attrs) do
     base = %{
       "playbook" => playbook,
       "source_revision" => source_revision,
@@ -167,8 +170,13 @@ defmodule Fount.Intelligence.Reporting.WriterPacket do
   end
 
   defp plain(%{__struct__: module} = value) when module == __MODULE__, do: to_map(value)
-  defp plain(%{__struct__: _}), do: raise(ArgumentError, "writer packet cannot contain runtime structs")
-  defp plain(map) when is_map(map), do: Map.new(map, fn {key, value} -> {to_string(key), plain(value)} end)
+
+  defp plain(%{__struct__: _}),
+    do: raise(ArgumentError, "writer packet cannot contain runtime structs")
+
+  defp plain(map) when is_map(map),
+    do: Map.new(map, fn {key, value} -> {to_string(key), plain(value)} end)
+
   defp plain(list) when is_list(list), do: Enum.map(list, &plain/1)
   defp plain(value), do: value
 end

@@ -23,7 +23,9 @@ defmodule Fount.Intelligence.Acquisition.DiagnosticMeasurements do
       "questions" => [
         support: Question.noul("Does the supplied screenplay evidence support the hypothesis?"),
         counterevidence:
-          Question.noul("Does the supplied screenplay evidence materially contradict the hypothesis?")
+          Question.noul(
+            "Does the supplied screenplay evidence materially contradict the hypothesis?"
+          )
       ]
     }
   end

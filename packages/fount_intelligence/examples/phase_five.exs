@@ -31,6 +31,14 @@ request = %{
       "hypothesis" => "The exchange stops changing tactic or leverage.",
       "alternatives" => ["The stillness may be intentional entrapment."],
       "context" => %{}
+    },
+    %{
+      "id" => "withheld-deadline",
+      "code" => "withheld_deadline",
+      "hypothesis" => "The threat has no visible deadline after Mara closes the file.",
+      "alternatives" => ["The stillness may be intentional entrapment."],
+      "next_investigations" => ["Read the next exchange for a visible consequence or deadline."],
+      "context" => %{}
     }
   ]
 }
@@ -46,6 +54,10 @@ contextual_fixtures = %{
   "hypothesis:repeated-tactic" => %{
     "support" => 0.9,
     "counterevidence" => 0.1
+  },
+  "hypothesis:withheld-deadline" => %{
+    "support" => 0.82,
+    "counterevidence" => 0.9
   }
 }
 

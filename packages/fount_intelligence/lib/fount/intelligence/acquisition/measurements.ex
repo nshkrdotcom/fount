@@ -19,32 +19,41 @@ defmodule Fount.Intelligence.Acquisition.Measurements do
   def evaluate(_, _, _, _), do: {:error, :invalid_measurement_inputs}
 
   @doc "Provider-free preflight for a set of source projections using the same request construction as evaluate/4."
-  def preflight(inputs, questions, opts \\ []) when is_list(inputs) and is_list(opts) do
+  def preflight(inputs, questions, opts \\ [])
+
+  def preflight(inputs, questions, opts) when is_list(inputs) and is_list(opts) do
     with :ok <- input_ids(inputs) do
       {requests, rejected} =
-        Enum.reduce(inputs, {[], %{}}, fn input, {requests, errors} ->
-          case prepare_request(input, opts) do
-            {:ok, request} -> {requests ++ [request], errors}
-            {:error, reason} -> {requests, Map.put(errors, input["id"], failure(input["id"], reason))}
-          end
-        end)
+        Enum.reduce(inputs, {[], %{}}, &collect_request(&1, &2, opts))
 
       observe_opts =
         opts
         |> Keyword.take(Options.allowed())
         |> Keyword.put(:budget, Resources.from_options(opts))
 
-      with {:ok, estimate} <- Fount.Observe.preflight(requests, questions, observe_opts) do
-        {:ok,
-         estimate
-         |> Map.put("requested", length(inputs))
-         |> Map.put("valid", length(requests))
-         |> Map.put("rejected", Map.values(rejected))}
+      Fount.Observe.preflight(requests, questions, observe_opts)
+      |> case do
+        {:ok, estimate} ->
+          {:ok,
+           estimate
+           |> Map.put("requested", length(inputs))
+           |> Map.put("valid", length(requests))
+           |> Map.put("rejected", Map.values(rejected))}
+
+        error ->
+          error
       end
     end
   end
 
   def preflight(_, _, _), do: {:error, :invalid_measurement_inputs}
+
+  defp collect_request(input, {requests, errors}, opts) do
+    case prepare_request(input, opts) do
+      {:ok, request} -> {requests ++ [request], errors}
+      {:error, reason} -> {requests, Map.put(errors, input["id"], failure(input["id"], reason))}
+    end
+  end
 
   defp evaluate_inputs(provider, inputs, questions, opts) do
     {requests, rejected} =

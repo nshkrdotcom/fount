@@ -79,6 +79,7 @@ defmodule Fount.Intelligence.WriterRunnerTest do
     assert first.status == "complete"
     assert length(first.diagnoses) == 2
     assert first.trajectory == []
+
     assert Enum.map(first.provenance["analysis_passes"], & &1["kind"]) == [
              "observe_base",
              "pure_evidence_need_reduction",
@@ -161,5 +162,19 @@ defmodule Fount.Intelligence.WriterRunnerTest do
     model = model()
     bad = put_in(request(), ["hypotheses", Access.at(0), "evidence_ids"], ["missing-evidence-id"])
     assert {:error, :invalid_hypotheses} = Planner.plan(model, bad)
+  end
+
+  test "explicit hypothesis evidence IDs must be nonempty and unique" do
+    model = model()
+
+    {:ok, plan} = Planner.plan(model, request())
+    [first | _] = plan["evidence"]
+    id = first["evidence_id"]
+
+    empty = put_in(request(), ["hypotheses", Access.at(0), "evidence_ids"], [])
+    duplicate = put_in(request(), ["hypotheses", Access.at(0), "evidence_ids"], [id, id])
+
+    assert {:error, :invalid_hypotheses} = Planner.plan(model, empty)
+    assert {:error, :invalid_hypotheses} = Planner.plan(model, duplicate)
   end
 end

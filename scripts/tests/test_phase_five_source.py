@@ -128,7 +128,10 @@ class PhaseFiveSourceTests(unittest.TestCase):
         self.assertIn("max_playbook_provider_requests", source)
         self.assertIn('"hosted_cost" => nil', source)
         self.assertIn('selection_complete = not plan["evidence_scope"]["truncated_by_host_limit"]', source)
-        self.assertIn('status = if acquisition_complete and evidence_complete and selection_complete, do: "complete", else: "partial"', source)
+        self.assertRegex(
+            source,
+            r'status\s*=\s*if\s+acquisition_complete\s+and\s+evidence_complete\s+and\s+selection_complete\s*,\s*do:\s*"complete"\s*,\s*else:\s*"partial"',
+        )
 
     def test_phase_five_docs_make_no_runtime_or_human_validation_claim(self) -> None:
         guide = self.read("packages/fount_intelligence/guides/diagnosis-and-playbooks.md")

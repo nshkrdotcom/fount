@@ -13,27 +13,21 @@ defmodule Fount.Intelligence.Diagnosis do
   @measurement "diagnosis.evidence_support"
 
   @doc "Purely reduces the first Observe pass into explicit context signals; it never filters source evidence."
-  def reduce_base(assessments, evidence_ids) when is_list(assessments) and is_list(evidence_ids) do
+  def reduce_base(assessments, evidence_ids)
+      when is_list(assessments) and is_list(evidence_ids) do
     allowed = MapSet.new(evidence_ids)
 
-    valid =
-      Enum.all?(assessments, fn assessment ->
-        is_map(assessment) and is_binary(assessment["evidence_id"]) and
-          MapSet.member?(allowed, assessment["evidence_id"]) and
-          is_binary(assessment["status"]) and
-          (is_nil(assessment["relevance"]) or is_map(assessment["relevance"])) and
-          is_list(assessment["observation_ids"] || [])
-      end)
+    valid = Enum.all?(assessments, &valid_base_assessment?(&1, allowed))
 
     if valid do
       signals = Enum.sort_by(assessments, & &1["evidence_id"])
 
       counts =
-        Enum.reduce(signals, %{"supported" => 0, "uncertain" => 0, "not_supported" => 0, "error" => 0}, fn signal, acc ->
-          status = get_in(signal, ["relevance", "status"]) || signal["status"] || "error"
-          bucket = if Map.has_key?(acc, status), do: status, else: "error"
-          Map.update!(acc, bucket, &(&1 + 1))
-        end)
+        Enum.reduce(
+          signals,
+          %{"supported" => 0, "uncertain" => 0, "not_supported" => 0, "error" => 0},
+          &count_base_signal/2
+        )
 
       {:ok, %{"signals" => signals, "counts" => counts, "evidence_filtered" => false}}
     else
@@ -42,6 +36,19 @@ defmodule Fount.Intelligence.Diagnosis do
   end
 
   def reduce_base(_, _), do: {:error, :invalid_base_assessments}
+
+  defp valid_base_assessment?(assessment, allowed) do
+    is_map(assessment) and is_binary(assessment["evidence_id"]) and
+      MapSet.member?(allowed, assessment["evidence_id"]) and is_binary(assessment["status"]) and
+      (is_nil(assessment["relevance"]) or is_map(assessment["relevance"])) and
+      is_list(assessment["observation_ids"] || [])
+  end
+
+  defp count_base_signal(signal, acc) do
+    status = get_in(signal, ["relevance", "status"]) || signal["status"] || "error"
+    bucket = if Map.has_key?(acc, status), do: status, else: "error"
+    Map.update!(acc, bucket, &(&1 + 1))
+  end
 
   @spec evaluate(Concern.t() | String.t() | map(), [map()], [map()] | map(), keyword()) ::
           {:ok, Result.t()} | {:error, atom()}
@@ -64,6 +71,7 @@ defmodule Fount.Intelligence.Diagnosis do
       investigations =
         needs
         |> Enum.map(&investigation/1)
+        |> Kernel.++(Enum.flat_map(diagnoses, &Map.get(&1, "next_investigations", [])))
         |> Kernel.++(Enum.flat_map(abstentions, &Map.get(&1, "next_investigations", [])))
         |> Enum.uniq()
 
@@ -97,9 +105,14 @@ defmodule Fount.Intelligence.Diagnosis do
     cond do
       unknown != [] ->
         need =
-          evidence_need!(hypothesis, unknown, "Referenced source evidence is unavailable in the current request.")
+          evidence_need!(
+            hypothesis,
+            unknown,
+            "Referenced source evidence is unavailable in the current request."
+          )
 
-        {diagnoses, needs ++ [need], abstentions ++ [abstention(hypothesis, "missing_source_evidence")]}
+        {diagnoses, needs ++ [need],
+         abstentions ++ [abstention(hypothesis, "missing_source_evidence")]}
 
       is_nil(hypothesis["assessment"]) ->
         need =
@@ -131,13 +144,6 @@ defmodule Fount.Intelligence.Diagnosis do
 
     cond do
       support_status == "supported" ->
-        uncertainty =
-          cond do
-            counter_status == "supported" -> "high"
-            counter_status in ["uncertain", "insufficient_evidence", "error"] -> "medium"
-            true -> "low"
-          end
-
         {:ok,
          %{
            "id" => diagnosis_id(concern.id, hypothesis),
@@ -148,7 +154,7 @@ defmodule Fount.Intelligence.Diagnosis do
            "claim_class" => "model_estimated_interpretation",
            "support" => evidence_records(evidence, support_ids),
            "counterevidence" => evidence_records(evidence, counter_ids),
-           "uncertainty" => uncertainty,
+           "uncertainty" => counter_uncertainty(counter_status),
            "assessment" => assessment,
            "alternatives" => hypothesis["alternatives"],
            "missing_evidence" => [],
@@ -198,6 +204,13 @@ defmodule Fount.Intelligence.Diagnosis do
          )}
     end
   end
+
+  defp counter_uncertainty("supported"), do: "high"
+
+  defp counter_uncertainty(status) when status in ["uncertain", "insufficient_evidence", "error"],
+    do: "medium"
+
+  defp counter_uncertainty(_), do: "low"
 
   defp evidence_need!(hypothesis, ids, reason) do
     {:ok, need} =
@@ -268,7 +281,10 @@ defmodule Fount.Intelligence.Diagnosis do
     |> case do
       {:ok, normalized} ->
         ids = Enum.map(normalized, & &1["id"])
-        if length(ids) == length(Enum.uniq(ids)), do: {:ok, normalized}, else: {:error, :duplicate_hypothesis}
+
+        if length(ids) == length(Enum.uniq(ids)),
+          do: {:ok, normalized},
+          else: {:error, :duplicate_hypothesis}
 
       error ->
         error
@@ -280,13 +296,13 @@ defmodule Fount.Intelligence.Diagnosis do
   defp normalize_hypothesis(value) when is_map(value) do
     value = stringify(value)
     hypothesis = value["hypothesis"]
-    code = value["code"] || "writer_hypothesis"
-    evidence_ids = value["evidence_ids"] || []
-    alternatives = value["alternatives"] || []
-    strengths = value["protected_strengths"] || []
-    next = value["next_investigations"] || []
-    strategies = value["strategy_classes"] || []
-    scope = value["scope"] || %{}
+    code = field_or(value, "code", "writer_hypothesis")
+    evidence_ids = field_or(value, "evidence_ids", [])
+    alternatives = field_or(value, "alternatives", [])
+    strengths = field_or(value, "protected_strengths", [])
+    next = field_or(value, "next_investigations", [])
+    strategies = field_or(value, "strategy_classes", [])
+    scope = field_or(value, "scope", %{})
 
     identity = %{
       "code" => code,
@@ -295,12 +311,19 @@ defmodule Fount.Intelligence.Diagnosis do
       "evidence_ids" => evidence_ids
     }
 
-    id = value["id"] || "hypothesis-" <> String.slice(CanonicalJSON.hash(identity), 0, 24)
+    id = field_or(value, "id", "hypothesis-" <> String.slice(CanonicalJSON.hash(identity), 0, 24))
 
     valid =
-      text?(id) and text?(code) and text?(hypothesis) and strings?(evidence_ids) and
-        strings?(alternatives) and strings?(strengths) and strings?(next) and strings?(strategies) and
-        is_map(scope) and (is_nil(value["assessment"]) or is_map(value["assessment"]))
+      valid_hypothesis_fields?(%{
+        id: id,
+        code: code,
+        hypothesis: hypothesis,
+        evidence_ids: evidence_ids,
+        alternatives: alternatives,
+        strengths: strengths,
+        next: next,
+        strategies: strategies
+      }) and is_map(scope) and (is_nil(value["assessment"]) or is_map(value["assessment"]))
 
     if valid do
       {:ok,
@@ -309,7 +332,7 @@ defmodule Fount.Intelligence.Diagnosis do
          "code" => code,
          "hypothesis" => hypothesis,
          "scope" => scope,
-         "evidence_ids" => Enum.uniq(evidence_ids),
+         "evidence_ids" => evidence_ids,
          "alternatives" => alternatives,
          "protected_strengths" => strengths,
          "next_investigations" => next,
@@ -325,20 +348,43 @@ defmodule Fount.Intelligence.Diagnosis do
 
   defp normalize_hypothesis(_), do: {:error, :invalid_hypothesis}
 
-  defp normalize_evidence(values) when is_list(values) do
-    Enum.reduce_while(values, {:ok, %{}}, fn value, {:ok, acc} ->
-      case evidence_record(value) do
-        {:ok, %{"id" => id} = record} ->
-          if Map.has_key?(acc, id), do: {:halt, {:error, :duplicate_evidence}}, else: {:cont, {:ok, Map.put(acc, id, record)}}
+  defp field_or(value, key, default), do: Map.get(value, key) || default
 
-        error ->
-          {:halt, error}
-      end
-    end)
+  defp valid_hypothesis_fields?(fields) do
+    Enum.all?([fields.id, fields.code, fields.hypothesis], &text?/1) and
+      Enum.all?(
+        [
+          fields.evidence_ids,
+          fields.alternatives,
+          fields.strengths,
+          fields.next,
+          fields.strategies
+        ],
+        &strings?/1
+      ) and fields.evidence_ids != [] and
+      length(fields.evidence_ids) == length(Enum.uniq(fields.evidence_ids))
   end
 
-  defp normalize_evidence(values) when is_map(values), do: values |> Map.values() |> normalize_evidence()
+  defp normalize_evidence(values) when is_list(values) do
+    Enum.reduce_while(values, {:ok, %{}}, &add_evidence_record/2)
+  end
+
+  defp normalize_evidence(values) when is_map(values),
+    do: values |> Map.values() |> normalize_evidence()
+
   defp normalize_evidence(_), do: {:error, :invalid_evidence}
+
+  defp add_evidence_record(value, {:ok, acc}) do
+    case evidence_record(value) do
+      {:ok, %{"id" => id} = record} ->
+        if Map.has_key?(acc, id),
+          do: {:halt, {:error, :duplicate_evidence}},
+          else: {:cont, {:ok, Map.put(acc, id, record)}}
+
+      error ->
+        {:halt, error}
+    end
+  end
 
   defp evidence_record(value) when is_map(value) do
     value = stringify(value)

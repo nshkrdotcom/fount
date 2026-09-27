@@ -58,10 +58,14 @@ defmodule Fount.Intelligence.Acquisition.ContextBuilder do
     end
   end
 
-  defp concern_map(value) when is_binary(value), do: value |> Concern.new() |> then(fn
-    {:ok, concern} -> {:ok, Concern.to_map(concern)}
-    error -> error
-  end)
+  defp concern_map(value) when is_binary(value),
+    do:
+      value
+      |> Concern.new()
+      |> then(fn
+        {:ok, concern} -> {:ok, Concern.to_map(concern)}
+        error -> error
+      end)
 
   defp concern_map(_), do: {:error, :invalid_concern}
 
@@ -82,19 +86,15 @@ defmodule Fount.Intelligence.Acquisition.ContextBuilder do
   end
 
   defp plain_only?(map) when is_map(map) do
-    if Map.has_key?(map, "__struct__") or Map.has_key?(map, :__struct__) do
-      {:error, :struct_not_allowed}
-    else
-      Enum.reduce_while(map, :ok, fn {key, value}, :ok ->
-        if (is_binary(key) or is_atom(key)) and plain_only?(value) == :ok,
-          do: {:cont, :ok},
-          else: {:halt, {:error, :non_plain_context_value}}
-      end)
-    end
+    if Map.has_key?(map, "__struct__") or Map.has_key?(map, :__struct__),
+      do: {:error, :struct_not_allowed},
+      else: Enum.reduce_while(map, :ok, &plain_entry/2)
   end
 
   defp plain_only?(list) when is_list(list) do
-    if Enum.all?(list, &(plain_only?(&1) == :ok)), do: :ok, else: {:error, :non_plain_context_value}
+    if Enum.all?(list, &(plain_only?(&1) == :ok)),
+      do: :ok,
+      else: {:error, :non_plain_context_value}
   end
 
   defp plain_only?(value)
@@ -102,6 +102,12 @@ defmodule Fount.Intelligence.Acquisition.ContextBuilder do
        do: :ok
 
   defp plain_only?(_), do: {:error, :non_plain_context_value}
+
+  defp plain_entry({key, value}, :ok) do
+    if (is_binary(key) or is_atom(key)) and plain_only?(value) == :ok,
+      do: {:cont, :ok},
+      else: {:halt, {:error, :non_plain_context_value}}
+  end
 
   defp stringify(map) do
     Map.new(map, fn

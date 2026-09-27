@@ -81,7 +81,10 @@ defmodule Fount.Intelligence.Diagnosis.EvidenceNeed do
   defp get(map, "hypothesis_id"), do: Map.get(map, "hypothesis_id", Map.get(map, :hypothesis_id))
   defp get(map, "reason"), do: Map.get(map, "reason", Map.get(map, :reason))
   defp get(map, "evidence_ids"), do: Map.get(map, "evidence_ids", Map.get(map, :evidence_ids))
-  defp get(map, "context_requirements"), do: Map.get(map, "context_requirements", Map.get(map, :context_requirements))
+
+  defp get(map, "context_requirements"),
+    do: Map.get(map, "context_requirements", Map.get(map, :context_requirements))
+
   defp get(map, "optional"), do: Map.get(map, "optional", Map.get(map, :optional))
   defp get(map, "id"), do: Map.get(map, "id", Map.get(map, :id))
   defp text?(value), do: is_binary(value) and value != "" and String.valid?(value)

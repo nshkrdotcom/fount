@@ -1,7 +1,13 @@
 defmodule Fount.Intelligence.Playbooks.WriterRunner do
   @moduledoc "Imperative Phase-5 multi-pass shell. Observe acquisition stays here; Diagnosis stays pure."
 
-  alias Fount.Intelligence.Acquisition.{ContextBuilder, DiagnosticMeasurements, Measurements, Planner}
+  alias Fount.Intelligence.Acquisition.{
+    ContextBuilder,
+    DiagnosticMeasurements,
+    Measurements,
+    Planner
+  }
+
   alias Fount.Intelligence.Diagnosis
   alias Fount.Intelligence.Diagnosis.{EvidenceNeed, Result}
   alias Fount.Intelligence.Playbooks.WriterRegistry
@@ -11,18 +17,34 @@ defmodule Fount.Intelligence.Playbooks.WriterRunner do
 
   @default_provider_cap 250
 
-  @spec preflight(Fount.Screenplay.t(), String.t(), map(), keyword()) :: {:ok, map()} | {:error, term()}
+  @spec preflight(Fount.Screenplay.t(), String.t(), map(), keyword()) ::
+          {:ok, map()} | {:error, term()}
   def preflight(model, playbook, request, opts \\ []) do
     with {:ok, definition} <- WriterRegistry.fetch(playbook),
          {:ok, plan} <- Planner.plan(model, request, opts),
-         {:ok, initial} <- Diagnosis.evaluate(plan["concern"], plan["hypotheses"], plan["evidence"]),
+         {:ok, initial} <-
+           Diagnosis.evaluate(plan["concern"], plan["hypotheses"], plan["evidence"]),
          needed_ids = MapSet.new(Enum.map(initial.missing_evidence, & &1.hypothesis_id)),
          pending = Enum.filter(plan["hypotheses"], &MapSet.member?(needed_ids, &1["id"])),
          {:ok, cap} <- provider_cap(opts),
          {:ok, contextual_inputs} <- contextual_inputs(plan, pending, []),
-         {:ok, base} <- measurement_preflight(plan["base_inputs"], DiagnosticMeasurements.base(), model, opts, min(cap, length(plan["base_inputs"]))),
+         {:ok, base} <-
+           measurement_preflight(
+             plan["base_inputs"],
+             DiagnosticMeasurements.base(),
+             model,
+             opts,
+             min(cap, length(plan["base_inputs"]))
+           ),
          remaining = max(cap - min(cap, length(plan["base_inputs"])), 0),
-         {:ok, contextual} <- measurement_preflight(contextual_inputs, DiagnosticMeasurements.support(), model, opts, remaining) do
+         {:ok, contextual} <-
+           measurement_preflight(
+             contextual_inputs,
+             DiagnosticMeasurements.support(),
+             model,
+             opts,
+             remaining
+           ) do
       estimate = %{
         "targets" => length(plan["base_inputs"]) + length(contextual_inputs),
         "base_targets" => length(plan["base_inputs"]),
@@ -77,17 +99,28 @@ defmodule Fount.Intelligence.Playbooks.WriterRunner do
              ),
            base_assessments = base_assessments(plan, base),
            {:ok, base_reduction} <-
-             Diagnosis.reduce_base(base_assessments, Enum.map(plan["evidence"], & &1["evidence_id"])),
-           {:ok, first_pass} <- Diagnosis.evaluate(plan["concern"], plan["hypotheses"], plan["evidence"]),
+             Diagnosis.reduce_base(
+               base_assessments,
+               Enum.map(plan["evidence"], & &1["evidence_id"])
+             ),
+           {:ok, first_pass} <-
+             Diagnosis.evaluate(plan["concern"], plan["hypotheses"], plan["evidence"]),
            needed_ids = MapSet.new(Enum.map(first_pass.missing_evidence, & &1.hypothesis_id)),
            pending = Enum.filter(plan["hypotheses"], &MapSet.member?(needed_ids, &1["id"])),
            {:ok, contextual_inputs} <- contextual_inputs(plan, pending, base_reduction["signals"]),
            remaining = max(cap - base["scheduled"], 0),
-           {:ok, contextual} <- contextual_run(provider, contextual_inputs, model, opts, remaining),
+           {:ok, contextual} <-
+             contextual_run(provider, contextual_inputs, model, opts, remaining),
            assessed = merge_assessments(plan["hypotheses"], contextual),
-           {:ok, final} <- Diagnosis.evaluate(plan["concern"], assessed, plan["evidence"]),
-           {:ok, packet} <- packet(definition, plan, preflight, base, contextual, base_reduction, first_pass, final, budget) do
-        {:ok, packet}
+           {:ok, final} <- Diagnosis.evaluate(plan["concern"], assessed, plan["evidence"]) do
+        packet(definition, plan, preflight, %{
+          base: base,
+          contextual: contextual,
+          base_reduction: base_reduction,
+          first_pass: first_pass,
+          final: final,
+          budget: budget
+        })
       end
     end
   rescue
@@ -96,60 +129,68 @@ defmodule Fount.Intelligence.Playbooks.WriterRunner do
   end
 
   defp measurement_preflight(inputs, spec, model, opts, cap) do
-    Measurements.preflight(inputs, spec["questions"], measurement_opts(opts, model, spec["lens_id"], cap))
+    Measurements.preflight(
+      inputs,
+      spec["questions"],
+      measurement_opts(opts, model, spec["lens_id"], cap)
+    )
   end
 
   defp contextual_run(_provider, [], _model, _opts, _cap), do: {:ok, empty_measurement_report()}
 
   defp contextual_run(provider, inputs, model, opts, cap) do
     spec = DiagnosticMeasurements.support()
-    Measurements.evaluate(provider, inputs, spec["questions"], measurement_opts(opts, model, spec["lens_id"], cap))
+
+    Measurements.evaluate(
+      provider,
+      inputs,
+      spec["questions"],
+      measurement_opts(opts, model, spec["lens_id"], cap)
+    )
   end
 
   defp contextual_inputs(plan, hypotheses, base_assessments) do
     source_by_id = Map.new(plan["evidence"], &{&1["evidence_id"], &1})
 
     Enum.reduce_while(hypotheses, {:ok, []}, fn hypothesis, {:ok, acc} ->
-      evidence = Enum.map(hypothesis["evidence_ids"], &Map.get(source_by_id, &1))
+      case contextual_input(plan, hypothesis, base_assessments, source_by_id) do
+        {:ok, input} -> {:cont, {:ok, acc ++ [input]}}
+        {:error, reason} -> {:halt, {:error, reason}}
+      end
+    end)
+  end
 
-      if evidence == [] or Enum.any?(evidence, &is_nil/1) do
-        {:halt, {:error, :missing_source_evidence}}
-      else
-        assessments = Enum.filter(base_assessments, &(&1["evidence_id"] in hypothesis["evidence_ids"]))
+  defp contextual_input(plan, hypothesis, base_assessments, source_by_id) do
+    evidence = Enum.map(hypothesis["evidence_ids"], &Map.get(source_by_id, &1))
 
-        case ContextBuilder.build(
+    if evidence == [] or Enum.any?(evidence, &is_nil/1) do
+      {:error, :missing_source_evidence}
+    else
+      assessments =
+        Enum.filter(base_assessments, &(&1["evidence_id"] in hypothesis["evidence_ids"]))
+
+      with {:ok, context} <-
+             ContextBuilder.build(
                DiagnosticMeasurements.support()["lens_id"],
                plan["concern"],
                hypothesis["context"] || %{},
                assessments
              ) do
-          {:ok, context} ->
-            input = %{
-              "id" => "hypothesis:" <> hypothesis["id"],
-              "state" => %{
-                "concern" => Diagnosis.Concern.to_map(plan["concern"]),
-                "hypothesis" => Map.take(hypothesis, ~w(id code hypothesis alternatives protected_strengths)),
-                "evidence" =>
-                  Enum.map(evidence, fn source ->
-                    %{
-                      "evidence_id" => source["evidence_id"],
-                      "excerpt" => source["excerpt"],
-                      "target" => source["target"]
-                    }
-                  end)
-              },
-              "target" => hd(evidence)["target"],
-              "evidence" => evidence,
-              "context" => context
-            }
-
-            {:cont, {:ok, acc ++ [input]}}
-
-          {:error, reason} ->
-            {:halt, {:error, reason}}
-        end
+        {:ok,
+         %{
+           "id" => "hypothesis:" <> hypothesis["id"],
+           "state" => %{
+             "concern" => Diagnosis.Concern.to_map(plan["concern"]),
+             "hypothesis" =>
+               Map.take(hypothesis, ~w(id code hypothesis alternatives protected_strengths)),
+             "evidence" => Enum.map(evidence, &Map.take(&1, ~w(evidence_id excerpt target)))
+           },
+           "target" => hd(evidence)["target"],
+           "evidence" => evidence,
+           "context" => context
+         }}
       end
-    end)
+    end
   end
 
   defp base_assessments(plan, report) do
@@ -189,7 +230,16 @@ defmodule Fount.Intelligence.Playbooks.WriterRunner do
     end)
   end
 
-  defp packet(definition, plan, preflight, base, contextual, base_reduction, first_pass, final, budget) do
+  defp packet(definition, plan, preflight, state) do
+    %{
+      base: base,
+      contextual: contextual,
+      base_reduction: base_reduction,
+      first_pass: first_pass,
+      final: final,
+      budget: budget
+    } = state
+
     final_map = Result.to_map(final)
     errors = base["errors"] ++ contextual["errors"]
     skipped = skipped(base) ++ skipped(contextual)
@@ -197,7 +247,11 @@ defmodule Fount.Intelligence.Playbooks.WriterRunner do
     acquisition_complete = base["status"] == "complete" and contextual["status"] == "complete"
     evidence_complete = final.missing_evidence == []
     selection_complete = not plan["evidence_scope"]["truncated_by_host_limit"]
-    status = if acquisition_complete and evidence_complete and selection_complete, do: "complete", else: "partial"
+
+    status =
+      if acquisition_complete and evidence_complete and selection_complete,
+        do: "complete",
+        else: "partial"
 
     coverage = %{
       "status" => status,
@@ -256,43 +310,50 @@ defmodule Fount.Intelligence.Playbooks.WriterRunner do
       }
     ]
 
-    WriterPacket.new(definition["id"], plan["source_revision"], Diagnosis.Concern.to_map(plan["concern"]), %{
-      status: status,
-      scope: plan["concern"].scope,
-      intent: writer_intent(plan),
-      finding: finding,
-      coverage: coverage,
-      evidence: plan["evidence"],
-      derived_state: %{
-        "base_reduction" => base_reduction,
-        "first_pass_missing_evidence" =>
-          Enum.map(first_pass.missing_evidence, &EvidenceNeed.to_map/1)
-      },
-      trajectory: [],
-      diagnoses: final.diagnoses,
-      abstentions: final.abstentions,
-      counterevidence: counterevidence,
-      alternatives: alternatives,
-      uncertainty: uncertainty,
-      missing_evidence: final_map["missing_evidence"],
-      protected_strengths: final.protected_strengths,
-      next_investigations: final.next_investigations,
-      strategies: plan["strategies"],
-      revision_comparison: plan["revision_comparison"],
-      resource_usage: resource_usage,
-      errors: errors,
-      provenance: %{
-        "playbook_definition" => definition,
-        "analysis_passes" => analysis_passes,
-        "base_measurement_spec_sha256" => base["measurement_spec_sha256"],
-        "contextual_measurement_spec_sha256" => contextual["measurement_spec_sha256"]
-      },
-      limitations: final.limitations ++ [
-        "The ten Phase-5 playbooks provide a diagnosis shell; capability-family semantics remain later phases.",
-        "No human usefulness or reader-agreement claim is made unless a separate rights-cleared study records one."
-      ],
-      candidate: nil
-    })
+    WriterPacket.new(
+      definition["id"],
+      plan["source_revision"],
+      Diagnosis.Concern.to_map(plan["concern"]),
+      %{
+        status: status,
+        scope: plan["concern"].scope,
+        intent: writer_intent(plan),
+        finding: finding,
+        coverage: coverage,
+        evidence: plan["evidence"],
+        derived_state: %{
+          "base_reduction" => base_reduction,
+          "first_pass_missing_evidence" =>
+            Enum.map(first_pass.missing_evidence, &EvidenceNeed.to_map/1)
+        },
+        trajectory: [],
+        diagnoses: final.diagnoses,
+        abstentions: final.abstentions,
+        counterevidence: counterevidence,
+        alternatives: alternatives,
+        uncertainty: uncertainty,
+        missing_evidence: final_map["missing_evidence"],
+        protected_strengths: final.protected_strengths,
+        next_investigations: final.next_investigations,
+        strategies: plan["strategies"],
+        revision_comparison: plan["revision_comparison"],
+        resource_usage: resource_usage,
+        errors: errors,
+        provenance: %{
+          "playbook_definition" => definition,
+          "analysis_passes" => analysis_passes,
+          "base_measurement_spec_sha256" => base["measurement_spec_sha256"],
+          "contextual_measurement_spec_sha256" => contextual["measurement_spec_sha256"]
+        },
+        limitations:
+          final.limitations ++
+            [
+              "The ten Phase-5 playbooks provide a diagnosis shell; capability-family semantics remain later phases.",
+              "No human usefulness or reader-agreement claim is made unless a separate rights-cleared study records one."
+            ],
+        candidate: nil
+      }
+    )
   end
 
   defp concise_finding(%Result{} = result) do
@@ -306,7 +367,8 @@ defmodule Fount.Intelligence.Playbooks.WriterRunner do
         "The current evidence supports this hypothesis: #{hypothesis} Counterevidence and uncertainty remain explicit below."
 
       hypotheses ->
-        shown = hypotheses |> Enum.take(3) |> Enum.join("; ")
+        shown = hypotheses |> Enum.take(3) |> Enum.map_join("; ", &String.trim_trailing(&1, "."))
+
         remainder = max(length(hypotheses) - 3, 0)
         suffix = if remainder > 0, do: " (+#{remainder} more)", else: ""
 
@@ -342,17 +404,22 @@ defmodule Fount.Intelligence.Playbooks.WriterRunner do
 
   defp provider_cap(opts) when is_list(opts) do
     value = Keyword.get(opts, :max_playbook_provider_requests, @default_provider_cap)
-    if is_integer(value) and value >= 0 and value <= 10_000, do: {:ok, value}, else: {:error, :invalid_resource_cap}
-  end
 
-  defp provider_cap(_), do: {:error, :invalid_resource_cap}
+    if is_integer(value) and value >= 0 and value <= 10_000,
+      do: {:ok, value},
+      else: {:error, :invalid_resource_cap}
+  end
 
   defp skipped(report) do
     for entry <- report["entries"], entry["status"] != "complete", do: entry["input_id"]
   end
 
   defp hosted_cost(base, contextual) do
-    values = [get_in(base, ["resource_usage", "actual", "hosted_cost"]), get_in(contextual, ["resource_usage", "actual", "hosted_cost"])]
+    values = [
+      get_in(base, ["resource_usage", "actual", "hosted_cost"]),
+      get_in(contextual, ["resource_usage", "actual", "hosted_cost"])
+    ]
+
     if Enum.all?(values, &is_number/1), do: Enum.sum(values), else: nil
   end
 

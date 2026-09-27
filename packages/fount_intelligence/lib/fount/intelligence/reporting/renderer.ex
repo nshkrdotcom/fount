@@ -33,7 +33,7 @@ defmodule Fount.Intelligence.Reporting.Renderer do
       evidence(value["evidence"]),
       "",
       "## Derived state",
-      code_json(value["derived_state"]),
+      derived_state(value["derived_state"]),
       "",
       "## Trajectory",
       bullets(value["trajectory"]),
@@ -45,7 +45,7 @@ defmodule Fount.Intelligence.Reporting.Renderer do
       bullets(value["abstentions"]),
       "",
       "## Counterevidence and alternatives",
-      bullets(value["counterevidence"] ++ value["alternatives"]),
+      evidence(value["counterevidence"]) <> "\n" <> bullets(value["alternatives"]),
       "",
       "## Uncertainty and missing evidence",
       bullets(value["uncertainty"] ++ value["missing_evidence"]),
@@ -63,7 +63,7 @@ defmodule Fount.Intelligence.Reporting.Renderer do
       bullets(value["revision_comparison"] || []),
       "",
       "## Resource usage",
-      code_json(value["resource_usage"]),
+      resource_usage(value["resource_usage"]),
       "",
       "## Errors",
       bullets(value["errors"]),
@@ -91,10 +91,16 @@ defmodule Fount.Intelligence.Reporting.Renderer do
       support = length(Map.get(diagnosis, "support", []))
       counter = length(Map.get(diagnosis, "counterevidence", []))
 
-      "### " <> Map.get(diagnosis, "hypothesis", "Diagnosis") <> "\n" <>
-        "- Uncertainty: " <> Map.get(diagnosis, "uncertainty", "unknown") <> "\n" <>
+      "### " <>
+        Map.get(diagnosis, "hypothesis", "Diagnosis") <>
+        "\n" <>
+        "- Uncertainty: " <>
+        Map.get(diagnosis, "uncertainty", "unknown") <>
+        "\n" <>
         "- Supporting evidence records: #{support}\n" <>
-        "- Counterevidence records: #{counter}"
+        "- Counterevidence records: #{counter}\n" <>
+        "- Inspect source evidence: " <>
+        Enum.map_join(Map.get(diagnosis, "support", []), ", ", &"`#{&1["id"]}`")
     end)
   end
 
@@ -120,6 +126,39 @@ defmodule Fount.Intelligence.Reporting.Renderer do
 
   defp short(value) when is_binary(value), do: value
   defp short(value), do: CanonicalJSON.encode!(value)
-  defp code_json(value), do: "```json\n" <> CanonicalJSON.encode!(value) <> "\n```"
-  defp label(id), do: id |> String.replace("_", " ") |> String.split() |> Enum.map_join(" ", &String.capitalize/1)
+
+  defp derived_state(%{"base_reduction" => base, "first_pass_missing_evidence" => needs}) do
+    "- Base relevance: #{short(base["counts"])}\n" <>
+      "- Source evidence filtered: #{base["evidence_filtered"]}\n" <>
+      "- Contextual evidence needs identified: #{length(needs)}"
+  end
+
+  defp derived_state(value), do: bullets(value)
+
+  defp resource_usage(%{"preflight" => preflight, "actual" => actual}) do
+    estimate = preflight["estimate"] || %{}
+    base = get_in(actual, ["base", "actual"]) || %{}
+    contextual = get_in(actual, ["contextual", "actual"]) || %{}
+    budget = actual["analysis_budget"] || %{}
+
+    [
+      "- Preflight targets: #{reported(estimate["targets"], "unknown")}",
+      "- Base acquired: #{reported(base["successful_states"], 0)}",
+      "- Contextual acquired: #{reported(contextual["successful_states"], 0)}",
+      "- Provider requests: #{reported(base["provider_requests"], 0) + reported(contextual["provider_requests"], 0)}",
+      "- Cache hits: #{reported(base["cache_hits"], 0) + reported(contextual["cache_hits"], 0)}",
+      "- Analysis budget: #{reported(budget["spent"], 0)} / #{reported(budget["limit"], "unknown")}",
+      "- Hosted cost: #{reported(actual["hosted_cost"], "unknown")}"
+    ]
+    |> Enum.join("\n")
+  end
+
+  defp resource_usage(value), do: bullets(value)
+
+  defp reported(nil, fallback), do: fallback
+  defp reported(value, _fallback), do: value
+
+  defp label(id),
+    do:
+      id |> String.replace("_", " ") |> String.split() |> Enum.map_join(" ", &String.capitalize/1)
 end

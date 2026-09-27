@@ -28,20 +28,16 @@ defmodule Fount.Intelligence.Diagnosis.Concern do
     strengths = normalized["protected_strengths"] || []
     source = normalized["source"] || "writer"
 
-    with true <- text?(statement),
-         true <- is_nil(desired_effect) or text?(desired_effect),
-         true <- is_map(scope),
-         true <- is_map(intent),
-         true <- strings?(strengths),
-         true <- text?(source),
-         {:ok, _} <- CanonicalJSON.encode(%{
-           "statement" => statement,
-           "desired_effect" => desired_effect,
-           "scope" => scope,
-           "intent" => intent,
-           "protected_strengths" => strengths,
-           "source" => source
-         }) do
+    with true <- valid_fields?(statement, desired_effect, scope, intent, strengths, source),
+         {:ok, _} <-
+           CanonicalJSON.encode(%{
+             "statement" => statement,
+             "desired_effect" => desired_effect,
+             "scope" => scope,
+             "intent" => intent,
+             "protected_strengths" => strengths,
+             "source" => source
+           }) do
       identity = %{
         "statement" => statement,
         "desired_effect" => desired_effect,
@@ -75,6 +71,11 @@ defmodule Fount.Intelligence.Diagnosis.Concern do
   end
 
   def new(_), do: {:error, :invalid_concern}
+
+  defp valid_fields?(statement, desired_effect, scope, intent, strengths, source) do
+    text?(statement) and (is_nil(desired_effect) or text?(desired_effect)) and is_map(scope) and
+      is_map(intent) and strings?(strengths) and text?(source)
+  end
 
   @spec to_map(t()) :: map()
   def to_map(%__MODULE__{} = concern) do

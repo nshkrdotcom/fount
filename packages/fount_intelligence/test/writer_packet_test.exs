@@ -15,7 +15,15 @@ defmodule Fount.Intelligence.WriterPacketTest do
           finding: "The current evidence supports one diagnostic hypothesis.",
           evidence: [%{"id" => "ev-1", "excerpt" => "Mara looks away."}],
           derived_state: %{"reader_question" => "Will she answer?"},
-          diagnoses: [%{"id" => "d1", "hypothesis" => "The tactic stops changing.", "uncertainty" => "medium", "support" => [], "counterevidence" => []}],
+          diagnoses: [
+            %{
+              "id" => "d1",
+              "hypothesis" => "The tactic stops changing.",
+              "uncertainty" => "medium",
+              "support" => [],
+              "counterevidence" => []
+            }
+          ],
           strategies: ["change_tactic_without_changing_reveal"],
           candidate: nil
         }

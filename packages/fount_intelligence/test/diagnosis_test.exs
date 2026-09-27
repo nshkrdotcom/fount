@@ -17,13 +17,35 @@ defmodule Fount.Intelligence.DiagnosisTest do
     {:ok, result} =
       Diagnosis.evaluate(
         %{"statement" => "The exchange loses pressure."},
-        [%{"id" => "h1", "hypothesis" => "The tactic stops changing.", "evidence_ids" => ["ev-1"]}],
+        [
+          %{
+            "id" => "h1",
+            "hypothesis" => "The tactic stops changing.",
+            "evidence_ids" => ["ev-1"]
+          }
+        ],
         @evidence
       )
 
     assert result.diagnoses == []
-    assert [%{measurement: "diagnosis.evidence_support", hypothesis_id: "h1"}] = result.missing_evidence
+
+    assert [%{measurement: "diagnosis.evidence_support", hypothesis_id: "h1"}] =
+             result.missing_evidence
+
     assert [%{"reason" => "needs_measurement"}] = result.abstentions
+  end
+
+  test "pure diagnosis rejects empty and duplicate hypothesis evidence IDs" do
+    hypothesis = %{"id" => "h1", "hypothesis" => "The tactic stops changing."}
+
+    for ids <- [[], ["ev-1", "ev-1"]] do
+      assert {:error, :invalid_hypothesis} =
+               Diagnosis.evaluate(
+                 "The exchange loses pressure.",
+                 [Map.put(hypothesis, "evidence_ids", ids)],
+                 @evidence
+               )
+    end
   end
 
   test "competing supported diagnoses coexist and counterevidence remains visible" do
@@ -45,6 +67,7 @@ defmodule Fount.Intelligence.DiagnosisTest do
         "code" => "information_without_leverage",
         "hypothesis" => "Information accumulates without changing leverage.",
         "evidence_ids" => ["ev-1"],
+        "next_investigations" => ["Inspect the next exchange for a changed consequence."],
         "assessment" => %{
           "support" => %{"status" => "supported", "probability" => 0.87},
           "counterevidence" => %{"status" => "supported", "probability" => 0.81},
@@ -54,9 +77,15 @@ defmodule Fount.Intelligence.DiagnosisTest do
     ]
 
     {:ok, result} = Diagnosis.evaluate("The exchange loses pressure.", hypotheses, @evidence)
-    assert Enum.map(result.diagnoses, & &1["code"]) == ["repeated_tactic", "information_without_leverage"]
+
+    assert Enum.map(result.diagnoses, & &1["code"]) == [
+             "repeated_tactic",
+             "information_without_leverage"
+           ]
+
     assert Enum.at(result.diagnoses, 1)["uncertainty"] == "high"
     assert length(Enum.at(result.diagnoses, 1)["counterevidence"]) == 1
+    assert "Inspect the next exchange for a changed consequence." in result.next_investigations
     refute Enum.any?(result.diagnoses, &Map.has_key?(&1, "severity"))
     refute Enum.any?(result.diagnoses, &Map.has_key?(&1, "quality_score"))
   end

@@ -9,7 +9,9 @@ defmodule Fount.Intelligence.Evaluation.Metrics do
   @default_thresholds [0.0, 0.5, 0.7, 0.8, 0.9, 0.95]
 
   @spec evaluate(String.t() | atom(), [map()], keyword()) :: {:ok, map()} | {:error, atom()}
-  def evaluate(kind, cases, opts \\ []) when is_list(cases) and cases != [] do
+  def evaluate(kind, cases, opts \\ [])
+
+  def evaluate(kind, cases, opts) when is_list(cases) and cases != [] do
     case to_string(kind) do
       "noul" -> categorical("noul", cases, opts)
       "choice" -> categorical("choice", cases, opts)
@@ -34,7 +36,8 @@ defmodule Fount.Intelligence.Evaluation.Metrics do
          "log_loss" => log_loss,
          "expected_calibration_error" => calibration.ece,
          "calibration_bins" => calibration.bins,
-         "abstention" => abstention(prepared, Keyword.get(opts, :thresholds, @default_thresholds)),
+         "abstention" =>
+           abstention(prepared, Keyword.get(opts, :thresholds, @default_thresholds)),
          "human_disagreement_preserved" => true,
          "metric_notes" => [
            "Human labels are evaluated as empirical distributions, not adjudicated consensus.",
@@ -52,7 +55,10 @@ defmodule Fount.Intelligence.Evaluation.Metrics do
        categorical
        |> Map.put("kind", "score")
        |> Map.put("ordinal_mean_absolute_error", mean(prepared, & &1.absolute_error))
-       |> Map.put("ordinal_root_mean_square_error", :math.sqrt(mean(prepared, & &1.squared_error)))
+       |> Map.put(
+         "ordinal_root_mean_square_error",
+         :math.sqrt(mean(prepared, & &1.squared_error))
+       )
        |> Map.put("ordinal_cases", length(prepared))}
     end
   end
@@ -72,11 +78,17 @@ defmodule Fount.Intelligence.Evaluation.Metrics do
 
     with true <- domain != [] and valid_distribution?(distribution),
          true <- Enum.all?(labels, &(is_binary(&1) and &1 in domain)) do
-      human = labels |> Enum.frequencies() |> Map.new(fn {label, count} -> {label, count / length(labels)} end)
+      human =
+        labels
+        |> Enum.frequencies()
+        |> Map.new(fn {label, count} -> {label, count / length(labels)} end)
+
       selected = selected(distribution)
       confidence = distribution[selected]
       support = Map.get(human, selected, 0.0)
-      brier = Enum.sum(Enum.map(domain, &:math.pow(distribution[&1] - Map.get(human, &1, 0.0), 2)))
+
+      brier =
+        Enum.sum(Enum.map(domain, &:math.pow(distribution[&1] - Map.get(human, &1, 0.0), 2)))
 
       log_loss =
         -Enum.sum(
@@ -101,24 +113,29 @@ defmodule Fount.Intelligence.Evaluation.Metrics do
   defp categorical_case(_), do: {:error, :invalid_case}
 
   defp prepare_ordinal(cases) do
-    Enum.reduce_while(cases, {:ok, []}, fn
-      %{"distribution" => distribution, "human_ordinals" => labels}, {:ok, acc}
-      when is_map(distribution) and is_list(labels) and labels != [] ->
-        with {:ok, values} <- ordinal_distribution(distribution),
-             true <- Enum.all?(labels, &is_integer/1),
-             true <- Enum.all?(labels, fn value -> value in Enum.map(values, &elem(&1, 0)) end) do
-          predicted = Enum.sum(Enum.map(values, fn {ordinal, p} -> ordinal * p end))
-          actual = Enum.sum(labels) / length(labels)
-          error = predicted - actual
-          {:cont, {:ok, acc ++ [%{absolute_error: abs(error), squared_error: error * error}]}}
-        else
-          _ -> {:halt, {:error, :invalid_evaluation_case}}
-        end
-
-      _, _ ->
-        {:halt, {:error, :invalid_evaluation_case}}
+    Enum.reduce_while(cases, {:ok, []}, fn case_data, {:ok, acc} ->
+      case ordinal_case(case_data) do
+        {:ok, value} -> {:cont, {:ok, acc ++ [value]}}
+        error -> {:halt, error}
+      end
     end)
   end
+
+  defp ordinal_case(%{"distribution" => distribution, "human_ordinals" => labels})
+       when is_map(distribution) and is_list(labels) and labels != [] do
+    with {:ok, values} <- ordinal_distribution(distribution),
+         true <- Enum.all?(labels, &is_integer/1),
+         true <- Enum.all?(labels, fn value -> value in Enum.map(values, &elem(&1, 0)) end) do
+      predicted = Enum.sum(Enum.map(values, fn {ordinal, p} -> ordinal * p end))
+      actual = Enum.sum(labels) / length(labels)
+      error = predicted - actual
+      {:ok, %{absolute_error: abs(error), squared_error: error * error}}
+    else
+      _ -> {:error, :invalid_evaluation_case}
+    end
+  end
+
+  defp ordinal_case(_), do: {:error, :invalid_evaluation_case}
 
   defp ordinal_as_categorical(cases) do
     Enum.reduce_while(cases, {:ok, []}, fn
@@ -126,7 +143,10 @@ defmodule Fount.Intelligence.Evaluation.Metrics do
         converted =
           case_data
           |> Map.delete("human_ordinals")
-          |> Map.put("distribution", Map.new(distribution, fn {key, value} -> {to_string(key), value} end))
+          |> Map.put(
+            "distribution",
+            Map.new(distribution, fn {key, value} -> {to_string(key), value} end)
+          )
           |> Map.put("human_labels", Enum.map(labels, &to_string/1))
 
         {:cont, {:ok, acc ++ [converted]}}
@@ -148,9 +168,10 @@ defmodule Fount.Intelligence.Evaluation.Metrics do
     probabilities = Enum.map(values, &elem(&1, 1))
 
     valid =
-      values != [] and Enum.all?(values, fn {ordinal, probability} ->
-        is_integer(ordinal) and is_number(probability) and probability >= 0 and probability <= 1
-      end) and abs(Enum.sum(probabilities) - 1.0) <= 0.020000000001
+      values != [] and
+        Enum.all?(values, fn {ordinal, probability} ->
+          is_integer(ordinal) and is_number(probability) and probability >= 0 and probability <= 1
+        end) and abs(Enum.sum(probabilities) - 1.0) <= 0.020000000001
 
     if valid, do: {:ok, Enum.sort(values)}, else: {:error, :invalid_ordinal_distribution}
   end
@@ -207,8 +228,10 @@ defmodule Fount.Intelligence.Evaluation.Metrics do
     |> elem(0)
   end
 
-  defp valid_distribution?(distribution) when is_map(distribution) and map_size(distribution) >= 2 do
+  defp valid_distribution?(distribution)
+       when is_map(distribution) and map_size(distribution) >= 2 do
     values = Map.values(distribution)
+
     Enum.all?(Map.keys(distribution), &is_binary/1) and
       Enum.all?(values, &(is_number(&1) and &1 >= 0 and &1 <= 1)) and
       abs(Enum.sum(values) - 1.0) <= 0.020000000001

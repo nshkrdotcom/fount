@@ -5,15 +5,28 @@ defmodule Fount.Intelligence.Evaluation do
   longitudinal resource calibration.
   """
 
-  alias Fount.Intelligence.Evaluation.{Annotation, Benchmark, CorpusManifest, Drift, Metrics, Resources, Suite}
+  alias Fount.Intelligence.Evaluation.{
+    Annotation,
+    Benchmark,
+    CorpusManifest,
+    Drift,
+    Metrics,
+    Resources,
+    Suite
+  }
 
   def validate_corpus_manifest(manifest), do: CorpusManifest.validate(manifest)
   def authorize_corpus_use(manifest, use_kind), do: CorpusManifest.authorize(manifest, use_kind)
   def summarize_annotations(annotations), do: Annotation.summarize_groups(annotations)
   def evaluate_measurements(kind, cases, opts \\ []), do: Metrics.evaluate(kind, cases, opts)
   def compare_drift(baseline, current), do: Drift.compare(baseline, current)
-  def validate_benchmark(fixture, current_question), do: Benchmark.validate(fixture, current_question)
-  def benchmark_regeneration_plan(fixture, current_question), do: Benchmark.regeneration_plan(fixture, current_question)
+
+  def validate_benchmark(fixture, current_question),
+    do: Benchmark.validate(fixture, current_question)
+
+  def benchmark_regeneration_plan(fixture, current_question),
+    do: Benchmark.regeneration_plan(fixture, current_question)
+
   def compare_resource_estimate(estimate, actual), do: Resources.compare(estimate, actual)
   def summarize_resource_history(history), do: Resources.summarize_history(history)
   def benchmark_catalog, do: Suite.catalog()

@@ -14,7 +14,14 @@ defmodule Fount.Intelligence.Evaluation.Benchmark do
 
   @spec freeze(String.t(), Question.t(), MeasurementResult.t(), Observation.t(), map(), keyword()) ::
           {:ok, map()} | {:error, atom()}
-  def freeze(fixture_id, %Question{} = question, %MeasurementResult{} = result, %Observation{} = observation, expected, opts \\ [])
+  def freeze(
+        fixture_id,
+        %Question{} = question,
+        %MeasurementResult{} = result,
+        %Observation{} = observation,
+        expected,
+        opts \\ []
+      )
       when is_binary(fixture_id) and fixture_id != "" and is_map(expected) do
     contract = Question.output_contract(question)
 
@@ -90,15 +97,22 @@ defmodule Fount.Intelligence.Evaluation.Benchmark do
   def regeneration_plan(_, _), do: {:error, :invalid_benchmark_fixture}
 
   defp validate_integrity(fixture) do
-    required = ~w(format fixture_id evidence_level question output_contract measurement_result observation expected_reasoning regression_tags fixture_sha256)
+    required =
+      ~w(format fixture_id evidence_level question output_contract measurement_result observation expected_reasoning regression_tags fixture_sha256)
 
     with true <- fixture["format"] == @format,
          true <- required -- Map.keys(fixture) == [],
          :ok <- validate_hash_only(fixture),
          :ok <- OutputContract.validate(fixture["output_contract"]),
-         true <- get_in(fixture, ["measurement_result", "output_contract_id"]) == get_in(fixture, ["output_contract", "id"]),
-         true <- get_in(fixture, ["measurement_result", "output_contract_sha256"]) == get_in(fixture, ["output_contract", "sha256"]),
-         true <- get_in(fixture, ["observation", "result", "id"]) == get_in(fixture, ["measurement_result", "id"]) do
+         true <-
+           get_in(fixture, ["measurement_result", "output_contract_id"]) ==
+             get_in(fixture, ["output_contract", "id"]),
+         true <-
+           get_in(fixture, ["measurement_result", "output_contract_sha256"]) ==
+             get_in(fixture, ["output_contract", "sha256"]),
+         true <-
+           get_in(fixture, ["observation", "result", "id"]) ==
+             get_in(fixture, ["measurement_result", "id"]) do
       :ok
     else
       _ -> {:error, :invalid_benchmark_fixture}
@@ -108,7 +122,10 @@ defmodule Fount.Intelligence.Evaluation.Benchmark do
   defp validate_hash_only(fixture) do
     hash = fixture["fixture_sha256"]
     body = Map.delete(fixture, "fixture_sha256")
-    if is_binary(hash) and hash == CanonicalJSON.hash(body), do: :ok, else: {:error, :invalid_fixture_digest}
+
+    if is_binary(hash) and hash == CanonicalJSON.hash(body),
+      do: :ok,
+      else: {:error, :invalid_fixture_digest}
   end
 
   defp stale(fixture, current) do

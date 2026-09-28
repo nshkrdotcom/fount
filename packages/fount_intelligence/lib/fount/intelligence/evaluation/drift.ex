@@ -14,11 +14,12 @@ defmodule Fount.Intelligence.Evaluation.Drift do
       {:ok,
        %{
          "matched_cases" => length(rows),
-         "missing_from_current" => Map.keys(left) -- Map.keys(right) |> Enum.sort(),
-         "new_in_current" => Map.keys(right) -- Map.keys(left) |> Enum.sort(),
+         "missing_from_current" => (Map.keys(left) -- Map.keys(right)) |> Enum.sort(),
+         "new_in_current" => (Map.keys(right) -- Map.keys(left)) |> Enum.sort(),
          "changed_selection_count" => Enum.count(rows, & &1["selection_changed"]),
          "mean_l1_distance" => if(rows == [], do: nil, else: mean(rows, "l1_distance")),
-         "max_l1_distance" => if(rows == [], do: nil, else: Enum.max(Enum.map(rows, & &1["l1_distance"]))),
+         "max_l1_distance" =>
+           if(rows == [], do: nil, else: Enum.max(Enum.map(rows, & &1["l1_distance"]))),
          "cases" => rows,
          "interpretation" => "descriptive_drift_only_not_quality_ranking"
        }}
@@ -41,12 +42,17 @@ defmodule Fount.Intelligence.Evaluation.Drift do
   end
 
   defp compare_case(id, left, right) do
-    labels = (Map.keys(left["distribution"]) ++ Map.keys(right["distribution"])) |> Enum.uniq() |> Enum.sort()
+    labels =
+      (Map.keys(left["distribution"]) ++ Map.keys(right["distribution"]))
+      |> Enum.uniq()
+      |> Enum.sort()
 
     l1 =
       Enum.sum(
         Enum.map(labels, fn label ->
-          abs(Map.get(left["distribution"], label, 0.0) - Map.get(right["distribution"], label, 0.0))
+          abs(
+            Map.get(left["distribution"], label, 0.0) - Map.get(right["distribution"], label, 0.0)
+          )
         end)
       )
 
@@ -60,7 +66,10 @@ defmodule Fount.Intelligence.Evaluation.Drift do
         Enum.reduce(@identity_fields, %{}, fn key, acc ->
           before = get_in(left, ["identity", key])
           after_value = get_in(right, ["identity", key])
-          if before == after_value, do: acc, else: Map.put(acc, key, %{"before" => before, "after" => after_value})
+
+          if before == after_value,
+            do: acc,
+            else: Map.put(acc, key, %{"before" => before, "after" => after_value})
         end)
     }
   end
@@ -71,6 +80,7 @@ defmodule Fount.Intelligence.Evaluation.Drift do
 
   defp valid_distribution?(distribution) do
     values = Map.values(distribution)
+
     map_size(distribution) >= 2 and Enum.all?(Map.keys(distribution), &is_binary/1) and
       Enum.all?(values, &(is_number(&1) and &1 >= 0 and &1 <= 1)) and
       abs(Enum.sum(values) - 1.0) <= 0.020000000001

@@ -32,3 +32,15 @@ FOUNT_OBSERVE_LIVE=1 mix run examples/live.exs
 This path has one request, retries disabled, a 16 KiB wire cap and a 30-second
 acquisition cap. Record actual model/request/resource metadata and failures; a
 synthetic fixture is not a substitute for this live check.
+
+For Phase-11 synthetic repeatability QC, use `phase_eleven_live.exs`. The
+official TypeSafe endpoint uses the SDK default model `jev-latest` when
+`FOUNT_OBSERVE_MODEL` is unset. If the key is already stored as
+`SYSTEM_ONE_API_KEY`, pass it through without printing it:
+
+```bash
+FOUNT_OBSERVE_API_KEY="$SYSTEM_ONE_API_KEY" FOUNT_PHASE11_OBSERVE_LIVE=1 mix run examples/phase_eleven_live.exs
+```
+
+The Phase-11 runner makes three one-state requests and reports resource usage,
+the current output-contract digest, and descriptive baseline-to-last drift.

@@ -93,21 +93,24 @@ defmodule Fount.Intelligence do
   def list_genre_packs(catalog), do: Packs.list(catalog)
   def enabled_genre_packs(catalog), do: Packs.enabled(catalog)
 
-
   @doc "Validates a rights/provenance manifest for evaluation material."
   def validate_evaluation_corpus(manifest), do: Evaluation.validate_corpus_manifest(manifest)
 
   @doc "Checks one explicitly named evaluation use against corpus rights/privacy policy."
-  def authorize_evaluation_corpus(manifest, use_kind), do: Evaluation.authorize_corpus_use(manifest, use_kind)
+  def authorize_evaluation_corpus(manifest, use_kind),
+    do: Evaluation.authorize_corpus_use(manifest, use_kind)
 
   @doc "Summarizes independent semantic human annotations without forcing consensus."
-  def summarize_evaluation_annotations(annotations), do: Evaluation.summarize_annotations(annotations)
+  def summarize_evaluation_annotations(annotations),
+    do: Evaluation.summarize_annotations(annotations)
 
   @doc "Computes distributional calibration/abstention metrics for a measurement kind."
-  def evaluate_measurements(kind, cases, opts \\ []), do: Evaluation.evaluate_measurements(kind, cases, opts)
+  def evaluate_measurements(kind, cases, opts \\ []),
+    do: Evaluation.evaluate_measurements(kind, cases, opts)
 
   @doc "Describes distribution/model drift without ranking providers or models."
-  def compare_measurement_drift(baseline, current), do: Evaluation.compare_drift(baseline, current)
+  def compare_measurement_drift(baseline, current),
+    do: Evaluation.compare_drift(baseline, current)
 
   @doc "Lists evaluation coverage for all installed screenplay capability families."
   def evaluation_benchmark_catalog, do: Evaluation.benchmark_catalog()

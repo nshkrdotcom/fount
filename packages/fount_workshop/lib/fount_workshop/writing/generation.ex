@@ -40,8 +40,15 @@ defmodule FountWorkshop.Writing.Generation do
       end
     end
 
+    qc_prefix =
+      if Keyword.get(opts, :phase_eleven_qc, false),
+        do:
+          "The root strategy_id must be exactly #{strategy["id"]}. Copy this ID verbatim in every repair.\n",
+        else: ""
+
     prompt =
-      "Write actual complete screenplay pages as canonical typed edits for this chosen dramatic approach. The JSON proposal is the only output. Produce dialogue/action, not instructions to a future writer, placeholders or summaries. Preserve every unchanged element's exact text and identity using keep references. Use local_id new:<label> only for new identities. Link new cues to confirmed character IDs in attrs.character_id or create an explicitly disclosed cast entry first. Declare groups with causal depends_on links; a group must be independently meaningful with its dependencies. Never claim writer_edit or mixed origin. Quote only inspected evidence IDs. Do not mark notes resolved or change constraints/facts to make a check pass. IDs, constraints and placement are authoritative.\n" <>
+      qc_prefix <>
+        "Write actual complete screenplay pages as canonical typed edits for this chosen dramatic approach. The JSON proposal is the only output. Produce dialogue/action, not instructions to a future writer, placeholders or summaries. Preserve every unchanged element's exact text and identity using keep references. Use local_id new:<label> only for new identities. Link new cues to confirmed character IDs in attrs.character_id or create an explicitly disclosed cast entry first. Declare groups with causal depends_on links; a group must be independently meaningful with its dependencies. Never claim writer_edit or mixed origin. Quote only inspected evidence IDs. Do not mark notes resolved or change constraints/facts to make a check pass. IDs, constraints and placement are authoritative.\n" <>
         direction(request) <>
         "\n" <>
         Jason.encode!(%{

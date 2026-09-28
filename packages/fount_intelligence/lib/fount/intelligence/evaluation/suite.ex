@@ -12,12 +12,20 @@ defmodule Fount.Intelligence.Evaluation.Suite do
     "relationship_dynamics" => ["relationship.dynamics"],
     "audience_reader_experience" => ["audience.reader_experience", "knowledge.epistemic_trace"],
     "sequence_movement" => ["sequence.movement", "continuity.transitions"],
-    "dialogue_interaction" => ["dialogue.interaction", "dialogue.exchange", "dialogue.voice_distinction"],
+    "dialogue_interaction" => [
+      "dialogue.interaction",
+      "dialogue.exchange",
+      "dialogue.voice_distinction"
+    ],
     "setup_payoff_motifs" => ["setup_payoff.motifs", "causality.support"],
     "emotional_value_movement" => ["emotional.value_movement"],
     "theme_meaning" => ["theme.meaning"],
     "genre_lens_packs" => ["genre.lens_pack"],
-    "revision_intelligence" => ["revision.intelligence", "diagnosis.concern_relevance", "diagnosis.evidence_support"]
+    "revision_intelligence" => [
+      "revision.intelligence",
+      "diagnosis.concern_relevance",
+      "diagnosis.evidence_support"
+    ]
   }
 
   @spec catalog() :: [map()]
@@ -27,12 +35,13 @@ defmodule Fount.Intelligence.Evaluation.Suite do
       %{
         "capability_family" => family,
         "lens_ids" => Map.fetch!(@family_lenses, family),
-        "required_evaluation" => [
-          "current_contract_fixture",
-          "synthetic_regression",
-          "failure_and_abstention",
-          "resource_accounting"
-        ] ++ nonlinear_requirement(family),
+        "required_evaluation" =>
+          [
+            "current_contract_fixture",
+            "synthetic_regression",
+            "failure_and_abstention",
+            "resource_accounting"
+          ] ++ nonlinear_requirement(family),
         "human_evidence" => "optional_unless_actual_study_is_recorded"
       }
     end)
@@ -61,7 +70,8 @@ defmodule Fount.Intelligence.Evaluation.Suite do
          true <- is_list(suite["slices"]) and Enum.all?(suite["slices"], &nonblank?/1),
          true <- is_list(suite["fixture_refs"]) and Enum.all?(suite["fixture_refs"], &nonblank?/1),
          true <- suite["support_validity"] == true,
-         true <- suite["writer_usefulness"] in ["separate_optional_study", "separate_recorded_study"],
+         true <-
+           suite["writer_usefulness"] in ["separate_optional_study", "separate_recorded_study"],
          {:ok, _} <- CanonicalJSON.encode(suite) do
       {:ok, Map.put(suite, "suite_sha256", CanonicalJSON.hash(suite))}
     else
@@ -73,9 +83,12 @@ defmodule Fount.Intelligence.Evaluation.Suite do
 
   def validate_suite(_), do: {:error, :invalid_evaluation_suite}
 
-  defp nonlinear_requirement(family) when family in ~w(audience_reader_experience sequence_movement setup_payoff_motifs revision_intelligence),
-    do: ["nonlinear_presentation_story_time"]
+  defp nonlinear_requirement(family)
+       when family in ~w(audience_reader_experience sequence_movement setup_payoff_motifs revision_intelligence),
+       do: ["nonlinear_presentation_story_time"]
 
   defp nonlinear_requirement(_), do: []
-  defp nonblank?(value), do: is_binary(value) and String.trim(value) != "" and String.valid?(value)
+
+  defp nonblank?(value),
+    do: is_binary(value) and String.trim(value) != "" and String.valid?(value)
 end

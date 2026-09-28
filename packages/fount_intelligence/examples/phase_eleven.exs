@@ -1,5 +1,4 @@
 alias Fount.Intelligence.Evaluation
-alias Fount.Intelligence.Evaluation.Benchmark
 alias Fount.Observe.Question
 
 load = fn name ->
@@ -13,6 +12,7 @@ manifest = load.("corpus_manifest.synthetic.json")
 annotations = load.("reader_annotations.synthetic.json")
 fixture = load.("frozen_concealment_fixture.json")
 suite = load.("phase_eleven_suite.json")
+nonlinear = load.("nonlinear_story_time.synthetic.json")
 
 {:ok, rights} = Evaluation.validate_corpus_manifest(manifest)
 {:ok, reader_groups} = Evaluation.summarize_annotations(annotations)
@@ -36,7 +36,11 @@ suite = load.("phase_eleven_suite.json")
 
 {:ok, resource_calibration} =
   Evaluation.compare_resource_estimate(
-    %{"provider_requests_before_retries_estimate" => 4, "reuse_estimate" => nil, "hosted_cost" => nil},
+    %{
+      "provider_requests_before_retries_estimate" => 4,
+      "reuse_estimate" => nil,
+      "hosted_cost" => nil
+    },
     %{"provider_requests" => 4, "cache_hits" => 0, "scheduled_states" => 4, "hosted_cost" => nil}
   )
 
@@ -51,6 +55,7 @@ IO.puts(
       "resource_calibration" => resource_calibration,
       "suite_sha256" => suite["suite_sha256"],
       "benchmark_catalog" => Evaluation.benchmark_catalog(),
+      "nonlinear_fixture" => nonlinear,
       "fixture_status" => "current",
       "human_validation_claim" => false
     },

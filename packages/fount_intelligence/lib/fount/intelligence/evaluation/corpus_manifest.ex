@@ -15,7 +15,12 @@ defmodule Fount.Intelligence.Evaluation.CorpusManifest do
   @secret_fragments ~w(api_key authorization bearer credential credentials password secret token)
 
   @type use_kind ::
-          :local_storage | :human_review | :observe_hosted | :inference_hosted | :local_model | :redistribution
+          :local_storage
+          | :human_review
+          | :observe_hosted
+          | :inference_hosted
+          | :local_model
+          | :redistribution
 
   @spec validate(map()) :: {:ok, map()} | {:error, atom()}
   def validate(manifest) when is_map(manifest) do
@@ -39,7 +44,8 @@ defmodule Fount.Intelligence.Evaluation.CorpusManifest do
   def validate(_), do: {:error, :invalid_corpus_manifest}
 
   @spec authorize(map(), use_kind()) :: :ok | {:error, atom()}
-  def authorize(manifest, use_kind) when use_kind in ~w(local_storage human_review observe_hosted inference_hosted local_model redistribution)a do
+  def authorize(manifest, use_kind)
+      when use_kind in ~w(local_storage human_review observe_hosted inference_hosted local_model redistribution)a do
     with {:ok, validated} <- validate(manifest),
          true <- permitted?(validated, use_kind) do
       :ok
@@ -71,15 +77,15 @@ defmodule Fount.Intelligence.Evaluation.CorpusManifest do
   defp permitted?(manifest, use_kind) do
     key = Atom.to_string(use_kind)
     permission = manifest["permissions"][key] == true
-
-    case use_kind do
-      :observe_hosted -> permission and manifest["provider_export_allowed"] == true
-      :inference_hosted -> permission and manifest["provider_export_allowed"] == true
-      :human_review -> permission and manifest["human_review_allowed"] == true
-      :redistribution -> permission and manifest["redistribution_allowed"] == true
-      _ -> permission
-    end
+    permission and upper_bound?(manifest, use_kind)
   end
+
+  defp upper_bound?(manifest, kind) when kind in [:observe_hosted, :inference_hosted],
+    do: manifest["provider_export_allowed"] == true
+
+  defp upper_bound?(manifest, :human_review), do: manifest["human_review_allowed"] == true
+  defp upper_bound?(manifest, :redistribution), do: manifest["redistribution_allowed"] == true
+  defp upper_bound?(_manifest, _kind), do: true
 
   defp exact_keys(manifest) do
     keys = Map.keys(manifest)
@@ -89,7 +95,8 @@ defmodule Fount.Intelligence.Evaluation.CorpusManifest do
   end
 
   defp required_strings(manifest) do
-    keys = ~w(corpus_item_id label rights_basis rights_evidence_ref retention_policy confidentiality_class)
+    keys =
+      ~w(corpus_item_id label rights_basis rights_evidence_ref retention_policy confidentiality_class)
 
     if Enum.all?(keys, &nonblank?(manifest[&1])) and
          Enum.all?(@optional -- ["source_sha256"], fn key ->
@@ -108,9 +115,12 @@ defmodule Fount.Intelligence.Evaluation.CorpusManifest do
   defp string_list(_), do: :error
 
   defp booleans(manifest) do
-    if Enum.all?(~w(provider_export_allowed human_review_allowed redistribution_allowed), &is_boolean(manifest[&1])),
-      do: :ok,
-      else: :error
+    if Enum.all?(
+         ~w(provider_export_allowed human_review_allowed redistribution_allowed),
+         &is_boolean(manifest[&1])
+       ),
+       do: :ok,
+       else: :error
   end
 
   defp permissions(%{"permissions" => permissions}) when is_map(permissions) do
@@ -135,35 +145,30 @@ defmodule Fount.Intelligence.Evaluation.CorpusManifest do
   end
 
   defp digest(nil), do: :ok
+
   defp digest(value) when is_binary(value) do
     if Regex.match?(~r/^[0-9a-f]{64}$/, value), do: :ok, else: :error
   end
+
   defp digest(_), do: :error
 
   defp no_secret_keys(value) when is_map(value) do
-    Enum.reduce_while(value, :ok, fn {key, child}, :ok ->
-      key = String.downcase(to_string(key))
-
-      if Enum.any?(@secret_fragments, &String.contains?(key, &1)) do
-        {:halt, :error}
-      else
-        case no_secret_keys(child) do
-          :ok -> {:cont, :ok}
-          :error -> {:halt, :error}
-        end
-      end
-    end)
+    if Enum.all?(value, &safe_entry?/1), do: :ok, else: :error
   end
 
   defp no_secret_keys(value) when is_list(value) do
-    Enum.reduce_while(value, :ok, fn child, :ok ->
-      case no_secret_keys(child) do
-        :ok -> {:cont, :ok}
-        :error -> {:halt, :error}
-      end
-    end)
+    if Enum.all?(value, &(no_secret_keys(&1) == :ok)), do: :ok, else: :error
   end
 
   defp no_secret_keys(_), do: :ok
-  defp nonblank?(value), do: is_binary(value) and String.trim(value) != "" and String.valid?(value)
+
+  defp safe_entry?({key, child}) do
+    key = String.downcase(to_string(key))
+
+    not Enum.any?(@secret_fragments, &String.contains?(key, &1)) and
+      no_secret_keys(child) == :ok
+  end
+
+  defp nonblank?(value),
+    do: is_binary(value) and String.trim(value) != "" and String.valid?(value)
 end

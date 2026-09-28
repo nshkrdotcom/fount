@@ -59,7 +59,10 @@ runs =
       )
 
     if packet["status"] != "available",
-      do: raise("Observe live QC unavailable on iteration #{iteration}; inspect neutral error output")
+      do:
+        raise(
+          "Observe live QC unavailable on iteration #{iteration}; inspect neutral error output"
+        )
 
     [finding] = packet["findings"]
 
@@ -70,15 +73,57 @@ runs =
       "drift_case" => %{
         "case_id" => "synthetic-concealment",
         "distribution" => finding["value"]["probabilities"],
-        "identity" => Map.put(finding["provider_fingerprint"], "output_contract_sha256", Question.output_digest(question))
+        "identity" =>
+          Map.put(
+            finding["provider_fingerprint"],
+            "output_contract_sha256",
+            Question.output_digest(question)
+          )
       }
     }
   end)
 
 [first | _] = runs
 last = List.last(runs)
-{:ok, drift} =
-  Fount.Intelligence.Evaluation.compare_drift([first["drift_case"]], [last["drift_case"]])
+
+baseline = first["drift_case"]
+current = last["drift_case"]
+left = baseline["distribution"]
+right = current["distribution"]
+
+select = fn distribution ->
+  distribution
+  |> Enum.sort_by(fn {label, probability} -> {-probability, label} end)
+  |> hd()
+  |> elem(0)
+end
+
+identity_changes =
+  (Map.keys(baseline["identity"]) ++ Map.keys(current["identity"]))
+  |> Enum.uniq()
+  |> Enum.sort()
+  |> Enum.reduce(%{}, fn key, changes ->
+    before = baseline["identity"][key]
+    after_value = current["identity"][key]
+
+    if before == after_value,
+      do: changes,
+      else: Map.put(changes, key, %{"before" => before, "after" => after_value})
+  end)
+
+drift = %{
+  "l1_distance" =>
+    (Map.keys(left) ++ Map.keys(right))
+    |> Enum.uniq()
+    |> Enum.reduce(0.0, fn label, total ->
+      total + abs(Map.get(left, label, 0.0) - Map.get(right, label, 0.0))
+    end),
+  "baseline_selection" => select.(left),
+  "current_selection" => select.(right),
+  "selection_changed" => select.(left) != select.(right),
+  "identity_changes" => identity_changes,
+  "interpretation" => "descriptive_drift_only_not_quality_ranking"
+}
 
 IO.puts(
   Jason.encode!(

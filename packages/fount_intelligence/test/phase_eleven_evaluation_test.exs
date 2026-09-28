@@ -2,7 +2,7 @@ defmodule Fount.Intelligence.PhaseElevenEvaluationTest do
   use ExUnit.Case, async: true
 
   alias Fount.Intelligence.Evaluation
-  alias Fount.Intelligence.Evaluation.Benchmark
+  alias Fount.Intelligence.Evaluation.{Annotation, Benchmark}
   alias Fount.Observe.Question
 
   defp fixture(name) do
@@ -21,6 +21,7 @@ defmodule Fount.Intelligence.PhaseElevenEvaluationTest do
     assert :ok = Evaluation.authorize_corpus_use(manifest, :human_review)
     assert :ok = Evaluation.authorize_corpus_use(manifest, :local_model)
     assert :ok = Evaluation.authorize_corpus_use(manifest, :redistribution)
+
     assert {:error, :corpus_use_not_permitted} =
              Evaluation.authorize_corpus_use(manifest, :observe_hosted)
 
@@ -36,11 +37,16 @@ defmodule Fount.Intelligence.PhaseElevenEvaluationTest do
     assert summary["agreement"] == 0.5
     assert summary["label_distribution"] == %{"archive" => 0.5, "unknown" => 0.5}
     assert length(summary["annotations"]) == 2
-    assert Enum.all?(summary["annotations"], &(get_in(&1, ["checkpoint", "first_exposure"]) == true))
+
+    assert Enum.all?(
+             summary["annotations"],
+             &(get_in(&1, ["checkpoint", "first_exposure"]) == true)
+           )
 
     provider_coupled = put_in(hd(annotations), ["response", "provider_probability"], 0.9)
+
     assert {:error, :invalid_human_annotation} =
-             Fount.Intelligence.Evaluation.Annotation.validate(provider_coupled)
+             Annotation.validate(provider_coupled)
   end
 
   test "categorical metrics include calibration and abstention without collapsing disagreement" do
@@ -62,6 +68,9 @@ defmodule Fount.Intelligence.PhaseElevenEvaluationTest do
     assert is_number(report["brier_score"])
     assert is_number(report["log_loss"])
     assert is_number(report["expected_calibration_error"])
+    assert_in_delta report["brier_score"], 0.020277777777777787, 1.0e-12
+    assert_in_delta report["log_loss"], 0.6917070100871012, 1.0e-12
+    assert_in_delta report["expected_calibration_error"], 0.09166666666666673, 1.0e-12
     assert report["human_disagreement_preserved"] == true
     assert Enum.any?(report["abstention"], &(&1["threshold"] == 0.8 and &1["retained"] == 1))
   end
@@ -80,6 +89,8 @@ defmodule Fount.Intelligence.PhaseElevenEvaluationTest do
     assert report["ordinal_cases"] == 1
     assert is_number(report["ordinal_mean_absolute_error"])
     assert is_number(report["ordinal_root_mean_square_error"])
+    assert_in_delta report["ordinal_mean_absolute_error"], 1.0 / 15, 1.0e-12
+    assert_in_delta report["ordinal_root_mean_square_error"], 1.0 / 15, 1.0e-12
   end
 
   test "drift is descriptive and keeps provider/model identity changes explicit" do
@@ -102,8 +113,10 @@ defmodule Fount.Intelligence.PhaseElevenEvaluationTest do
     assert {:ok, report} = Evaluation.compare_drift(baseline, current)
     assert report["changed_selection_count"] == 1
     case_result = hd(report["cases"])
+
     assert get_in(case_result, ["identity_changes", "model"]) ==
              %{"before" => "jev-a", "after" => "jev-b"}
+
     assert report["interpretation"] == "descriptive_drift_only_not_quality_ranking"
   end
 
@@ -134,7 +147,9 @@ defmodule Fount.Intelligence.PhaseElevenEvaluationTest do
     assert :ok = Evaluation.validate_benchmark_catalog()
     catalog = Evaluation.benchmark_catalog()
     assert length(catalog) == 12
-    assert Enum.map(catalog, & &1["capability_family"]) == Fount.Intelligence.capability_families()
+
+    assert Enum.map(catalog, & &1["capability_family"]) ==
+             Fount.Intelligence.capability_families()
 
     suite = fixture("phase_eleven_suite.json")
     assert {:ok, validated} = Evaluation.validate_evaluation_suite(suite)

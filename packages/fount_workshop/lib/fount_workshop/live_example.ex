@@ -29,7 +29,12 @@ defmodule FountWorkshop.LiveExample do
 
       max_inference_calls = if mode == "phase_eleven_qc", do: 8, else: 40
       max_measurement_states = if mode == "phase_eleven_qc", do: 64, else: 1500
-      budget = Budget.new(max_inference_calls: max_inference_calls, max_measurement_states: max_measurement_states)
+
+      budget =
+        Budget.new(
+          max_inference_calls: max_inference_calls,
+          max_measurement_states: max_measurement_states
+        )
 
       opts = [
         budget: budget,
@@ -39,7 +44,8 @@ defmodule FountWorkshop.LiveExample do
         output_dir: directory,
         render: mode == "sequence_routes",
         pdf: true,
-        actor: "live-example-writer"
+        actor: "live-example-writer",
+        phase_eleven_qc: mode == "phase_eleven_qc"
       ]
 
       {base, sessions, details} = execute(mode, root, key, services, opts)

@@ -23,7 +23,8 @@ defmodule Fount.Intelligence.PhaseElevenNonlinearBenchmarkTest do
     assert {:ok, reader} = Reader.reduce(screenplay, Fixture.reader_events(screenplay))
     [scene_1, scene_2, scene_3, scene_4] = Fixture.scene_events(screenplay)
 
-    assert Enum.map(reader.points, & &1["ordinal"]) == Enum.to_list(0..(length(reader.points) - 1))
+    assert Enum.map(reader.points, & &1["ordinal"]) ==
+             Enum.to_list(0..(length(reader.points) - 1))
 
     assert %{status: :known, relations: ["before"]} =
              StoryWorld.story_time_relation(world, scene_3, scene_1)

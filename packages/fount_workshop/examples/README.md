@@ -31,6 +31,8 @@ The primary example runner is [`live.exs`](file:///home/home/p/g/n/fount/package
    export FOUNT_CODEX_MODEL="YOUR_CONFIGURED_CODEX_MODEL"
    export SYSTEM_ONE_MODEL="YOUR_CONFIGURED_SYSTEM_ONE_MODEL"
    ```
+   For the Phase-11 one-candidate QC, use `FOUNT_CODEX_MODEL=gpt-6-luna`.
+   Its special mode disables Observe, so `SYSTEM_ONE_MODEL` is not used there.
 3. **Poppler & Node.js Dependencies** (for PDF export and verification):
    - Ensure Poppler tools (`pdfinfo`, `pdffonts`, `pdftotext`) are installed.
    - Install Afterwriting dependencies:
@@ -41,6 +43,13 @@ The primary example runner is [`live.exs`](file:///home/home/p/g/n/fount/package
 ---
 
 ### Executing Live Modes
+
+Phase-11 synthetic generation QC uses the existing Inference/ASM Codex path,
+one first-scene candidate, and no canon acceptance:
+
+```bash
+FOUNT_CODEX_MODEL=gpt-6-luna FOUNT_CODEX_REASONING_EFFORT=medium FOUNT_PHASE11_WORKSHOP_LIVE=1 mix run examples/phase_eleven_live.exs
+```
 
 Run scripts using `mix run`:
 

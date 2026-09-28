@@ -32,7 +32,8 @@ defmodule Fount.Intelligence.Evaluation.Resources do
     contextual = stage_actual(actual["contextual"])
 
     flattened = %{
-      "provider_requests" => add_known(base["provider_requests"], contextual["provider_requests"]),
+      "provider_requests" =>
+        add_known(base["provider_requests"], contextual["provider_requests"]),
       "cache_hits" => add_known(base["cache_hits"], contextual["cache_hits"]),
       "scheduled_states" => add_known(base["scheduled_states"], contextual["scheduled_states"]),
       "hosted_cost" => actual["hosted_cost"]
@@ -75,8 +76,11 @@ defmodule Fount.Intelligence.Evaluation.Resources do
   def summarize_history(_), do: {:error, :invalid_resource_history}
 
   defp comparison("reuse", estimate, actual, actual_map) do
-    estimated_ratio = if is_number(estimate) and estimate >= 0 and estimate <= 1, do: estimate, else: nil
+    estimated_ratio =
+      if is_number(estimate) and estimate >= 0 and estimate <= 1, do: estimate, else: nil
+
     scheduled = actual_map["scheduled_states"]
+
     actual_ratio =
       if is_integer(actual) and actual >= 0 and is_integer(scheduled) and scheduled > 0,
         do: actual / scheduled,
@@ -85,7 +89,8 @@ defmodule Fount.Intelligence.Evaluation.Resources do
     numeric_comparison("reuse", estimated_ratio, actual_ratio)
   end
 
-  defp comparison(name, estimate, actual, _actual_map), do: numeric_comparison(name, estimate, actual)
+  defp comparison(name, estimate, actual, _actual_map),
+    do: numeric_comparison(name, estimate, actual)
 
   defp numeric_comparison(name, estimate, actual) do
     if is_number(estimate) and is_number(actual) do
@@ -140,6 +145,7 @@ defmodule Fount.Intelligence.Evaluation.Resources do
   end
 
   defp numeric_values([]), do: nil
+
   defp numeric_values(values),
     do: %{
       "count" => length(values),
@@ -147,5 +153,4 @@ defmodule Fount.Intelligence.Evaluation.Resources do
       "min" => Enum.min(values),
       "max" => Enum.max(values)
     }
-
 end

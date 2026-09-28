@@ -2,7 +2,10 @@ defmodule FountWorkshop.PhaseSixteenAcceptanceMatrixTest do
   use ExUnit.Case, async: true
 
   @root Path.expand("../../../..", __DIR__)
-  @matrix Path.join(@root, "packages/fount_workshop/examples/phase_sixteen/acceptance_matrix.json")
+  @matrix Path.join(
+            @root,
+            "packages/fount_workshop/examples/phase_sixteen/acceptance_matrix.json"
+          )
 
   test "final acceptance matrix owns every W01-W12 and A01-A12 evidence path" do
     matrix = @matrix |> File.read!() |> Jason.decode!()

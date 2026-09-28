@@ -1,6 +1,7 @@
 defmodule FountWorkshop.Writing.Context do
   @moduledoc false
   alias Fount.Screenplay.Model
+  alias FountWorkshop.Writing.VoiceProtection
 
   @doc "Compacts duplicated projection metadata for provider prompts; saved evidence stays complete."
   def prompt_data(data, opts \\ []) when is_map(data) do
@@ -84,7 +85,8 @@ defmodule FountWorkshop.Writing.Context do
     selection = editable_selection(model, request)
 
     with {:ok, selected} <- Fount.Selection.select(model, selection),
-         {:ok, all} <- Fount.Selection.select(model, %{"whole_screenplay" => true}) do
+         {:ok, all} <- Fount.Selection.select(model, %{"whole_screenplay" => true}),
+         {:ok, voice_protection} <- VoiceProtection.context(model, request) do
       selected_scenes =
         selected |> Enum.map(& &1["scene_id"]) |> Enum.reject(&is_nil/1) |> Enum.uniq()
 
@@ -128,6 +130,8 @@ defmodule FountWorkshop.Writing.Context do
         "scope_notice" =>
           "Only selected pages may change. Adjacent material informs joins, not permission to rewrite it. Actor utterances are not automatically facts."
       }
+
+      data = if voice_protection, do: Map.put(data, "voice_protection", voice_protection), else: data
 
       if byte_size(Jason.encode!(data)) > Keyword.get(opts, :max_context_bytes, 100_000),
         do: {:error, :context_limit_requires_smaller_selection},

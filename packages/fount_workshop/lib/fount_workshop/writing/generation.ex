@@ -48,7 +48,7 @@ defmodule FountWorkshop.Writing.Generation do
 
     prompt =
       qc_prefix <>
-        "Write actual complete screenplay pages as canonical typed edits for this chosen dramatic approach. The JSON proposal is the only output. Produce dialogue/action, not instructions to a future writer, placeholders or summaries. Preserve every unchanged element's exact text and identity using keep references. Use local_id new:<label> only for new identities. Link new cues to confirmed character IDs in attrs.character_id or create an explicitly disclosed cast entry first. Declare groups with causal depends_on links; a group must be independently meaningful with its dependencies. Never claim writer_edit or mixed origin. Quote only inspected evidence IDs. Do not mark notes resolved or change constraints/facts to make a check pass. IDs, constraints and placement are authoritative.\n" <>
+        "Write actual complete screenplay pages as canonical typed edits for this chosen dramatic approach. The JSON proposal is the only output. Produce dialogue/action, not instructions to a future writer, placeholders or summaries. Preserve every unchanged element's exact text and identity using keep references. Use local_id new:<label> only for new identities. Link new cues to confirmed character IDs in attrs.character_id or create an explicitly disclosed cast entry first. Declare groups with causal depends_on links; a group must be independently meaningful with its dependencies. Never claim writer_edit or mixed origin. Quote only inspected evidence IDs. Do not mark notes resolved or change constraints/facts to make a check pass. IDs, constraints and placement are authoritative. When voice_protection is present, treat exemplars and style preferences as writer-owned evidence, keep protected text byte-identical, and do not silently translate or normalize multilingual text, dialect, deliberate fragments, strategic awkwardness, or repetition. Adopted rehearsal material is exploratory project context, not a proven StoryWorld fact.\n" <>
         direction(request) <>
         "\n" <>
         Jason.encode!(%{
@@ -125,7 +125,7 @@ defmodule FountWorkshop.Writing.Generation do
 
   defp direction(%{"workflow" => "pass"}),
     do:
-      "PASS: apply the actual named profile and writer direction; return useful selective screenplay changes. Brevity is not universally better. Do not flatten every exchange or delete expressive long turns automatically."
+      "PASS: apply the actual named profile and writer direction; return useful selective screenplay changes. Visual, sound/space, stillness/rhythm and transition passes may change what the audience sees, hears, withholds or spatially infers without forcing dialogue. Brevity is not universally better. Preserve intentional silence and voiceover unless the writer authorizes changing them; do not flatten every exchange, add unrequested camera directions, or delete expressive long turns automatically."
 
   defp direction(%{"workflow" => "recover"}),
     do:

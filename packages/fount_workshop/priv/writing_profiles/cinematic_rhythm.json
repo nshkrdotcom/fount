@@ -1,0 +1,18 @@
+{
+  "id": "cinematic_rhythm",
+  "version": 1,
+  "goal": "Revise playable timing, stillness, entrances, exits and held beats without treating silence or unconventional rhythm as an error.",
+  "creative_prompt": "Consider entering later, leaving earlier, holding an action, allowing a reaction to complete, or letting a repeated beat accumulate meaning. Preserve deliberate fragments, repetition, voiceover and expressive long turns unless the writer asks to change them.",
+  "context_needs": [
+    "exact_selected_pages",
+    "adjacent_scene_context",
+    "writer_constraints",
+    "source_provenance"
+  ],
+  "suggested_tools": [
+    "scene_mechanics",
+    "action",
+    "dialogue",
+    "check_constraints"
+  ]
+}

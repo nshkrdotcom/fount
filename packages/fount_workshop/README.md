@@ -25,6 +25,8 @@ Phase 11 adds a deliberately small live-generation QC lane: `FOUNT_PHASE11_WORKS
 
 Phase 12 adds writer-first discovery without creating another screenplay representation: provider-free `Session.open/4`, explicit Draft/Explore/Inspect/Revise modes, evolving briefs and fragments, reverse outlines/card proposals, manual writer candidates, and treatment-bound scene alternatives. Canon still moves only through explicit acceptance. See [`guides/discovery-and-scene-exploration.md`](guides/discovery-and-scene-exploration.md) and [`examples/phase_twelve/README.md`](examples/phase_twelve/README.md).
 
+Phase 13 adds cinematic pass lenses for sound/space, playable stillness/rhythm and transitions; writer-selected source voice exemplars and deterministic exact-text protection; explicitly noncanonical rehearsal exercises with traceable adoption; and actual candidate-page comparison that separates changed action/language from generator self-description. See [`guides/cinematic-revision-rehearsal-and-voice.md`](guides/cinematic-revision-rehearsal-and-voice.md) and [`examples/phase_thirteen/README.md`](examples/phase_thirteen/README.md).
+
 ## A complete writer demonstration
 
 After configuring a disposable PostgreSQL database and applying Fount's migrations:
@@ -78,7 +80,7 @@ For a project starting from a brief, use `Develop.run/5` or the public `FountWor
 
 Run `npm ci` in this package for the existing renderer; PDF inspection requires Poppler. Database workflows require `FOUNT_DATABASE_URL` and Fount's migrations. For the newly inspected SDK source, set `FOUNT_SYSTEM_ONE_SDK_PATH` before resolving dependencies; details are in Observe's guide.
 
-Run `mix test` for package tests and `MIX_ENV=test mix test integration` for the explicit integration directory after preparing the database/PDF prerequisites. Phase 12 Elixir/runtime checks were not run in the source-writing environment. Codex must execute, repair and record the Phase-12 handoff checks before declaring the phase complete.
+Run `mix test` for package tests and `MIX_ENV=test mix test integration` for the explicit integration directory after preparing the database/PDF prerequisites. Phase 12 is the applied/runtime-verified baseline in this snapshot. Phase 13 source changes require Codex runtime repair/QC before the phase can be marked complete; this source-writing handoff does not claim Mix/PostgreSQL/provider or human-study execution.
 
 ## License
 

@@ -6,6 +6,7 @@ defmodule FountWorkshop.Session do
   alias FountWorkshop.Candidate
   alias FountWorkshop.Discovery
   alias FountWorkshop.Request
+  alias FountWorkshop.Rehearsal
   alias FountWorkshop.Store
   alias FountWorkshop.Strategy
   alias FountWorkshop.Writing.Budget
@@ -616,11 +617,19 @@ defmodule FountWorkshop.Session do
       |> put_if_present("intended_effect", brief["desired_experience"])
       |> put_if_present("pending_question", discovery["pending_question"])
       |> put_if_present("allow_brief_departure", brief["permission_to_depart"])
+      |> put_if_present("adopted_rehearsal", rehearsal_context(session))
 
     original
     |> Map.put("mode", mode)
     |> Map.put("options", options)
     |> Map.put("discovery_brief", brief)
+  end
+
+  defp rehearsal_context(session) do
+    case Rehearsal.generation_context(session) do
+      [] -> nil
+      values -> values
+    end
   end
 
   defp put_if_present(map, _key, nil), do: map

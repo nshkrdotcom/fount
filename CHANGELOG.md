@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased - Phase 13 offline implementation
+
+- Add cinematic pass lenses for sound/space, playable stillness/rhythm and transitions while preserving silence, voiceover and already-working material as valid choices.
+- Add source-backed voice exemplars, explicit style preferences and deterministic required exact-text pins for Unicode, code-switching, fragments and repetition.
+- Add durable noncanonical rehearsal exercises whose inventions enter later generation context only after explicit traceable adoption.
+- Add stable-ID original/candidate comparison that reports actual changed action/language and marks generator summaries as non-evidence.
+- Add deterministic A02/A04/A05 regressions and Phase-13 source checks. Runtime verification and optional human comparison remain for Codex; Phase 14 is not implemented.
+
 ## Unreleased - Phase 12 offline implementation
 
 - Add provider-free durable discovery sessions with explicit Draft/Explore/Inspect/Revise modes, evolving briefs, fragment history, reverse outlines and noncanonical card-reorder proposals.

@@ -115,3 +115,6 @@ FOUNT_EXAMPLE_OUT="/tmp/workshop_demo" mix run examples/live.exs --mode recover
 
 `examples/phase_twelve/README.md` documents a PostgreSQL-backed CLI path that opens a discovery session, captures an unattached image, evolves the brief, creates a writer-origin candidate from typed edits, manually edits it, accepts it explicitly, switches to Inspect, and resumes without provider credentials. The deterministic Phase-12 tests separately exercise generated three-route alternatives using `ScriptedCompletion`; no live-provider result is claimed by the offline implementation.
 
+## Phase 13 cinematic revision, voice and rehearsal
+
+`examples/phase_thirteen/README.md` maps the deterministic A02/A04/A05 fixtures to the public Phase-13 APIs. It demonstrates actual page comparison, required exact-text protection, and noncanonical rehearsal/adoption semantics. The offline handoff does not claim the ExUnit or optional human comparison was executed.

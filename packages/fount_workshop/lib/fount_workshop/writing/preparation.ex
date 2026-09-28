@@ -273,6 +273,41 @@ defmodule FountWorkshop.Writing.Preparation do
             })
           ]
 
+        "sound_space" ->
+          [
+            request("sound-space-action", "action", %{
+              "selection" => context.selection,
+              "direction" => opts["direction"] || profile["goal"]
+            }),
+            request("sound-space-function", "scene_mechanics", %{
+              "selection" => context.selection,
+              "concern" =>
+                "How offscreen sound, absence, spatial relationship, withheld information or object placement can change the scene without forcing explanatory dialogue."
+            })
+          ]
+
+        "cinematic_rhythm" ->
+          [
+            request("cinematic-rhythm", "scene_mechanics", %{
+              "selection" => context.selection,
+              "concern" =>
+                "Playable timing, intentional stillness, entrances/exits, held beats and performance rhythm. Silence is not automatically a defect."
+            }),
+            request("cinematic-rhythm-action", "action", %{
+              "selection" => context.selection,
+              "direction" => opts["direction"] || profile["goal"]
+            })
+          ]
+
+        "transition" ->
+          [
+            request("transition-function", "scene_mechanics", %{
+              "selection" => context.selection,
+              "concern" =>
+                "Transition and juxtaposition opportunities at scene boundaries: what image, sound, absence or unresolved action carries into the next scene without rewriting it into explanation."
+            })
+          ]
+
         "brevity" ->
           [
             request("rhythm", "dialogue", %{
@@ -314,7 +349,7 @@ defmodule FountWorkshop.Writing.Preparation do
        "pass_profile" => profile,
        "writer_direction" => opts["direction"],
        "pass_rule" =>
-         "Write revised pages in selective groups. The profile is a lens, not universal rules. Preserve intentional long turns, direct emotion and existing good material when they serve the writer's direction."
+         "Write revised pages in selective groups. The profile is a lens, not universal rules. A cinematic pass may work through image, sound, offscreen action, absence, spatial relationship, stillness, performance timing or transition without forcing dialogue. Preserve intentional silence, voiceover, long turns, direct emotion and existing good material when they serve the writer's direction. Do not introduce camera directions unless requested."
      }}
   end
 

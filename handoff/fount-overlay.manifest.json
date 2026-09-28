@@ -1,368 +1,247 @@
 {
   "format_version": 1,
-  "phase": 12,
-  "date": "2026-09-27",
-  "source_input_sha256": "6565f479c58774649c3036b900f620a576b93920741bacd4d4d50bf4be6ffd27",
+  "phase": 13,
+  "description": "Fount Phase 13 - Cinematic Revision, Rehearsal, and Voice",
   "files": [
     {
       "path": "CHANGELOG.md",
       "action": "modify",
-      "original_sha256": "9311953555af7fb770b5a0cc5863fa0fcca554c739bf5515886623088d8c2a84",
-      "original_terminal_lf_sha256": "4993e751f86aaacf914c1cb0e81b9b34413572445145feb4a53e664cff4d286e",
-      "result_sha256": "d3ad0840f5a31cae3f7dce70a6a61b63b171029ae588f3cc7d1f3a64e9c5d515",
+      "original_sha256": "d3ad0840f5a31cae3f7dce70a6a61b63b171029ae588f3cc7d1f3a64e9c5d515",
+      "original_terminal_lf_sha256": "1b487aec599533cce19e55ace71792574d0bd2c93fd2745fdfcc1b0ab8287025",
+      "result_sha256": "21fcdde14d89bed6bad8fe84f1eef536770b1658613a5dcf565937d9896f0085",
       "mode": 420,
-      "original_bytes": 3350,
-      "result_bytes": 4068
-    },
-    {
-      "path": "packages/fount/priv/writing_contracts/workflow.schema.json",
-      "action": "modify",
-      "original_sha256": "f5cbf729bb55cc90e7df23a44fc9f8f7553dad32a5856186c21c740d022ae0ad",
-      "original_terminal_lf_sha256": "a78739300c535f2d797c5b2148813a9912047e868e0666b657bc9b31a03087a6",
-      "result_sha256": "1d9016ad8d4f75a885d06fcca3a691eb136c66fbec97a6af24ce92781f91a452",
-      "mode": 420,
-      "original_bytes": 6332,
-      "result_bytes": 6351
+      "original_bytes": 4068,
+      "result_bytes": 4892
     },
     {
       "path": "packages/fount_workshop/CHANGELOG.md",
       "action": "modify",
-      "original_sha256": "ea3d241e7e41a80911f4678f64167b87892817c1a71895f3746f953754ec8e92",
-      "original_terminal_lf_sha256": "9fefdb97f429d39c8ae0a1f5d2d9507831592e16a2542e26bb5840ec20db7123",
-      "result_sha256": "1c6d3046b7616f8798bf78755bf2ff1fce6b535fc96f4558fcecb10bdf9cf9bc",
+      "original_sha256": "1c6d3046b7616f8798bf78755bf2ff1fce6b535fc96f4558fcecb10bdf9cf9bc",
+      "original_terminal_lf_sha256": "483ac4714cc7a88f98805f6fed90d93969484576893a5c943a5ae42cdb412d51",
+      "result_sha256": "48b5e546e3602ba7e221f438ed62d08d6fe62601abcc82894f90578bc09f1d05",
       "mode": 420,
-      "original_bytes": 3005,
-      "result_bytes": 3854
+      "original_bytes": 3854,
+      "result_bytes": 4678
     },
     {
       "path": "packages/fount_workshop/README.md",
       "action": "modify",
-      "original_sha256": "aa9778e9f62f33ad8d804912398bc4ad5b0086878447276e7a27f3d04e370ebd",
-      "original_terminal_lf_sha256": "311e5536c2d100b56e668492949781cc8afbb37406b1cd4e736446cfeec63348",
-      "result_sha256": "a1a4ac07dac8b8f360e0245a25d612e2b7bc833e420e4cfcb05626504040ca34",
+      "original_sha256": "a1a4ac07dac8b8f360e0245a25d612e2b7bc833e420e4cfcb05626504040ca34",
+      "original_terminal_lf_sha256": "7021f1b5b8e42d5b979062d9a4123f214f3c755ad05a15f271b7f97f9951c629",
+      "result_sha256": "91aee225fe9e9dcc53eb848c7625c987739658cfe90b5ef0eb88a08307f35b01",
       "mode": 420,
-      "original_bytes": 6544,
-      "result_bytes": 7076
+      "original_bytes": 7076,
+      "result_bytes": 7692
     },
     {
       "path": "packages/fount_workshop/examples/README.md",
       "action": "modify",
-      "original_sha256": "caa809e4cbb9b4922cdd04a72c5f979573777c869f356ee2c65053e5d767718f",
-      "original_terminal_lf_sha256": "a52ccf557fa92bbde4a9397d102c7fbfe4f35a7b15fca88877beba6b7bd09813",
-      "result_sha256": "100d37a187087db1bbdc959a031868e92293becbffa0a064db75b3de10b1e82f",
+      "original_sha256": "6591b5b6a26640fc765dc3d28f7eba8bd277cc59b69ea3d512766c845ff8ee02",
+      "original_terminal_lf_sha256": "f865b548519256178de14aa256f6d49e7fd58b87ae64255b2a0ba0b9e809016f",
+      "result_sha256": "ea8c5af8e1f5f7c3faaef91a37fe03d2cb901cf689436eb94bc9f993aad8a9fa",
       "mode": 420,
-      "original_bytes": 5482,
-      "result_bytes": 6026
+      "original_bytes": 6024,
+      "result_bytes": 6396
     },
     {
-      "path": "packages/fount_workshop/examples/phase_twelve/README.md",
+      "path": "packages/fount_workshop/examples/phase_thirteen/README.md",
       "action": "add",
       "original_sha256": null,
       "original_terminal_lf_sha256": null,
-      "result_sha256": "a30b79bfb50ee31505e3d1d411b64c32e2db4abda2829d6362c23d1cf10d3cda",
+      "result_sha256": "34e169cb754fa3d4c9461f70c768de59ac6b6359a3ced2ceaba20c5ec522fba1",
       "mode": 420,
       "original_bytes": null,
-      "result_bytes": 3318
+      "result_bytes": 2644
     },
     {
-      "path": "packages/fount_workshop/examples/phase_twelve/brief_patch.json",
+      "path": "packages/fount_workshop/guides/cinematic-revision-rehearsal-and-voice.md",
       "action": "add",
       "original_sha256": null,
       "original_terminal_lf_sha256": null,
-      "result_sha256": "c1a6379a6c27b05ab9e7efb76bb8ec68fa49761c676347618118c736e6b62ce8",
+      "result_sha256": "4f738b84743ae2409e4b98a4aac034dfbc2ef4b85a1f331c50460ca2867ba0eb",
       "mode": 420,
       "original_bytes": null,
-      "result_bytes": 206
+      "result_bytes": 5930
     },
     {
-      "path": "packages/fount_workshop/examples/phase_twelve/image_fragment.json",
+      "path": "packages/fount_workshop/lib/fount_workshop/comparison.ex",
       "action": "add",
       "original_sha256": null,
       "original_terminal_lf_sha256": null,
-      "result_sha256": "53534427be709e4dbbdf7f43e92b5ca0b1fddcc1210eff4fe44e63a4ec4bc225",
+      "result_sha256": "f14c038cf79ef078bb0ccfe65923983c6ed13b2a08ae50e991f7249069a014f8",
       "mode": 420,
       "original_bytes": null,
-      "result_bytes": 140
+      "result_bytes": 4168
     },
     {
-      "path": "packages/fount_workshop/examples/phase_twelve/inspect_mode.json",
-      "action": "add",
-      "original_sha256": null,
-      "original_terminal_lf_sha256": null,
-      "result_sha256": "05f8da1f47f5ab1641ec2c6eb7c82cccaeaff22760e60e644d0c16d4431eed46",
-      "mode": 420,
-      "original_bytes": null,
-      "result_bytes": 20
-    },
-    {
-      "path": "packages/fount_workshop/examples/phase_twelve/manual_candidate.json",
-      "action": "add",
-      "original_sha256": null,
-      "original_terminal_lf_sha256": null,
-      "result_sha256": "52f35df473e418d12d3022f1893b2ba0d9051ebd989544cab1b98b8b78b5c0a5",
-      "mode": 420,
-      "original_bytes": null,
-      "result_bytes": 606
-    },
-    {
-      "path": "packages/fount_workshop/examples/phase_twelve/manual_edit.json",
-      "action": "add",
-      "original_sha256": null,
-      "original_terminal_lf_sha256": null,
-      "result_sha256": "0ad126059f2e701f83713b84ec42e5649e52d426de9f97b922f1278a5a83446f",
-      "mode": 420,
-      "original_bytes": null,
-      "result_bytes": 214
-    },
-    {
-      "path": "packages/fount_workshop/examples/phase_twelve/open_request.json",
-      "action": "add",
-      "original_sha256": null,
-      "original_terminal_lf_sha256": null,
-      "result_sha256": "79fde305c7b3cad50385bdc933076d1bf6a3f9bb9a18f673436bc4383ce427c6",
-      "mode": 420,
-      "original_bytes": null,
-      "result_bytes": 489
-    },
-    {
-      "path": "packages/fount_workshop/guides/discovery-and-scene-exploration.md",
-      "action": "add",
-      "original_sha256": null,
-      "original_terminal_lf_sha256": null,
-      "result_sha256": "5166735e203032d560ae89b01c00cb84f8a184a33d1c6cecfc6478a951383b1f",
-      "mode": 420,
-      "original_bytes": null,
-      "result_bytes": 4680
-    },
-    {
-      "path": "packages/fount_workshop/lib/fount_workshop/candidate.ex",
+      "path": "packages/fount_workshop/lib/fount_workshop/pass.ex",
       "action": "modify",
-      "original_sha256": "96964fa696b22c6c18835e186b18300aeac713d134174217b36e8acc395f651e",
-      "original_terminal_lf_sha256": "2b749ccc96566019a9baab7ea12ff7ef5afd0f94af55aee4de8eca6f5753b3f2",
-      "result_sha256": "36f8c33c4bbb2c40c7eec44d3fa21657e2c723c542722a38154f368dc1789de8",
+      "original_sha256": "482ffffcbcb852cebceb99eda86713233306a2f4a86a1cb0dab513c1ad5c75bd",
+      "original_terminal_lf_sha256": "28190f6a2b6d05384657ab65dc849088b589e6cbdcbd6688e3074f33bfc4813d",
+      "result_sha256": "1f81f7163f9d4e0c464cb087774203d235ef0aad6be83478092a0c8584d3a979",
       "mode": 420,
-      "original_bytes": 19045,
-      "result_bytes": 19312
+      "original_bytes": 5622,
+      "result_bytes": 5725
     },
     {
-      "path": "packages/fount_workshop/lib/fount_workshop/candidate_api.ex",
-      "action": "modify",
-      "original_sha256": "345bfaa2029c3ac37c8b49b7df96e2b97c5818bd811c2fbe3c18cdd5b5f09c58",
-      "original_terminal_lf_sha256": "2cc7a54ca37a4b1b3940ec7b640f9e7ee3765f285f3801fc7cb7c979d459452a",
-      "result_sha256": "aae9b0769c576994f8000a25e36109e2d8357b1f11c3292c1291b6f6dd28b80c",
-      "mode": 420,
-      "original_bytes": 9719,
-      "result_bytes": 11706
-    },
-    {
-      "path": "packages/fount_workshop/lib/fount_workshop/cli.ex",
-      "action": "modify",
-      "original_sha256": "21a843eb0b173678b5b0190c02aec7178388ba977ec1607e4efc34130c3db9a2",
-      "original_terminal_lf_sha256": "1bd5823b25a29f79ecd42e02780aa3c43ede13a37081ebca467299e09c185e3e",
-      "result_sha256": "e963ef2bbb104ba003f0a4a937d6482c8e345253a0994b0402d45c00ba311295",
-      "mode": 420,
-      "original_bytes": 10244,
-      "result_bytes": 16542
-    },
-    {
-      "path": "packages/fount_workshop/lib/fount_workshop/discovery.ex",
+      "path": "packages/fount_workshop/lib/fount_workshop/rehearsal.ex",
       "action": "add",
       "original_sha256": null,
       "original_terminal_lf_sha256": null,
-      "result_sha256": "13043ba4343db11a795e1a35ecbeead48e62cd9858e0fadf8c5a8eb1c92bec21",
+      "result_sha256": "086df880555a839de3f277b03524716d4b7ec1d5ac5a53f247f9f3c526e3670a",
       "mode": 420,
       "original_bytes": null,
-      "result_bytes": 18906
+      "result_bytes": 5394
     },
     {
       "path": "packages/fount_workshop/lib/fount_workshop/request.ex",
       "action": "modify",
-      "original_sha256": "95ffcf14d8f34f4e9a3fed02a2a202c3472361d9490a50ea297f0447affe1a39",
-      "original_terminal_lf_sha256": "add8d3d49e21d6e41b38354d3bffa98d025d135bfff85840de6b08e24e8eb409",
-      "result_sha256": "a9870dc9b496f7fbf1b915e52b03c5f71ab58d6c64c5790eb6fce720892da8b1",
+      "original_sha256": "0e939b57b24b68c052d9b49382e0abe3ca57ff6c17c90564a1fb0c6bad4a7104",
+      "original_terminal_lf_sha256": "0ccc8cc5f2c319627a6e369460c9392e89a5ae0b8a3fcdde04a3e587cfffdc89",
+      "result_sha256": "ead81560b8c1e381910faa649c42ba5453d6868e022142c66e6e711c675ac164",
       "mode": 420,
-      "original_bytes": 7702,
-      "result_bytes": 9483
+      "original_bytes": 9506,
+      "result_bytes": 9640
     },
     {
       "path": "packages/fount_workshop/lib/fount_workshop/session.ex",
       "action": "modify",
-      "original_sha256": "136d9ca3651f696819af7cc1f05c57fb0d27a6fb0a39f50a11c83047845b59c9",
-      "original_terminal_lf_sha256": "c9d2e39789fb15f71e4b8be33c4819a948b05ac3b1cd8b2cc6f55869b34781b8",
-      "result_sha256": "3b70e8ff8dff57dbc88ed303b8a59af206510791022166d5f0f15ff92f774338",
+      "original_sha256": "ee2b111900b17dc8ab0e1cf9ce4af3375ebc7259cf90961e2ae4995563929e19",
+      "original_terminal_lf_sha256": "5858449bd67e3c7ea340f6b7c3add7d5e202d728bd293e28ccf38ee4714189cf",
+      "result_sha256": "cb58c78451745cd83d0b93995102b73f91ba736a122ed3840aa0cf74722b8883",
       "mode": 420,
-      "original_bytes": 21399,
-      "result_bytes": 24227
+      "original_bytes": 24239,
+      "result_bytes": 24485
     },
     {
-      "path": "packages/fount_workshop/lib/fount_workshop/strategy.ex",
+      "path": "packages/fount_workshop/lib/fount_workshop/writing/context.ex",
       "action": "modify",
-      "original_sha256": "21e0d7e08cefae0c5f1fe6a70701c6e7637b2a6231f3127c116331a55059a435",
-      "original_terminal_lf_sha256": "a7dac768afa1523b924145ca444fe849d3ed2a260c49b40980fea1f52278f660",
-      "result_sha256": "9158c68740d7ee2a5e496d5dfe0b8a0771a989d82f36d997f4ac517bb87c59d8",
+      "original_sha256": "e631c484d6e9c0402bbe6132c05479a9043f904f2efe4da11507c2cfab9406dc",
+      "original_terminal_lf_sha256": "8b77ed509b20e60bb5212df2d083968c34f5490b0f36c4eec4e95dff8dfc6df4",
+      "result_sha256": "064165b42597fd19942c71556decb5c73d17cf2fbb6019229308ee11c98173ac",
       "mode": 420,
-      "original_bytes": 4292,
-      "result_bytes": 7118
+      "original_bytes": 8147,
+      "result_bytes": 8373
     },
     {
-      "path": "packages/fount_workshop/lib/mix/tasks/fount.brief.ex",
-      "action": "add",
-      "original_sha256": null,
-      "original_terminal_lf_sha256": null,
-      "result_sha256": "0aec321547eecf15ca3626658cd7a40a81452252308508ddce01c697c10a9472",
-      "mode": 420,
-      "original_bytes": null,
-      "result_bytes": 291
-    },
-    {
-      "path": "packages/fount_workshop/lib/mix/tasks/fount.decide.ex",
-      "action": "add",
-      "original_sha256": null,
-      "original_terminal_lf_sha256": null,
-      "result_sha256": "3408588d72bdb4c905425f2254e52b9398306dd6ece098b52bdf1580e9dac654",
-      "mode": 420,
-      "original_bytes": null,
-      "result_bytes": 295
-    },
-    {
-      "path": "packages/fount_workshop/lib/mix/tasks/fount.edit.ex",
-      "action": "add",
-      "original_sha256": null,
-      "original_terminal_lf_sha256": null,
-      "result_sha256": "7f8fc0ea6c7182874b315828b8ae497cb19165b2f65cc583449be7b8fd27a26a",
-      "mode": 420,
-      "original_bytes": null,
-      "result_bytes": 287
-    },
-    {
-      "path": "packages/fount_workshop/lib/mix/tasks/fount.fragment.ex",
-      "action": "add",
-      "original_sha256": null,
-      "original_terminal_lf_sha256": null,
-      "result_sha256": "d633a892458b278364ad78c5222983c5e5615bd8a8943eaba8f13bcad50f5fa6",
-      "mode": 420,
-      "original_bytes": null,
-      "result_bytes": 303
-    },
-    {
-      "path": "packages/fount_workshop/lib/mix/tasks/fount.manual.ex",
-      "action": "add",
-      "original_sha256": null,
-      "original_terminal_lf_sha256": null,
-      "result_sha256": "32a1ebf918cfab014957a054aeb3c2a93ae7238a0e81020776c4d6ab6b403664",
-      "mode": 420,
-      "original_bytes": null,
-      "result_bytes": 295
-    },
-    {
-      "path": "packages/fount_workshop/lib/mix/tasks/fount.mode.ex",
-      "action": "add",
-      "original_sha256": null,
-      "original_terminal_lf_sha256": null,
-      "result_sha256": "9f4bee86a4f6a4c5c6d4a4256fe353110aa574c3d1aa1a3fa61d775ca7b0c6e4",
-      "mode": 420,
-      "original_bytes": null,
-      "result_bytes": 287
-    },
-    {
-      "path": "packages/fount_workshop/lib/mix/tasks/fount.open.ex",
-      "action": "add",
-      "original_sha256": null,
-      "original_terminal_lf_sha256": null,
-      "result_sha256": "b4a8b32dbe14374c680820c68c8ba71ee3cd38998f00812d840047fb7f94a6d7",
-      "mode": 420,
-      "original_bytes": null,
-      "result_bytes": 287
-    },
-    {
-      "path": "packages/fount_workshop/lib/mix/tasks/fount.outline.ex",
-      "action": "add",
-      "original_sha256": null,
-      "original_terminal_lf_sha256": null,
-      "result_sha256": "2099c5f1f46dca95571af66a4973b743b99c7e2bcbecb7e67972d9ce5d1d09d0",
-      "mode": 420,
-      "original_bytes": null,
-      "result_bytes": 299
-    },
-    {
-      "path": "packages/fount_workshop/lib/mix/tasks/fount.reorder.ex",
-      "action": "add",
-      "original_sha256": null,
-      "original_terminal_lf_sha256": null,
-      "result_sha256": "33f3fb2b5518963a5fc881c5490e09f35b460908269ccb30939aa44b0681f123",
-      "mode": 420,
-      "original_bytes": null,
-      "result_bytes": 299
-    },
-    {
-      "path": "packages/fount_workshop/support/continuation_store.ex",
+      "path": "packages/fount_workshop/lib/fount_workshop/writing/generation.ex",
       "action": "modify",
-      "original_sha256": "df36ce169f19ac9e06680da2727126caaa3d57e2d7efcde0764e56fa2eb21668",
-      "original_terminal_lf_sha256": "50a4123a0ae642956ab068dd50a5d220ffe21b3a9c7ee4fb37a7189ee6b6a55b",
-      "result_sha256": "320a4cadbb87a80bcf8071dc9cf37d8f5b3e6cabfdaf955a3a64c866f938223a",
+      "original_sha256": "2408e923a6c111d92317aa9b7e777a838ce8c5869e89e7226b603a1e628dd5cf",
+      "original_terminal_lf_sha256": "c7648e26d0c2e49453f705620275aeabe10e986d07656ac2514bed9675487037",
+      "result_sha256": "d5922bf2e97788bf05bb0c15613877f1c9009e16e8fc606814d0434ffff03e36",
       "mode": 420,
-      "original_bytes": 2589,
-      "result_bytes": 4467
+      "original_bytes": 6949,
+      "result_bytes": 7584
     },
     {
-      "path": "packages/fount_workshop/test/writer_workflows/phase_twelve_a01_demo_test.exs",
-      "action": "add",
-      "original_sha256": null,
-      "original_terminal_lf_sha256": null,
-      "result_sha256": "c897283ccc9100d4eb7c9ffba80754c090a762b2e44c988c050d9b4db8e36510",
-      "mode": 420,
-      "original_bytes": null,
-      "result_bytes": 7802
-    },
-    {
-      "path": "packages/fount_workshop/test/writer_workflows/phase_twelve_discovery_test.exs",
-      "action": "add",
-      "original_sha256": null,
-      "original_terminal_lf_sha256": null,
-      "result_sha256": "fd1c73a0e169e4a3281556f9e1e8a9c1381a071991eaec03479bcd7c11636553",
-      "mode": 420,
-      "original_bytes": null,
-      "result_bytes": 8453
-    },
-    {
-      "path": "packages/fount_workshop/test/writer_workflows/phase_twelve_inspect_test.exs",
-      "action": "add",
-      "original_sha256": null,
-      "original_terminal_lf_sha256": null,
-      "result_sha256": "15bd10cef8aa0e67c15461d5788614b9ab8e430160490e1bf0fdf1ecb6d465dd",
-      "mode": 420,
-      "original_bytes": null,
-      "result_bytes": 2455
-    },
-    {
-      "path": "packages/fount_workshop/test/writer_workflows/phase_twelve_scene_exploration_test.exs",
-      "action": "add",
-      "original_sha256": null,
-      "original_terminal_lf_sha256": null,
-      "result_sha256": "d3f6e8cdc85da2b3c1eb507c4d5fbfe5f993dcda08e750b25cd6d71124bd5a25",
-      "mode": 420,
-      "original_bytes": null,
-      "result_bytes": 9666
-    },
-    {
-      "path": "scripts/tests/test_phase_eleven_source.py",
+      "path": "packages/fount_workshop/lib/fount_workshop/writing/preparation.ex",
       "action": "modify",
-      "original_sha256": "0e151ed273d06a6dfd0665b4acb5b92500dab63f99fe9961a44fbdd379d441b6",
-      "original_terminal_lf_sha256": "c709d317e50b07f5606f7ea69491aa9d1f74ed2c152d4daf48c0a83193f33ce4",
-      "result_sha256": "144e8aa4b390945118ffeaed6576cb9cf20259b74c3717c9bfae20fc4b9ae951",
+      "original_sha256": "26ad42b1e3b0defa90541358f858930d0a2a8c2af86c975b12ad260c930ccb19",
+      "original_terminal_lf_sha256": "3a2f85fa2054831a44c17fc6ca06364b8d395200a7fa0cae834167730f7ee66d",
+      "result_sha256": "d6562f56486c4302e0c38ccbd7ed5ca5c2c2ac943b7f5982405c1c62b8506b34",
       "mode": 420,
-      "original_bytes": 8260,
-      "result_bytes": 8147
+      "original_bytes": 17805,
+      "result_bytes": 19553
     },
     {
-      "path": "scripts/tests/test_phase_twelve_source.py",
+      "path": "packages/fount_workshop/lib/fount_workshop/writing/voice_protection.ex",
       "action": "add",
       "original_sha256": null,
       "original_terminal_lf_sha256": null,
-      "result_sha256": "5307224944135097fa7074cc6d0768ed7126eee72bbfd329816e0f50349e874a",
+      "result_sha256": "99a86836f3c24c1854aa847765853d053e3dd561d585244f273780bda32e167c",
       "mode": 420,
       "original_bytes": null,
-      "result_bytes": 6100
+      "result_bytes": 5861
+    },
+    {
+      "path": "packages/fount_workshop/mix.exs",
+      "action": "modify",
+      "original_sha256": "3ad93dbf06f623c9b79990f77a6d92d58707ef028d05bbfd16ee8a4f604b1f22",
+      "original_terminal_lf_sha256": "d37670ac7e4d9eff02fbbe1c548930a64bbde43c787b44000cd81f914898409d",
+      "result_sha256": "11aa9a28d4a04cb5847e403f1d80cec58432e665b73033431113a089763b423f",
+      "mode": 420,
+      "original_bytes": 3553,
+      "result_bytes": 3842
+    },
+    {
+      "path": "packages/fount_workshop/priv/writing_profiles/cinematic_rhythm.json",
+      "action": "add",
+      "original_sha256": null,
+      "original_terminal_lf_sha256": null,
+      "result_sha256": "917f575ab50681832eb2bd0d10c585951f721cf86546371ef2f0ffa5d4559fc1",
+      "mode": 420,
+      "original_bytes": null,
+      "result_bytes": 712
+    },
+    {
+      "path": "packages/fount_workshop/priv/writing_profiles/sound_space.json",
+      "action": "add",
+      "original_sha256": null,
+      "original_terminal_lf_sha256": null,
+      "result_sha256": "0394c27b84c2b1bbaed3ba336f19b2a2733c8e000855c93058be47b73ff7e756",
+      "mode": 420,
+      "original_bytes": null,
+      "result_bytes": 726
+    },
+    {
+      "path": "packages/fount_workshop/priv/writing_profiles/transition.json",
+      "action": "add",
+      "original_sha256": null,
+      "original_terminal_lf_sha256": null,
+      "result_sha256": "d9af1e135c0dfd0d2878e17c54f15983e43864e1ca58bb4c4f586c59f0f8428e",
+      "mode": 420,
+      "original_bytes": null,
+      "result_bytes": 694
+    },
+    {
+      "path": "packages/fount_workshop/test/writer_workflows/phase_thirteen_comparison_test.exs",
+      "action": "add",
+      "original_sha256": null,
+      "original_terminal_lf_sha256": null,
+      "result_sha256": "fc11343feb151456d33143bb7dd77e012509a531720439b66d78cc6ae974a5c2",
+      "mode": 420,
+      "original_bytes": null,
+      "result_bytes": 4369
+    },
+    {
+      "path": "packages/fount_workshop/test/writer_workflows/phase_thirteen_pass_profiles_test.exs",
+      "action": "add",
+      "original_sha256": null,
+      "original_terminal_lf_sha256": null,
+      "result_sha256": "abd246b901620ad11122a65e6df51a2c9ad60ebec48a1ddc428f2e9f1af9e138",
+      "mode": 420,
+      "original_bytes": null,
+      "result_bytes": 1134
+    },
+    {
+      "path": "packages/fount_workshop/test/writer_workflows/phase_thirteen_rehearsal_test.exs",
+      "action": "add",
+      "original_sha256": null,
+      "original_terminal_lf_sha256": null,
+      "result_sha256": "b65d2831b22f3ecfeb80e4e147b4f7896b1af334980083b2ce239e879545673f",
+      "mode": 420,
+      "original_bytes": null,
+      "result_bytes": 3490
+    },
+    {
+      "path": "packages/fount_workshop/test/writer_workflows/phase_thirteen_voice_test.exs",
+      "action": "add",
+      "original_sha256": null,
+      "original_terminal_lf_sha256": null,
+      "result_sha256": "768d2691b6c1df324ec80a21504e7e6f090a020cf4e0298d91cec972461b86b6",
+      "mode": 420,
+      "original_bytes": null,
+      "result_bytes": 3332
+    },
+    {
+      "path": "scripts/tests/test_phase_thirteen_source.py",
+      "action": "add",
+      "original_sha256": null,
+      "original_terminal_lf_sha256": null,
+      "result_sha256": "b930031c8a6e35e27a1ac98de969477da2fa34d246a9c1410bf13f9137192b85",
+      "mode": 420,
+      "original_bytes": null,
+      "result_bytes": 5503
     }
   ],
   "deletions": []

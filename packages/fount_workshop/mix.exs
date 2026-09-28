@@ -62,6 +62,7 @@ defmodule FountWorkshop.MixProject do
         "guides/architecture.md",
         "guides/creative-workflows.md",
         "guides/discovery-and-scene-exploration.md",
+        "guides/cinematic-revision-rehearsal-and-voice.md",
         "guides/intelligence-integration.md",
         "guides/scene-revision-loop.md",
         "guides/proposals-and-diffs.md",
@@ -70,12 +71,14 @@ defmodule FountWorkshop.MixProject do
         "guides/table-reads-and-audio.md",
         {"examples/phase_twelve/README.md",
          filename: "phase-twelve-example", title: "Phase 12 Example"},
+        {"examples/phase_thirteen/README.md",
+         filename: "phase-thirteen-example", title: "Phase 13 Example"},
         {"examples/README.md", filename: "examples", title: "Live Examples"}
       ],
       groups_for_extras: [
         Overview: ~r/(README|CHANGELOG|LICENSE)/,
         "Agent Workflows":
-          ~r/guides\/(architecture|creative-workflows|discovery-and-scene-exploration|intelligence-integration|scene-revision-loop|proposals-and-diffs)/,
+          ~r/guides\/(architecture|creative-workflows|discovery-and-scene-exploration|cinematic-revision-rehearsal-and-voice|intelligence-integration|scene-revision-loop|proposals-and-diffs)/,
         "Export & Inspection": ~r/guides\/(pdf-export-and-inspection|submission-checks)/,
         "Rehearsal & Audio": ~r/guides\/table-reads-and-audio/,
         "Live Examples": ~r/examples/
@@ -85,6 +88,8 @@ defmodule FountWorkshop.MixProject do
           FountWorkshop,
           FountWorkshop.Develop,
           FountWorkshop.Review,
+          FountWorkshop.Rehearsal,
+          FountWorkshop.Comparison,
           FountWorkshop.SequenceRebuild,
           FountWorkshop.TargetedRewrite,
           FountWorkshop.NoteResponse,

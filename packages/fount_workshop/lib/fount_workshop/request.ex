@@ -1,10 +1,10 @@
 defmodule FountWorkshop.Request do
   @moduledoc "Closed writer request validation before persistence or paid calls."
-  alias Fount.Intelligence.Playbooks.Constraints
   alias Fount.Writing.Schema
   alias Fount.Writing.UTF8Span
+  alias FountWorkshop.Writing.VoiceProtection
 
-  @common_options ~w(protected_strengths intended_effect pending_question)
+  @common_options ~w(protected_strengths intended_effect pending_question voice_exemplars protected_text style_preferences)
 
   @options %{
     "develop" =>
@@ -38,9 +38,9 @@ defmodule FountWorkshop.Request do
              [] or
              {:error, :unknown_workflow_option},
          {:ok, _} <- Fount.Selection.selected_ids(model, request["selection"]),
-         {:ok, constraints} <-
-           Constraints.resolve(model, request["constraints"]),
          :ok <- common_options(request["options"]),
+         :ok <- VoiceProtection.validate(model, request),
+         {:ok, constraints} <- VoiceProtection.resolve_constraints(model, request),
          :ok <- treatment_count(request),
          :ok <- options(model, workflow, request["options"]) do
       {:ok, Map.put(request, "constraints", constraints)}
@@ -127,7 +127,7 @@ defmodule FountWorkshop.Request do
   end
 
   defp options(_, "pass", opts) do
-    if opts["profile"] in ~w(dialogue_subtext action_visual brevity dry_comedy tension custom) and
+    if opts["profile"] in ~w(dialogue_subtext action_visual sound_space cinematic_rhythm transition brevity dry_comedy tension custom) and
          (opts["profile"] != "custom" or
             (is_binary(opts["direction"]) and String.trim(opts["direction"]) != "")),
        do: :ok,

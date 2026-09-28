@@ -1,0 +1,17 @@
+{
+  "id": "transition",
+  "version": 1,
+  "goal": "Strengthen the dramatic relationship between scene endings and beginnings through juxtaposition, carried sound, image, unresolved action or contrast.",
+  "creative_prompt": "Treat the boundary between scenes as playable material. Prefer a concrete transition mechanism over explanation. Preserve both scenes when the transition can do the work; do not invent montage or camera notation unless the writer requests it.",
+  "context_needs": [
+    "exact_selected_pages",
+    "adjacent_scene_context",
+    "writer_constraints",
+    "source_provenance"
+  ],
+  "suggested_tools": [
+    "scene_mechanics",
+    "action",
+    "check_constraints"
+  ]
+}

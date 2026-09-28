@@ -1,0 +1,17 @@
+{
+  "id": "sound_space",
+  "version": 1,
+  "goal": "Change the scene through sound, offscreen action, absence, object placement or spatial relationship while preserving the writer's intended dramatic ambiguity.",
+  "creative_prompt": "Look for what the audience can hear, fail to hear, see indirectly, or infer from distance and placement. Offscreen events and silence are available tools. Do not convert withheld material into explanatory dialogue and do not add camera directions unless requested.",
+  "context_needs": [
+    "exact_selected_pages",
+    "adjacent_scene_context",
+    "writer_constraints",
+    "source_provenance"
+  ],
+  "suggested_tools": [
+    "action",
+    "scene_mechanics",
+    "check_constraints"
+  ]
+}

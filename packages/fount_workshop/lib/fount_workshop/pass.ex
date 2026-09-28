@@ -6,9 +6,9 @@ defmodule FountWorkshop.Pass do
   alias FountWorkshop.SequenceRebuild
   alias FountWorkshop.TargetedRewrite
 
-  @profiles ~w(action_visual brevity custom dialogue_subtext dry_comedy tension)
+  @profiles ~w(action_visual sound_space cinematic_rhythm transition brevity custom dialogue_subtext dry_comedy tension)
 
-  @doc "Returns the six callable profile IDs."
+  @doc "Returns the callable writer-directed profile IDs."
   def profiles, do: @profiles
 
   @doc "Loads a shipped writing direction, without treating its craft advice as a rule."
@@ -46,7 +46,7 @@ defmodule FountWorkshop.Pass do
       "dialogue_subtext" ->
         rewrite_type(base, scene_ids, :dialogue, instruction, client)
 
-      "action_visual" ->
+      id when id in ["action_visual", "sound_space", "cinematic_rhythm"] ->
         rewrite_type(base, scene_ids, :action, instruction, client)
 
       "custom" ->

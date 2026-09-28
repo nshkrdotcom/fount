@@ -2,6 +2,7 @@ defmodule FountWorkshop.Review do
   @moduledoc "Builds a writer review packet and applies an explicit candidate decision."
   alias Fount.Persistence
   alias Fount.Screenplay
+  alias FountWorkshop.Comparison
   alias FountWorkshop.Writing.ReviewGate
 
   def export(session_id, directory, services, opts \\ []),
@@ -29,6 +30,7 @@ defmodule FountWorkshop.Review do
         "proposed_fountain" => proposed,
         "source_diff" => String.myers_difference(original, proposed),
         "structural_diff" => Screenplay.diff(base, draft),
+        "comparison" => Comparison.compare(base, candidate),
         "change_groups" => candidate["change_groups"],
         "lineage" => candidate["lineage"],
         "provenance" => candidate["provenance"],
@@ -59,7 +61,11 @@ defmodule FountWorkshop.Review do
           "revision_intelligence",
           "revision_comparison",
           "causal_ripple"
-        ]) || %{}
+        ]) || %{},
+      "note_decisions" =>
+        get_in(candidate, ["provenance", "intelligence_lineage", "note_decisions"]) || [],
+      "phase14" =>
+        get_in(candidate, ["provenance", "intelligence_lineage", "phase14"]) || %{}
     }
   end
 

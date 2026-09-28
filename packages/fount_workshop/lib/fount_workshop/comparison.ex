@@ -2,6 +2,7 @@ defmodule FountWorkshop.Comparison do
   @moduledoc "Deterministic original-versus-candidate page comparison; generator self-description is never treated as proof."
 
   alias Fount.Screenplay
+  alias FountWorkshop.ConsequenceReview
   alias FountWorkshop.Store
 
   @language_types ~w(character dialogue parenthetical lyric)
@@ -40,6 +41,7 @@ defmodule FountWorkshop.Comparison do
         "strategy" => candidate["strategy"]
       },
       "generator_claim_is_evidence" => false,
+      "consequence_review" => ConsequenceReview.build(base, candidate),
       "human_review" => %{
         "required_for" => [
           "voice fit",

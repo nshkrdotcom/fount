@@ -34,7 +34,8 @@ defmodule FountWorkshop.CandidateAPI do
              editable_selection: session["request"]["selection"],
              placement: get_in(session, ["request", "options", "placement"]),
              constraints: session["request"]["constraints"] || [],
-             label: Keyword.get(opts, :label, "Writer fragment")
+             label: Keyword.get(opts, :label, "Writer fragment"),
+             intelligence_lineage: Keyword.get(opts, :intelligence_lineage, %{})
            ) do
       save_checked(base, candidate, session_id, services, opts)
     end
@@ -111,7 +112,7 @@ defmodule FountWorkshop.CandidateAPI do
           "title" => Keyword.get(opts, :title, "Writer fragment"),
           "reason" => "Explicit writer edit by " <> actor,
           "depends_on" => [],
-          "addresses_notes" => [],
+          "addresses_notes" => Keyword.get(opts, :addresses_notes, []),
           "evidence_ids" => [],
           "operations" => operations,
           "origin" => "writer_edit"

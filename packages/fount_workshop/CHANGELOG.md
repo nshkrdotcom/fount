@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased - Phase 14 offline implementation
+
+- Add durable noncanonical research dossiers with explicit source provenance, sourced/disputed/unverified/deliberately-fictionalized claim status, host-web-unavailable questions, and untrusted-source instruction isolation.
+- Add durable note triage preserving raw note/source/draft anchors, separate concern/treatment decisions, unmerged conflicts, and exact/relocated/ambiguous/orphaned anchor states.
+- Link decided notes to ordinary writer-origin candidates and expose actual stable-ID consequence review with explicit local/sequence/whole-draft scope, supported versus uncertain downstream effects, unresolved work, and unrelated-scene spillover.
+- Extend manual candidate lineage plus comparison/review surfaces without changing explicit acceptance, and add A06-A08 plus stale-concurrent-edit/rebase/exact-undo regressions and PostgreSQL durability coverage.
+- Runtime Mix/PostgreSQL/provider checks and the optional D046 human study remain for Codex; Phase 15 is not implemented.
+
 ## Unreleased - Phase 13 offline implementation
 
 - Add cinematic pass lenses for sound/space, playable stillness/rhythm and transitions while preserving silence, voiceover and already-working material as valid choices.

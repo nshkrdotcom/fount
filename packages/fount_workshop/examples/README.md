@@ -118,3 +118,7 @@ FOUNT_EXAMPLE_OUT="/tmp/workshop_demo" mix run examples/live.exs --mode recover
 ## Phase 13 cinematic revision, voice and rehearsal
 
 `examples/phase_thirteen/README.md` maps the deterministic A02/A04/A05 fixtures to the public Phase-13 APIs. It demonstrates actual page comparison, required exact-text protection, and noncanonical rehearsal/adoption semantics. The offline handoff does not claim the ExUnit or optional human comparison was executed.
+
+## Phase 14 research, notes, and consequence review
+
+`examples/phase_fourteen/README.md` maps A06–A08 to the deterministic Phase-14 tests and public APIs: research provenance with untrusted-source handling, conflicting note triage and re-anchoring, a note-linked reveal-move candidate with visible consequence review, stale concurrent-edit reconciliation, and exact undo. The offline handoff does not claim ExUnit/PostgreSQL or optional human-review execution.

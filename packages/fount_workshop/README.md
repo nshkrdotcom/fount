@@ -21,6 +21,8 @@ Phase 9 now carries that separation through the actual writing loop: provider-fr
 
 Phase 10 adds an opt-in durable analysis layer for session resume and audit: reusable semantic measurements can survive draft revisions while current evidence/provenance is rematerialized for the active revision. Cache eviction remains separate from candidate/history retention, and writer acceptance is unchanged.
 
+Phase 11 adds a deliberately small live-generation QC lane: `FOUNT_PHASE11_WORKSHOP_LIVE=1 mix run examples/phase_eleven_live.exs` generates exactly one candidate for one scene, disables Observe for that run, exports the normal review packet, and never accepts the candidate. Evaluation/metrics remain in Intelligence.
+
 ## A complete writer demonstration
 
 After configuring a disposable PostgreSQL database and applying Fount's migrations:

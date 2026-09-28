@@ -110,12 +110,9 @@ class PhaseNineSourceTests(unittest.TestCase):
         )
         self.assertIn('"severity" => "advisory"', bridge)
         self.assertIn('"observe_provider_not_configured"', bridge)
-        workspace = "\n".join(
-            path.read_text(encoding="utf-8")
-            for path in (ROOT / "packages").rglob("*.ex")
-        )
-        self.assertNotIn("Phase-11", workspace)
-        self.assertNotIn("Phase 11", workspace)
+        # Later phases may add new modules, but the verified Phase-9 bridge contract stays intact.
+        self.assertNotIn("Inference.complete", bridge)
+        self.assertNotIn("ASM.", bridge)
 
 
 if __name__ == "__main__":

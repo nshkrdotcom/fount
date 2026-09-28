@@ -1,0 +1,207 @@
+{
+  "evidence_level": "synthetic",
+  "expected_reasoning": {
+    "claim_level": "synthetic_regression_only",
+    "construct": "concealment",
+    "supported_label": "true"
+  },
+  "fixture_id": "phase11.concealment.noul",
+  "fixture_sha256": "66e8dd845a6ea4538ef3b4ea3ad51340a754bcd7a618278444c69cc1a4d42e62",
+  "format": "fount.evaluation.fixture",
+  "measurement_result": {
+    "calibration": null,
+    "distribution": {
+      "confidence": null,
+      "kind": "noul",
+      "labels": [],
+      "scalar": null,
+      "selected": null,
+      "values": [
+        [
+          "true",
+          0.82
+        ],
+        [
+          "false",
+          0.18
+        ]
+      ]
+    },
+    "id": "phase11-synthetic-result-concealment",
+    "input_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+    "measurement_spec_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+    "metadata": {
+      "claim_class": "synthetic_regression_fixture",
+      "question_key": "concealment"
+    },
+    "normalized_raw": {
+      "probabilities": {
+        "false": 0.18,
+        "true": 0.82
+      },
+      "probability": 0.82,
+      "type": "noul"
+    },
+    "output_contract_id": "observe.distribution",
+    "output_contract_sha256": "79b0afc9ef4518c7a2834a6ffddbb42812724cd371a691d8152e1c032de87c9b",
+    "provider_fingerprint": {
+      "model": "phase11-synthetic",
+      "provider": "sandbox",
+      "stability": "immutable_exact"
+    },
+    "semantic_execution_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+    "value": {
+      "probabilities": {
+        "false": 0.18,
+        "true": 0.82
+      },
+      "probability": 0.82,
+      "type": "noul"
+    }
+  },
+  "observation": {
+    "calibration_sha256": null,
+    "context_sha256": "6666666666666666666666666666666666666666666666666666666666666666",
+    "dependencies": [
+      "synthetic:concealment"
+    ],
+    "discourse_point": "synthetic-element-3",
+    "evidence": [
+      {
+        "element_id": "synthetic-element-3",
+        "revision_id": "synthetic-revision-1",
+        "span": {
+          "byte_end": 48,
+          "byte_start": 38
+        }
+      }
+    ],
+    "id": "phase11-synthetic-observation-concealment",
+    "kind": "concealment",
+    "lens_id": "dialogue.interaction",
+    "lens_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+    "metadata": {
+      "grounding": "exact_source_evidence"
+    },
+    "projection_id": "page_reader",
+    "projection_sha256": "5555555555555555555555555555555555555555555555555555555555555555",
+    "provenance": {
+      "origin": "synthetic",
+      "rights": "generated_fixture"
+    },
+    "result": {
+      "calibration": null,
+      "distribution": {
+        "confidence": null,
+        "kind": "noul",
+        "labels": [],
+        "scalar": null,
+        "selected": null,
+        "values": [
+          [
+            "true",
+            0.82
+          ],
+          [
+            "false",
+            0.18
+          ]
+        ]
+      },
+      "id": "phase11-synthetic-result-concealment",
+      "input_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+      "measurement_spec_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+      "metadata": {
+        "claim_class": "synthetic_regression_fixture",
+        "question_key": "concealment"
+      },
+      "normalized_raw": {
+        "probabilities": {
+          "false": 0.18,
+          "true": 0.82
+        },
+        "probability": 0.82,
+        "type": "noul"
+      },
+      "output_contract_id": "observe.distribution",
+      "output_contract_sha256": "79b0afc9ef4518c7a2834a6ffddbb42812724cd371a691d8152e1c032de87c9b",
+      "provider_fingerprint": {
+        "model": "phase11-synthetic",
+        "provider": "sandbox",
+        "stability": "immutable_exact"
+      },
+      "semantic_execution_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+      "value": {
+        "probabilities": {
+          "false": 0.18,
+          "true": 0.82
+        },
+        "probability": 0.82,
+        "type": "noul"
+      }
+    },
+    "sensor_id": "sandbox",
+    "story_time_refs": [],
+    "target": {
+      "id": "synthetic-scene-1",
+      "kind": "scene",
+      "revision_id": "synthetic-revision-1"
+    }
+  },
+  "output_contract": {
+    "id": "observe.distribution",
+    "sha256": "79b0afc9ef4518c7a2834a6ffddbb42812724cd371a691d8152e1c032de87c9b",
+    "shape": {
+      "additionalProperties": false,
+      "properties": {
+        "probabilities": {
+          "additionalProperties": false,
+          "properties": {
+            "false": {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            "true": {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            }
+          },
+          "required": [
+            "false",
+            "true"
+          ],
+          "type": "object"
+        },
+        "probability": {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number"
+        },
+        "type": {
+          "const": "noul",
+          "type": "string"
+        }
+      },
+      "required": [
+        "probabilities",
+        "probability",
+        "type"
+      ],
+      "type": "object"
+    }
+  },
+  "question": {
+    "criteria": [],
+    "extra": {},
+    "instructions": "Does Mara conceal the key from Dan?",
+    "kind": "noul",
+    "levels": []
+  },
+  "regression_tags": [
+    "current_output_contract",
+    "frozen_measurement_result",
+    "fresh_observation_provenance"
+  ]
+}

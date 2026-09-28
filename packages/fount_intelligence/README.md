@@ -32,7 +32,9 @@ Phase 9 is the verified baseline for this delivery: Workshop can carry provider-
 
 Phase 10 adds optional durable analysis beneath that writing experience. `Fount.Intelligence.Persistence` stores exact analysis-run history and fronts Observe with a privacy-namespaced L2 MeasurementResult cache; Observe still rematerializes fresh current-revision Observations on reuse. `Fount.Intelligence.Recomputation` composes the existing StoryWorld connected-region and Reader presentation-suffix frontiers with persisted diagnosis/report dependencies. Cache eviction never erases analysis or candidate history. See [Durable analysis, reuse, and recomputation](guides/durable-analysis.md).
 
-The Phase-10 source/tests in this delivery have not been compiled or run under Elixir/PostgreSQL in the source-writing environment. Codex must execute the Phase-10 runtime handoff after the overlay is applied. No Phase-11 calibration/evaluation work is included.
+Phase 10 is the recorded verified baseline for this Phase-11 source delivery. Phase 11 adds rights/provenance corpus policy, independent human annotations with disagreement preservation, distributional calibration/abstention metrics, descriptive drift comparison, frozen current-contract MeasurementResult/Observation benchmarks, twelve-family benchmark coverage, non-linear regression assets, and longitudinal estimate-versus-actual resource calibration. See [Calibration, evaluation, robustness, and corpus policy](guides/evaluation.md) and `mix run examples/phase_eleven.exs`.
+
+The Phase-11 Elixir/runtime/live gates have **not** been run in this source-writing environment. The shipped human-label examples are synthetic and make no human-validation claim. Codex must execute the Phase-11 runtime handoff after the overlay is applied, then stop before Phase 12.
 
 ## License
 

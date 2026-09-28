@@ -101,7 +101,7 @@ class PhaseTenSourceTests(unittest.TestCase):
         self.assertIn("Analysis.runs_for_session", source)
         self.assertIn("head.revision.id == base.revision.id", source)
 
-    def test_dependency_snapshots_remain_external_only_and_phase_eleven_is_absent(self) -> None:
+    def test_dependency_snapshots_remain_external_only_after_later_phases(self) -> None:
         changed = [
             "packages/fount/lib/fount/persistence/analysis.ex",
             "packages/fount_intelligence/lib/fount/intelligence/persistence.ex",
@@ -111,8 +111,6 @@ class PhaseTenSourceTests(unittest.TestCase):
         text = "\n".join(self.read(path) for path in changed)
         for direct in ["SystemOneSDK.", "Inference.complete", "ASM."]:
             self.assertNotIn(direct, text)
-        self.assertNotIn("Phase-11", text)
-        self.assertNotIn("Phase 11", text)
 
 
 if __name__ == "__main__":

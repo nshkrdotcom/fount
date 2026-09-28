@@ -9,7 +9,7 @@ defmodule FountWorkshop.LiveExample do
   alias FountWorkshop.Writing.Budget
   alias FountWorkshop.Writing.ChangeGroups
 
-  @modes ~w(bridge alternatives propagate sequence_routes character_workspace grouped_notes pass_all recover_scene investigate)
+  @modes ~w(bridge alternatives propagate sequence_routes character_workspace grouped_notes pass_all recover_scene investigate phase_eleven_qc)
   def modes, do: @modes
 
   def run(mode, output, options \\ []) do
@@ -18,7 +18,7 @@ defmodule FountWorkshop.LiveExample do
       {root, _} = A.fixture()
       key = "writer-#{mode}-#{Fount.ID.v4()}"
       Fount.Persistence.create(repo, key, root) |> A.require!()
-      clients = FountWorkshop.Launcher.clients() |> A.require!()
+      clients = FountWorkshop.Launcher.clients(observe: mode != "phase_eleven_qc") |> A.require!()
 
       services = %{
         store: Store.new(repo),
@@ -27,13 +27,14 @@ defmodule FountWorkshop.LiveExample do
         renderer: FountWorkshop.Export.PDF
       }
 
-      budget =
-        Budget.new(max_inference_calls: 40, max_measurement_states: 1500)
+      max_inference_calls = if mode == "phase_eleven_qc", do: 8, else: 40
+      max_measurement_states = if mode == "phase_eleven_qc", do: 64, else: 1500
+      budget = Budget.new(max_inference_calls: max_inference_calls, max_measurement_states: max_measurement_states)
 
       opts = [
         budget: budget,
-        max_inference_calls: 40,
-        max_measurement_states: 1500,
+        max_inference_calls: max_inference_calls,
+        max_measurement_states: max_measurement_states,
         max_context_bytes: 100_000,
         output_dir: directory,
         render: mode == "sequence_routes",
@@ -198,6 +199,34 @@ defmodule FountWorkshop.LiveExample do
        "combined_candidate_id" => combined["id"],
        "audition" => audition,
        "source_candidate_ids" => [a["id"], b["id"]]
+     }}
+  end
+
+  defp execute("phase_eleven_qc", root, _key, services, opts) do
+    first = hd(root.ir.scenes)
+
+    request =
+      req(
+        root,
+        "pass",
+        "Tighten the first scene for responsive subtext without changing its story facts or adding a new reveal.",
+        scenes([first]),
+        %{"profile" => "dialogue_subtext"}
+      )
+      |> Map.put("alternatives", 1)
+
+    session = start(root, request, services, opts)
+    candidates = candidates(session, services)
+
+    if length(candidates) != 1, do: raise("Phase-11 live QC expected exactly one candidate")
+    [candidate] = candidates
+
+    {root, [session],
+     %{
+       "candidate_id" => candidate["id"],
+       "scope" => "one_scene_one_candidate",
+       "observe_enabled" => false,
+       "accepted" => false
      }}
   end
 

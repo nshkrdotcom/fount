@@ -16,7 +16,7 @@ File.mkdir_p!(out)
 {:ok, _} = Fount.Repo.start_link(url: url, pool_size: 2)
 
 case mode do
-  new_mode when new_mode in ["bridge", "alternatives", "propagate", "sequence_routes", "character_workspace", "grouped_notes", "pass_all", "recover_scene", "investigate"] ->
+  new_mode when new_mode in ["bridge", "alternatives", "propagate", "sequence_routes", "character_workspace", "grouped_notes", "pass_all", "recover_scene", "investigate", "phase_eleven_qc"] ->
     FountWorkshop.LiveExample.run(new_mode, out, accept_demo: opts[:accept_demo] || false) |> Fount.LiveArtifacts.require!()
 
   "recover" ->

@@ -16,7 +16,7 @@ From this package, run `mix run examples/sandbox.exs`. It uses an authored fixtu
 
 Observe depends on canonical `fount` and `system_one_sdk`. Only `Fount.Observe.Providers.SystemOne` touches native SDK types. Closed sensor, projection and lens registries reject arbitrary executable names. Intelligence interprets measurements; Workshop owns screenplay generation, PDF rendering and acceptance.
 
-The Phase 1 source includes request/error contracts, source projections, a deterministic Sandbox, ordered batch reassembly, analytical budgets, cancellation/timeouts, and a process-owned LRU cache. It does not claim the later calibration/corpus or full measurement-substrate hardening phases are complete.
+The Phase 1 source includes request/error contracts, source projections, a deterministic Sandbox, ordered batch reassembly, analytical budgets, cancellation/timeouts, and a process-owned LRU cache. The measurement substrate is the verified Phase-10 baseline. Phase-11 calibration/corpus interpretation remains owned by Intelligence; Observe only adds a gated live measurement check.
 
 ## Build against the supplied SDK
 
@@ -52,3 +52,7 @@ The installed `diagnosis.concern_relevance` and `diagnosis.evidence_support` len
 ## Phase 8: safe project/studio lens declarations
 
 `Fount.Observe.validate_declarative_lens/1`, `preview_declarative_lens/1`, and the explicit install/enable catalog helpers allow project/studio teams to define one generic proposition/choice/score measurement without loading executable code. Declarations are limited to registered projections, closed typed context, standard thresholds/resources and the existing System One measurement path; module/function names, shell/file access, endpoints, credentials, database/HTTP callbacks, tools and custom decoders/adapters are rejected. See [Constrained declarative lenses](guides/declarative-lenses.md). Durable asset persistence remains a later phase.
+
+## Phase 11 live QC
+
+`FOUNT_PHASE11_OBSERVE_LIVE=1 mix run examples/phase_eleven_live.exs` sends only the synthetic hallway scene through the existing provider boundary three times, records provider-neutral findings/resource usage, and prints no credentials. It is an opt-in live contract/drift check, not human calibration or screenplay-quality evidence.

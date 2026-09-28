@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased - Phase 11 offline implementation
+
+- Add an explicitly gated synthetic live-QC script that repeats the existing `SceneQuestion.ask/5` path three times for provider/model drift inspection without printing credentials.
+- Preserve the existing provider boundary and measurement contracts; calibration/evaluation interpretation remains in `fount_intelligence`.
+
 ## Unreleased
 
 - Add the Phase-8 constrained declarative lens validator/preview/compiler and explicit caller-owned install/enable catalog, without opening executable extension points.

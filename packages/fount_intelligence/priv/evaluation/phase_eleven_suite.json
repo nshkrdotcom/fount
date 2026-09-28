@@ -1,0 +1,46 @@
+{
+  "capability_families": [
+    "scene_engine",
+    "agency_causality",
+    "character_trajectory",
+    "relationship_dynamics",
+    "audience_reader_experience",
+    "sequence_movement",
+    "dialogue_interaction",
+    "setup_payoff_motifs",
+    "emotional_value_movement",
+    "theme_meaning",
+    "genre_lens_packs",
+    "revision_intelligence"
+  ],
+  "fixture_refs": [
+    "frozen_concealment_fixture.json",
+    "nonlinear_story_time.synthetic.json"
+  ],
+  "id": "phase11.core-screenplay-evaluation",
+  "lens_ids": [
+    "scene.engine",
+    "agency.causality",
+    "character.trajectory",
+    "relationship.dynamics",
+    "audience.reader_experience",
+    "sequence.movement",
+    "dialogue.interaction",
+    "setup_payoff.motifs",
+    "emotional.value_movement",
+    "theme.meaning",
+    "genre.lens_pack",
+    "revision.intelligence"
+  ],
+  "slices": [
+    "nonlinear_presentation",
+    "dialogue_heavy",
+    "action_heavy",
+    "deliberate_ambiguity",
+    "ensemble",
+    "short_scene",
+    "long_scene"
+  ],
+  "support_validity": true,
+  "writer_usefulness": "separate_optional_study"
+}

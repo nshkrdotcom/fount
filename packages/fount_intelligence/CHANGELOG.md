@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased - Phase 11 offline implementation
+
+- Add rights/provenance corpus manifests with separate local/human/hosted-Observe/hosted-Inference/local-model/redistribution permissions and secret-key rejection.
+- Add independent semantic human annotations, first-exposure reader checkpoints and disagreement-preserving summaries.
+- Add Brier/log-loss/calibration/abstention and ordinal-error metrics, descriptive distribution/model drift, frozen current-output-contract MeasurementResult/Observation fixtures, explicit stale-fixture regeneration plans, and all-twelve-family benchmark coverage.
+- Add longitudinal preflight-versus-actual resource calibration over Phase-10 durable usage history.
+- Add synthetic nonlinear/corpus/annotation fixtures and provider-free Phase-11 example. Elixir/runtime/live verification remains for Codex; no human study is claimed.
+
 ## Unreleased - Phase 10 offline implementation
 
 - Add an Intelligence-owned durable shell over Core persistence for exact analysis-run history, L2 Observe MeasurementResult reuse, fresh current-revision Observation persistence, and audit export.

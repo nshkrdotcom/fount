@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased - Phase 11 offline implementation
+
+- Add the Intelligence evaluation layer for rights-aware corpora, semantic human annotations/disagreement, calibration and abstention metrics, descriptive drift, frozen current-contract fixtures, nonlinear regressions and longitudinal resource calibration.
+- Add opt-in Observe and Workshop live-QC paths without moving provider ownership across package boundaries or changing writer acceptance.
+- Preserve Phase 10 durable-analysis behavior and stop before Phase 12; runtime/live verification remains for Codex.
+
 ## Unreleased
 
 - Implement the Phase-7 screenplay capability families 5–8 across Intelligence and Observe without advancing to Phase 8.

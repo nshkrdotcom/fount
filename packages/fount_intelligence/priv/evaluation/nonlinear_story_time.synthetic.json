@@ -1,0 +1,33 @@
+{
+  "evidence_level": "synthetic_regression",
+  "expected_invariants": [
+    "reader_reduces_in_presentation_order",
+    "flashback_does_not_inherit_future_state",
+    "unknown_story_time_stays_unknown_without_evidence",
+    "causality_is_not_inferred_from_presentation_order"
+  ],
+  "id": "phase11.non_linear_story_time",
+  "presentation_order": [
+    "scene-present",
+    "scene-later",
+    "scene-flashback",
+    "scene-resolution"
+  ],
+  "story_time_constraints": [
+    {
+      "left": "scene-flashback",
+      "relation": "before",
+      "right": "scene-present"
+    },
+    {
+      "left": "scene-present",
+      "relation": "before",
+      "right": "scene-later"
+    },
+    {
+      "left": "scene-later",
+      "relation": "before",
+      "right": "scene-resolution"
+    }
+  ]
+}

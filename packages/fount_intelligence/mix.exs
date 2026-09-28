@@ -62,6 +62,7 @@ defmodule Fount.Intelligence.MixProject do
         "guides/capabilities-b.md",
         "guides/capabilities-c.md",
         "guides/durable-analysis.md",
+        "guides/evaluation.md",
         "guides/investigations-and-evidence.md",
         "guides/comparison-and-ablation.md",
         "guides/playbook-catalog.md",
@@ -83,7 +84,12 @@ defmodule Fount.Intelligence.MixProject do
           Fount.Intelligence.Packs.Catalog,
           Fount.Intelligence.Packs.GenrePack,
           Fount.Intelligence.Persistence,
-          Fount.Intelligence.Recomputation
+          Fount.Intelligence.Recomputation,
+          Fount.Intelligence.Evaluation,
+          Fount.Intelligence.Evaluation.CorpusManifest,
+          Fount.Intelligence.Evaluation.Annotation,
+          Fount.Intelligence.Evaluation.Metrics,
+          Fount.Intelligence.Evaluation.Benchmark
         ],
         "Pure interpretation": [
           Fount.Intelligence.Capabilities.DecisionPolicy,
@@ -114,7 +120,7 @@ defmodule Fount.Intelligence.MixProject do
       maintainers: ["nshkrdotcom"],
       licenses: ["MIT"],
       links: %{"GitHub" => @source_url},
-      files: ~w(lib guides assets examples mix.exs README.md CHANGELOG.md LICENSE)
+      files: ~w(lib guides assets examples priv mix.exs README.md CHANGELOG.md LICENSE)
     ]
   end
 end

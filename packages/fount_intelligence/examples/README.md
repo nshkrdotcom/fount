@@ -27,3 +27,7 @@ The historical Phase 1 writing preservation demonstration remains `packages/foun
 ## Phase 8 capability-completion demonstration
 
 `mix run examples/phase_eight.exs` creates a tiny base screenplay and an explicit candidate revision, supplies deterministic `Fount.Observe.Sandbox` answers, and runs the preserved `revision_regression` writer packet through Phase-8 Revision Intelligence. The packet reports intended-effect/protected-strength evidence and separate source/StoryWorld/Reader comparison slots without accepting either revision or generating new pages. Runtime execution remains for Codex QC in this source delivery.
+
+## Phase 11 evaluation demonstration
+
+`mix run examples/phase_eleven.exs` validates the shipped synthetic rights manifest, preserves two disagreeing first-reader annotations, evaluates a sample probability distribution, compares descriptive drift, validates the frozen current-output-contract fixture and lists all twelve capability benchmark mappings. It performs no provider or database call and makes no human-validation claim.

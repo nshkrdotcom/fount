@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased - Phase 11 offline implementation
+
+- Add an explicitly gated `phase_eleven_qc` live mode limited to one scene and one generated candidate, with Observe disabled and writer acceptance forced off.
+- Preserve all existing generation, review, resume and acceptance behavior; Phase-11 evaluation does not rank or promote candidates.
+
 ## Unreleased - Phase 10 offline implementation
 
 - Allow writer sessions to opt into durable Intelligence analysis with an explicit privacy namespace while preserving the existing Store + Inference-only lane.

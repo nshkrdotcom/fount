@@ -1,0 +1,25 @@
+{
+  "allowed_uses": [
+    "structural_evaluation",
+    "reader_checkpoint_evaluation",
+    "regression_testing"
+  ],
+  "confidentiality_class": "non_confidential_synthetic",
+  "corpus_item_id": "phase11-synthetic-feature-001",
+  "human_review_allowed": true,
+  "label": "synthetic-nonlinear-feature",
+  "notes": "Synthetic authored evaluation material. No claim of human validation.",
+  "permissions": {
+    "human_review": true,
+    "inference_hosted": false,
+    "local_model": true,
+    "local_storage": true,
+    "observe_hosted": false,
+    "redistribution": true
+  },
+  "provider_export_allowed": false,
+  "redistribution_allowed": true,
+  "retention_policy": "repository_fixture",
+  "rights_basis": "project_generated_synthetic_fixture",
+  "rights_evidence_ref": "repository_fixture_authorship_record"
+}

@@ -84,7 +84,11 @@ For a project starting from a brief, use `Develop.run/5` or the public `FountWor
 
 Run `npm ci` in this package for the existing renderer; PDF inspection requires Poppler. Database workflows require `FOUNT_DATABASE_URL` and Fount's migrations. For the newly inspected SDK source, set `FOUNT_SYSTEM_ONE_SDK_PATH` before resolving dependencies; details are in Observe's guide.
 
-Run `mix test` for package tests and `MIX_ENV=test mix test integration` for the explicit integration directory after preparing the database/PDF prerequisites. The supplied snapshot records Phases 1–14 as applied/runtime-complete. Phase 15 in this overlay is an offline source implementation pending Codex runtime repair/QC; it does not claim Mix/PostgreSQL/provider/TTS/PDF or human-study execution.
+Run `mix test` for package tests and `MIX_ENV=test mix test integration` for the explicit integration directory after preparing the database/PDF prerequisites. The supplied snapshot records Phases 1–15 as runtime-complete on applicable non-human engineering gates. Phase 16 adds the final source/acceptance audit and documentation cleanup; its Mix/PostgreSQL/Hex/provider/PDF/TTS gates remain for Codex runtime QC, and optional human studies remain separate evidence.
+
+## Final integration audit
+
+Phase 16 does not add another generation or canon path. It audits the existing four-package product and the W01–W12/A01–A12 demonstrations through `scripts/final_acceptance.py`, `scripts/final_acceptance.sh`, and [`guides/final-acceptance.md`](guides/final-acceptance.md). Source-only checks can run without credentials; runtime, database, package-build, live-provider, and human evidence remain explicitly separate.
 
 ## License
 

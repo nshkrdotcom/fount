@@ -126,3 +126,6 @@ FOUNT_EXAMPLE_OUT="/tmp/workshop_demo" mix run examples/live.exs --mode recover
 ## Phase 15 read/share/resume and usefulness
 
 `examples/phase_fifteen/README.md` documents the provider-free A09–A12 path: human table-read packets with revision-linked reactions, privacy-safe accepted-draft Fountain/FDX sharing, stale/idempotent acceptance and session resume, and usefulness evidence that can record kept-original or generic-output outcomes without producing a screenplay score. The optional D046 human study remains NOT_RUN in the offline delivery.
+## Phase 16 final acceptance
+
+`examples/phase_sixteen/README.md` is the final execution map. Its `acceptance_matrix.json` owns W01–W12/A01–A12 evidence paths and keeps Phase-16 execution status explicit until runtime QC records actual results. `bash scripts/final_acceptance.sh --static` runs the credential-free source audit; `--runtime` adds the repository CI and package-build ladder without converting skipped PostgreSQL/live/human gates into passes.

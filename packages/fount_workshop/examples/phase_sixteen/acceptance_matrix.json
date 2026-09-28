@@ -1,0 +1,367 @@
+{
+  "format_version": 1,
+  "phase": 16,
+  "purpose": "Final traceability map for the existing writer workflows and acceptance scenarios; not a replacement workflow or proof of runtime execution.",
+  "phase16_execution_status": "NOT_RUN",
+  "source_revision": "TO_BE_RECORDED_BY_RUNTIME_QC",
+  "workflows": [
+    {
+      "id": "W01",
+      "title": "A writing session, not a diagnostic funnel",
+      "evidence_paths": [
+        "packages/fount_workshop/test/writer_workflows/phase_twelve_discovery_test.exs",
+        "packages/fount_workshop/test/writer_workflows/phase_fifteen_read_share_resume_test.exs"
+      ],
+      "phase16_execution_status": "NOT_RUN"
+    },
+    {
+      "id": "W02",
+      "title": "An evolving brief and a collection of wanted material",
+      "evidence_paths": [
+        "packages/fount_workshop/test/writer_workflows/phase_twelve_discovery_test.exs"
+      ],
+      "phase16_execution_status": "NOT_RUN"
+    },
+    {
+      "id": "W03",
+      "title": "A scene workshop",
+      "evidence_paths": [
+        "packages/fount_workshop/test/writer_workflows/phase_twelve_scene_exploration_test.exs"
+      ],
+      "phase16_execution_status": "NOT_RUN"
+    },
+    {
+      "id": "W04",
+      "title": "Cinematic action, sound, space, and rhythm",
+      "evidence_paths": [
+        "packages/fount_workshop/test/writer_workflows/phase_thirteen_pass_profiles_test.exs"
+      ],
+      "phase16_execution_status": "NOT_RUN"
+    },
+    {
+      "id": "W05",
+      "title": "Character and relationship rehearsal",
+      "evidence_paths": [
+        "packages/fount_workshop/test/writer_workflows/phase_thirteen_rehearsal_test.exs"
+      ],
+      "phase16_execution_status": "NOT_RUN"
+    },
+    {
+      "id": "W06",
+      "title": "Voice protection and language",
+      "evidence_paths": [
+        "packages/fount_workshop/test/writer_workflows/phase_thirteen_voice_test.exs"
+      ],
+      "phase16_execution_status": "NOT_RUN"
+    },
+    {
+      "id": "W07",
+      "title": "Research that supports invention without laundering facts",
+      "evidence_paths": [
+        "packages/fount_workshop/test/writer_workflows/phase_fourteen_research_test.exs"
+      ],
+      "phase16_execution_status": "NOT_RUN"
+    },
+    {
+      "id": "W08",
+      "title": "Notes become decisions, not obedience",
+      "evidence_paths": [
+        "packages/fount_workshop/test/writer_workflows/phase_fourteen_notes_test.exs"
+      ],
+      "phase16_execution_status": "NOT_RUN"
+    },
+    {
+      "id": "W09",
+      "title": "Revision experiments and consequence review",
+      "evidence_paths": [
+        "packages/fount_workshop/test/writer_workflows/phase_fourteen_consequence_test.exs",
+        "packages/fount_workshop/test/writer_workflows/phase_fourteen_rebase_test.exs"
+      ],
+      "phase16_execution_status": "NOT_RUN"
+    },
+    {
+      "id": "W10",
+      "title": "Read, hear, and share",
+      "evidence_paths": [
+        "packages/fount_workshop/test/writer_workflows/phase_fifteen_read_share_resume_test.exs"
+      ],
+      "phase16_execution_status": "NOT_RUN"
+    },
+    {
+      "id": "W11",
+      "title": "Finite help and graceful failure",
+      "evidence_paths": [
+        "packages/fount_workshop/test/writer_workflows/phase_twelve_discovery_test.exs",
+        "packages/fount_workshop/test/writer_workflows/phase_fifteen_read_share_resume_test.exs"
+      ],
+      "phase16_execution_status": "NOT_RUN"
+    },
+    {
+      "id": "W12",
+      "title": "Measure usefulness without turning creativity into a scoreboard",
+      "evidence_paths": [
+        "packages/fount_workshop/test/writer_workflows/phase_fifteen_usefulness_test.exs"
+      ],
+      "phase16_execution_status": "NOT_RUN"
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "A01",
+      "title": "Start with an image",
+      "requirements": [
+        "W01",
+        "W02",
+        "W03"
+      ],
+      "fixture_or_consented_source_identity": "phase12-pool synthetic image/fragment fixture",
+      "invoked_public_operation_or_command": "mix test test/writer_workflows/phase_twelve_a01_demo_test.exs",
+      "evidence_paths": [
+        "packages/fount_workshop/test/writer_workflows/phase_twelve_a01_demo_test.exs"
+      ],
+      "candidate_or_output_path": "temporary Workshop session/candidate/review artifacts",
+      "assertions": [
+        "three materially different openings remain candidates until explicit review",
+        "writer can keep none or adopt a manual fragment",
+        "no global analysis is required"
+      ],
+      "phase16_execution_status": "NOT_RUN",
+      "source_revision": "TO_BE_RECORDED_BY_RUNTIME_QC",
+      "human_review_status": "NOT_RUN"
+    },
+    {
+      "id": "A02",
+      "title": "Protect a quiet choice",
+      "requirements": [
+        "W04",
+        "W06"
+      ],
+      "fixture_or_consented_source_identity": "quiet key-and-cooling-cup synthetic fixture",
+      "invoked_public_operation_or_command": "mix test test/writer_workflows/phase_thirteen_pass_profiles_test.exs",
+      "evidence_paths": [
+        "packages/fount_workshop/test/writer_workflows/phase_thirteen_pass_profiles_test.exs"
+      ],
+      "candidate_or_output_path": "temporary candidate/comparison artifacts",
+      "assertions": [
+        "silence and unresolved tenderness remain valid",
+        "visual/sound experiments need not add confrontation or explanation",
+        "performed fact remains separate from interpretation"
+      ],
+      "phase16_execution_status": "NOT_RUN",
+      "source_revision": "TO_BE_RECORDED_BY_RUNTIME_QC",
+      "human_review_status": "NOT_RUN"
+    },
+    {
+      "id": "A03",
+      "title": "Distinct alternatives, not paraphrases",
+      "requirements": [
+        "W03"
+      ],
+      "fixture_or_consented_source_identity": "synthetic conceal/volunteer/accidental-reveal fixture",
+      "invoked_public_operation_or_command": "mix test test/writer_workflows/phase_twelve_scene_exploration_test.exs",
+      "evidence_paths": [
+        "packages/fount_workshop/test/writer_workflows/phase_twelve_scene_exploration_test.exs"
+      ],
+      "candidate_or_output_path": "temporary candidate alternatives",
+      "assertions": [
+        "candidate pages embody different dramatic mechanisms",
+        "three confession paraphrases fail the fixture",
+        "model self-description is not accepted as diversity evidence"
+      ],
+      "phase16_execution_status": "NOT_RUN",
+      "source_revision": "TO_BE_RECORDED_BY_RUNTIME_QC",
+      "human_review_status": "NOT_RUN"
+    },
+    {
+      "id": "A04",
+      "title": "Preserve voice",
+      "requirements": [
+        "W06"
+      ],
+      "fixture_or_consented_source_identity": "synthetic repeated multilingual protected-text fixture",
+      "invoked_public_operation_or_command": "mix test test/writer_workflows/phase_thirteen_voice_test.exs",
+      "evidence_paths": [
+        "packages/fount_workshop/test/writer_workflows/phase_thirteen_voice_test.exs"
+      ],
+      "candidate_or_output_path": "temporary candidate/review-gate artifacts",
+      "assertions": [
+        "protected bytes survive",
+        "multilingual/dialect/repetition is not silently normalized",
+        "generic polish can be rejected"
+      ],
+      "phase16_execution_status": "NOT_RUN",
+      "source_revision": "TO_BE_RECORDED_BY_RUNTIME_QC",
+      "human_review_status": "NOT_RUN"
+    },
+    {
+      "id": "A05",
+      "title": "Rehearsal is not history",
+      "requirements": [
+        "W05"
+      ],
+      "fixture_or_consented_source_identity": "synthetic stolen-boat rehearsal fixture",
+      "invoked_public_operation_or_command": "mix test test/writer_workflows/phase_thirteen_rehearsal_test.exs",
+      "evidence_paths": [
+        "packages/fount_workshop/test/writer_workflows/phase_thirteen_rehearsal_test.exs"
+      ],
+      "candidate_or_output_path": "temporary rehearsal/session artifacts",
+      "assertions": [
+        "unadopted rehearsal does not enter later facts/prompts",
+        "adoption is explicit and traceable",
+        "rejection remains outside canon"
+      ],
+      "phase16_execution_status": "NOT_RUN",
+      "source_revision": "TO_BE_RECORDED_BY_RUNTIME_QC",
+      "human_review_status": "NOT_RUN"
+    },
+    {
+      "id": "A06",
+      "title": "Notes disagree and move",
+      "requirements": [
+        "W08"
+      ],
+      "fixture_or_consented_source_identity": "synthetic conflicting-note and split-scene fixture",
+      "invoked_public_operation_or_command": "mix test test/writer_workflows/phase_fourteen_notes_test.exs",
+      "evidence_paths": [
+        "packages/fount_workshop/test/writer_workflows/phase_fourteen_notes_test.exs"
+      ],
+      "candidate_or_output_path": "temporary note/anchor/decision artifacts",
+      "assertions": [
+        "raw notes retain source and draft identity",
+        "conflicting notes are not silently merged",
+        "duplicate anchors become ambiguous until resolved"
+      ],
+      "phase16_execution_status": "NOT_RUN",
+      "source_revision": "TO_BE_RECORDED_BY_RUNTIME_QC",
+      "human_review_status": "NOT_RUN"
+    },
+    {
+      "id": "A07",
+      "title": "Move a reveal",
+      "requirements": [
+        "W09"
+      ],
+      "fixture_or_consented_source_identity": "synthetic spare-key reveal-move fixture",
+      "invoked_public_operation_or_command": "mix test test/writer_workflows/phase_fourteen_consequence_test.exs",
+      "evidence_paths": [
+        "packages/fount_workshop/test/writer_workflows/phase_fourteen_consequence_test.exs"
+      ],
+      "candidate_or_output_path": "temporary candidate/consequence artifacts",
+      "assertions": [
+        "reader knowledge changes after the moved reveal",
+        "supported dependencies and hypotheses stay distinct",
+        "unrelated scenes are not silently rewritten"
+      ],
+      "phase16_execution_status": "NOT_RUN",
+      "source_revision": "TO_BE_RECORDED_BY_RUNTIME_QC",
+      "human_review_status": "NOT_RUN"
+    },
+    {
+      "id": "A08",
+      "title": "Facts and fiction",
+      "requirements": [
+        "W07"
+      ],
+      "fixture_or_consented_source_identity": "synthetic disputed-date/untrusted-quote research fixture",
+      "invoked_public_operation_or_command": "mix test test/writer_workflows/phase_fourteen_research_test.exs",
+      "evidence_paths": [
+        "packages/fount_workshop/test/writer_workflows/phase_fourteen_research_test.exs"
+      ],
+      "candidate_or_output_path": "temporary research dossier/decision artifacts",
+      "assertions": [
+        "quoted instructions stay untrusted data",
+        "disputed fact remains disputed without evidence",
+        "fictional departure is explicit and no upload is implied"
+      ],
+      "phase16_execution_status": "NOT_RUN",
+      "source_revision": "TO_BE_RECORDED_BY_RUNTIME_QC",
+      "human_review_status": "NOT_RUN"
+    },
+    {
+      "id": "A09",
+      "title": "Hear without pretending to measure",
+      "requirements": [
+        "W10"
+      ],
+      "fixture_or_consented_source_identity": "synthetic human table-read/reaction fixture",
+      "invoked_public_operation_or_command": "mix test test/writer_workflows/phase_fifteen_read_share_resume_test.exs",
+      "evidence_paths": [
+        "packages/fount_workshop/test/writer_workflows/phase_fifteen_read_share_resume_test.exs"
+      ],
+      "candidate_or_output_path": "temporary read packet/reaction artifacts",
+      "assertions": [
+        "human reaction is version-linked and separate from screenplay facts",
+        "TTS is not accepted as an audience observer",
+        "packet works without speech service"
+      ],
+      "phase16_execution_status": "NOT_RUN",
+      "source_revision": "TO_BE_RECORDED_BY_RUNTIME_QC",
+      "human_review_status": "NOT_RUN"
+    },
+    {
+      "id": "A10",
+      "title": "Stale candidate and interrupted session",
+      "requirements": [
+        "W01",
+        "W11"
+      ],
+      "fixture_or_consented_source_identity": "synthetic stale-candidate/resume fixture",
+      "invoked_public_operation_or_command": "mix test test/writer_workflows/phase_fifteen_read_share_resume_test.exs",
+      "evidence_paths": [
+        "packages/fount_workshop/test/writer_workflows/phase_fifteen_read_share_resume_test.exs",
+        "packages/fount_workshop/integration/phase_fifteen_read_share_resume_test.exs"
+      ],
+      "candidate_or_output_path": "durable Workshop session/candidate/review state",
+      "assertions": [
+        "stale acceptance requires reconciliation",
+        "accepted/rejected/remaining candidate state survives resume",
+        "retry does not duplicate accepted changes"
+      ],
+      "phase16_execution_status": "NOT_RUN",
+      "source_revision": "TO_BE_RECORDED_BY_RUNTIME_QC",
+      "human_review_status": "NOT_RUN"
+    },
+    {
+      "id": "A11",
+      "title": "Clean share",
+      "requirements": [
+        "W10"
+      ],
+      "fixture_or_consented_source_identity": "synthetic private-note/boneyard/dual-dialogue/Unicode fixture",
+      "invoked_public_operation_or_command": "mix test test/writer_workflows/phase_fifteen_read_share_resume_test.exs",
+      "evidence_paths": [
+        "packages/fount_workshop/test/writer_workflows/phase_fifteen_read_share_resume_test.exs"
+      ],
+      "candidate_or_output_path": "temporary Fountain/FDX/share manifest artifacts",
+      "assertions": [
+        "only selected reader-visible material is exported",
+        "private and unchosen material stays excluded",
+        "supported fidelity is preserved and unsupported output is reported"
+      ],
+      "phase16_execution_status": "NOT_RUN",
+      "source_revision": "TO_BE_RECORDED_BY_RUNTIME_QC",
+      "human_review_status": "NOT_RUN"
+    },
+    {
+      "id": "A12",
+      "title": "An honest usefulness report",
+      "requirements": [
+        "W12"
+      ],
+      "fixture_or_consented_source_identity": "synthetic positive/neutral/negative usefulness records",
+      "invoked_public_operation_or_command": "mix test test/writer_workflows/phase_fifteen_usefulness_test.exs",
+      "evidence_paths": [
+        "packages/fount_workshop/test/writer_workflows/phase_fifteen_usefulness_test.exs"
+      ],
+      "candidate_or_output_path": "temporary usefulness report artifacts",
+      "assertions": [
+        "positive neutral and negative outcomes remain separate",
+        "engineering evidence is separate from human response",
+        "no aggregate screenplay score/winner/representative-sample claim is emitted"
+      ],
+      "phase16_execution_status": "NOT_RUN",
+      "source_revision": "TO_BE_RECORDED_BY_RUNTIME_QC",
+      "human_review_status": "NOT_RUN"
+    }
+  ]
+}

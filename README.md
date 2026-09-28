@@ -278,6 +278,14 @@ The current delivery surface is primarily for developers, agents, integrations, 
 
 ---
 
+## Final Four-Package Product
+
+The implementation is intentionally one four-package product rather than a compatibility stack: `fount` owns the canonical screenplay and typed edits; `fount_observe` owns neutral measurements and the System One adapter boundary; `fount_intelligence` owns evidence-grounded interpretation, reader/story-world reasoning, diagnosis and playbooks; `fount_workshop` owns generation, revision experiments, review, acceptance, sharing and performance conveniences through Inference/ASM.
+
+Phase 16 adds a repository-owned final acceptance harness without creating another creative or canonical path. `bash scripts/final_acceptance.sh --static` checks source/package/traceability invariants; the runtime-QC environment uses `--runtime` for Mix CI and package builds, then records PostgreSQL, live-provider and optional human evidence separately. See [`packages/fount_workshop/guides/final-acceptance.md`](packages/fount_workshop/guides/final-acceptance.md).
+
+---
+
 ## Repository Structure
 
 | Package | Responsibility |

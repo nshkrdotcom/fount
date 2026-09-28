@@ -71,6 +71,7 @@ defmodule FountWorkshop.MixProject do
         "guides/submission-checks.md",
         "guides/table-reads-and-audio.md",
         "guides/read-share-resume-and-usefulness.md",
+        "guides/final-acceptance.md",
         {"examples/phase_twelve/README.md",
          filename: "phase-twelve-example", title: "Phase 12 Example"},
         {"examples/phase_thirteen/README.md",
@@ -79,6 +80,8 @@ defmodule FountWorkshop.MixProject do
          filename: "phase-fourteen-example", title: "Phase 14 Example"},
         {"examples/phase_fifteen/README.md",
          filename: "phase-fifteen-example", title: "Phase 15 Example"},
+        {"examples/phase_sixteen/README.md",
+         filename: "phase-sixteen-example", title: "Phase 16 Final Acceptance"},
         {"examples/README.md", filename: "examples", title: "Live Examples"}
       ],
       groups_for_extras: [

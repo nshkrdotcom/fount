@@ -1,178 +1,175 @@
 {
   "format_version": 1,
-  "phase": 15,
-  "created_date": "2026-09-27",
-  "description": "Fount Phase 15 Read, Share, Resume, and Prove Usefulness overlay",
   "files": [
     {
       "path": "CHANGELOG.md",
       "action": "modify",
-      "original_sha256": "4cabd61ecf1e0ab68be84800df12a2ce063a4424ecfc296acfbff147bde7185a",
-      "original_terminal_lf_sha256": "1b1c42aaa4a80ea5257b698b9a82b1a1ed4a51af16161bcd0d077ad73c104809",
-      "result_sha256": "ea54397720731dba3426fe02d1f38c697a00768b9a8b4d6bec0f2979138c03e7",
+      "original_sha256": "ea54397720731dba3426fe02d1f38c697a00768b9a8b4d6bec0f2979138c03e7",
+      "original_terminal_lf_sha256": "04afc9263bb1f698a692f29435ca481adaace2708d2e5abccf2e8315b1d2877e",
+      "result_sha256": "06a9e502d7116600394bfdfef8ea80260a29257a96ff95546a22af81e7bbd577",
       "mode": 420,
-      "original_bytes": 5928,
-      "result_bytes": 6832
+      "original_bytes": 6832,
+      "result_bytes": 7440
+    },
+    {
+      "path": "README.md",
+      "action": "modify",
+      "original_sha256": "0f3cc5e76d7ee3a65a4daf829ef659e6e5c32807739920423a73cd3017942080",
+      "original_terminal_lf_sha256": "ba3dab39bfd090437c94f3aaae147c272739b52341f94758a450a73e0f1ae9dd",
+      "result_sha256": "1ab09a7b4b7fa0a7b50ef10fc3cadfc17a8ae2af8315fc587b98e5ed627a5a0e",
+      "mode": 420,
+      "original_bytes": 23028,
+      "result_bytes": 24015
+    },
+    {
+      "path": "packages/fount/CHANGELOG.md",
+      "action": "modify",
+      "original_sha256": "1db30b760f42d9bbfcc68e6de1da04649667a296d48c26f73d2d9ac971a0f797",
+      "original_terminal_lf_sha256": "d56be276c3faf2e5ca76e97829f8eb1450b8ddcc8effa99f259210ccfa946d2d",
+      "result_sha256": "32b20b744cc0a373d92d3b69a52e3c81f2a0685e4ae0b2899ac3e9455e8e3162",
+      "mode": 420,
+      "original_bytes": 1573,
+      "result_bytes": 2181
+    },
+    {
+      "path": "packages/fount_intelligence/CHANGELOG.md",
+      "action": "modify",
+      "original_sha256": "bf86e2537b8c0c040ec3ca7ecdf7bebb4812ac3a9152d869fddb9cf88b754a6b",
+      "original_terminal_lf_sha256": "42d8e5eb034d0006ad431297b5647d07895da8eb793625a0f53ab97829a7dedc",
+      "result_sha256": "368e0931fba60330d18e5703ad40204bf86b5003158b058144f4590804b0616e",
+      "mode": 420,
+      "original_bytes": 5268,
+      "result_bytes": 5876
+    },
+    {
+      "path": "packages/fount_intelligence/test/phase_sixteen_final_architecture_test.exs",
+      "action": "add",
+      "original_sha256": null,
+      "original_terminal_lf_sha256": null,
+      "result_sha256": "8d7c77e702161252d882d48d3b2a2f96a7a270e80602c027e98ccc9686b59aa9",
+      "mode": 420,
+      "original_bytes": null,
+      "result_bytes": 1329
+    },
+    {
+      "path": "packages/fount_observe/CHANGELOG.md",
+      "action": "modify",
+      "original_sha256": "01f7af0a84e4f5a462813c2e43eaa679b2caa6825dce5c39f067f8e7ab21a22b",
+      "original_terminal_lf_sha256": "621499125627bc517eec3d66e069d333723fbe35887fad2e0728616be54c709d",
+      "result_sha256": "e22576d5445ccdddc01673bfc0a35abc4f7cb6105c1ba004f0e2e6c3d80314fd",
+      "mode": 420,
+      "original_bytes": 2178,
+      "result_bytes": 2786
     },
     {
       "path": "packages/fount_workshop/CHANGELOG.md",
       "action": "modify",
-      "original_sha256": "393cee40b63eda119b564723de8f327aab0008b017f1cb6861b9e720b8556f2a",
-      "original_terminal_lf_sha256": "e78363ccfd2471a79d82c8389a3eae2472f13ca33761e35a9d62238fb1d0ebb8",
-      "result_sha256": "7f13fe59ca7a43a26eb447d87b7fbb7f7ab7b3953f5495ad4fffd45fc547371e",
+      "original_sha256": "7f13fe59ca7a43a26eb447d87b7fbb7f7ab7b3953f5495ad4fffd45fc547371e",
+      "original_terminal_lf_sha256": "3cbbdea334b2d6ec3bcd2a5a1b6e9e66ad7ececd86f5d56aeb5ca1f7b968d451",
+      "result_sha256": "90eb9a9d24ef2159e48189407e01746d98d03ac81180cb3c84aaecf06d6f8907",
       "mode": 420,
-      "original_bytes": 5714,
-      "result_bytes": 6829
+      "original_bytes": 6829,
+      "result_bytes": 7437
     },
     {
       "path": "packages/fount_workshop/README.md",
       "action": "modify",
-      "original_sha256": "d0df2c5c207a6e99a7c2d3b3d566d1975d1546e2f59b4419f8022b2d456e327f",
-      "original_terminal_lf_sha256": "9114bab9e1ae97aaed01d143e08e1e9aa85eef4e943da62a5d917f3943453ec0",
-      "result_sha256": "58bbf3ea8317b10e6b64bb4a4a8b8458b14a2fc5b2be9b632ffa8fea1925b901",
+      "original_sha256": "58bbf3ea8317b10e6b64bb4a4a8b8458b14a2fc5b2be9b632ffa8fea1925b901",
+      "original_terminal_lf_sha256": "eda16480a90b615ae1ac867d244097c7e5a3b8dbee3f05132044f8f95edf3f7f",
+      "result_sha256": "ae2f805d30b7778923b2566d49a245db788f1615100dba46580a79dc49725fa3",
       "mode": 420,
-      "original_bytes": 8210,
-      "result_bytes": 8803
+      "original_bytes": 8803,
+      "result_bytes": 9320
     },
     {
       "path": "packages/fount_workshop/examples/README.md",
       "action": "modify",
-      "original_sha256": "0a169d8736e64756b902b7ec34462e55a7dd08c1339f7ef9be6ed13aa865cf78",
-      "original_terminal_lf_sha256": "badf0ad02add0a4ada7fbf809961ddb13e3f13d8bc943c265d0cb68ce008fa2b",
-      "result_sha256": "029daba202bea0183c70499e684930e5880d308a4843729c42fbe31a7f2eea10",
+      "original_sha256": "99ea6e7c8171f9fa998e26a8262790e4d69a30516036a63b43d304f7ada0e54e",
+      "original_terminal_lf_sha256": "029daba202bea0183c70499e684930e5880d308a4843729c42fbe31a7f2eea10",
+      "result_sha256": "a9f42823bd685e4fea95fa2c130be5dbc231690c956a175b46d0b86201bb8b6b",
       "mode": 420,
-      "original_bytes": 6859,
-      "result_bytes": 7331
+      "original_bytes": 7330,
+      "result_bytes": 7790
     },
     {
-      "path": "packages/fount_workshop/examples/phase_fifteen/README.md",
+      "path": "packages/fount_workshop/examples/phase_sixteen/README.md",
       "action": "add",
       "original_sha256": null,
       "original_terminal_lf_sha256": null,
-      "result_sha256": "7f1a69fe8c8b3a60c57118aca0fbaf856a3073d4b93a6e3528ad004ec721cc64",
+      "result_sha256": "be3958abef6e4594c32e0a369d2c0f3cd98618f9193d020cd44c34e3d8c5ab36",
       "mode": 420,
       "original_bytes": null,
-      "result_bytes": 1363
+      "result_bytes": 1519
     },
     {
-      "path": "packages/fount_workshop/guides/read-share-resume-and-usefulness.md",
+      "path": "packages/fount_workshop/examples/phase_sixteen/acceptance_matrix.json",
       "action": "add",
       "original_sha256": null,
       "original_terminal_lf_sha256": null,
-      "result_sha256": "85e78482840038ed1741aaa22f6069cc55480e4e5a67455975fa36480b876f9a",
+      "result_sha256": "ca9339eb0a575060fda5c1241fd5c9a09c828b41ac487c21bc27ebf06e9d4927",
       "mode": 420,
       "original_bytes": null,
-      "result_bytes": 6155
+      "result_bytes": 14595
     },
     {
-      "path": "packages/fount_workshop/guides/table-reads-and-audio.md",
-      "action": "modify",
-      "original_sha256": "c5845ec6e629de169058a7adcc94772c9d10575e270dc4f4146afa98c8196fa1",
-      "original_terminal_lf_sha256": "0738198ee2a2c51a63140d131f4caa97fae8093287159586d9f128721240beb9",
-      "result_sha256": "a56b0f33796654c778769a88c217215bdbdee4d2df8e9636bdc64fc58d04ee1e",
-      "mode": 420,
-      "original_bytes": 2506,
-      "result_bytes": 3324
-    },
-    {
-      "path": "packages/fount_workshop/integration/phase_fifteen_read_share_resume_test.exs",
+      "path": "packages/fount_workshop/guides/final-acceptance.md",
       "action": "add",
       "original_sha256": null,
       "original_terminal_lf_sha256": null,
-      "result_sha256": "30d4512a8e68d21be841b4c35c81f2d2e19f356567d90d081b853c492747075b",
+      "result_sha256": "7730d89471e71d2732fe096c88b95aac477ff45d7e185a594952fb1a9800ca09",
       "mode": 420,
       "original_bytes": null,
-      "result_bytes": 3853
-    },
-    {
-      "path": "packages/fount_workshop/lib/fount_workshop.ex",
-      "action": "modify",
-      "original_sha256": "4c094ca0d77ece2e30b65374d9bedb69dec1048effaf8ce5592659ddb22670cc",
-      "original_terminal_lf_sha256": "00a9af79d75176ed430e512b4e18ec9d1457f1ec3b390d301d0d6d1e4e37f9aa",
-      "result_sha256": "2b7e713f0f52e985a349fee6821b0dab702f341a2cde1d6ada145e20442dce8a",
-      "mode": 420,
-      "original_bytes": 811,
-      "result_bytes": 1646
-    },
-    {
-      "path": "packages/fount_workshop/lib/fount_workshop/cli.ex",
-      "action": "modify",
-      "original_sha256": "a744f7ab30040c68100e7c0f1cd38defac0571c49c8c7724e572fc49fed39b8b",
-      "original_terminal_lf_sha256": "81d4c847a48a6571cfa6b2c02a2da371d72dbeb19bc1a3bcfe7bdefc54ada759",
-      "result_sha256": "ab2e2025b9546c913749536ae7373ab7d2d44863471c18d252349ed7283f45cd",
-      "mode": 420,
-      "original_bytes": 16534,
-      "result_bytes": 16965
-    },
-    {
-      "path": "packages/fount_workshop/lib/fount_workshop/share.ex",
-      "action": "add",
-      "original_sha256": null,
-      "original_terminal_lf_sha256": null,
-      "result_sha256": "5a7f0112a53bb0250beb915fb47a3995d8fabed6d95c84c7e87988904683355e",
-      "mode": 420,
-      "original_bytes": null,
-      "result_bytes": 6349
-    },
-    {
-      "path": "packages/fount_workshop/lib/fount_workshop/table_read.ex",
-      "action": "modify",
-      "original_sha256": "a7f68abc05bbf6bdb35e2e3ff1e610514d6f0c84cf8d666c952c4c2b86dac601",
-      "original_terminal_lf_sha256": "da9f5a7af9bf51fcbf025ac43ca253f4212c91b726f4e20e20d8ce7ad0fb9c1a",
-      "result_sha256": "89fdae714e31ef31a11e2880b56b201a5eea5f920b5c6a730b09742cc66051bd",
-      "mode": 420,
-      "original_bytes": 6705,
-      "result_bytes": 13010
-    },
-    {
-      "path": "packages/fount_workshop/lib/fount_workshop/usefulness.ex",
-      "action": "add",
-      "original_sha256": null,
-      "original_terminal_lf_sha256": null,
-      "result_sha256": "51c87119e87bb76e06861ef70dfccb03b699e864a5a3e99cda3e5252b9c5d42f",
-      "mode": 420,
-      "original_bytes": null,
-      "result_bytes": 6232
+      "result_bytes": 2592
     },
     {
       "path": "packages/fount_workshop/mix.exs",
       "action": "modify",
-      "original_sha256": "65d475fee3a7a27522989efa6c1988fb099a4efd1df298c90ade4127644218f6",
-      "original_terminal_lf_sha256": "c05d4cad3f068ddc7171bacc945464a5a8f0f427c65abcd14722a35166d4401c",
-      "result_sha256": "234afadb20b3f61d790f3e46a622be70a07275bc8f441c051a95bfdaefafb39a",
+      "original_sha256": "234afadb20b3f61d790f3e46a622be70a07275bc8f441c051a95bfdaefafb39a",
+      "original_terminal_lf_sha256": "155ac9878ef80f9afb28ef26896843361222179a0a3a49577765d6b328b87f68",
+      "result_sha256": "4bc9d682ea6cc61446b6279231d2bd9a7998d4ed8b1f054222779f42e6a27b74",
       "mode": 420,
-      "original_bytes": 4046,
-      "result_bytes": 4319
+      "original_bytes": 4319,
+      "result_bytes": 4483
     },
     {
-      "path": "packages/fount_workshop/test/writer_workflows/phase_fifteen_read_share_resume_test.exs",
+      "path": "packages/fount_workshop/test/writer_workflows/phase_sixteen_acceptance_matrix_test.exs",
       "action": "add",
       "original_sha256": null,
       "original_terminal_lf_sha256": null,
-      "result_sha256": "80f84a1f59cafad65582e323a2ffe5587685a1ecb7bd0871a5eca475adfd9295",
+      "result_sha256": "88436fa46deb5d51724643b12cfc9673c0380da1d0bd029692d1d82b3fbafc21",
       "mode": 420,
       "original_bytes": null,
-      "result_bytes": 7176
+      "result_bytes": 1506
     },
     {
-      "path": "packages/fount_workshop/test/writer_workflows/phase_fifteen_usefulness_test.exs",
+      "path": "scripts/final_acceptance.py",
       "action": "add",
       "original_sha256": null,
       "original_terminal_lf_sha256": null,
-      "result_sha256": "baff99004175dc238bcd19f0d5a935c9e04ac1f9593bda454fc63b4f450c4e0b",
-      "mode": 420,
+      "result_sha256": "87cbde341a835deaa806af4dd0e598167664e6c1f46da657f00082eb4fbde497",
+      "mode": 493,
       "original_bytes": null,
-      "result_bytes": 3252
+      "result_bytes": 13136
     },
     {
-      "path": "scripts/tests/test_phase_fifteen_source.py",
+      "path": "scripts/final_acceptance.sh",
       "action": "add",
       "original_sha256": null,
       "original_terminal_lf_sha256": null,
-      "result_sha256": "2d4e8804c1d0e3e57c110f440b04588eda2e402ee80ddedd39fb3980faeccfec",
+      "result_sha256": "cf9ea9fcf9b679836797f81c82898c64d01e04aef91710c7acfe301c821a9e64",
+      "mode": 493,
+      "original_bytes": null,
+      "result_bytes": 1493
+    },
+    {
+      "path": "scripts/tests/test_phase_sixteen_source.py",
+      "action": "add",
+      "original_sha256": null,
+      "original_terminal_lf_sha256": null,
+      "result_sha256": "f947d22dfb359f2d77b0b8127926bacefd4e3e7d79100c5bf7db2e37f7284dfb",
       "mode": 420,
       "original_bytes": null,
-      "result_bytes": 5828
+      "result_bytes": 2552
     }
   ],
   "deletions": []

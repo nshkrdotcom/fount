@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased - Phase 16 final integration source delivery
+
+- Add the final source/package acceptance harness and W01-W12/A01-A12 evidence inventory without introducing a second analysis, generation, session, or canon path.
+- Audit the four-package dependency graph, provider ownership boundaries, removed-package residue, declarative asset identity, package allowlists, and current documentation claims.
+- Add final architecture/source regressions plus the writer-facing acceptance guide/walkthrough. Runtime Mix/PostgreSQL/Hex/live/provider/PDF/TTS and optional human evidence remain separate QC results.
+
 ## Unreleased - Phase 10 offline implementation
 
 - Add non-canonical PostgreSQL storage for durable analysis runs, revision-bound Observations, immutable privacy-namespaced MeasurementResult cache entries, dependency history, resource usage, and content-addressed safe analysis assets.

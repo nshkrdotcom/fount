@@ -109,57 +109,7 @@ defmodule FountWorkshop.CLI do
 
   defp dispatch("fragment", opts, services) do
     with {:ok, request} <- S.json_file(opts[:request]) do
-      result =
-        case request["action"] do
-          nil ->
-            Discovery.add_fragment(opts[:session], request, services, actor: opts[:actor] || "writer")
-
-          "capture" ->
-            Discovery.add_fragment(
-              opts[:session],
-              Map.delete(request, "action"),
-              services,
-              actor: opts[:actor] || "writer"
-            )
-
-          "link" ->
-            Discovery.link_fragment(
-              opts[:session],
-              request["fragment_id"],
-              request["scene_id"],
-              services,
-              actor: opts[:actor] || "writer"
-            )
-
-          "classify" ->
-            Discovery.classify_fragment(
-              opts[:session],
-              request["fragment_id"],
-              request["classification"],
-              services,
-              actor: opts[:actor] || "writer"
-            )
-
-          "retire" ->
-            Discovery.retire_fragment(
-              opts[:session],
-              request["fragment_id"],
-              services,
-              actor: opts[:actor] || "writer"
-            )
-
-          "adopt" ->
-            Discovery.adopt_fragment(
-              opts[:session],
-              request["fragment_id"],
-              request["candidate_id"],
-              services,
-              actor: opts[:actor] || "writer"
-            )
-
-          _ ->
-            {:error, :unknown_fragment_action}
-        end
+      result = fragment_action(request["action"], request, opts, services)
 
       case result do
         {:ok, saved} -> phase12_result(opts[:output], "fragment.json", saved)
@@ -170,7 +120,10 @@ defmodule FountWorkshop.CLI do
 
   defp dispatch("brief", opts, services) do
     with {:ok, patch} <- S.json_file(opts[:request]),
-         {:ok, saved} <- Discovery.update_brief(opts[:session], patch, services, actor: opts[:actor] || "writer") do
+         {:ok, saved} <-
+           Discovery.update_brief(opts[:session], patch, services,
+             actor: opts[:actor] || "writer"
+           ) do
       phase12_result(opts[:output], "brief.json", saved)
     end
   end
@@ -178,7 +131,8 @@ defmodule FountWorkshop.CLI do
   defp dispatch("mode", opts, services) do
     with {:ok, request} <- S.json_file(opts[:request]),
          mode when is_binary(mode) <- request["mode"],
-         {:ok, saved} <- Discovery.switch_mode(opts[:session], mode, services, actor: opts[:actor] || "writer") do
+         {:ok, saved} <-
+           Discovery.switch_mode(opts[:session], mode, services, actor: opts[:actor] || "writer") do
       phase12_result(opts[:output], "mode.json", saved)
     else
       nil -> {:error, :mode_required}
@@ -195,7 +149,10 @@ defmodule FountWorkshop.CLI do
   defp dispatch("reorder", opts, services) do
     with {:ok, request} <- S.json_file(opts[:request]),
          scene_ids when is_list(scene_ids) <- request["scene_ids"],
-         {:ok, proposal} <- Discovery.propose_reorder(opts[:session], scene_ids, services, actor: opts[:actor] || "writer") do
+         {:ok, proposal} <-
+           Discovery.propose_reorder(opts[:session], scene_ids, services,
+             actor: opts[:actor] || "writer"
+           ) do
       phase12_result(opts[:output], "card-reorder.json", proposal)
     else
       nil -> {:error, :scene_ids_required}
@@ -225,7 +182,8 @@ defmodule FountWorkshop.CLI do
   defp dispatch("edit", opts, services) do
     with {:ok, request} <- S.json_file(opts[:request]),
          operations when is_list(operations) <- request["operations"],
-         {:ok, candidate} <- Candidate.edit(opts[:candidate], operations, services, actor: opts[:actor]) do
+         {:ok, candidate} <-
+           Candidate.edit(opts[:candidate], operations, services, actor: opts[:actor]) do
       phase12_candidate_result(candidate, opts, services)
     else
       nil -> {:error, :operations_required}
@@ -238,9 +196,14 @@ defmodule FountWorkshop.CLI do
          candidate_ids when is_list(candidate_ids) <- request["candidate_ids"] do
       result =
         case request["action"] do
-          "keep_both" -> Discovery.keep_both(opts[:session], candidate_ids, services, actor: opts[:actor])
-          "reject_all" -> Discovery.reject_all(opts[:session], candidate_ids, opts[:actor], services)
-          _ -> {:error, :unknown_phase12_decision}
+          "keep_both" ->
+            Discovery.keep_both(opts[:session], candidate_ids, services, actor: opts[:actor])
+
+          "reject_all" ->
+            Discovery.reject_all(opts[:session], candidate_ids, opts[:actor], services)
+
+          _ ->
+            {:error, :unknown_phase12_decision}
         end
 
       case result do
@@ -379,6 +342,45 @@ defmodule FountWorkshop.CLI do
       {:ok, %{json: json, html: html}}
     end
   end
+
+  defp fragment_action(action, request, opts, services) when action in [nil, "capture"] do
+    attrs = Map.delete(request, "action")
+    Discovery.add_fragment(opts[:session], attrs, services, actor: opts[:actor] || "writer")
+  end
+
+  defp fragment_action("link", request, opts, services) do
+    Discovery.link_fragment(opts[:session], request["fragment_id"], request["scene_id"], services,
+      actor: opts[:actor] || "writer"
+    )
+  end
+
+  defp fragment_action("classify", request, opts, services) do
+    Discovery.classify_fragment(
+      opts[:session],
+      request["fragment_id"],
+      request["classification"],
+      services,
+      actor: opts[:actor] || "writer"
+    )
+  end
+
+  defp fragment_action("retire", request, opts, services) do
+    Discovery.retire_fragment(opts[:session], request["fragment_id"], services,
+      actor: opts[:actor] || "writer"
+    )
+  end
+
+  defp fragment_action("adopt", request, opts, services) do
+    Discovery.adopt_fragment(
+      opts[:session],
+      request["fragment_id"],
+      request["candidate_id"],
+      services,
+      actor: opts[:actor] || "writer"
+    )
+  end
+
+  defp fragment_action(_, _request, _opts, _services), do: {:error, :unknown_fragment_action}
 
   defp base(opts, request, services) do
     if opts[:new] do

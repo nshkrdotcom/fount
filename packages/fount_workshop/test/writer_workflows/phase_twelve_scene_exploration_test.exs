@@ -31,17 +31,20 @@ defmodule FountWorkshop.PhaseTwelveSceneExplorationTest do
       %{
         "id" => "conceal",
         "mechanism_kind" => "revelation",
-        "instruction" => "Keep the secret withheld; the map remains a pressure point rather than a confession."
+        "instruction" =>
+          "Keep the secret withheld; the map remains a pressure point rather than a confession."
       },
       %{
         "id" => "volunteer",
         "mechanism_kind" => "relationship",
-        "instruction" => "One sibling chooses to offer the secret, changing the relationship by choice."
+        "instruction" =>
+          "One sibling chooses to offer the secret, changing the relationship by choice."
       },
       %{
         "id" => "accident",
         "mechanism_kind" => "action",
-        "instruction" => "A physical mistake with the wet map exposes the secret without a voluntary confession."
+        "instruction" =>
+          "A physical mistake with the wet map exposes the secret without a voluntary confession."
       }
     ]
 
@@ -67,9 +70,30 @@ defmodule FountWorkshop.PhaseTwelveSceneExplorationTest do
       Agent.start_link(fn ->
         [
           fn _ -> %{"strategies" => strategies} end,
-          fn _ -> proposal(base, action.id, "conceal", "Evan folds the hotel stamp inward before Nora can read it.") end,
-          fn _ -> proposal(base, action.id, "volunteer", "Nora opens the map to the hotel stamp. She tells Evan where she found it.") end,
-          fn _ -> proposal(base, action.id, "accident", "The wet map tears. A hotel receipt skitters between them.") end
+          fn _ ->
+            proposal(
+              base,
+              action.id,
+              "conceal",
+              "Evan folds the hotel stamp inward before Nora can read it."
+            )
+          end,
+          fn _ ->
+            proposal(
+              base,
+              action.id,
+              "volunteer",
+              "Nora opens the map to the hotel stamp. She tells Evan where she found it."
+            )
+          end,
+          fn _ ->
+            proposal(
+              base,
+              action.id,
+              "accident",
+              "The wet map tears. A hotel receipt skitters between them."
+            )
+          end
         ]
       end)
 
@@ -82,17 +106,31 @@ defmodule FountWorkshop.PhaseTwelveSceneExplorationTest do
 
     context = %{
       data: %{
-        "selected_pages" => [%{"scene_id" => hd(base.ir.scenes).id, "text" => Screenplay.to_fountain(base)}],
+        "selected_pages" => [
+          %{"scene_id" => hd(base.ir.scenes).id, "text" => Screenplay.to_fountain(base)}
+        ],
         "inspections" => []
       },
       evidence: []
     }
 
     assert {:ok, generated_strategies, [_]} =
-             Strategy.generate(nil, opened["request"], context, %{inference: inference}, force_json_text: true)
+             Strategy.generate(nil, opened["request"], context, %{inference: inference},
+               force_json_text: true
+             )
 
-    assert Enum.map(generated_strategies, & &1["treatment_id"]) == ["conceal", "volunteer", "accident"]
-    assert Enum.map(generated_strategies, & &1["mechanism_kind"]) == ["revelation", "relationship", "action"]
+    assert Enum.map(generated_strategies, & &1["treatment_id"]) == [
+             "conceal",
+             "volunteer",
+             "accident"
+           ]
+
+    assert Enum.map(generated_strategies, & &1["mechanism_kind"]) == [
+             "revelation",
+             "relationship",
+             "action"
+           ]
+
     assert Enum.any?(generated_strategies, &get_in(&1, ["brief_departure", "departed"]))
 
     prepared =
@@ -116,7 +154,10 @@ defmodule FountWorkshop.PhaseTwelveSceneExplorationTest do
     assert Enum.any?(pages, &String.contains?(&1, "receipt skitters"))
 
     [first, second | _] = state["candidates"]
-    assert {:ok, _} = Discovery.keep_both(opened["id"], [first["id"], second["id"]], %{store: store})
+
+    assert {:ok, _} =
+             Discovery.keep_both(opened["id"], [first["id"], second["id"]], %{store: store})
+
     assert ContinuationStore.head(repo).revision.id == base.revision.id
 
     candidate_ids = Enum.map(state["candidates"], & &1["id"])
@@ -124,7 +165,10 @@ defmodule FountWorkshop.PhaseTwelveSceneExplorationTest do
 
     assert {:ok, after_decision} = Session.get(opened["id"], %{store: store})
     assert Enum.all?(after_decision["candidates"], &(&1["decision"] == "rejected"))
-    assert Enum.map(after_decision["discovery"]["decisions"], & &1["action"]) |> Enum.take(-2) == ["keep_both", "reject_all"]
+
+    assert Enum.map(after_decision["discovery"]["decisions"], & &1["action"]) |> Enum.take(-2) ==
+             ["keep_both", "reject_all"]
+
     assert ContinuationStore.head(repo).revision.id == base.revision.id
   end
 
@@ -132,7 +176,6 @@ defmodule FountWorkshop.PhaseTwelveSceneExplorationTest do
     base = Screenplay.new()
     {:ok, repo} = ContinuationStore.start_link(base)
     on_exit(fn -> if Process.alive?(repo), do: Agent.stop(repo) end)
-    store = %Store{repo: repo, module: ContinuationStore}
 
     request = %{
       "version" => 1,
@@ -146,7 +189,11 @@ defmodule FountWorkshop.PhaseTwelveSceneExplorationTest do
       "options" => %{
         "treatments" => [
           %{"id" => "conceal", "mechanism_kind" => "revelation", "instruction" => "withhold"},
-          %{"id" => "volunteer", "mechanism_kind" => "relationship", "instruction" => "choose to tell"},
+          %{
+            "id" => "volunteer",
+            "mechanism_kind" => "relationship",
+            "instruction" => "choose to tell"
+          },
           %{"id" => "accident", "mechanism_kind" => "action", "instruction" => "physical mistake"}
         ],
         "allow_brief_departure" => false
@@ -155,10 +202,19 @@ defmodule FountWorkshop.PhaseTwelveSceneExplorationTest do
 
     bad =
       Enum.map(~w(conceal volunteer accident), fn id ->
-        treatment_strategy(id, "revelation", "They confess the secret in slightly different words.", false)
+        treatment_strategy(
+          id,
+          "revelation",
+          "They confess the secret in slightly different words.",
+          false
+        )
       end)
 
-    {:ok, script} = Agent.start_link(fn -> [fn _ -> %{"strategies" => bad} end, fn _ -> %{"strategies" => bad} end] end)
+    {:ok, script} =
+      Agent.start_link(fn ->
+        [fn _ -> %{"strategies" => bad} end, fn _ -> %{"strategies" => bad} end]
+      end)
+
     on_exit(fn -> if Process.alive?(script), do: Agent.stop(script) end)
     client = Inference.Client.new!(adapter: ScriptedCompletion, adapter_opts: [script: script])
 
@@ -166,6 +222,55 @@ defmodule FountWorkshop.PhaseTwelveSceneExplorationTest do
 
     assert {:error, {:invalid_completion, :treatment_routes_not_honored}, _} =
              Strategy.generate(nil, request, context, %{inference: client}, force_json_text: true)
+  end
+
+  test "treatment validation requires tradeoffs and rejects a forbidden departure" do
+    routes = [
+      treatment_strategy("conceal", "revelation", "Keep the secret hidden.", false),
+      treatment_strategy("volunteer", "relationship", "Offer the secret by choice.", false),
+      treatment_strategy("accident", "action", "A mishap exposes the secret.", false)
+    ]
+
+    request = %{
+      "alternatives" => 3,
+      "options" => %{
+        "treatments" =>
+          Enum.map(routes, fn route ->
+            %{
+              "id" => route["treatment_id"],
+              "mechanism_kind" => route["mechanism_kind"],
+              "instruction" => route["dramatic_mechanism"]
+            }
+          end),
+        "allow_brief_departure" => false
+      }
+    }
+
+    context = %{data: %{"selected_pages" => [], "inspections" => []}, evidence: []}
+    missing_tradeoff = List.update_at(routes, 0, &Map.put(&1, "tradeoffs", []))
+
+    departed =
+      List.update_at(
+        routes,
+        1,
+        &Map.put(&1, "brief_departure", %{"departed" => true, "reason" => "Changes disclosure."})
+      )
+
+    for {invalid, reason} <- [
+          {missing_tradeoff, :treatment_tradeoff_required},
+          {departed, :brief_departure_not_permitted}
+        ] do
+      {:ok, script} = Agent.start_link(fn -> [fn _ -> %{"strategies" => invalid} end] end)
+      client = Inference.Client.new!(adapter: ScriptedCompletion, adapter_opts: [script: script])
+
+      assert {:error, {:invalid_completion, ^reason}, _} =
+               Strategy.generate(nil, request, context, %{inference: client},
+                 force_json_text: true,
+                 decode_repairs: 0
+               )
+
+      Agent.stop(script)
+    end
   end
 
   defp strategy_response do
@@ -196,7 +301,11 @@ defmodule FountWorkshop.PhaseTwelveSceneExplorationTest do
       "tradeoffs" => ["This route gains one kind of pressure and gives up another."],
       "brief_departure" => %{
         "departed" => departed,
-        "reason" => if(departed, do: "Uses voluntary disclosure despite the initial concealment bias.", else: nil)
+        "reason" =>
+          if(departed,
+            do: "Uses voluntary disclosure despite the initial concealment bias.",
+            else: nil
+          )
       }
     }
   end

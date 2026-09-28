@@ -16,7 +16,10 @@ defmodule FountWorkshop.PhaseTwelveA01DemoTest do
           %{
             heading: "EXT. CLOSED SWIMMING POOL - NIGHT",
             elements: [
-              %{type: :action, text: "Two estranged siblings fold a wet paper map beside the chained gate."}
+              %{
+                type: :action,
+                text: "Two estranged siblings fold a wet paper map beside the chained gate."
+              }
             ]
           }
         ]
@@ -28,9 +31,21 @@ defmodule FountWorkshop.PhaseTwelveA01DemoTest do
     store = %Store{repo: repo, module: ContinuationStore}
 
     treatments = [
-      %{"id" => "gate", "mechanism_kind" => "action", "instruction" => "Begin with a failed physical attempt to enter."},
-      %{"id" => "handoff", "mechanism_kind" => "relationship", "instruction" => "Begin with one sibling refusing to take the map."},
-      %{"id" => "mark", "mechanism_kind" => "revelation", "instruction" => "Begin when folding the map exposes one unexplained mark."}
+      %{
+        "id" => "gate",
+        "mechanism_kind" => "action",
+        "instruction" => "Begin with a failed physical attempt to enter."
+      },
+      %{
+        "id" => "handoff",
+        "mechanism_kind" => "relationship",
+        "instruction" => "Begin with one sibling refusing to take the map."
+      },
+      %{
+        "id" => "mark",
+        "mechanism_kind" => "revelation",
+        "instruction" => "Begin when folding the map exposes one unexplained mark."
+      }
     ]
 
     request = %{
@@ -38,7 +53,8 @@ defmodule FountWorkshop.PhaseTwelveA01DemoTest do
       "workflow" => "alternatives",
       "mode" => "explore",
       "base_revision_id" => base.revision.id,
-      "instruction" => "Give me three ways this scene might begin. Do not commit to a global plot.",
+      "instruction" =>
+        "Give me three ways this scene might begin. Do not commit to a global plot.",
       "selection" => %{"whole_screenplay" => true},
       "constraints" => [],
       "alternatives" => 3,
@@ -46,7 +62,8 @@ defmodule FountWorkshop.PhaseTwelveA01DemoTest do
         "treatments" => treatments,
         "allow_brief_departure" => false,
         "protected_strengths" => ["wet paper map"],
-        "pending_question" => "Which opening makes their estrangement playable without explaining it?"
+        "pending_question" =>
+          "Which opening makes their estrangement playable without explaining it?"
       }
     }
 
@@ -60,9 +77,30 @@ defmodule FountWorkshop.PhaseTwelveA01DemoTest do
       Agent.start_link(fn ->
         [
           fn _ -> %{"strategies" => strategies} end,
-          fn _ -> proposal(base, action.id, "gate", "Evan shoulders the chained gate. Nora keeps folding the wet paper map.") end,
-          fn _ -> proposal(base, action.id, "handoff", "Nora offers the wet paper map. Evan leaves it hanging between them.") end,
-          fn _ -> proposal(base, action.id, "mark", "They fold the wet paper map. A red X bleeds through from the other side.") end
+          fn _ ->
+            proposal(
+              base,
+              action.id,
+              "gate",
+              "Evan shoulders the chained gate. Nora keeps folding the wet paper map."
+            )
+          end,
+          fn _ ->
+            proposal(
+              base,
+              action.id,
+              "handoff",
+              "Nora offers the wet paper map. Evan leaves it hanging between them."
+            )
+          end,
+          fn _ ->
+            proposal(
+              base,
+              action.id,
+              "mark",
+              "They fold the wet paper map. A red X bleeds through from the other side."
+            )
+          end
         ]
       end)
 
@@ -71,16 +109,21 @@ defmodule FountWorkshop.PhaseTwelveA01DemoTest do
     services = %{store: store, inference: inference}
 
     assert {:ok, session} = Session.open(base, request, %{store: store})
+
     context = %{
       data: %{
-        "selected_pages" => [%{"scene_id" => hd(base.ir.scenes).id, "text" => Screenplay.to_fountain(base)}],
+        "selected_pages" => [
+          %{"scene_id" => hd(base.ir.scenes).id, "text" => Screenplay.to_fountain(base)}
+        ],
         "inspections" => []
       },
       evidence: []
     }
 
     assert {:ok, generated, [_]} =
-             Strategy.generate(nil, session["request"], context, %{inference: inference}, force_json_text: true)
+             Strategy.generate(nil, session["request"], context, %{inference: inference},
+               force_json_text: true
+             )
 
     prepared =
       session
@@ -89,7 +132,10 @@ defmodule FountWorkshop.PhaseTwelveA01DemoTest do
       |> Map.put("status", "strategies_ready")
 
     assert {:ok, _} = Store.call(store, :save_session, [prepared])
-    assert {:ok, _} = Strategy.materialize(session["id"], Enum.map(generated, & &1["id"]), services)
+
+    assert {:ok, _} =
+             Strategy.materialize(session["id"], Enum.map(generated, & &1["id"]), services)
+
     assert {:ok, state} = Session.get(session["id"], %{store: store})
     assert length(state["candidates"]) == 3
 
@@ -110,12 +156,17 @@ defmodule FountWorkshop.PhaseTwelveA01DemoTest do
       "overrides" => []
     }
 
-    assert {:ok, accepted} = Acceptance.accept(chosen["id"], base.revision.id, review, %{store: store})
+    assert {:ok, accepted} =
+             Acceptance.accept(chosen["id"], base.revision.id, review, %{store: store})
+
     assert {:ok, _} = Discovery.record_acceptance(session["id"], chosen["id"], %{store: store})
     assert {:ok, _} = Acceptance.reject(rejected["id"], "writer", %{store: store})
 
     assert {:ok, resumed} = Session.resume_view(session["id"], %{store: store})
-    assert resumed["pending_question"] == "Which opening makes their estrangement playable without explaining it?"
+
+    assert resumed["pending_question"] ==
+             "Which opening makes their estrangement playable without explaining it?"
+
     assert resumed["selected_candidate_id"] == chosen["id"]
     assert resumed["discovery"]["brief"]["protected_strengths"] == ["wet paper map"]
 

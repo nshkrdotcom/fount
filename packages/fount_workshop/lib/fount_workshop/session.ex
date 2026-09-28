@@ -108,7 +108,8 @@ defmodule FountWorkshop.Session do
   end
 
   @doc "Switches the explicit session mode; the immutable opening request remains preserved for provenance."
-  def switch_mode(id, mode, services, opts \\ []), do: Discovery.switch_mode(id, mode, services, opts)
+  def switch_mode(id, mode, services, opts \\ []),
+    do: Discovery.switch_mode(id, mode, services, opts)
 
   def get(id, services) do
     with {:ok, session} <- Store.call(services[:store], :session, [id]) do
@@ -625,7 +626,8 @@ defmodule FountWorkshop.Session do
   defp put_if_present(map, _key, nil), do: map
   defp put_if_present(map, key, value), do: Map.put(map, key, value)
 
-  defp default_materialization(%{"mode" => mode}, _) when mode in ["explore", "inspect", "diagnose"], do: []
+  defp default_materialization(%{"mode" => mode}, _)
+       when mode in ["explore", "inspect", "diagnose"], do: []
 
   defp default_materialization(
          %{"workflow" => "investigate", "options" => %{"write_fixes" => false}},
@@ -647,10 +649,11 @@ defmodule FountWorkshop.Session do
       true -> "continue_when_ready"
     end
   end
+
   defp services(%{store: %Store{}, inference: %Inference.Client{}}), do: :ok
+  defp services(_), do: {:error, :explicit_store_and_inference_services_required}
   defp store_service(%{store: %Store{}}), do: :ok
   defp store_service(_), do: {:error, :explicit_store_required}
-  defp services(_), do: {:error, :explicit_store_and_inference_services_required}
 
   defp safe_error(%Inference.Error{category: category, reason: reason}),
     do: %{

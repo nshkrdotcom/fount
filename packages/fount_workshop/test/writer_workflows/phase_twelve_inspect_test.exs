@@ -35,7 +35,8 @@ defmodule FountWorkshop.PhaseTwelveInspectTest do
       "selection" => %{"whole_screenplay" => true},
       "constraints" => [],
       "options" => %{
-        "concern" => "Can a first reader register the physical choice without assigning a motive?",
+        "concern" =>
+          "Can a first reader register the physical choice without assigning a motive?",
         "write_fixes" => false,
         "protected_strengths" => ["Mara leaves without waking Dan."]
       }

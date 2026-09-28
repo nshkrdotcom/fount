@@ -76,9 +76,8 @@ defmodule FountWorkshop.Strategy do
            length(Enum.uniq_by(value["strategies"], & &1["id"])) == count or
              {:error, :duplicate_strategy_id},
          true <- valid_strategy_evidence?(value, evidence) or {:error, :uninspected_evidence},
-         true <- distinct_strategies?(value["strategies"]) or {:error, :strategies_not_distinct},
-         :ok <- treatment_match(value["strategies"], treatments, allow_departure) do
-      :ok
+         true <- distinct_strategies?(value["strategies"]) or {:error, :strategies_not_distinct} do
+      treatment_match(value["strategies"], treatments, allow_departure)
     end
   end
 

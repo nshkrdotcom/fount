@@ -61,18 +61,21 @@ defmodule FountWorkshop.MixProject do
         "LICENSE",
         "guides/architecture.md",
         "guides/creative-workflows.md",
+        "guides/discovery-and-scene-exploration.md",
         "guides/intelligence-integration.md",
         "guides/scene-revision-loop.md",
         "guides/proposals-and-diffs.md",
         "guides/pdf-export-and-inspection.md",
         "guides/submission-checks.md",
         "guides/table-reads-and-audio.md",
+        {"examples/phase_twelve/README.md",
+         filename: "phase-twelve-example", title: "Phase 12 Example"},
         {"examples/README.md", filename: "examples", title: "Live Examples"}
       ],
       groups_for_extras: [
         Overview: ~r/(README|CHANGELOG|LICENSE)/,
         "Agent Workflows":
-          ~r/guides\/(architecture|creative-workflows|intelligence-integration|scene-revision-loop|proposals-and-diffs)/,
+          ~r/guides\/(architecture|creative-workflows|discovery-and-scene-exploration|intelligence-integration|scene-revision-loop|proposals-and-diffs)/,
         "Export & Inspection": ~r/guides\/(pdf-export-and-inspection|submission-checks)/,
         "Rehearsal & Audio": ~r/guides\/table-reads-and-audio/,
         "Live Examples": ~r/examples/

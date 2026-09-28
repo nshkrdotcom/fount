@@ -11,8 +11,14 @@ defmodule FountWorkshop.PhaseTwelveDiscoveryTest do
     base =
       Screenplay.new(
         scenes: [
-          %{heading: "EXT. CLOSED SWIMMING POOL - NIGHT", elements: [%{type: :action, text: "The gate is chained."}]},
-          %{heading: "INT. POOL OFFICE - NIGHT", elements: [%{type: :action, text: "A dead clock reads 2:13."}]}
+          %{
+            heading: "EXT. CLOSED SWIMMING POOL - NIGHT",
+            elements: [%{type: :action, text: "The gate is chained."}]
+          },
+          %{
+            heading: "INT. POOL OFFICE - NIGHT",
+            elements: [%{type: :action, text: "A dead clock reads 2:13."}]
+          }
         ]
       )
 
@@ -39,8 +45,10 @@ defmodule FountWorkshop.PhaseTwelveDiscoveryTest do
     assert session["request"]["mode"] == "draft"
     assert session["request"]["alternatives"] == 1
     assert get_in(session, ["provenance", "phase9_preflight", "analysis", "status"]) == "not_run"
+
     assert get_in(session, ["provenance", "phase9_preflight", "analysis", "reason"]) ==
              "no_prewrite_playbook_for_workflow"
+
     assert ContinuationStore.head(repo).revision.id == base.revision.id
 
     assert {:ok, image} =
@@ -48,7 +56,8 @@ defmodule FountWorkshop.PhaseTwelveDiscoveryTest do
                session["id"],
                %{
                  "kind" => "image",
-                 "content" => "At a closed swimming pool, two estranged siblings fold a wet paper map."
+                 "content" =>
+                   "At a closed swimming pool, two estranged siblings fold a wet paper map."
                },
                services
              )
@@ -59,26 +68,45 @@ defmodule FountWorkshop.PhaseTwelveDiscoveryTest do
     assert {:ok, connective} =
              Discovery.add_fragment(
                session["id"],
-               %{"kind" => "line", "content" => "You kept the dry half.", "classification" => "wanted"},
+               %{
+                 "kind" => "line",
+                 "content" => "You kept the dry half.",
+                 "classification" => "wanted"
+               },
                services
              )
 
     first_scene_id = hd(base.ir.scenes).id
+
     assert {:ok, classified} =
              Discovery.classify_fragment(session["id"], connective["id"], "connective", services)
+
     assert classified["classification"] == "connective"
-    assert {:ok, linked} = Discovery.link_fragment(session["id"], connective["id"], first_scene_id, services)
+
+    assert {:ok, linked} =
+             Discovery.link_fragment(session["id"], connective["id"], first_scene_id, services)
+
     assert linked["status"] == "linked"
     assert {:ok, retired} = Discovery.retire_fragment(session["id"], connective["id"], services)
     assert retired["status"] == "retired"
-    assert Enum.map(retired["history"], & &1["action"]) == ["captured", "classified", "linked", "retired"]
+
+    assert Enum.map(retired["history"], & &1["action"]) == [
+             "captured",
+             "classified",
+             "linked",
+             "retired"
+           ]
 
     assert {:ok, brief} =
              Discovery.update_brief(
                session["id"],
-               %{"desired_experience" => "Uneasy recognition without explanation", "permission_to_depart" => false},
+               %{
+                 "desired_experience" => "Uneasy recognition without explanation",
+                 "permission_to_depart" => false
+               },
                services
              )
+
     assert brief["desired_experience"] == "Uneasy recognition without explanation"
 
     assert {:ok, outline} = Discovery.reverse_outline(session["id"], services)
@@ -148,7 +176,9 @@ defmodule FountWorkshop.PhaseTwelveDiscoveryTest do
 
     new_action =
       first["screenplay"].ir.elements
-      |> Enum.find(&(&1.type == :action and is_binary(&1.text) and String.contains?(&1.text, "wet paper map")))
+      |> Enum.find(
+        &(&1.type == :action and is_binary(&1.text) and String.contains?(&1.text, "wet paper map"))
+      )
 
     assert {:ok, edited} =
              Candidate.edit(
@@ -157,14 +187,17 @@ defmodule FountWorkshop.PhaseTwelveDiscoveryTest do
                  %{
                    "kind" => "replace_text",
                    "target" => %{"kind" => "element", "id" => new_action.id},
-                   "value" => "They fold the wet paper map on the concrete. Neither lets go first."
+                   "value" =>
+                     "They fold the wet paper map on the concrete. Neither lets go first."
                  }
                ],
                services,
                actor: "writer"
              )
 
-    assert {:ok, adopted} = Discovery.adopt_fragment(session["id"], image["id"], edited["id"], services)
+    assert {:ok, adopted} =
+             Discovery.adopt_fragment(session["id"], image["id"], edited["id"], services)
+
     assert adopted["status"] == "adopted"
 
     review = %{

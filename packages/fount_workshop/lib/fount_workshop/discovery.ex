@@ -29,16 +29,19 @@ defmodule FountWorkshop.Discovery do
       "mode_history" => [
         %{"mode" => public_mode(request["mode"]), "source" => "request", "at" => timestamp()}
       ],
-      "brief" =>
-        %{
-          "desired_experience" => opts["intended_effect"] || supplied_brief["desired_experience"],
-          "current_question" => pending,
-          "audience_context" => supplied_brief["audience_context"],
-          "formal_constraints" => supplied_brief["formal_constraints"] || [],
-          "protected_strengths" => protected,
-          "permission_to_depart" =>
-            Map.get(supplied_brief, "permission_to_depart", Map.get(opts, "allow_brief_departure", false))
-        },
+      "brief" => %{
+        "desired_experience" => opts["intended_effect"] || supplied_brief["desired_experience"],
+        "current_question" => pending,
+        "audience_context" => supplied_brief["audience_context"],
+        "formal_constraints" => supplied_brief["formal_constraints"] || [],
+        "protected_strengths" => protected,
+        "permission_to_depart" =>
+          Map.get(
+            supplied_brief,
+            "permission_to_depart",
+            Map.get(opts, "allow_brief_departure", false)
+          )
+      },
       "brief_history" => [],
       "fragments" => [],
       "card_reorders" => [],
@@ -57,7 +60,9 @@ defmodule FountWorkshop.Discovery do
   end
 
   @doc "Explicitly changes the current writer mode without mutating the immutable request."
-  def switch_mode(session_id, mode, services, opts \\ []) when mode in @modes do
+  def switch_mode(session_id, mode, services, opts \\ [])
+
+  def switch_mode(session_id, mode, services, opts) when mode in @modes do
     update(session_id, services, fn discovery ->
       if discovery["current_mode"] == mode do
         {:ok, discovery}
@@ -77,43 +82,55 @@ defmodule FountWorkshop.Discovery do
   def switch_mode(_session_id, _mode, _services, _opts), do: {:error, :invalid_session_mode}
 
   @doc "Updates only declared evolving-brief fields and retains the prior values in history."
-  def update_brief(session_id, patch, services, opts \\ []) when is_map(patch) do
-    with :ok <- validate_brief_patch(patch) do
-      update(session_id, services, fn discovery ->
-        old = discovery["brief"] || %{}
-        next = Map.merge(old, patch)
+  def update_brief(session_id, patch, services, opts \\ [])
 
-        history = %{
-          "at" => timestamp(),
-          "actor" => Keyword.get(opts, :actor, "writer"),
-          "before" => Map.take(old, Map.keys(patch)),
-          "after" => Map.take(next, Map.keys(patch))
-        }
+  def update_brief(session_id, patch, services, opts) when is_map(patch) do
+    with :ok <- validate_brief_patch(patch),
+         :ok <- store_service(services),
+         {:ok, session} <- Store.call(services[:store], :session, [session_id]) do
+      old = state(session)["brief"] || %{}
+      next = Map.merge(old, patch)
 
-        discovery =
-          discovery
-          |> Map.put("brief", next)
-          |> Map.update("brief_history", [history], &(&1 ++ [history]))
-
-        discovery =
-          if Map.has_key?(patch, "current_question"),
-            do: Map.put(discovery, "pending_question", patch["current_question"]),
-            else: discovery
-
-        {:ok, discovery}
-      end)
+      save_discovery(session, services, &put_brief(&1, old, next, patch, opts), next)
     end
   end
 
   def update_brief(_session_id, _patch, _services, _opts), do: {:error, :invalid_brief_patch}
 
+  defp put_brief(discovery, old, next, patch, opts) do
+    history = %{
+      "at" => timestamp(),
+      "actor" => Keyword.get(opts, :actor, "writer"),
+      "before" => Map.take(old, Map.keys(patch)),
+      "after" => Map.take(next, Map.keys(patch))
+    }
+
+    discovery =
+      discovery
+      |> Map.put("brief", next)
+      |> Map.update("brief_history", [history], &(&1 ++ [history]))
+
+    if Map.has_key?(patch, "current_question"),
+      do: Map.put(discovery, "pending_question", patch["current_question"]),
+      else: discovery
+  end
+
   @doc "Captures wanted material before its screenplay placement is known."
-  def add_fragment(session_id, attrs, services, opts \\ []) when is_map(attrs) do
+  def add_fragment(session_id, attrs, services, opts \\ [])
+
+  def add_fragment(session_id, attrs, services, opts) when is_map(attrs) do
     with {:ok, fragment} <- fragment(attrs, opts),
-         :ok <- validate_fragment_scene(session_id, fragment["scene_id"], services) do
-      update(session_id, services, fn discovery ->
-        {:ok, Map.update(discovery, "fragments", [fragment], &(&1 ++ [fragment]))}
-      end)
+         :ok <- validate_fragment_scene(session_id, fragment["scene_id"], services),
+         :ok <- store_service(services),
+         {:ok, session} <- Store.call(services[:store], :session, [session_id]) do
+      save_discovery(
+        session,
+        services,
+        fn discovery ->
+          Map.update(discovery, "fragments", [fragment], &(&1 ++ [fragment]))
+        end,
+        fragment
+      )
     end
   end
 
@@ -136,6 +153,8 @@ defmodule FountWorkshop.Discovery do
 
   @doc "Changes whether a fragment is wanted material or connective material without losing history."
   def classify_fragment(session_id, fragment_id, classification, services, opts \\ [])
+
+  def classify_fragment(session_id, fragment_id, classification, services, opts)
       when classification in @classifications do
     mutate_fragment(session_id, fragment_id, services, fn _session, fragment ->
       {:ok,
@@ -175,7 +194,8 @@ defmodule FountWorkshop.Discovery do
   end
 
   @doc "Returns a source-identity reverse outline; inferred functions remain labeled interpretations."
-  def reverse_outline(session_id, services, interpretations \\ %{}) when is_map(interpretations) do
+  def reverse_outline(session_id, services, interpretations \\ %{})
+      when is_map(interpretations) do
     with :ok <- store_service(services),
          {:ok, session} <- Store.call(services[:store], :session, [session_id]),
          {:ok, model} <- base_model(session, services) do
@@ -208,7 +228,9 @@ defmodule FountWorkshop.Discovery do
   end
 
   @doc "Persists a proposed scene-card order as a branch plan; canonical order is unchanged."
-  def propose_reorder(session_id, scene_ids, services, opts \\ []) when is_list(scene_ids) do
+  def propose_reorder(session_id, scene_ids, services, opts \\ [])
+
+  def propose_reorder(session_id, scene_ids, services, opts) when is_list(scene_ids) do
     with :ok <- store_service(services),
          {:ok, session} <- Store.call(services[:store], :session, [session_id]),
          {:ok, model} <- base_model(session, services),
@@ -223,13 +245,19 @@ defmodule FountWorkshop.Discovery do
         "changes_canon" => false
       }
 
-      save_discovery(session, services, fn discovery ->
-        Map.update(discovery, "card_reorders", [proposal], &(&1 ++ [proposal]))
-      end, proposal)
+      save_discovery(
+        session,
+        services,
+        fn discovery ->
+          Map.update(discovery, "card_reorders", [proposal], &(&1 ++ [proposal]))
+        end,
+        proposal
+      )
     end
   end
 
-  def propose_reorder(_session_id, _scene_ids, _services, _opts), do: {:error, :invalid_scene_order}
+  def propose_reorder(_session_id, _scene_ids, _services, _opts),
+    do: {:error, :invalid_scene_order}
 
   @doc "Stores one unresolved question for the next invocation without triggering analysis."
   def set_pending_question(session_id, question, services, opts \\ [])
@@ -258,31 +286,43 @@ defmodule FountWorkshop.Discovery do
 
   @doc "Keeps multiple candidates alive as an explicit writer decision; no candidate becomes canon."
   def keep_both(session_id, candidate_ids, services, opts \\ [])
+
+  def keep_both(session_id, candidate_ids, services, opts)
       when is_list(candidate_ids) and length(candidate_ids) >= 2 do
     with {:ok, _} <- session_candidates(session_id, candidate_ids, services) do
       record_decision(session_id, "keep_both", candidate_ids, services, opts)
     end
   end
 
-  def keep_both(_session_id, _candidate_ids, _services, _opts), do: {:error, :keep_both_requires_candidates}
+  def keep_both(_session_id, _candidate_ids, _services, _opts),
+    do: {:error, :keep_both_requires_candidates}
 
   @doc "Rejects each supplied candidate explicitly and records the aggregate none-of-these decision."
   def reject_all(session_id, candidate_ids, actor, services, opts \\ [])
+
+  def reject_all(session_id, candidate_ids, actor, services, opts)
       when is_list(candidate_ids) and candidate_ids != [] and is_binary(actor) do
     with true <- String.trim(actor) != "" or {:error, :missing_actor},
          {:ok, _} <- session_candidates(session_id, candidate_ids, services),
-         :ok <- reject_each(candidate_ids, actor, services),
-         {:ok, saved} <- record_decision(session_id, "reject_all", candidate_ids, services, Keyword.put(opts, :actor, actor)) do
-      {:ok, saved}
+         :ok <- reject_each(candidate_ids, actor, services) do
+      record_decision(
+        session_id,
+        "reject_all",
+        candidate_ids,
+        services,
+        Keyword.put(opts, :actor, actor)
+      )
     end
   end
 
-  def reject_all(_session_id, _candidate_ids, _actor, _services, _opts), do: {:error, :invalid_reject_all}
+  def reject_all(_session_id, _candidate_ids, _actor, _services, _opts),
+    do: {:error, :invalid_reject_all}
 
   @doc "Records the candidate selected by an explicit acceptance action for resume presentation."
   def record_acceptance(session_id, candidate_id, services, opts \\ []) do
     with {:ok, [candidate]} <- session_candidates(session_id, [candidate_id], services),
-         true <- candidate["decision"] in ["accepted", :accepted] or {:error, :candidate_not_accepted} do
+         true <-
+           candidate["decision"] in ["accepted", :accepted] or {:error, :candidate_not_accepted} do
       update(session_id, services, fn discovery ->
         decision = %{
           "action" => "accepted",
@@ -325,12 +365,16 @@ defmodule FountWorkshop.Discovery do
   defp session_candidates(session_id, candidate_ids, services) do
     with :ok <- store_service(services) do
       Enum.reduce_while(candidate_ids, {:ok, []}, fn id, {:ok, acc} ->
-        case Store.call(services[:store], :candidate, [id]) do
-          {:ok, %{"session_id" => ^session_id} = candidate} -> {:cont, {:ok, acc ++ [candidate]}}
-          {:ok, _} -> {:halt, {:error, :candidate_session_mismatch}}
-          error -> {:halt, error}
-        end
+        session_candidate(id, session_id, services, acc)
       end)
+    end
+  end
+
+  defp session_candidate(id, session_id, services, acc) do
+    case Store.call(services[:store], :candidate, [id]) do
+      {:ok, %{"session_id" => ^session_id} = candidate} -> {:cont, {:ok, acc ++ [candidate]}}
+      {:ok, _} -> {:halt, {:error, :candidate_session_mismatch}}
+      error -> {:halt, error}
     end
   end
 
@@ -340,19 +384,18 @@ defmodule FountWorkshop.Discovery do
       discovery = state(session)
       fragments = discovery["fragments"] || []
 
-      case Enum.find_index(fragments, &(&1["id"] == fragment_id)) do
-        nil ->
-          {:error, :unknown_fragment}
+      index = Enum.find_index(fragments, &(&1["id"] == fragment_id))
+      replace_fragment(index, fragments, discovery, session, services, fun)
+    end
+  end
 
-        index ->
-          fragment = Enum.at(fragments, index)
+  defp replace_fragment(nil, _fragments, _discovery, _session, _services, _fun),
+    do: {:error, :unknown_fragment}
 
-          with {:ok, next_fragment} <- fun.(session, fragment) do
-            next_fragments = List.replace_at(fragments, index, next_fragment)
-            next = Map.put(discovery, "fragments", next_fragments)
-            save_discovery(session, services, fn _ -> next end, next_fragment)
-          end
-      end
+  defp replace_fragment(index, fragments, discovery, session, services, fun) do
+    with {:ok, next_fragment} <- fun.(session, Enum.at(fragments, index)) do
+      next = Map.put(discovery, "fragments", List.replace_at(fragments, index, next_fragment))
+      save_discovery(session, services, fn _ -> next end, next_fragment)
     end
   end
 
@@ -384,44 +427,63 @@ defmodule FountWorkshop.Discovery do
     scene_id = attrs["scene_id"]
     classification = Map.get(attrs, "classification", "wanted")
 
-    cond do
-      kind not in @fragment_kinds ->
-        {:error, :invalid_fragment_kind}
+    with :ok <- validate_fragment_kind(kind),
+         :ok <- validate_fragment_content(content),
+         :ok <- validate_fragment_scene_id(scene_id),
+         :ok <- validate_fragment_classification(classification),
+         :ok <- validate_fragment_fields(attrs) do
+      id = Fount.ID.v4()
+      status = if(scene_id, do: "linked", else: "unattached")
 
-      is_nil(content) or (is_binary(content) and String.trim(content) == "") ->
-        {:error, :missing_fragment_content}
-
-      not is_nil(scene_id) and not is_binary(scene_id) ->
-        {:error, :invalid_fragment_scene}
-
-      classification not in @classifications ->
-        {:error, :invalid_fragment_classification}
-
-      Map.keys(attrs) -- ~w(kind content scene_id classification) != [] ->
-        {:error, :unknown_fragment_field}
-
-      true ->
-        id = Fount.ID.v4()
-        status = if(scene_id, do: "linked", else: "unattached")
-
-        {:ok,
-         %{
-           "id" => id,
-           "kind" => kind,
-           "content" => Model.plain(content),
-           "scene_id" => scene_id,
-           "classification" => classification,
-           "status" => status,
-           "history" => [
-             %{
-               "action" => "captured",
-               "actor" => Keyword.get(opts, :actor, "writer"),
-               "at" => timestamp()
-             }
-           ]
-         }}
+      {:ok,
+       %{
+         "id" => id,
+         "kind" => kind,
+         "content" => Model.plain(content),
+         "scene_id" => scene_id,
+         "classification" => classification,
+         "status" => status,
+         "history" => [
+           %{
+             "action" => "captured",
+             "actor" => Keyword.get(opts, :actor, "writer"),
+             "at" => timestamp()
+           }
+         ]
+       }}
     end
   end
+
+  defp validate_fragment_kind(kind),
+    do: if(kind in @fragment_kinds, do: :ok, else: {:error, :invalid_fragment_kind})
+
+  defp validate_fragment_content(nil), do: {:error, :missing_fragment_content}
+
+  defp validate_fragment_content(content) when is_binary(content),
+    do: if(String.trim(content) == "", do: {:error, :missing_fragment_content}, else: :ok)
+
+  defp validate_fragment_content(_), do: :ok
+
+  defp validate_fragment_scene_id(scene_id),
+    do:
+      if(is_nil(scene_id) or is_binary(scene_id),
+        do: :ok,
+        else: {:error, :invalid_fragment_scene}
+      )
+
+  defp validate_fragment_classification(classification),
+    do:
+      if(classification in @classifications,
+        do: :ok,
+        else: {:error, :invalid_fragment_classification}
+      )
+
+  defp validate_fragment_fields(attrs),
+    do:
+      if(Map.keys(attrs) -- ~w(kind content scene_id classification) == [],
+        do: :ok,
+        else: {:error, :unknown_fragment_field}
+      )
 
   defp history(fragment, action, opts, detail) do
     event =
@@ -436,31 +498,41 @@ defmodule FountWorkshop.Discovery do
   end
 
   defp validate_brief_patch(patch) do
-    unknown = Map.keys(patch) -- @brief_fields
+    with :ok <- validate_brief_fields(patch),
+         :ok <- validate_brief_permission(patch),
+         :ok <- validate_brief_lists(patch) do
+      validate_brief_text(patch)
+    end
+  end
 
-    cond do
-      unknown != [] ->
-        {:error, :unknown_brief_field}
+  defp validate_brief_fields(patch),
+    do: if(Map.keys(patch) -- @brief_fields == [], do: :ok, else: {:error, :unknown_brief_field})
 
-      Map.has_key?(patch, "permission_to_depart") and
-          not is_boolean(patch["permission_to_depart"]) and
-          not is_nil(patch["permission_to_depart"]) ->
-        {:error, :invalid_permission_to_depart}
+  defp validate_brief_permission(patch) do
+    value = patch["permission_to_depart"]
 
+    if Map.has_key?(patch, "permission_to_depart") and not (is_boolean(value) or is_nil(value)),
+      do: {:error, :invalid_permission_to_depart},
+      else: :ok
+  end
+
+  defp validate_brief_lists(patch) do
+    invalid? =
       Enum.any?(~w(formal_constraints protected_strengths), fn key ->
         Map.has_key?(patch, key) and
           (not is_list(patch[key]) or Enum.any?(patch[key], &(not is_binary(&1))))
-      end) ->
-        {:error, :invalid_brief_list}
+      end)
 
+    if invalid?, do: {:error, :invalid_brief_list}, else: :ok
+  end
+
+  defp validate_brief_text(patch) do
+    invalid? =
       Enum.any?(~w(desired_experience current_question audience_context), fn key ->
         Map.has_key?(patch, key) and not is_nil(patch[key]) and not is_binary(patch[key])
-      end) ->
-        {:error, :invalid_brief_text}
+      end)
 
-      true ->
-        :ok
-    end
+    if invalid?, do: {:error, :invalid_brief_text}, else: :ok
   end
 
   defp exact_scene_permutation(model, scene_ids) do
@@ -470,7 +542,6 @@ defmodule FountWorkshop.Discovery do
       do: :ok,
       else: {:error, :scene_order_must_be_exact_permutation}
   end
-
 
   defp validate_fragment_scene(_session_id, nil, services), do: store_service(services)
 
@@ -483,7 +554,8 @@ defmodule FountWorkshop.Discovery do
     end
   end
 
-  defp validate_fragment_scene(_session_id, _scene_id, _services), do: {:error, :invalid_fragment_scene}
+  defp validate_fragment_scene(_session_id, _scene_id, _services),
+    do: {:error, :invalid_fragment_scene}
 
   defp base_model(session, services),
     do:

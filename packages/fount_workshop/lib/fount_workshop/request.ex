@@ -54,25 +54,23 @@ defmodule FountWorkshop.Request do
   defp default_alternatives(_), do: 2
 
   defp common_options(opts) do
-    strengths = Map.get(opts, "protected_strengths", [])
-    effect = Map.get(opts, "intended_effect")
-
-    cond do
-      not is_list(strengths) or
-          Enum.any?(strengths, &(not is_binary(&1) or String.trim(&1) == "")) ->
-        {:error, :invalid_protected_strengths}
-
-      not is_nil(effect) and (not is_binary(effect) or String.trim(effect) == "") ->
-        {:error, :invalid_intended_effect}
-
-      not is_nil(opts["pending_question"]) and
-          (not is_binary(opts["pending_question"]) or String.trim(opts["pending_question"]) == "") ->
-        {:error, :invalid_pending_question}
-
-      true ->
-        :ok
+    with :ok <- protected_strengths(opts),
+         :ok <- optional_text(opts["intended_effect"], :invalid_intended_effect) do
+      optional_text(opts["pending_question"], :invalid_pending_question)
     end
   end
+
+  defp protected_strengths(opts) do
+    values = Map.get(opts, "protected_strengths", [])
+
+    if is_list(values) and Enum.all?(values, &valid_text?/1),
+      do: :ok,
+      else: {:error, :invalid_protected_strengths}
+  end
+
+  defp optional_text(nil, _error), do: :ok
+  defp optional_text(value, error), do: if(valid_text?(value), do: :ok, else: {:error, error})
+  defp valid_text?(value), do: is_binary(value) and String.trim(value) != ""
 
   defp options(model, "develop", opts) do
     if opts["brief"] && opts["brief_item_id"],
@@ -122,7 +120,7 @@ defmodule FountWorkshop.Request do
   defp options(_, "alternatives", opts) do
     with :ok <- treatments(Map.get(opts, "treatments")),
          true <-
-           (is_nil(opts["allow_brief_departure"]) or is_boolean(opts["allow_brief_departure"])) or
+           is_nil(opts["allow_brief_departure"]) or is_boolean(opts["allow_brief_departure"]) or
              {:error, :invalid_brief_departure_permission} do
       :ok
     end
@@ -150,7 +148,11 @@ defmodule FountWorkshop.Request do
 
   defp options(_, _, _), do: :ok
 
-  defp treatment_count(%{"workflow" => "alternatives", "alternatives" => count, "options" => opts}) do
+  defp treatment_count(%{
+         "workflow" => "alternatives",
+         "alternatives" => count,
+         "options" => opts
+       }) do
     case opts["treatments"] do
       nil -> :ok
       treatments when is_list(treatments) and length(treatments) == count -> :ok
@@ -163,14 +165,7 @@ defmodule FountWorkshop.Request do
   defp treatments(nil), do: :ok
 
   defp treatments(values) when is_list(values) and values != [] do
-    valid_shape? =
-      Enum.all?(values, fn value ->
-        is_map(value) and
-          Map.keys(value) -- ~w(id mechanism_kind instruction) == [] and
-          is_binary(value["id"]) and String.trim(value["id"]) != "" and
-          value["mechanism_kind"] in ~w(action revelation relationship mixed) and
-          is_binary(value["instruction"]) and String.trim(value["instruction"]) != ""
-      end)
+    valid_shape? = Enum.all?(values, &valid_treatment?/1)
 
     if valid_shape? do
       ids = Enum.map(values, & &1["id"])
@@ -181,6 +176,16 @@ defmodule FountWorkshop.Request do
   end
 
   defp treatments(_), do: {:error, :invalid_treatments}
+
+  defp valid_treatment?(value) when is_map(value) do
+    Map.keys(value) -- ~w(id mechanism_kind instruction) == [] and
+      valid_text?(value["id"]) and
+      value["mechanism_kind"] in ~w(action revelation relationship mixed) and
+      valid_text?(value["instruction"])
+  end
+
+  defp valid_treatment?(_), do: false
+
   def placement(_model, %{"kind" => "start"} = p), do: only(p, ~w(kind))
 
   def placement(model, %{"kind" => "after_scene", "after_scene_id" => id} = p) do

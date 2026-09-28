@@ -12,10 +12,13 @@ defmodule FountWorkshop.CandidateAPI do
   alias FountWorkshop.Writing.ProposalGuide
 
   @doc "Builds a writer-origin candidate from explicit typed operations without an inference client."
-  def manual(session_id, operations, services, opts \\ []) when is_list(operations) and operations != [] do
+  def manual(session_id, operations, services, opts \\ [])
+
+  def manual(session_id, operations, services, opts)
+      when is_list(operations) and operations != [] do
     actor = Keyword.get(opts, :actor)
 
-    with true <- is_binary(actor) and String.trim(actor) != "" or {:error, :missing_actor},
+    with true <- (is_binary(actor) and String.trim(actor) != "") or {:error, :missing_actor},
          {:ok, session} <- Store.call(services[:store], :session, [session_id]),
          {:ok, base} <-
            Store.call(services[:store], :load_revision, [
@@ -37,7 +40,8 @@ defmodule FountWorkshop.CandidateAPI do
     end
   end
 
-  def manual(_session_id, _operations, _services, _opts), do: {:error, :manual_candidate_requires_operations}
+  def manual(_session_id, _operations, _services, _opts),
+    do: {:error, :manual_candidate_requires_operations}
 
   def select(id, group_ids, services, opts \\ []) do
     with {:ok, c} <- Store.call(services[:store], :candidate, [id]),

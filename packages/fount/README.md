@@ -181,8 +181,8 @@ Save canonical screenplays, normalized scene rows, and immutable draft snapshots
 # Start Fount.Repo in your application supervision tree:
 {:ok, _} = Fount.Repo.start_link(url: System.fetch_env!("DATABASE_URL"))
 
-# Save a screenplay under a unique key:
-{:ok, saved} = Fount.Persistence.save(Fount.Repo, "my-feature-slug", script)
+# Create the genesis screenplay under a unique key:
+{:ok, saved} = Fount.Persistence.create(Fount.Repo, "my-feature-slug", script)
 
 # Reload the screenplay at the latest accepted head:
 {:ok, current_draft} = Fount.Persistence.load(Fount.Repo, "my-feature-slug")

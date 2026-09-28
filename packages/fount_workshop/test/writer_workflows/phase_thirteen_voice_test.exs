@@ -5,6 +5,7 @@ defmodule FountWorkshop.PhaseThirteenVoiceTest do
   alias Fount.Screenplay
   alias FountWorkshop.Request
   alias FountWorkshop.Writing.Context
+  alias Fount.Writing.{CanonicalJSON, Principal, Review}
   alias FountWorkshop.Writing.ReviewGate
 
   test "A04 protects exact repetition, Unicode and code-switching while surfacing human language review" do
@@ -87,23 +88,25 @@ defmodule FountWorkshop.PhaseThirteenVoiceTest do
     checks = Constraints.deterministic(base, revised, pins)
     assert Enum.all?(checks, &(&1["status"] == "pass"))
 
-    review = %{
-      "candidate_id" => "voice-candidate",
-      "content_hash" => revised.revision.content_hash,
-      "report_ids" => [],
-      "actor" => "writer",
-      "overrides" => []
-    }
+    required = Enum.map(checks, &%{"constraint_id" => &1["constraint_id"], "evaluation" => &1["evaluation"], "overridable" => false})
+    fingerprint = CanonicalJSON.hash(%{"required_checks" => required, "checks" => checks, "report_ids" => []})
+    {:ok, principal} = Principal.new(:human, "writer")
+    {:ok, review} = Review.new(reviewer: principal, candidate_id: "voice-candidate",
+      base_revision_id: base.revision.id, content_hash: revised.revision.content_hash,
+      report_ids: [], check_set_fingerprint: fingerprint, recommendation: :approve)
 
     candidate = %{
       "id" => "voice-candidate",
       "base_revision_id" => base.revision.id,
       "content_hash" => revised.revision.content_hash,
       "report_ids" => [],
-      "checks" => checks
+      "structural_errors" => [],
+      "checks" => checks,
+      "required_checks" => required,
+      "check_set_fingerprint" => fingerprint
     }
 
-    assert :ok = ReviewGate.validate(candidate, review, base.revision.id)
+    assert :ok = ReviewGate.validate(candidate, review, principal)
 
     assert {:ok, normalized, _} =
              Screenplay.apply(base, [
@@ -116,28 +119,21 @@ defmodule FountWorkshop.PhaseThirteenVoiceTest do
 
     [failed] = Constraints.deterministic(base, normalized, [pin])
     assert failed["status"] == "fail"
+    blocked_required = [%{"constraint_id" => failed["constraint_id"], "evaluation" => failed["evaluation"], "overridable" => false}]
+    blocked_fp = CanonicalJSON.hash(%{"required_checks" => blocked_required, "checks" => [failed], "report_ids" => []})
+    blocked = %{candidate | "content_hash" => normalized.revision.content_hash, "checks" => [failed],
+      "required_checks" => blocked_required, "check_set_fingerprint" => blocked_fp}
+    {:ok, blocked_review} = Review.new(reviewer: principal, candidate_id: "voice-candidate",
+      base_revision_id: base.revision.id, content_hash: normalized.revision.content_hash,
+      report_ids: [], check_set_fingerprint: blocked_fp, recommendation: :approve)
 
-    blocked = %{
-      candidate
-      | "content_hash" => normalized.revision.content_hash,
-        "checks" => [failed]
-    }
+    assert {:error, {:review_blockers, blockers}} = ReviewGate.validate(blocked, blocked_review, principal)
+    assert Enum.any?(blockers, &(&1["reason"] == "required_check_not_passing"))
 
-    blocked_review = %{review | "content_hash" => normalized.revision.content_hash}
-
-    assert {:error, {:review_blockers, blockers}} =
-             ReviewGate.validate(blocked, blocked_review, base.revision.id)
-
-    assert Enum.any?(blockers, &(&1["reason"] == "hard_requirement_failed"))
-
-    assert {:error, {:review_blockers, _}} =
-             ReviewGate.validate(
-               blocked,
-               %{
-                 blocked_review
-                 | "overrides" => [%{"constraint_id" => pin["id"], "reason" => "Writer reviewed"}]
-               },
-               base.revision.id
-             )
+    {:ok, override_review} = Review.new(reviewer: principal, candidate_id: "voice-candidate",
+      base_revision_id: base.revision.id, content_hash: normalized.revision.content_hash,
+      report_ids: [], check_set_fingerprint: blocked_fp, recommendation: :approve,
+      overrides: [%{"constraint_id" => pin["id"], "reason" => "Writer reviewed"}])
+    assert {:error, :invalid_override_target} = ReviewGate.validate(blocked, override_review, principal)
   end
 end

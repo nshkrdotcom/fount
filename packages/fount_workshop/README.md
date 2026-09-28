@@ -63,14 +63,15 @@ The lower-level and original workflow APIs remain available:
 {:ok, packet} = FountWorkshop.Review.packet(repo, result.candidate.id)
 
 # Present packet["original_fountain"], packet["proposed_fountain"], and both diffs.
-# Only after the writer reviews this exact content:
-review = %{"candidate_id" => result.candidate.id, "content_hash" => packet["content_hash"],
-  "actor" => writer_id, "report_ids" => packet["report_ids"], "overrides" => []}
-{:ok, accepted} = FountWorkshop.Review.accept(repo, result.candidate.id,
-  packet["base_revision_id"], review)
+# Only after an authenticated writer reviews this exact content:
+{:ok, principal} = Fount.Writing.Principal.new(:human, writer_id)
+{:ok, authority} = Fount.Writing.Authority.new(principal, packet["screenplay_id"], [:approve])
+{:ok, stored_candidate} = Fount.Persistence.candidate(repo, result.candidate.id)
+{:ok, approval} = Fount.Writing.Approval.direct(stored_candidate, principal, stable_approval_id)
+{:ok, accepted} = FountWorkshop.Review.accept(repo, result.candidate.id, approval, authority)
 ```
 
-`Review.reject/3` preserves candidate material for history/recovery while leaving canon unchanged. Stale-base or mismatched-content acceptance fails; do not bypass it. These are the implemented functions, not a hypothetical context/propose/preview facade.
+`Review.reject/3` preserves candidate material for history/recovery while leaving canon unchanged. Stale-base, mismatched-content, forged-authority, stale-check/report, or changed-approval replay fails; do not bypass it. The caller owns the stable approval ID and must retain the exact payload before the first acceptance attempt. These are the implemented functions, not a hypothetical context/propose/preview facade.
 
 For a project starting from a brief, use `Develop.run/5` or the public `FountWorkshop.develop/5`. Existing candidate, session, rebase, audition, pass, notes, sequence, character and recovery APIs remain available; their guides and tests travel with this phase.
 

@@ -120,17 +120,17 @@ defmodule FountWorkshop.PhaseTwelveDurableWriterTest do
     assert {:ok, edited} = Candidate.edit(first["id"], [edit], services, actor: "writer")
 
     assert {:ok, accepted} =
-             Acceptance.accept(edited["id"], base.revision.id, review(edited), services)
+             FountWorkshop.TestApproval.accept(services, edited["id"])
 
     assert {:ok, _} = Discovery.record_acceptance(opened["id"], edited["id"], services)
 
     assert {:ok, retried} =
-             Acceptance.accept(edited["id"], base.revision.id, review(edited), services)
+             FountWorkshop.TestApproval.accept(services, edited["id"])
 
     assert retried.revision.id == accepted.revision.id
 
     assert {:error, {:stale_revision, current}} =
-             Acceptance.accept(sibling["id"], base.revision.id, review(sibling), services)
+             FountWorkshop.TestApproval.accept(services, sibling["id"])
 
     assert current == accepted.revision.id
     assert {:ok, _} = Acceptance.reject(sibling["id"], "writer", services)
@@ -143,12 +143,4 @@ defmodule FountWorkshop.PhaseTwelveDurableWriterTest do
     assert head.revision.id == accepted.revision.id
   end
 
-  defp review(candidate),
-    do: %{
-      "candidate_id" => candidate["id"],
-      "content_hash" => candidate["screenplay"].revision.content_hash,
-      "actor" => "writer",
-      "report_ids" => candidate["provenance"]["report_ids"] || [],
-      "overrides" => []
-    }
 end

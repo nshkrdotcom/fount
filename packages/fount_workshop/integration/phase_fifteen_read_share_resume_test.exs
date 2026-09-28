@@ -51,7 +51,7 @@ defmodule FountWorkshop.PhaseFifteenReadShareResumeIntegrationTest do
              )
 
     assert {:ok, accepted} =
-             Acceptance.accept(chosen["id"], base.revision.id, review(chosen), services)
+             FountWorkshop.TestApproval.accept(services, chosen["id"])
 
     assert {:ok, _} = Acceptance.reject(rejected["id"], "writer", services)
 
@@ -83,14 +83,6 @@ defmodule FountWorkshop.PhaseFifteenReadShareResumeIntegrationTest do
       "value" => text
     }
 
-  defp review(candidate),
-    do: %{
-      "candidate_id" => candidate["id"],
-      "content_hash" => candidate["screenplay"].revision.content_hash,
-      "actor" => "writer",
-      "report_ids" => candidate["provenance"]["report_ids"] || [],
-      "overrides" => []
-    }
 
   defp request(base),
     do: %{

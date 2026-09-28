@@ -36,8 +36,10 @@ defmodule FountWorkshop.RecoverDatabaseIntegrationTest do
         }
       ])
 
-    assert {:ok, _} =
-             Persistence.save_edit(Repo, key, edited, expected_revision: root.revision.id)
+    assert {:ok, manual} =
+             Persistence.save_edit_candidate(Repo, key, edited, expected_revision: root.revision.id)
+    {approval, authority} = FountWorkshop.TestApproval.for_repo(Repo, manual.id)
+    assert {:ok, _} = Persistence.accept_candidate(Repo, manual.id, approval: approval, authority: authority)
 
     assert {:ok, result} = Recover.run(Repo, key, root.revision.id, lost.id)
     assert {:ok, saved} = Persistence.candidate(Repo, result.candidate.id)

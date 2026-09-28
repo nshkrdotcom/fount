@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased - Fount Run Phase 01 core approval safety (source delivery)
+
+- Migrate standalone Review/Acceptance, CLI accept, fake stores, examples and acceptance tests to Core's typed stable approval plus trusted authority API.
+- Remove the actor-string review shape as a writable acceptance path while preserving rejection, review/export surfaces and candidate-only workflows.
+- Add source regressions for approval identity and required-check handling; runtime Elixir/PostgreSQL verification remains pending.
+
 ## Unreleased - Phase 16 final integration source delivery
 
 - Add the final source/package acceptance harness and W01-W12/A01-A12 evidence inventory without introducing a second analysis, generation, session, or canon path.

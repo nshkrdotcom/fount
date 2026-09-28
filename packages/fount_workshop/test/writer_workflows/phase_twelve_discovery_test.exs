@@ -200,32 +200,18 @@ defmodule FountWorkshop.PhaseTwelveDiscoveryTest do
 
     assert adopted["status"] == "adopted"
 
-    review = %{
-      "candidate_id" => edited["id"],
-      "content_hash" => edited["screenplay"].revision.content_hash,
-      "actor" => "writer",
-      "report_ids" => edited["provenance"]["report_ids"] || [],
-      "overrides" => []
-    }
 
-    assert {:ok, accepted} = Acceptance.accept(edited["id"], base.revision.id, review, services)
+    assert {:ok, accepted} = FountWorkshop.TestApproval.accept(services, edited["id"])
     assert accepted.revision.id == edited["screenplay"].revision.id
     assert {:ok, _} = Discovery.record_acceptance(session["id"], edited["id"], services)
 
     # Retrying the same explicit acceptance remains idempotent and creates no second draft.
-    assert {:ok, retried} = Acceptance.accept(edited["id"], base.revision.id, review, services)
+    assert {:ok, retried} = FountWorkshop.TestApproval.accept(services, edited["id"])
     assert retried.revision.id == accepted.revision.id
 
-    alternate_review = %{
-      "candidate_id" => alternate["id"],
-      "content_hash" => alternate["screenplay"].revision.content_hash,
-      "actor" => "writer",
-      "report_ids" => alternate["provenance"]["report_ids"] || [],
-      "overrides" => []
-    }
 
     assert {:error, {:stale_revision, current}} =
-             Acceptance.accept(alternate["id"], base.revision.id, alternate_review, services)
+             FountWorkshop.TestApproval.accept(services, alternate["id"])
 
     assert current == accepted.revision.id
     assert {:ok, _} = Acceptance.reject(alternate["id"], "writer", services)

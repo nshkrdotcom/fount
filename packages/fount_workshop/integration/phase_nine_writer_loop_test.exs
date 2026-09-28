@@ -112,21 +112,12 @@ defmodule FountWorkshop.PhaseNineWriterLoopTest do
     assert {:ok, head_before} = Persistence.load(Repo, key)
     assert head_before.revision.id == base.revision.id
 
-    assert {:error, _} =
-             Review.accept(
-               Repo,
-               selected["id"],
-               base.revision.id,
-               review(selected["id"], "wrong-hash", packet)
-             )
+    {approval, authority} = FountWorkshop.TestApproval.for_repo(Repo, selected["id"])
+    wrong_review = %{approval.review | content_hash: "wrong-hash"}
+    wrong_approval = %{approval | review: wrong_review}
+    assert {:error, _} = Review.accept(Repo, selected["id"], wrong_approval, authority)
 
-    assert {:ok, accepted} =
-             Review.accept(
-               Repo,
-               selected["id"],
-               base.revision.id,
-               review(selected["id"], packet["content_hash"], packet)
-             )
+    assert {:ok, accepted} = Review.accept(Repo, selected["id"], approval, authority)
 
     assert {:ok, head} = Persistence.load(Repo, key)
     assert head.revision.id == accepted.revision.id

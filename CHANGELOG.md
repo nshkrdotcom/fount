@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased - Fount Run Phase 01 core approval safety (offline implementation)
+
+- Require every post-genesis canonical advance to consume one typed, stable approval through candidate acceptance with trusted host authority; direct `save`/`save_edit` canon mutation is blocked.
+- Add authoritative required-check snapshots/fingerprints, exact review/report bindings, human-only declared subjective overrides, and authenticated human/agent/service approval audit.
+- Add forward approval-audit migration, historical classification without guessed principal types, exact candidate/result/approval constraints, Workshop/CLI migration, and Phase 01 PostgreSQL/source regressions. Runtime Elixir/PostgreSQL certification remains pending.
+
 ## Unreleased - Phase 16 final integration source delivery
 
 - Add the final source/package acceptance harness and W01-W12/A01-A12 evidence inventory without introducing a second analysis, generation, session, or canon path.

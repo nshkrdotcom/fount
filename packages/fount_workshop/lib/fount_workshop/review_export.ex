@@ -134,10 +134,14 @@ defmodule FountWorkshop.ReviewExport do
     write!(directory, review, packet)
     # This is a review form, never a pre-filled acceptance claim.
     write!(directory, id <> ".decision.json", %{
+      "reviewer" => %{"type" => "", "id" => ""},
       "candidate_id" => id,
+      "base_revision_id" => candidate["base_revision_id"],
       "content_hash" => model.revision.content_hash,
-      "actor" => "",
       "report_ids" => report_ids,
+      "check_set_fingerprint" => candidate["check_set_fingerprint"],
+      "findings" => [],
+      "recommendation" => "approve",
       "overrides" => []
     })
 

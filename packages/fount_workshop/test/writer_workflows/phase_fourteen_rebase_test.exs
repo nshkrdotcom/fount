@@ -4,7 +4,7 @@ defmodule FountWorkshop.PhaseFourteenRebaseTest do
   use ExUnit.Case, async: true
 
   alias Fount.Screenplay
-  alias FountWorkshop.{Acceptance, Candidate, Rebase, Session, Store}
+  alias FountWorkshop.{Candidate, Rebase, Session, Store}
   alias FountWorkshop.TestSupport.ContinuationStore
 
   test "manual concurrent edit makes the old candidate stale, rebase exposes the conflict, and undo restores exact source bytes" do
@@ -42,18 +42,11 @@ defmodule FountWorkshop.PhaseFourteenRebaseTest do
                label: "Concurrent manual edit"
              )
 
-    review = review(manual_current)
-
     assert {:ok, accepted} =
-             Acceptance.accept(manual_current["id"], base.revision.id, review, services)
+             FountWorkshop.TestApproval.accept(services, manual_current["id"])
 
     assert {:error, {:stale_revision, current_revision}} =
-             Acceptance.accept(
-               stale_candidate["id"],
-               base.revision.id,
-               review(stale_candidate),
-               services
-             )
+             FountWorkshop.TestApproval.accept(services, stale_candidate["id"])
 
     assert current_revision == accepted.revision.id
 
@@ -77,15 +70,6 @@ defmodule FountWorkshop.PhaseFourteenRebaseTest do
     }
   end
 
-  defp review(candidate) do
-    %{
-      "candidate_id" => candidate["id"],
-      "content_hash" => candidate["screenplay"].revision.content_hash,
-      "actor" => "writer",
-      "report_ids" => candidate["provenance"]["report_ids"] || [],
-      "overrides" => []
-    }
-  end
 
   defp request(base) do
     %{

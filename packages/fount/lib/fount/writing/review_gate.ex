@@ -1,108 +1,94 @@
 defmodule Fount.Writing.ReviewGate do
   @moduledoc """
-  Pure review validation before a PostgreSQL acceptance transaction.
+  Pure authorization-time validation for an exact stored candidate/review pair.
 
-  The transaction must additionally lock and compare the actual accepted head.
-  This gate does not advance a draft or treat a missing external check as passed.
+  PostgreSQL acceptance additionally locks and compares the accepted head. This
+  gate never treats a missing, malformed, or unknown required check as passing.
   """
 
-  @spec validate(map(), map(), String.t()) :: :ok | {:error, term()}
-  def validate(candidate, review, expected_revision)
-      when is_map(candidate) and is_map(review) and is_binary(expected_revision) do
-    with :ok <- validate_identity(candidate, review, expected_revision),
-         :ok <- validate_review(candidate, review) do
-      validate_checks(Map.get(candidate, "checks", []), Map.get(review, "overrides", []))
+  alias Fount.Writing.{CheckSet, Principal, Review}
+
+  @spec validate(map(), Review.t(), Principal.t()) :: :ok | {:error, term()}
+  def validate(candidate, %Review{} = review, %Principal{} = approver) when is_map(candidate) do
+    with :ok <- validate_identity(candidate, review),
+         :ok <- validate_review(candidate, review, approver),
+         :ok <-
+           CheckSet.validate_stored(
+             candidate,
+             Map.get(candidate, "checks", []),
+             Map.get(candidate, "report_ids", []),
+             Map.get(candidate, "check_set_fingerprint", "")
+           ) do
+      validate_checks(candidate, review, approver)
     end
   end
 
-  def validate(_, _, _), do: {:error, :missing_review}
+  # The old actor/map review signature is intentionally not a writable path.
+  def validate(_, _, _), do: {:error, :authorized_approval_required}
 
-  defp validate_identity(candidate, review, expected_revision) do
+  defp validate_identity(candidate, review) do
     cond do
-      candidate["base_revision_id"] != expected_revision ->
-        {:error, :candidate_base_mismatch}
+      review.base_revision_id != candidate["base_revision_id"] -> {:error, :candidate_base_mismatch}
+      review.candidate_id != candidate["id"] -> {:error, :review_candidate_mismatch}
+      review.content_hash != candidate["content_hash"] -> {:error, :review_content_mismatch}
+      review.check_set_fingerprint != candidate["check_set_fingerprint"] -> {:error, :review_check_set_mismatch}
+      MapSet.new(review.report_ids) != MapSet.new(Map.get(candidate, "report_ids", [])) -> {:error, :review_reports_mismatch}
+      true -> :ok
+    end
+  end
 
-      review["candidate_id"] != candidate["id"] ->
-        {:error, :review_candidate_mismatch}
+  defp validate_review(candidate, review, approver) do
+    cond do
+      Map.get(candidate, "structural_errors", []) != [] -> {:error, :invalid_model}
+      review.recommendation != :approve -> {:error, :review_rejected}
+      review.reviewer != approver -> {:error, :review_approver_mismatch}
+      approver.type in [:agent, :service] and review.overrides != [] -> {:error, :automated_override_forbidden}
+      true -> :ok
+    end
+  end
 
-      review["content_hash"] != candidate["content_hash"] ->
-        {:error, :review_content_mismatch}
+  defp validate_checks(candidate, review, approver) do
+    checks = Map.new(Map.get(candidate, "checks", []), &{&1["constraint_id"], &1})
+    required = Map.get(candidate, "required_checks", [])
+    overrides = Map.new(review.overrides, &{field(&1, :constraint_id), field(&1, :reason)})
+    allowed_override_ids = MapSet.new(for definition <- required, definition["overridable"], do: definition["constraint_id"])
+
+    cond do
+      Enum.any?(Map.keys(overrides), &(not MapSet.member?(allowed_override_ids, &1))) ->
+        {:error, :invalid_override_target}
 
       true ->
-        :ok
+        blockers =
+          Enum.flat_map(required, fn definition ->
+            check = checks[definition["constraint_id"]]
+            blocker(definition, check, overrides, approver)
+          end)
+
+        if blockers == [], do: :ok, else: {:error, {:review_blockers, blockers}}
     end
   end
 
-  defp validate_review(candidate, review) do
-    cond do
-      not is_binary(review["actor"]) or String.trim(review["actor"]) == "" ->
-        {:error, :missing_actor}
+  defp blocker(_definition, %{"status" => "pass"}, _overrides, _approver), do: []
 
-      Map.get(candidate, "structural_errors", []) != [] ->
-        {:error, :invalid_model}
-
-      not is_list(Map.get(candidate, "checks", [])) or
-          not Enum.all?(Map.get(candidate, "checks", []), &is_map/1) ->
-        {:error, :invalid_check_results}
-
-      not valid_overrides?(Map.get(review, "overrides", [])) ->
-        {:error, :invalid_overrides}
-
-      MapSet.new(Map.get(review, "report_ids", [])) !=
-          MapSet.new(Map.get(candidate, "report_ids", [])) ->
-        {:error, :review_reports_mismatch}
-
-      true ->
-        :ok
+  defp blocker(%{"evaluation" => "semantic", "overridable" => true, "constraint_id" => id}, check, overrides, %Principal{type: :human}) do
+    case Map.get(overrides, id) do
+      reason when is_binary(reason) and byte_size(String.trim(reason)) > 0 -> []
+      _ -> [%{"constraint_id" => id, "reason" => "human_override_required", "status" => status(check)}]
     end
   end
 
-  defp valid_overrides?(overrides) when is_list(overrides) do
-    Enum.all?(overrides, fn
-      %{"constraint_id" => id, "reason" => reason}
-      when is_binary(id) and is_binary(reason) ->
-        id != "" and String.trim(reason) != ""
-
-      _ ->
-        false
-    end)
+  defp blocker(definition, check, _overrides, _approver) do
+    [
+      %{
+        "constraint_id" => definition["constraint_id"],
+        "reason" => "required_check_not_passing",
+        "evaluation" => definition["evaluation"],
+        "status" => status(check)
+      }
+    ]
   end
 
-  defp valid_overrides?(_), do: false
-
-  defp validate_checks(checks, overrides) when is_list(checks) do
-    acknowledged = MapSet.new(overrides, & &1["constraint_id"])
-
-    blockers =
-      Enum.flat_map(checks, fn check ->
-        required = check["severity"] == "required"
-        status = check["status"]
-        deterministic = check["evaluation"] == "deterministic"
-        id = check["constraint_id"]
-
-        cond do
-          not required or status == "pass" ->
-            []
-
-          deterministic ->
-            [%{"constraint_id" => id, "reason" => "hard_requirement_failed"}]
-
-          not MapSet.member?(acknowledged, id) ->
-            [
-              %{
-                "constraint_id" => id,
-                "reason" => "review_acknowledgment_required",
-                "status" => status
-              }
-            ]
-
-          true ->
-            []
-        end
-      end)
-
-    if blockers == [], do: :ok, else: {:error, {:review_blockers, blockers}}
-  end
-
-  defp validate_checks(_, _), do: {:error, :invalid_check_results}
+  defp status(nil), do: "missing"
+  defp status(check), do: Map.get(check, "status", "unknown")
+  defp field(map, key), do: Map.get(map, key, Map.get(map, to_string(key)))
 end

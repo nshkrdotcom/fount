@@ -46,8 +46,13 @@ case mode do
         }
       ])
 
-    {:ok, _} =
-      Fount.Persistence.save_edit(Fount.Repo, key, cut, expected_revision: root.revision.id)
+    {:ok, manual} =
+      Fount.Persistence.save_edit_candidate(Fount.Repo, key, cut, expected_revision: root.revision.id)
+    {:ok, stored_manual} = Fount.Persistence.candidate(Fount.Repo, manual.id)
+    {:ok, principal} = Fount.Writing.Principal.new(:human, "live example writer")
+    {:ok, authority} = Fount.Writing.Authority.new(principal, root.id, [:approve])
+    {:ok, manual_approval} = Fount.Writing.Approval.direct(stored_manual, principal, Fount.ID.v5(root.id, ["recover-example:", manual.id]))
+    {:ok, _} = Fount.Persistence.accept_candidate(Fount.Repo, manual.id, approval: manual_approval, authority: authority)
 
     {:ok, result} = FountWorkshop.Recover.run(Fount.Repo, key, root.revision.id, lost.id)
     candidate = result.candidate
@@ -682,16 +687,13 @@ case mode do
           if opts[:accept_demo] do
             chosen = hd(result.candidates)
 
-            review = %{
-              "candidate_id" => chosen.id,
-              "content_hash" => chosen.screenplay.revision.content_hash,
-              "actor" => "live example writer",
-              "report_ids" => [],
-              "overrides" => []
-            }
+            {:ok, stored} = Fount.Persistence.candidate(Fount.Repo, chosen.id)
+            {:ok, principal} = Fount.Writing.Principal.new(:human, "live example writer")
+            {:ok, authority} = Fount.Writing.Authority.new(principal, root.id, [:approve])
+            {:ok, approval} = Fount.Writing.Approval.direct(stored, principal, Fount.ID.v5(root.id, ["workshop-live:", chosen.id]))
 
             {:ok, head} =
-              FountWorkshop.Review.accept(Fount.Repo, chosen.id, root.revision.id, review)
+              FountWorkshop.Review.accept(Fount.Repo, chosen.id, approval, authority)
 
             head.revision.id
           else

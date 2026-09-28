@@ -28,15 +28,39 @@ persistence. A minimal application flow is:
 root = Fount.Screenplay.new()
 {:ok, _} = Fount.Persistence.create(Fount.Repo, "draft", root)
 {:ok, accepted} = Fount.Persistence.load(Fount.Repo, "draft")
-{:ok, candidate, changes} = Fount.Screenplay.apply(accepted, operations, [])
-{:ok, _} = Fount.Persistence.save_edit(Fount.Repo, "draft", candidate,
-  expected_revision: accepted.revision.id)
+{:ok, edited, changes} = Fount.Screenplay.apply(accepted, operations, [])
+
+# Post-genesis edits are saved as candidates; save/save_edit do not move canon.
+{:ok, candidate} = Fount.Persistence.save_edit_candidate(Fount.Repo, "draft", edited,
+  expected_revision: accepted.revision.id,
+  operations: changes.operations)
+
+{:ok, principal} = Fount.Writing.Principal.new(:human, authenticated_writer_id)
+{:ok, authority} = Fount.Writing.Authority.new(principal, root.id, [:approve])
+
+# The trusted caller creates and durably retains this UUID and exact payload
+# before the first acceptance attempt, then reuses both after a lost response.
+{:ok, approval} = Fount.Writing.Approval.direct(candidate, principal, stable_approval_id)
+{:ok, _} = Fount.Persistence.accept_candidate(Fount.Repo, candidate.id,
+  approval: approval, authority: authority)
 ```
 
-Use `save_edit` for a direct writer edit. Generative work should save a writing
-session and candidate, then use `FountWorkshop.Review.accept/4` after an
-explicit review. Acceptance checks the current head and candidate base in one
-transaction. A stale base returns an error without changing the accepted head.
+`save/4` and `save_edit/4` are retained migration surfaces, but a changed
+post-genesis screenplay now returns `{:error, :approval_required}` instead of
+advancing the accepted head. `save_edit_candidate/4` is the Core manual-edit
+path. Generated work continues to save a writing session and candidate.
+Acceptance always goes through `accept_candidate/3` with a typed
+`Fount.Writing.Approval` and a separately constructed trusted
+`Fount.Writing.Authority`.
+
+Reviews bind the exact candidate/base/content hash, report IDs and stored
+required-check fingerprint. Required deterministic checks cannot be overridden.
+Only a human may override an explicitly allowlisted semantic requirement, with
+a nonblank reason; agent/service approvals cannot carry overrides. This direct
+Phase-01 API currently requires reviewer and approver to be the same principal.
+Acceptance compares the current head and candidate base in one transaction; a
+stale base returns an error without changing canon. The old actor-string review
+shape is not a writable compatibility path.
 
 `load_revision/3` reconstructs a historical or candidate value using the same
 loader. `history/3` lists revisions. An imported, untouched Fountain artifact

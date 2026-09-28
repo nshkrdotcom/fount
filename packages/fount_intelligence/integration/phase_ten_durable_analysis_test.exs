@@ -196,8 +196,13 @@ defmodule Fount.Intelligence.PhaseTenDurableAnalysisIntegrationTest do
                }
              ])
 
-    assert {:ok, ^changed} =
-             Persistence.save_edit(Repo, key, changed, expected_revision: root.revision.id)
+    assert {:ok, manual} =
+             Persistence.save_edit_candidate(Repo, key, changed, expected_revision: root.revision.id)
+    {:ok, stored} = Persistence.candidate(Repo, manual.id)
+    {:ok, principal} = Fount.Writing.Principal.new(:human, "analysis-test-writer")
+    {:ok, authority} = Fount.Writing.Authority.new(principal, root.id, [:approve])
+    {:ok, approval} = Fount.Writing.Approval.direct(stored, principal, Fount.ID.v4())
+    assert {:ok, ^changed} = Persistence.accept_candidate(Repo, manual.id, approval: approval, authority: authority)
 
     {root, changed, target.id}
   end

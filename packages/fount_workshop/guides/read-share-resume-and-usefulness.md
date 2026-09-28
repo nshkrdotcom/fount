@@ -53,7 +53,7 @@ mix fount.manual --session SESSION_ID --request manual_candidate.json --output o
 mix fount.edit --candidate CANDIDATE_ID --request manual_edit.json --output out/compare --actor writer
 
 # 6. Decide explicitly. Acceptance advances canon; rejection does not.
-mix fount.accept --candidate CANDIDATE_ID --expected-revision BASE_REVISION_ID --actor writer
+mix fount.accept --candidate CANDIDATE_ID --expected-revision BASE_REVISION_ID --actor writer --principal-type human --approval-id STABLE_APPROVAL_UUID
 # or:
 mix fount.reject --candidate CANDIDATE_ID --actor writer
 

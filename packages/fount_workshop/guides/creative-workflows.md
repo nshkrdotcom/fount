@@ -8,7 +8,7 @@
 
 `Candidate.select(id, group_ids, services, opts)` replays selected groups from the original base with their local-reference map and dependency selection. `Candidate.edit` appends explicit writer operations. `Candidate.combine(ids, selection, services, opts)` chooses groups or exact source/target element ranges, exposes overlap choices, namespaces local references and can write actual connective material around pinned selected passages. The intermediate combination source is persisted for evidence identity before generation of joins. `Candidate.rebase` produces an explicit new-base candidate/session or conflicts. None of these accepts writing.
 
-`Review.export(session_id, directory, services, opts)` writes base/candidate Fountain pages, strategies, structural and source diffs, check reports, lineage, JSON/HTML table reads and blank decision forms. With `pdf: true`, renderer failure is a failed request with retained packet rather than a fake PDF. `Acceptance.accept(candidate_id, expected_revision, review, services)` delegates to the PostgreSQL transaction. The transaction validates actual stored data and writer review, serializes head advancement and preserves immutable candidate/history material.
+`Review.export(session_id, directory, services, opts)` writes base/candidate Fountain pages, strategies, structural and source diffs, check reports, lineage, JSON/HTML table reads and blank decision forms. With `pdf: true`, renderer failure is a failed request with retained packet rather than a fake PDF. `Acceptance.accept(candidate_id, approval, authority, services)` delegates to the PostgreSQL transaction. The typed approval carries its stable ID and exact review bindings; `authority` is trusted host context, not request JSON. The transaction validates stored data, required checks, report lineage and principal authority, serializes head advancement and preserves immutable candidate/history material.
 
 ## Services
 
@@ -41,7 +41,7 @@ Evidence records carry screenplay/revision/typed target, exact excerpt and half-
 * Stable revision IDs and replayed local references must not be regenerated during group selection.
 * Core acceptance must validate stored structural/check data, not a caller's empty `structural_errors` array.
 * Speaker-scene membership is not proof of access. New knowledge paths use exact-prefix access evidence; the older preliminary `Knowledge.trace` remains as a narrower legacy example, not the full acceptance implementation.
-* Same actor/review/content acceptance is idempotent; a changed repeated decision conflicts.
+* The same stable approval ID plus identical payload is idempotent after a lost response; reusing the ID with changed payload conflicts, and another approval cannot re-accept an already accepted candidate.
 * Profile SHA, effective question SHA and SDK Prepared fingerprint are distinct values.
 
 ## Definition locations

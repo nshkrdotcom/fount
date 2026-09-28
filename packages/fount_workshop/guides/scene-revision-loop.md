@@ -9,7 +9,7 @@ to those IDs, validates the response, and applies typed edits in memory.
 saves a writing session and candidate revision, and returns the candidate ID.
 The accepted head stays where it was. Use `FountWorkshop.Review.packet/2` to
 inspect the exact source and structural differences; use
-`FountWorkshop.Review.accept/4` only after the writer makes a review decision.
+`FountWorkshop.Review.accept/4` only after a trusted caller has authenticated the approver, durably retained a stable typed approval payload, and the writer has made the review decision.
 
 `NoteResponse` uses the same exact edit path but removes the addressed note
 from the candidate. Other notes remain. `SequenceRebuild` replaces a run of

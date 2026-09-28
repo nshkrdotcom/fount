@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased - Fount Run Phase 01 core approval safety (source delivery)
+
+- Add typed review, approval, principal and trusted-authority contracts for post-genesis canonical acceptance.
+- Close direct `save`/`save_edit` head mutation, add a manual-edit candidate path, snapshot required-check identity, and persist stable approval audit identity through a forward migration.
+- Add direct human/agent/service, forged-authority, replay, missing-check and PostgreSQL concurrency/migration regression coverage. Runtime Elixir/PostgreSQL verification remains pending.
+
 ## Unreleased - Phase 16 final integration source delivery
 
 - Add the final source/package acceptance harness and W01-W12/A01-A12 evidence inventory without introducing a second analysis, generation, session, or canon path.

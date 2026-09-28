@@ -204,6 +204,9 @@ defmodule Fount.Persistence.Schema.WritingCandidate do
     field(:decision_actor, :string)
     field(:payload_hash, :string)
     field(:review_hash, :string)
+    field(:required_checks, Fount.Persistence.JSONValue)
+    field(:check_set_fingerprint, :string)
+    field(:approval_id, Ecto.UUID)
   end
 end
 
@@ -238,6 +241,20 @@ defmodule Fount.Persistence.Schema.Acceptance do
     field(:operations, Fount.Persistence.JSONValue)
     field(:provenance, :map)
     field(:review, :map)
+    field(:acceptance_kind, :string)
+    field(:approval_id, Ecto.UUID)
+    field(:approval_hash, :string)
+    field(:approval, :map)
+    field(:approver_type, :string)
+    field(:approver_id, :string)
+    field(:reviewer_type, :string)
+    field(:reviewer_id, :string)
+    field(:review_hash, :string)
+    field(:check_set_fingerprint, :string)
+    field(:report_ids, Fount.Persistence.JSONValue)
+    field(:run_id, Ecto.UUID)
+    field(:run_policy_version, :integer)
+    field(:run_policy_fingerprint, :string)
     field(:inserted_at, :utc_datetime_usec)
   end
 end

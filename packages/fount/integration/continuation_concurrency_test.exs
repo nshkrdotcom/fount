@@ -1,9 +1,18 @@
 defmodule Fount.ContinuationConcurrencyIntegrationTest do
   use ExUnit.Case, async: false
   alias Fount.{Persistence, Repo, Screenplay}
+  alias Fount.Writing.{Approval, Authority, Principal}
   setup_all do
     start_supervised!({Repo, url: System.fetch_env!("FOUNT_DATABASE_URL"), pool_size: 5})
     :ok
+  end
+
+  defp direct_approval(id, actor) do
+    {:ok, candidate} = Persistence.candidate(Repo, id)
+    {:ok, principal} = Principal.new(:human, actor)
+    {:ok, authority} = Authority.new(principal, candidate["screenplay_id"], [:approve])
+    {:ok, approval} = Approval.direct(candidate, principal, Fount.ID.v4())
+    {approval, authority}
   end
   test "same revision ID cannot disguise changed text on a no-op save" do
     root = Screenplay.new(scenes: [%{heading: "INT. ROOM - NIGHT", elements: [%{type: :action, text: "Mara waits."}]}])
@@ -16,17 +25,23 @@ defmodule Fount.ContinuationConcurrencyIntegrationTest do
     assert {:ok, head} = Persistence.load(Repo, key)
     assert Fount.Query.node(head, e.id).text == "Mara waits."
   end
-  test "two accepted edits racing the same head cannot both advance it" do
+  test "direct edits racing the same head are both blocked before persistence" do
     root = Screenplay.new(scenes: [%{heading: "INT. ROOM - NIGHT", elements: [%{type: :action, text: "Mara waits."}]}])
-    key = "race-#{Fount.ID.v4()}"
+    key = "direct-race-#{Fount.ID.v4()}"
     assert {:ok, _} = Persistence.create(Repo, key, root)
     e = Enum.find(root.ir.elements, &(&1.type == :action))
-    results = ["Mara leaves.", "Mara locks the door."] |> Task.async_stream(fn text ->
-      {:ok, candidate, _} = Screenplay.apply(root, [%{"kind" => "replace_text", "target" => %{"kind" => "element", "id" => e.id}, "value" => text}], [])
-      Persistence.save_edit(Repo, key, candidate, expected_revision: root.revision.id, actor: "integration-writer")
-    end, max_concurrency: 2, timeout: 15_000) |> Enum.map(fn {:ok, result} -> result end)
-    assert Enum.count(results, &match?({:ok, _}, &1)) == 1
-    assert Enum.count(results, &match?({:error, {:stale_revision, _}}, &1)) == 1
+
+    results =
+      ["Mara leaves.", "Mara locks the door."]
+      |> Task.async_stream(fn text ->
+        {:ok, candidate, _} = Screenplay.apply(root, [%{"kind" => "replace_text", "target" => %{"kind" => "element", "id" => e.id}, "value" => text}], [])
+        Persistence.save_edit(Repo, key, candidate, expected_revision: root.revision.id)
+      end, max_concurrency: 2, timeout: 15_000)
+      |> Enum.map(fn {:ok, result} -> result end)
+
+    assert Enum.all?(results, &(&1 == {:error, :approval_required}))
+    assert {:ok, head} = Persistence.load(Repo, key)
+    assert head.revision.id == root.revision.id
   end
 
   test "two candidate acceptances racing the same head cannot both advance it" do
@@ -62,17 +77,8 @@ defmodule Fount.ContinuationConcurrencyIntegrationTest do
       candidates
       |> Task.async_stream(
         fn candidate ->
-          review = %{
-            candidate_id: candidate.id,
-            content_hash: candidate.screenplay.revision.content_hash,
-            actor: "writer"
-          }
-
-          Persistence.accept_candidate(Repo, candidate.id,
-            expected_revision: root.revision.id,
-            actor: "writer",
-            review: review
-          )
+          {approval, authority} = direct_approval(candidate.id, "writer-#{candidate.id}")
+          Persistence.accept_candidate(Repo, candidate.id, approval: approval, authority: authority)
         end,
         max_concurrency: 2,
         timeout: 15_000

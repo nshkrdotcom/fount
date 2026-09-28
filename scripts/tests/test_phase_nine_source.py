@@ -101,7 +101,7 @@ class PhaseNineSourceTests(unittest.TestCase):
         )
         gate = self.read("packages/fount/lib/fount/writing/review_gate.ex")
         self.assertIn('"severity" => "advisory"', bridge)
-        self.assertIn('required = check["severity"] == "required"', gate)
+        self.assertIn('required = Map.get(candidate, "required_checks", [])', gate)
         self.assertNotIn("revision_intelligence", gate)
 
     def test_phase_nine_contract_survives_later_persistence_work(self) -> None:

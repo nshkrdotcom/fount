@@ -25,7 +25,7 @@ defmodule FountWorkshop.Examples.PhaseOneDemo do
     ensure!(before_packet["source_diff"] != [], "development produced no page changes")
     {:ok, rejected} = Review.reject(repo, alternate.id, "fixture-writer")
     ensure!(rejected["decision"] == "rejected", "alternate was not rejected")
-    {:ok, base} = Review.accept(repo, chosen.id, root.revision.id, review(chosen.id, before_packet))
+    {:ok, base} = approve(repo, chosen.id, "fixture-writer")
     target = Enum.find(base.ir.elements, &(&1.text == "I know you took it."))
     rewrite = client(%{"changes" => [%{"element_id" => target.id, "text" => "Then why is the safe open?"}]})
     {:ok, revised} = TargetedRewrite.run(repo, key, [target.id], "Make the accusation indirect; keep the locked-door action.", rewrite)
@@ -64,7 +64,7 @@ defmodule FountWorkshop.Examples.PhaseOneDemo do
 
     case decision do
       :accept ->
-        {:ok, _} = Review.accept(repo, revised.candidate.id, base.revision.id, review(revised.candidate.id, packet))
+        {:ok, _} = approve(repo, revised.candidate.id, "fixture-writer")
       :reject ->
         {:ok, _} = Review.reject(repo, revised.candidate.id, "fixture-writer")
     end
@@ -87,8 +87,14 @@ defmodule FountWorkshop.Examples.PhaseOneDemo do
   defp draft(action, dialogue), do: %{"approach" => action, "scenes" => [%{"heading" => "INT. HALL - NIGHT",
     "elements" => [%{"type" => "action", "text" => action}, %{"type" => "character", "text" => "DAN"},
       %{"type" => "dialogue", "text" => dialogue}]}]}
-  defp review(id, packet), do: %{"candidate_id" => id, "content_hash" => packet["content_hash"],
-    "actor" => "fixture-writer", "report_ids" => packet["report_ids"], "overrides" => []}
+  defp approve(repo, candidate_id, actor) do
+    {:ok, candidate} = Persistence.candidate(repo, candidate_id)
+    {:ok, principal} = Fount.Writing.Principal.new(:human, actor)
+    {:ok, authority} = Fount.Writing.Authority.new(principal, candidate["screenplay_id"], [:approve])
+    approval_id = ID.v5(candidate["screenplay_id"], ["phase-one-demo:", candidate_id, ":", actor])
+    {:ok, approval} = Fount.Writing.Approval.direct(candidate, principal, approval_id)
+    Review.accept(repo, candidate_id, approval, authority)
+  end
   defp ensure!(true, _message), do: :ok
   defp ensure!(false, message), do: raise(message)
 end

@@ -11,7 +11,4 @@ It contains exact Fountain for both, a Myers source difference, a structural
 difference, change groups, lineage and check references. Candidate pages can
 be reopened, exported and rendered before acceptance.
 
-The supplied `ReviewGate` checks review content and acknowledged concerns.
-`Fount.Persistence.accept_candidate/3` then locks the candidate and accepted
-head, checks the base and content hash, records acceptance, and moves the head
-atomically. `Review.reject/3` preserves a rejected candidate for history.
+The supplied `ReviewGate` checks typed review identity, recommendation, required-check inventory and allowed human-only semantic overrides. `Fount.Persistence.accept_candidate/3` receives the typed approval plus trusted authority, locks screenplay then candidate, validates base/content/report/check identity, records the stable approval audit, and moves the head atomically. `Review.reject/3` preserves a rejected candidate for history.

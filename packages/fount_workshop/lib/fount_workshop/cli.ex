@@ -2,6 +2,10 @@ defmodule FountWorkshop.CLI do
   @moduledoc "Writer commands. Review and acceptance are distinct operations; no generation command advances the accepted draft."
   alias Fount.CLI.Support, as: S
   alias Fount.Screenplay.Model
+  alias Fount.Writing.Approval, as: WritingApproval
+  alias Fount.Writing.Authority, as: WritingAuthority
+  alias Fount.Writing.Principal, as: WritingPrincipal
+  alias Fount.Writing.Review, as: WritingReview
   alias FountWorkshop.Acceptance
   alias FountWorkshop.Candidate
   alias FountWorkshop.Discovery
@@ -24,6 +28,8 @@ defmodule FountWorkshop.CLI do
     candidate: :string,
     groups: :string,
     actor: :string,
+    principal_type: :string,
+    approval_id: :string,
     expected_revision: :string,
     review: :string,
     pdf: :boolean,
@@ -47,7 +53,7 @@ defmodule FountWorkshop.CLI do
     "combine" => [:request, :output],
     "rebase" => [:candidate, :request, :output],
     "audition" => [:candidate, :output],
-    "accept" => [:candidate, :expected_revision, :actor],
+    "accept" => [:candidate, :expected_revision, :actor, :principal_type, :approval_id],
     "reject" => [:candidate, :actor],
     "render" => [:key, :output],
     "read" => [:key, :output]
@@ -291,9 +297,21 @@ defmodule FountWorkshop.CLI do
 
   defp dispatch("accept", opts, services) do
     with {:ok, candidate} <- Store.call(services.store, :candidate, [opts[:candidate]]),
-         {:ok, review} <- review(opts, candidate),
-         {:ok, model} <-
-           Acceptance.accept(opts[:candidate], opts[:expected_revision], review, services),
+         true <- candidate["base_revision_id"] == opts[:expected_revision] or {:error, :candidate_base_mismatch},
+         {:ok, principal} <- WritingPrincipal.new(opts[:principal_type], opts[:actor]),
+         {:ok, authority} <- WritingAuthority.new(principal, candidate["screenplay_id"], [:approve]),
+         {:ok, review} <- review(opts, candidate, principal),
+         {:ok, approval} <-
+           WritingApproval.new(
+             id: opts[:approval_id],
+             approver: principal,
+             screenplay_id: candidate["screenplay_id"],
+             candidate_id: candidate["id"],
+             base_revision_id: candidate["base_revision_id"],
+             content_hash: candidate["screenplay"].revision.content_hash,
+             review: review
+           ),
+         {:ok, model} <- Acceptance.accept(opts[:candidate], approval, authority, services),
          {:ok, _} <-
            Discovery.record_acceptance(candidate["session_id"], opts[:candidate], services,
              actor: opts[:actor]
@@ -447,22 +465,25 @@ defmodule FountWorkshop.CLI do
     end
   end
 
-  defp review(opts, candidate) do
+  defp review(opts, candidate, principal) do
     if opts[:review] do
-      with {:ok, review} <- S.json_file(opts[:review]),
-           true <- review["actor"] == opts[:actor] or {:error, :review_actor_mismatch} do
+      with {:ok, payload} <- S.json_file(opts[:review]),
+           {:ok, review} <- WritingReview.from_map(payload),
+           true <- review.reviewer == principal or {:error, :review_principal_mismatch} do
         {:ok, review}
       end
     else
-      # Running fount.accept with explicit actor is the decision, not an automatic action by generation.
-      {:ok,
-       %{
-         "candidate_id" => candidate["id"],
-         "content_hash" => candidate["screenplay"].revision.content_hash,
-         "actor" => opts[:actor],
-         "report_ids" => candidate["provenance"]["report_ids"] || [],
-         "overrides" => []
-       }}
+      WritingReview.new(
+        reviewer: principal,
+        candidate_id: candidate["id"],
+        base_revision_id: candidate["base_revision_id"],
+        content_hash: candidate["screenplay"].revision.content_hash,
+        report_ids: candidate["provenance"]["report_ids"] || [],
+        check_set_fingerprint: candidate["check_set_fingerprint"],
+        findings: [],
+        recommendation: :approve,
+        overrides: []
+      )
     end
   end
 

@@ -148,16 +148,9 @@ defmodule FountWorkshop.PhaseTwelveA01DemoTest do
 
     [chosen, rejected, unchosen] = state["candidates"]
 
-    review = %{
-      "candidate_id" => chosen["id"],
-      "content_hash" => chosen["screenplay"].revision.content_hash,
-      "actor" => "writer",
-      "report_ids" => chosen["provenance"]["report_ids"] || [],
-      "overrides" => []
-    }
 
     assert {:ok, accepted} =
-             Acceptance.accept(chosen["id"], base.revision.id, review, %{store: store})
+             FountWorkshop.TestApproval.accept(%{store: store}, chosen["id"])
 
     assert {:ok, _} = Discovery.record_acceptance(session["id"], chosen["id"], %{store: store})
     assert {:ok, _} = Acceptance.reject(rejected["id"], "writer", %{store: store})

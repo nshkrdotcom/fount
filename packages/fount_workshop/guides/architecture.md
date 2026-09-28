@@ -7,9 +7,7 @@ reviewable outputs.
 
 A writer starts with an accepted draft or an empty root, requests a writing
 operation, inspects the saved candidate and its Fountain/PDF output, then makes
-an explicit review decision. `FountWorkshop.Review.accept/4` validates the
-candidate review and asks PostgreSQL to compare the candidate base with the
-current accepted head in one transaction. A stale candidate cannot overwrite
+an explicit review decision. `FountWorkshop.Review.accept/4` accepts `(repo, candidate_id, approval, authority)`. The typed approval binds the exact review/candidate/check set and the authority is trusted host context constructed outside request payloads. PostgreSQL compares the candidate base with the current accepted head in the same transaction. A stale candidate cannot overwrite
 another accepted revision.
 
 The current writer operations are `Develop`, `TargetedRewrite`,

@@ -4,172 +4,426 @@
     {
       "path": "CHANGELOG.md",
       "action": "modify",
-      "original_sha256": "ea54397720731dba3426fe02d1f38c697a00768b9a8b4d6bec0f2979138c03e7",
-      "original_terminal_lf_sha256": "04afc9263bb1f698a692f29435ca481adaace2708d2e5abccf2e8315b1d2877e",
-      "result_sha256": "06a9e502d7116600394bfdfef8ea80260a29257a96ff95546a22af81e7bbd577",
-      "mode": 420,
-      "original_bytes": 6832,
-      "result_bytes": 7440
-    },
-    {
-      "path": "README.md",
-      "action": "modify",
-      "original_sha256": "0f3cc5e76d7ee3a65a4daf829ef659e6e5c32807739920423a73cd3017942080",
-      "original_terminal_lf_sha256": "ba3dab39bfd090437c94f3aaae147c272739b52341f94758a450a73e0f1ae9dd",
-      "result_sha256": "1ab09a7b4b7fa0a7b50ef10fc3cadfc17a8ae2af8315fc587b98e5ed627a5a0e",
-      "mode": 420,
-      "original_bytes": 23028,
-      "result_bytes": 24015
+      "original_sha256": "06a9e502d7116600394bfdfef8ea80260a29257a96ff95546a22af81e7bbd577",
+      "original_terminal_lf_sha256": "fcd953b03db28c63268160c13f4615978d3c227c66cf96c4237271cf0da83228",
+      "result_sha256": "8b4b8be79f87d3cd5009e87e31407ab950819af4c0c38370e92fd5f205df6ad7",
+      "mode": 420
     },
     {
       "path": "packages/fount/CHANGELOG.md",
       "action": "modify",
-      "original_sha256": "1db30b760f42d9bbfcc68e6de1da04649667a296d48c26f73d2d9ac971a0f797",
-      "original_terminal_lf_sha256": "d56be276c3faf2e5ca76e97829f8eb1450b8ddcc8effa99f259210ccfa946d2d",
-      "result_sha256": "32b20b744cc0a373d92d3b69a52e3c81f2a0685e4ae0b2899ac3e9455e8e3162",
-      "mode": 420,
-      "original_bytes": 1573,
-      "result_bytes": 2181
+      "original_sha256": "32b20b744cc0a373d92d3b69a52e3c81f2a0685e4ae0b2899ac3e9455e8e3162",
+      "original_terminal_lf_sha256": "30b17c08b58da58fdc11606de511680cf720743eec375e9ab9ca0a9e620f2a0a",
+      "result_sha256": "b3cb903893345a3ccfef0794c0f9c2d950fffa5eab81501608310e35bf97533b",
+      "mode": 420
     },
     {
-      "path": "packages/fount_intelligence/CHANGELOG.md",
+      "path": "packages/fount/README.md",
       "action": "modify",
-      "original_sha256": "bf86e2537b8c0c040ec3ca7ecdf7bebb4812ac3a9152d869fddb9cf88b754a6b",
-      "original_terminal_lf_sha256": "42d8e5eb034d0006ad431297b5647d07895da8eb793625a0f53ab97829a7dedc",
-      "result_sha256": "368e0931fba60330d18e5703ad40204bf86b5003158b058144f4590804b0616e",
-      "mode": 420,
-      "original_bytes": 5268,
-      "result_bytes": 5876
+      "original_sha256": "7f1df6a386a8f2e6bcbf98787908f8c0cdc682c658acf7cd0f41cb3247f41c98",
+      "original_terminal_lf_sha256": "6d9532dc6e6c2150cc46012d8bd2dca85c1a3b706e0632a096d15aae110562d1",
+      "result_sha256": "aae4a0c18ee75702398212ae275d1b1e9bbd345418bdfac401dad8df48d3353f",
+      "mode": 420
     },
     {
-      "path": "packages/fount_intelligence/test/phase_sixteen_final_architecture_test.exs",
+      "path": "packages/fount/examples/live.exs",
+      "action": "modify",
+      "original_sha256": "1352169e602e5963fc79ab25b8ead5c0cc2a1e2461b27897a77daffde3dea40d",
+      "original_terminal_lf_sha256": "44bd3fe760460fd7cc8d3d1594ac78c6013da08c978f2debd2a7e7e25acf309b",
+      "result_sha256": "4f2d7fcd2b7df8ce4c516315606f6119432fcbd90a1e71c09714859877f93b06",
+      "mode": 420
+    },
+    {
+      "path": "packages/fount/guides/persistence.md",
+      "action": "modify",
+      "original_sha256": "0dac20fb676aaff0f82c8d4406a4cd97ce24d9ff6313812c21250bf87b75fc00",
+      "original_terminal_lf_sha256": "4eb557fad2007cfb4638a7fcc4a41f9b1b9dd1ddf4e1392167d2d6317a2c832d",
+      "result_sha256": "c0248c53633e1c2ecb7daa891ff03826e5a336a8ed951431a192ddfe6d69228e",
+      "mode": 420
+    },
+    {
+      "path": "packages/fount/integration/approval_migration_test.exs",
       "action": "add",
       "original_sha256": null,
       "original_terminal_lf_sha256": null,
-      "result_sha256": "8d7c77e702161252d882d48d3b2a2f96a7a270e80602c027e98ccc9686b59aa9",
-      "mode": 420,
-      "original_bytes": null,
-      "result_bytes": 1329
+      "result_sha256": "012d79f47158f768bb73a7c87519530960cb8427224dcc88c25953417d80a8a7",
+      "mode": 420
     },
     {
-      "path": "packages/fount_observe/CHANGELOG.md",
+      "path": "packages/fount/integration/continuation_concurrency_test.exs",
       "action": "modify",
-      "original_sha256": "01f7af0a84e4f5a462813c2e43eaa679b2caa6825dce5c39f067f8e7ab21a22b",
-      "original_terminal_lf_sha256": "621499125627bc517eec3d66e069d333723fbe35887fad2e0728616be54c709d",
-      "result_sha256": "e22576d5445ccdddc01673bfc0a35abc4f7cb6105c1ba004f0e2e6c3d80314fd",
-      "mode": 420,
-      "original_bytes": 2178,
-      "result_bytes": 2786
+      "original_sha256": "8dc1ed6c43c0acbcb995446a368029d354b08ec3edcd0f8025438b2506f14498",
+      "original_terminal_lf_sha256": "47a04e83fedf35f8aa0be17e7806d7049d951e88deeaaae572d66fec6c55e091",
+      "result_sha256": "793f7267496bff9be1941ec220f8c84567566f26f9336ef85b6dd4f37ddeefa8",
+      "mode": 420
+    },
+    {
+      "path": "packages/fount/integration/writing_persistence_test.exs",
+      "action": "modify",
+      "original_sha256": "dd93bc0376b5b7d0a510141d5dc44a67c423484c5166e2014416a941a3afe9e5",
+      "original_terminal_lf_sha256": "4496d5f934a1fa78747a48eef8cb29d2898c522a3ea366d18fb0f4a4c6de11db",
+      "result_sha256": "7a6024a228d29c4c4226989d8fb3fedadba2d113b1688d44fdcadc69cedf1fc8",
+      "mode": 420
+    },
+    {
+      "path": "packages/fount/lib/fount/persistence/schema.ex",
+      "action": "modify",
+      "original_sha256": "089bc651b3b34585f3a7c7a34a24d6bf8d8255f75ade4c6dd1dc3b6135b23f58",
+      "original_terminal_lf_sha256": "d2ce402498fe4303a53c6757e26a4b698ba079da73a9117a52275b7085433737",
+      "result_sha256": "df339639f7ba5903ee5df354b996679ed40b1914d2262aef7c592a928d9e3771",
+      "mode": 420
+    },
+    {
+      "path": "packages/fount/lib/fount/persistence.ex",
+      "action": "modify",
+      "original_sha256": "3a5b04a83e8881d71234180867f4a722b47f534c96a1eb32818037a6ac545c58",
+      "original_terminal_lf_sha256": "a8565582cd16613e7bdc70e04c2dc177be4753327ac3d8cb669c5c3796a5de6e",
+      "result_sha256": "f3aa741190bcb0551d1b02ace6459516e095cf7d7a219acfe90fc89c6e7fab33",
+      "mode": 420
+    },
+    {
+      "path": "packages/fount/lib/fount/writing/approval.ex",
+      "action": "add",
+      "original_sha256": null,
+      "original_terminal_lf_sha256": null,
+      "result_sha256": "ca5ced3c44ce04bc4811d131e310969a296f113d7572796dc43704cf45ce6ad9",
+      "mode": 420
+    },
+    {
+      "path": "packages/fount/lib/fount/writing/authority.ex",
+      "action": "add",
+      "original_sha256": null,
+      "original_terminal_lf_sha256": null,
+      "result_sha256": "e4a6f7e32cbfd54320151b5d00339b885fb3d6210745c0142f893246070b58d6",
+      "mode": 420
+    },
+    {
+      "path": "packages/fount/lib/fount/writing/check_set.ex",
+      "action": "add",
+      "original_sha256": null,
+      "original_terminal_lf_sha256": null,
+      "result_sha256": "ee316029d8c40c73a782aea191d45af61e1b00598f042e81fc0d5015abad8d64",
+      "mode": 420
+    },
+    {
+      "path": "packages/fount/lib/fount/writing/principal.ex",
+      "action": "add",
+      "original_sha256": null,
+      "original_terminal_lf_sha256": null,
+      "result_sha256": "14b1bb6912e0dbefa88e939e4b27828b20426139bfed3ce6c257c301176ccaac",
+      "mode": 420
+    },
+    {
+      "path": "packages/fount/lib/fount/writing/review.ex",
+      "action": "add",
+      "original_sha256": null,
+      "original_terminal_lf_sha256": null,
+      "result_sha256": "41512be741ea0553f402949e3edacf2655242a3235e40fe8e5227411ef406c28",
+      "mode": 420
+    },
+    {
+      "path": "packages/fount/lib/fount/writing/review_gate.ex",
+      "action": "modify",
+      "original_sha256": "924b6f2f1a6d209233f46a2ee8c0b8b3966d8c9b8e6e2d32dd2c19cb185d6a5a",
+      "original_terminal_lf_sha256": "0cdf488cd72e96b4b407b049c7cb4023949be3e19139a5bd93f18f3f92d49460",
+      "result_sha256": "8c005bdc5d5133e77e236f170dab6b9fa6e0999b02e88835352db6f0697bec9a",
+      "mode": 420
+    },
+    {
+      "path": "packages/fount/priv/repo/migrations/20260928000000_authorize_canonical_acceptance.exs",
+      "action": "add",
+      "original_sha256": null,
+      "original_terminal_lf_sha256": null,
+      "result_sha256": "3af20d6c7e95185977248323c51579cf5b6ac545ee83c2a4fe42009b29199fda",
+      "mode": 420
+    },
+    {
+      "path": "packages/fount/test/persistence_scope_test.exs",
+      "action": "modify",
+      "original_sha256": "e739912b2d171f8cefa8122fda84d54ae869705493a84182f9469c08b622a2c6",
+      "original_terminal_lf_sha256": "dacae02a263c337a9849c6787cffde5a2000c2233849710e87447d8b952868a8",
+      "result_sha256": "cc371e85954414a152c3e8c524172b18bca2daf73f0d98cba1a0fe57a331ae15",
+      "mode": 420
+    },
+    {
+      "path": "packages/fount/test/test_helper.exs",
+      "action": "modify",
+      "original_sha256": "7c66674db33f80de6cfcd270824d97f8d7c56f4a28fa927fe27bdbd15fb9691f",
+      "original_terminal_lf_sha256": "b086ec47f0c6c7aaeb4cffca5ae5243dd05e0dc96ab761ced93325d5315f4b12",
+      "result_sha256": "0f8c82c80bb94ff3d701e27c4b4da0ecfd64b76ff3f4f9042c993c70f91db918",
+      "mode": 420
+    },
+    {
+      "path": "packages/fount/test/writing_contracts_test.exs",
+      "action": "modify",
+      "original_sha256": "0b2f55b7bc4cb0cd9eaac5a5baaff1eed2ab68205c437f14a0dd086c158b07ee",
+      "original_terminal_lf_sha256": "b1998b64c61543ce5522722a54a3b0772e47cb9664ca358172586ce17b0d8dde",
+      "result_sha256": "20f60668f3c865a7bfd05ff68374a2be94edce1bdfd9b3584ea16f551edfad69",
+      "mode": 420
+    },
+    {
+      "path": "packages/fount_intelligence/integration/phase_ten_durable_analysis_test.exs",
+      "action": "modify",
+      "original_sha256": "3a19db8ffb990d34784dfdd1de314e41d869bc40c4e466720de998bfd93dc2c1",
+      "original_terminal_lf_sha256": "89041063a4f5f247b414fefb29d0f2d30dfb4e0028b1305c5ed6899d499f2d99",
+      "result_sha256": "60218848a697ebe3f554ba472b79c835f73fb4bbc9be6ffbf5e052b0cd774fdb",
+      "mode": 420
     },
     {
       "path": "packages/fount_workshop/CHANGELOG.md",
       "action": "modify",
-      "original_sha256": "7f13fe59ca7a43a26eb447d87b7fbb7f7ab7b3953f5495ad4fffd45fc547371e",
-      "original_terminal_lf_sha256": "3cbbdea334b2d6ec3bcd2a5a1b6e9e66ad7ececd86f5d56aeb5ca1f7b968d451",
-      "result_sha256": "90eb9a9d24ef2159e48189407e01746d98d03ac81180cb3c84aaecf06d6f8907",
-      "mode": 420,
-      "original_bytes": 6829,
-      "result_bytes": 7437
+      "original_sha256": "90eb9a9d24ef2159e48189407e01746d98d03ac81180cb3c84aaecf06d6f8907",
+      "original_terminal_lf_sha256": "e5c26073028eaf4cd0709e358eae17adaa9589be0e14cacc3574c27446b47d8a",
+      "result_sha256": "e2cc0a3084b0a54a4d9b058b94080fe635175546466c25f3c237f4332381511f",
+      "mode": 420
     },
     {
       "path": "packages/fount_workshop/README.md",
       "action": "modify",
-      "original_sha256": "58bbf3ea8317b10e6b64bb4a4a8b8458b14a2fc5b2be9b632ffa8fea1925b901",
-      "original_terminal_lf_sha256": "eda16480a90b615ae1ac867d244097c7e5a3b8dbee3f05132044f8f95edf3f7f",
-      "result_sha256": "ae2f805d30b7778923b2566d49a245db788f1615100dba46580a79dc49725fa3",
-      "mode": 420,
-      "original_bytes": 8803,
-      "result_bytes": 9320
+      "original_sha256": "ae2f805d30b7778923b2566d49a245db788f1615100dba46580a79dc49725fa3",
+      "original_terminal_lf_sha256": "2434b9d67a783bf9a829ec2448466964c0cc695560daae90ef37de6e9c6061e3",
+      "result_sha256": "8221a15b7eed2f041365bc09393ebe5c4d3490a459d7869107be6fbc39540a15",
+      "mode": 420
     },
     {
       "path": "packages/fount_workshop/examples/README.md",
       "action": "modify",
-      "original_sha256": "99ea6e7c8171f9fa998e26a8262790e4d69a30516036a63b43d304f7ada0e54e",
-      "original_terminal_lf_sha256": "029daba202bea0183c70499e684930e5880d308a4843729c42fbe31a7f2eea10",
-      "result_sha256": "a9f42823bd685e4fea95fa2c130be5dbc231690c956a175b46d0b86201bb8b6b",
-      "mode": 420,
-      "original_bytes": 7330,
-      "result_bytes": 7790
+      "original_sha256": "bfef3c337153ca130f26a7c498a83d7627870ef4e9a7cbbda73bb1dfaf204c51",
+      "original_terminal_lf_sha256": "a9f42823bd685e4fea95fa2c130be5dbc231690c956a175b46d0b86201bb8b6b",
+      "result_sha256": "fb413bb704640024b48eb824847f13f174728f58e564e1120462e709a0f61f5a",
+      "mode": 420
     },
     {
-      "path": "packages/fount_workshop/examples/phase_sixteen/README.md",
-      "action": "add",
-      "original_sha256": null,
-      "original_terminal_lf_sha256": null,
-      "result_sha256": "be3958abef6e4594c32e0a369d2c0f3cd98618f9193d020cd44c34e3d8c5ab36",
-      "mode": 420,
-      "original_bytes": null,
-      "result_bytes": 1519
-    },
-    {
-      "path": "packages/fount_workshop/examples/phase_sixteen/acceptance_matrix.json",
-      "action": "add",
-      "original_sha256": null,
-      "original_terminal_lf_sha256": null,
-      "result_sha256": "ca9339eb0a575060fda5c1241fd5c9a09c828b41ac487c21bc27ebf06e9d4927",
-      "mode": 420,
-      "original_bytes": null,
-      "result_bytes": 14595
-    },
-    {
-      "path": "packages/fount_workshop/guides/final-acceptance.md",
-      "action": "add",
-      "original_sha256": null,
-      "original_terminal_lf_sha256": null,
-      "result_sha256": "7730d89471e71d2732fe096c88b95aac477ff45d7e185a594952fb1a9800ca09",
-      "mode": 420,
-      "original_bytes": null,
-      "result_bytes": 2592
-    },
-    {
-      "path": "packages/fount_workshop/mix.exs",
+      "path": "packages/fount_workshop/examples/live.exs",
       "action": "modify",
-      "original_sha256": "234afadb20b3f61d790f3e46a622be70a07275bc8f441c051a95bfdaefafb39a",
-      "original_terminal_lf_sha256": "155ac9878ef80f9afb28ef26896843361222179a0a3a49577765d6b328b87f68",
-      "result_sha256": "4bc9d682ea6cc61446b6279231d2bd9a7998d4ed8b1f054222779f42e6a27b74",
-      "mode": 420,
-      "original_bytes": 4319,
-      "result_bytes": 4483
+      "original_sha256": "dac39119a523fe68902caac87a4a30d0f4efd46fee6fc16d7cab56cf2a1f1fd1",
+      "original_terminal_lf_sha256": "5f299c6ed5eb325d25b7fb75f1719a1ff76e975f0912d39ff2090bf3febf589c",
+      "result_sha256": "96e02c5f0cdb6d47613d2da360f58ec86a2dcbc775764706eb27cc0b1062b3dc",
+      "mode": 420
     },
     {
-      "path": "packages/fount_workshop/test/writer_workflows/phase_sixteen_acceptance_matrix_test.exs",
-      "action": "add",
-      "original_sha256": null,
-      "original_terminal_lf_sha256": null,
-      "result_sha256": "88436fa46deb5d51724643b12cfc9673c0380da1d0bd029692d1d82b3fbafc21",
-      "mode": 420,
-      "original_bytes": null,
-      "result_bytes": 1506
+      "path": "packages/fount_workshop/examples/support/phase_one_demo.exs",
+      "action": "modify",
+      "original_sha256": "b64610b592e20981306f56331bc01b35c4fbb5e2206b3f1bf026046a60cead05",
+      "original_terminal_lf_sha256": "2127161285a9c56bdded3739d565b2b1c3ded8d30186232e07ed3d059abeee41",
+      "result_sha256": "d6eb943662a47db6da2f2276097e63b2208ac2674a3f27710bc95159c0a71c70",
+      "mode": 420
     },
     {
-      "path": "scripts/final_acceptance.py",
-      "action": "add",
-      "original_sha256": null,
-      "original_terminal_lf_sha256": null,
-      "result_sha256": "87cbde341a835deaa806af4dd0e598167664e6c1f46da657f00082eb4fbde497",
-      "mode": 493,
-      "original_bytes": null,
-      "result_bytes": 13136
+      "path": "packages/fount_workshop/guides/architecture.md",
+      "action": "modify",
+      "original_sha256": "8c4ba2bcf0df8abb3cd79d304a2033d2adef3aaf6d3f1dbf5de29155e1bdfb39",
+      "original_terminal_lf_sha256": "08f2112d8ce1223ec1a9afda5c2b4759af239d5ebefe08beb1b29ea28e9fd75f",
+      "result_sha256": "296434d786e8c29bc9b51ef1622ad6c1488b7756f01c571a79d5d6a266eb7305",
+      "mode": 420
     },
     {
-      "path": "scripts/final_acceptance.sh",
-      "action": "add",
-      "original_sha256": null,
-      "original_terminal_lf_sha256": null,
-      "result_sha256": "cf9ea9fcf9b679836797f81c82898c64d01e04aef91710c7acfe301c821a9e64",
-      "mode": 493,
-      "original_bytes": null,
-      "result_bytes": 1493
+      "path": "packages/fount_workshop/guides/creative-workflows.md",
+      "action": "modify",
+      "original_sha256": "4f1f1fdfb9bcd41d4826cb0229cd2ef06683b20ee011f6b6065a04225c798ddc",
+      "original_terminal_lf_sha256": "89beca3edc1b55cb3505d8c1115271c861c448375c031fe3b9bac35d681ebb67",
+      "result_sha256": "1cf686a9c3b6a59003b7a39185c5ca454e1be8f57ea0a308b120cb379fb816fb",
+      "mode": 420
     },
     {
-      "path": "scripts/tests/test_phase_sixteen_source.py",
-      "action": "add",
-      "original_sha256": null,
-      "original_terminal_lf_sha256": null,
-      "result_sha256": "f947d22dfb359f2d77b0b8127926bacefd4e3e7d79100c5bf7db2e37f7284dfb",
-      "mode": 420,
-      "original_bytes": null,
-      "result_bytes": 2552
+      "path": "packages/fount_workshop/guides/proposals-and-diffs.md",
+      "action": "modify",
+      "original_sha256": "a005296c4372239aca44e47d10b57e2792565d284809df7915c10247886d5875",
+      "original_terminal_lf_sha256": "977ecb80bffebee23c7ce3198010e92e061532ee606d5413b18bfd9336997fe4",
+      "result_sha256": "d6073963f0db6a340a312597baf3f89339caae57595e4122e7441358ddebeeba",
+      "mode": 420
+    },
+    {
+      "path": "packages/fount_workshop/guides/read-share-resume-and-usefulness.md",
+      "action": "modify",
+      "original_sha256": "e21806be1b9a2f25db32233ca2d108ba9766f12f5c681171c5410fdb66856736",
+      "original_terminal_lf_sha256": "85e78482840038ed1741aaa22f6069cc55480e4e5a67455975fa36480b876f9a",
+      "result_sha256": "119e18957a06fdc36c1466255296520af4dae9908b0ccc0718d5d52f2bc19db3",
+      "mode": 420
+    },
+    {
+      "path": "packages/fount_workshop/guides/scene-revision-loop.md",
+      "action": "modify",
+      "original_sha256": "399e0d38f3709dd9b2e08e85faa435fc3499820f34159d30df33e1cf1e184ede",
+      "original_terminal_lf_sha256": "259bb43fa32d3ab6cbda0dec9ec0f76237572862ca0af3a406f826830e2b2235",
+      "result_sha256": "f8fcabb9b3c5cb7f2da8a94a077b42d6a1e03a6457a8e5f3db2736733deb248d",
+      "mode": 420
+    },
+    {
+      "path": "packages/fount_workshop/integration/develop_db_test.exs",
+      "action": "modify",
+      "original_sha256": "affc2d3ba057c61464c8b6a64fbdcc5189d1eef2478b5e26fb37cbce2c94006b",
+      "original_terminal_lf_sha256": "2668e34523a107df890cb782e059308a249fecdac7ada29d4f13eb2413b17c27",
+      "result_sha256": "c8ff833ecedd33a64244d645a7b95bd3c8e6281b0060cde49df0c9a43c12b279",
+      "mode": 420
+    },
+    {
+      "path": "packages/fount_workshop/integration/phase_fifteen_read_share_resume_test.exs",
+      "action": "modify",
+      "original_sha256": "b8a50fa0144a28eabcb7f5b97351dd5df059318c9cc92b5902168662607a5fce",
+      "original_terminal_lf_sha256": "30d4512a8e68d21be841b4c35c81f2d2e19f356567d90d081b853c492747075b",
+      "result_sha256": "ca2d90909394abd7c70e54af3a4982e17b948d75ab15d083aaaa33ff78cdc247",
+      "mode": 420
+    },
+    {
+      "path": "packages/fount_workshop/integration/phase_nine_writer_loop_test.exs",
+      "action": "modify",
+      "original_sha256": "dcc4b7d620ff04d3e65ddb3f407233501b8b11ee238b8f85b5e56701116b60c7",
+      "original_terminal_lf_sha256": "778248d17c8455b3607ae5540623f1a267f0c7f22e8ae11923fc70669825b255",
+      "result_sha256": "8200d379ac581b36750dc040b64e7ab76339b6a137dbd70a3de163912b63f898",
+      "mode": 420
+    },
+    {
+      "path": "packages/fount_workshop/integration/phase_twelve_durable_writer_test.exs",
+      "action": "modify",
+      "original_sha256": "94946de75e9518503e77e3aabd83150b79b473dcf77909829fce8c7dc6e85497",
+      "original_terminal_lf_sha256": "ee258d991ff7fe50d6c825117bcd07f530295e74d223a1b0a4f15f10077ec595",
+      "result_sha256": "de262c5a923d46a6bcf1fbd65d052ec1d5da87fe3fad17acf41b7ba9702226a3",
+      "mode": 420
+    },
+    {
+      "path": "packages/fount_workshop/integration/recover_db_test.exs",
+      "action": "modify",
+      "original_sha256": "f87e58e929b4bc16f1cf39f659f92b5838cafcdc5b15b89f130ea86a94c104a6",
+      "original_terminal_lf_sha256": "3203d37f77e5972a51d8b4a10e4ec094b67decc027889d95956e23f616e8de80",
+      "result_sha256": "4a761076270e55a02a7e1876e23ada130dcd5726427af7bf0f06cf8859faf62c",
+      "mode": 420
+    },
+    {
+      "path": "packages/fount_workshop/lib/fount_workshop/acceptance.ex",
+      "action": "modify",
+      "original_sha256": "f7f91b98420e7586937b9b78e7f13ede595495f23f812e2cf3ddc0d186e54e5b",
+      "original_terminal_lf_sha256": "b6f9b6acfaa3f5ba6158352634c4dd7eff33d260df63d93d08631849f42a1219",
+      "result_sha256": "5c6ff8e2aad12e59ee36cfe0f7989cfd8c75df3691463b6825eb296641e3bfb0",
+      "mode": 420
+    },
+    {
+      "path": "packages/fount_workshop/lib/fount_workshop/cli.ex",
+      "action": "modify",
+      "original_sha256": "ab2e2025b9546c913749536ae7373ab7d2d44863471c18d252349ed7283f45cd",
+      "original_terminal_lf_sha256": "7bf9e3ec05a8a09013fe0a6705da8655bd7ab29a7819af54290018bd4d8c5ba3",
+      "result_sha256": "6d69c1206a9bbcae8c6029368d2f263f8cd927ccf1414afeb0dd63ea69c7f7a5",
+      "mode": 420
+    },
+    {
+      "path": "packages/fount_workshop/lib/fount_workshop/live_example.ex",
+      "action": "modify",
+      "original_sha256": "beada630ca71f783c4bfa1e7cd03d38b31673ad07cc5a0ba2da32a4511800769",
+      "original_terminal_lf_sha256": "c9eaffda6413934ce66f67f2f747eee683a71360ec7636fa978d29c7d4512541",
+      "result_sha256": "340fee13b16ba702f59013ad77eb63597d7d44ab425e59f15c7cd8f45661a9ae",
+      "mode": 420
+    },
+    {
+      "path": "packages/fount_workshop/lib/fount_workshop/review.ex",
+      "action": "modify",
+      "original_sha256": "ba168843aa9dea04ee09eb44d69a8f1c58365a505567749a6d00fd3ceb6edba5",
+      "original_terminal_lf_sha256": "108d0ce9df22acc5b8d60aaa5ae95d007321f3a927100e4cfff37cc770467a01",
+      "result_sha256": "1f4335c444ed3d60cf65a01a791381d468afc7c6c15bd0301e2a2f4800483799",
+      "mode": 420
+    },
+    {
+      "path": "packages/fount_workshop/lib/fount_workshop/review_export.ex",
+      "action": "modify",
+      "original_sha256": "44eb1668f1aeb674d604a9bdbeb57b33390344557ec80a0646ac022121aa9205",
+      "original_terminal_lf_sha256": "61d8fae4a2bb87291eaf625ff683626b056d2d819b349e4d003c055a94ca0e1c",
+      "result_sha256": "b6daea4e3c98a02d1f1284ba384e7fcdf6b084a3a059fd23c660f1055373f6b2",
+      "mode": 420
+    },
+    {
+      "path": "packages/fount_workshop/lib/fount_workshop/writing/review_gate.ex",
+      "action": "modify",
+      "original_sha256": "7f2bb7afb8c9bfc5b4b6a8cb39ec7d1c4244afcffd8c08867757c1d9cd295932",
+      "original_terminal_lf_sha256": "afb2af8273f0d87f9f76abec4513b71139d1b26cdc7733b52b38ed1392b5b81b",
+      "result_sha256": "9a46f30961165b0e1cf4f5084f2bb7bff133c1c09da4d4a45f7d16e54641e3e9",
+      "mode": 420
+    },
+    {
+      "path": "packages/fount_workshop/lib/fount_workshop.ex",
+      "action": "modify",
+      "original_sha256": "680996ff217380ec9dd0e52a54cc3d7c70425063f0d58be0279124dcae6c5ef2",
+      "original_terminal_lf_sha256": "2b7e713f0f52e985a349fee6821b0dab702f341a2cde1d6ada145e20442dce8a",
+      "result_sha256": "55e08af89ee4d3c48a3b71a7123bfa46d1c2c94c2a067dcbd83ddeef132ed1be",
+      "mode": 420
+    },
+    {
+      "path": "packages/fount_workshop/support/continuation_store.ex",
+      "action": "modify",
+      "original_sha256": "320a4cadbb87a80bcf8071dc9cf37d8f5b3e6cabfdaf955a3a64c866f938223a",
+      "original_terminal_lf_sha256": "f310ceaa007bf7e60a58cad33f2199269dde0ade59197fd3cd46faf265c83e2f",
+      "result_sha256": "f5f6e4e9da415060ac99c6739709ebb9efb916272bb094531e86da53c7cd1aff",
+      "mode": 420
+    },
+    {
+      "path": "packages/fount_workshop/test/test_helper.exs",
+      "action": "modify",
+      "original_sha256": "7c66674db33f80de6cfcd270824d97f8d7c56f4a28fa927fe27bdbd15fb9691f",
+      "original_terminal_lf_sha256": "b086ec47f0c6c7aaeb4cffca5ae5243dd05e0dc96ab761ced93325d5315f4b12",
+      "result_sha256": "8c33434a535ecf2607930dfe4f15ffbc42f3cd6811beb44d91b71f8a5ccc77ec",
+      "mode": 420
+    },
+    {
+      "path": "packages/fount_workshop/test/writer_workflows/phase_fifteen_read_share_resume_test.exs",
+      "action": "modify",
+      "original_sha256": "d8e6b12bd26e3dfe86e3ce5ed05751165eb59166b14739beefefafe106840392",
+      "original_terminal_lf_sha256": "10405089004db9b316b72b591e6cea6b209f1a1c0708eac13d40e7acf2d61db8",
+      "result_sha256": "b04fbfea7ca845f24fb38490b3f44b96ecfb0356771fd8512545c80046c8acd8",
+      "mode": 420
+    },
+    {
+      "path": "packages/fount_workshop/test/writer_workflows/phase_fourteen_rebase_test.exs",
+      "action": "modify",
+      "original_sha256": "edd580b8ba2dae935056f50da21939dceeda5dc4e5eccdcc33249a7c025090f1",
+      "original_terminal_lf_sha256": "ae61c94f18c1d00049feb476693e9ac1dbba6294b9996bd15c4ffa0416e48a2b",
+      "result_sha256": "fa7fc0013814cce2b37a847d64f3f5dc8d60912182fb286060c2a7f295e417ea",
+      "mode": 420
+    },
+    {
+      "path": "packages/fount_workshop/test/writer_workflows/phase_thirteen_voice_test.exs",
+      "action": "modify",
+      "original_sha256": "bf8e1d8bc19bc511f1a8b5ca176e784207bea9160f0d39e188b6562eb8a64fd5",
+      "original_terminal_lf_sha256": "44472b84ee7202758554b6f0a156789493c69adaf300b9936c158f5f10f18caa",
+      "result_sha256": "d7fb848d8f235a4cd754f146ea64e30641ec70c59e1c9b67a5364a9ea004addf",
+      "mode": 420
+    },
+    {
+      "path": "packages/fount_workshop/test/writer_workflows/phase_twelve_a01_demo_test.exs",
+      "action": "modify",
+      "original_sha256": "b79e239b4f72627da0e02d4066a077d4937ce3b058032d91dc8c05d2551505e1",
+      "original_terminal_lf_sha256": "da055bbf851c2b483209eabd72482bf28577a2d66e864b5250c8d82242e9c180",
+      "result_sha256": "9388b704a441490ac96518177c2702c649bb0e59546418c7bcefb3093206ff8e",
+      "mode": 420
+    },
+    {
+      "path": "packages/fount_workshop/test/writer_workflows/phase_twelve_discovery_test.exs",
+      "action": "modify",
+      "original_sha256": "eec99f34c88bb672b9e17ab41e2e7caf60f0cfab697cab4a82503fdcf169b223",
+      "original_terminal_lf_sha256": "748d43bcf5360588e039e92e91957b1eedfc65b854e0181233b2dfd5add362b2",
+      "result_sha256": "d2e2064ca8f1258479aac6cddc6a89d0a85f62fc1f426ee1d58691decf231282",
+      "mode": 420
+    },
+    {
+      "path": "packages/fount_workshop/test/writing_decisions_test.exs",
+      "action": "modify",
+      "original_sha256": "7c15b2472c9c56c83f061812309b4727143c28d7b534fe60dfb324a26ad52ffb",
+      "original_terminal_lf_sha256": "83b5d97857dbfa84656e57216ed050c10b7e4a3733598d2802ab3a1183179af1",
+      "result_sha256": "e12a5e2a471115ad300ff6da9ffd445766f5a9dd0b4a0943980ecc1dfe8671ad",
+      "mode": 420
+    },
+    {
+      "path": "scripts/tests/test_phase_nine_source.py",
+      "action": "modify",
+      "original_sha256": "52902247d58474cefa8579f6eda40fbf54f660b26741922b80ab866d62eb9213",
+      "original_terminal_lf_sha256": "cec90cba73d98e77fd6f6d65541abaac7dfebdfb7c4384dedcb103dd531f22d9",
+      "result_sha256": "248aba8f56561938a3e604b75ebe5bc471050bdcd6a86127da5655b562d4385b",
+      "mode": 420
+    },
+    {
+      "path": "scripts/tests/test_phase_one_source.py",
+      "action": "modify",
+      "original_sha256": "27f53629f55d7ce00ad48ed8a406ed3ddc0ac92b07001f649c554e9e1f23611b",
+      "original_terminal_lf_sha256": "c3c61e710d9b7d2e0cb4366950b2a4f8c3dc37fc04f96125c06d88f9e9fb1a53",
+      "result_sha256": "9f9b5975397d1c45137bcd262cb302221b8dff5464fe2774a4f277e3656e9fb0",
+      "mode": 420
     }
   ],
   "deletions": []

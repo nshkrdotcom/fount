@@ -619,13 +619,19 @@ defmodule FountWorkshop.LiveExample do
   defp apply_and_save(root, key, ops, services) do
     {:ok, edited, changes} = Fount.Screenplay.apply(root, ops, [])
 
-    saved =
-      Fount.Persistence.save_edit(services.store.repo, key, edited,
+    candidate =
+      Fount.Persistence.save_edit_candidate(services.store.repo, key, edited,
         expected_revision: root.revision.id,
-        actor: "live-example-writer",
         operations: changes.operations
       )
       |> A.require!()
+
+    stored = Fount.Persistence.candidate(services.store.repo, candidate.id) |> A.require!()
+    {:ok, principal} = Fount.Writing.Principal.new(:human, "live-example-writer")
+    {:ok, authority} = Fount.Writing.Authority.new(principal, root.id, [:approve])
+    approval_id = Fount.ID.v5(root.id, ["live-example-manual:", candidate.id])
+    {:ok, approval} = Fount.Writing.Approval.direct(stored, principal, approval_id)
+    saved = Fount.Persistence.accept_candidate(services.store.repo, candidate.id, approval: approval, authority: authority) |> A.require!()
 
     {saved, changes}
   end
@@ -649,16 +655,13 @@ defmodule FountWorkshop.LiveExample do
            %{"reason" => "No candidate passes required checks; demo does not invent overrides."}}
         )
 
-    review = %{
-      "candidate_id" => candidate["id"],
-      "content_hash" => candidate["screenplay"].revision.content_hash,
-      "actor" => "live-example-explicit-approval",
-      "report_ids" => candidate["provenance"]["report_ids"],
-      "overrides" => []
-    }
+    {:ok, principal} = Fount.Writing.Principal.new(:human, "live-example-explicit-approval")
+    {:ok, authority} = Fount.Writing.Authority.new(principal, candidate["screenplay_id"], [:approve])
+    approval_id = Fount.ID.v5(candidate["screenplay_id"], ["live-example-candidate:", candidate["id"]])
+    {:ok, approval} = Fount.Writing.Approval.direct(candidate, principal, approval_id)
 
     accepted =
-      FountWorkshop.Acceptance.accept(candidate["id"], base.revision.id, review, services)
+      FountWorkshop.Acceptance.accept(candidate["id"], approval, authority, services)
       |> A.require!()
 
     %{

@@ -5,8 +5,7 @@ defmodule Fount.Persistence do
   alias Fount.Persistence.Codec
   alias Fount.Screenplay
   alias Fount.Screenplay.Model
-  alias Fount.Writing.CanonicalJSON
-  alias Fount.Writing.ReviewGate
+  alias Fount.Writing.{Approval, Authority, CanonicalJSON, CheckSet, ReviewGate}
   alias Fount.Writing.UTF8Span
 
   def migrations_path, do: Application.app_dir(:fount, "priv/repo/migrations")
@@ -32,42 +31,99 @@ defmodule Fount.Persistence do
     root
   end
 
+  @doc "Legacy save entry point. Canon-changing calls must use a saved candidate plus authorized approval."
   def save(repo, key, %Screenplay{} = model, opts \\ []),
     do: save_edit(repo, key, model, opts)
 
+  @doc "Rejects post-genesis direct canon changes; unchanged heads remain an idempotent check."
   def save_edit(repo, key, %Screenplay{} = candidate, opts \\ []) do
     candidate = Model.refresh(candidate)
 
     with :ok <- validate(candidate) do
-      transaction(repo, fn -> persist_edit(repo, key, candidate, opts) end)
+      transaction(repo, fn -> reject_direct_edit(repo, key, candidate, opts) end)
     end
   end
 
-  defp persist_edit(repo, key, candidate, opts) do
+  defp reject_direct_edit(repo, key, candidate, opts) do
     row =
       one(repo, "SELECT id,head_revision_id FROM screenplays WHERE key=$1 FOR UPDATE", [key]) ||
         rollback(repo, :not_found)
 
     if row["id"] != candidate.id, do: rollback(repo, :wrong_screenplay)
     actual = row["head_revision_id"]
+    expected = Keyword.get(opts, :expected_revision, candidate.revision.parent_id || candidate.revision.id)
+    if actual != expected, do: rollback(repo, {:stale_revision, actual})
 
-    expected =
-      Keyword.get(
-        opts,
-        :expected_revision,
-        if(candidate.revision.id == actual, do: actual, else: candidate.revision.parent_id)
+    if candidate.revision.id == actual do
+      insert_revision(repo, candidate)
+      candidate
+    else
+      if candidate.revision.parent_id != actual, do: rollback(repo, :wrong_parent)
+      rollback(repo, :approval_required)
+    end
+  end
+
+  @doc "Stores a manual edit as an unaccepted writing candidate without advancing canon."
+  def save_edit_candidate(repo, key, %Screenplay{} = candidate, opts \\ []) do
+    candidate = Model.refresh(candidate)
+
+    with :ok <- validate(candidate) do
+      transaction(repo, fn -> persist_manual_candidate(repo, key, candidate, opts) end)
+    end
+  end
+
+  defp persist_manual_candidate(repo, key, candidate, opts) do
+    row =
+      one(repo, "SELECT id,head_revision_id FROM screenplays WHERE key=$1 FOR UPDATE", [key]) ||
+        rollback(repo, :not_found)
+
+    if row["id"] != candidate.id, do: rollback(repo, :wrong_screenplay)
+    base_id = Keyword.get(opts, :expected_revision, candidate.revision.parent_id)
+    if row["head_revision_id"] != base_id, do: rollback(repo, {:stale_revision, row["head_revision_id"]})
+    if candidate.revision.id == base_id, do: rollback(repo, :candidate_contains_no_change)
+    if candidate.revision.parent_id != base_id, do: rollback(repo, :wrong_parent)
+
+    constraints = Keyword.get(opts, :constraints, [])
+    session_id = Keyword.get(opts, :session_id, ID.v4())
+
+    session =
+      persist_session(
+        repo,
+        %{
+          id: session_id,
+          screenplay_id: candidate.id,
+          base_revision_id: base_id,
+          workflow: "pass",
+          request: %{
+            "operation" => "manual_edit",
+            "constraints" => Model.plain(constraints),
+            "approval" => Model.plain(Keyword.get(opts, :approval, %{}))
+          },
+          status: "review_ready",
+          provenance: %{"origin" => "direct_manual_edit"}
+        },
+        session_id
       )
 
-    if actual != expected, do: rollback(repo, {:stale_revision, actual})
-    if candidate.revision.id != actual and candidate.revision.parent_id != actual, do: rollback(repo, :wrong_parent)
-    insert_revision(repo, candidate)
-
-    if candidate.revision.id != actual do
-      acceptance(repo, candidate, actual, acceptance_details(opts))
-      set_head(repo, candidate.id, candidate.revision.id)
-    end
-
-    candidate
+    persist_candidate(repo, field(session, :id), %{
+      id: Keyword.get(opts, :candidate_id),
+      screenplay: candidate,
+      label: Keyword.get(opts, :label, "Manual edit"),
+      strategy: %{"source" => "manual_edit"},
+      change_groups: [
+        %{
+          "id" => "manual-edit",
+          "operations" => Model.plain(Keyword.get(opts, :operations, []))
+        }
+      ],
+      lineage: [],
+      provenance: %{
+        "checks" => Model.plain(Keyword.get(opts, :checks, [])),
+        "report_ids" => Keyword.get(opts, :report_ids, []),
+        "constraints" => Model.plain(constraints),
+        "origin" => "writer_edit"
+      }
+    }, candidate)
   end
 
   def load(repo, key) do
@@ -239,31 +295,58 @@ defmodule Fount.Persistence do
     if session["screenplay_id"] != model.id or session["base_revision_id"] != model.revision.parent_id,
       do: rollback(repo, :wrong_base)
 
+    provenance = Model.plain(field(candidate, :provenance) || %{})
+
+    snapshot =
+      case CheckSet.snapshot(session, provenance) do
+        {:ok, value} -> value
+        {:error, reason} -> rollback(repo, reason)
+      end
+
     id = field(candidate, :id) || ID.v4()
 
     case one(repo, "SELECT * FROM writing_candidates WHERE id=$1::uuid", [id]) do
-      nil -> insert_candidate(repo, session_id, candidate, model, id)
-      previous -> verify_candidate_identity(repo, candidate, model, id, previous)
+      nil -> insert_candidate(repo, session_id, candidate, model, id, snapshot)
+      previous -> verify_candidate_identity(repo, candidate, model, id, previous, snapshot)
     end
   end
 
-  defp verify_candidate_identity(repo, candidate, model, id, previous) do
+  defp verify_candidate_identity(repo, candidate, model, id, previous, snapshot) do
     existing = one(repo, "SELECT content_hash FROM revisions WHERE id=$1::uuid", [previous["result_revision_id"]])
 
-    if previous["result_revision_id"] != model.revision.id or
-         existing["content_hash"] != model.revision.content_hash or
-         candidate_payload(previous) != candidate_payload(candidate),
-       do: rollback(repo, :candidate_identity_conflict)
+    unless previous["result_revision_id"] == model.revision.id and
+             existing["content_hash"] == model.revision.content_hash and
+             candidate_payload(previous) == candidate_payload(candidate),
+           do: rollback(repo, :candidate_identity_conflict)
+
+    cond do
+      is_nil(previous["check_set_fingerprint"]) and previous["required_checks"] in [nil, []] ->
+        # Upgrade path for a pending candidate created before Phase 01. Only an
+        # exact immutable candidate replay may attach the newly authoritative
+        # check snapshot; no reviewed/accepted content is rewritten.
+        q(
+          repo,
+          "UPDATE writing_candidates SET required_checks=$2::jsonb,check_set_fingerprint=$3 WHERE id=$1::uuid AND check_set_fingerprint IS NULL",
+          [id, json(snapshot["required_checks"]), snapshot["check_set_fingerprint"]]
+        )
+
+      previous["required_checks"] != snapshot["required_checks"] or
+          previous["check_set_fingerprint"] != snapshot["check_set_fingerprint"] ->
+        rollback(repo, :candidate_identity_conflict)
+
+      true ->
+        :ok
+    end
 
     Map.put(candidate, :id, id)
   end
 
-  defp insert_candidate(repo, session_id, candidate, model, id) do
+  defp insert_candidate(repo, session_id, candidate, model, id, snapshot) do
     insert_revision(repo, model)
 
     q(
       repo,
-      "INSERT INTO writing_candidates(id,screenplay_id,session_id,base_revision_id,result_revision_id,parent_candidate_id,label,strategy,change_groups,lineage,provenance) VALUES($1::uuid,$2::uuid,$3::uuid,$4::uuid,$5::uuid,$6::uuid,$7,$8::jsonb,$9::jsonb,$10::jsonb,$11::jsonb)",
+      "INSERT INTO writing_candidates(id,screenplay_id,session_id,base_revision_id,result_revision_id,parent_candidate_id,label,strategy,change_groups,lineage,provenance,required_checks,check_set_fingerprint) VALUES($1::uuid,$2::uuid,$3::uuid,$4::uuid,$5::uuid,$6::uuid,$7,$8::jsonb,$9::jsonb,$10::jsonb,$11::jsonb,$12::jsonb,$13)",
       [
         id,
         model.id,
@@ -275,7 +358,9 @@ defmodule Fount.Persistence do
         json(field(candidate, :strategy) || %{}),
         json(field(candidate, :change_groups) || []),
         json(field(candidate, :lineage) || []),
-        json(field(candidate, :provenance) || %{})
+        json(field(candidate, :provenance) || %{}),
+        json(snapshot["required_checks"]),
+        snapshot["check_set_fingerprint"]
       ]
     )
 
@@ -315,15 +400,25 @@ defmodule Fount.Persistence do
     end)
   end
 
-  @doc "Accepts one reviewed candidate atomically when its base remains the head."
-
+  @doc "Accepts one exactly reviewed candidate with trusted host authority and stable approval identity."
   def accept_candidate(repo, candidate_id, opts) when is_list(opts) do
-    transaction(repo, fn -> accept_candidate_locked(repo, candidate_id, opts) end)
+    with {:ok, approval} <- normalize_approval(Keyword.get(opts, :approval)),
+         %Authority{} = authority <- Keyword.get(opts, :authority) do
+      transaction(repo, fn -> accept_candidate_locked(repo, candidate_id, approval, authority) end)
+    else
+      nil -> {:error, :authorized_approval_required}
+      {:error, _} = error -> error
+      _ -> {:error, :invalid_authority}
+    end
   end
 
-  defp accept_candidate_locked(repo, candidate_id, opts) do
+  defp normalize_approval(%Approval{} = approval), do: approval |> Approval.to_map() |> Approval.from_map()
+  defp normalize_approval(map) when is_map(map), do: Approval.from_map(map)
+  defp normalize_approval(_), do: {:error, :authorized_approval_required}
+
+  defp accept_candidate_locked(repo, candidate_id, approval, authority) do
     {screenplay, row} = lock_candidate(repo, candidate_id)
-    context = acceptance_review(repo, candidate_id, row, opts)
+    context = acceptance_review(repo, candidate_id, row, approval, authority)
     permitted = permitted_report_sources(repo, row, context.model)
 
     Enum.each(context.stored["report_ids"], fn id ->
@@ -338,51 +433,76 @@ defmodule Fount.Persistence do
       one(repo, "SELECT screenplay_id FROM writing_candidates WHERE id=$1::uuid", [candidate_id]) ||
         rollback(repo, :not_found)
 
-    # All acceptances take the screenplay lock first, then the candidate lock.
+    # All direct Core acceptances take the screenplay lock first, then candidate.
     screenplay =
-      one(repo, "SELECT head_revision_id FROM screenplays WHERE id=$1::uuid FOR UPDATE", [identity["screenplay_id"]])
+      one(
+        repo,
+        "SELECT id,head_revision_id FROM screenplays WHERE id=$1::uuid FOR UPDATE",
+        [identity["screenplay_id"]]
+      )
 
     row =
       one(
         repo,
         "SELECT c.*,r.content_hash FROM writing_candidates c JOIN revisions r ON r.screenplay_id=c.screenplay_id AND r.id=c.result_revision_id WHERE c.id=$1::uuid FOR UPDATE OF c",
         [candidate_id]
-      )
+      ) || rollback(repo, :not_found)
 
     {screenplay, row}
   end
 
-  defp acceptance_review(repo, candidate_id, row, opts) do
-    expected = Keyword.get(opts, :expected_revision)
-    review = Keyword.get(opts, :review)
-    actor = Keyword.get(opts, :actor)
-    unless is_map(review) and is_binary(actor) and String.trim(actor) != "", do: rollback(repo, :missing_review)
-    unless field(review, :actor) == actor, do: rollback(repo, :review_actor_mismatch)
-    review = Model.plain(review)
+  defp acceptance_review(repo, candidate_id, row, approval, authority) do
+    unless is_binary(row["check_set_fingerprint"]) and row["check_set_fingerprint"] != "",
+      do: rollback(repo, :candidate_check_snapshot_missing)
+
+    review = approval.review
+
+    cond do
+      approval.screenplay_id != row["screenplay_id"] -> rollback(repo, :approval_screenplay_mismatch)
+      approval.candidate_id != candidate_id -> rollback(repo, :approval_candidate_mismatch)
+      approval.base_revision_id != row["base_revision_id"] -> rollback(repo, :approval_base_mismatch)
+      approval.content_hash != row["content_hash"] -> rollback(repo, :approval_content_mismatch)
+      true -> :ok
+    end
+
+    case Authority.authorize(authority, :approve, row["screenplay_id"], approval.approver) do
+      :ok -> :ok
+      {:error, reason} -> rollback(repo, reason)
+    end
+
     {:ok, model} = load_revision(repo, row["screenplay_id"], row["result_revision_id"])
+    checks = stored_checks(row["provenance"] || %{})
 
     stored = %{
       "id" => candidate_id,
       "base_revision_id" => row["base_revision_id"],
       "content_hash" => row["content_hash"],
       "structural_errors" => Fount.Validate.screenplay(model),
-      "checks" => row["provenance"]["checks"] || [],
+      "checks" => checks,
+      "required_checks" => row["required_checks"] || [],
+      "check_set_fingerprint" => row["check_set_fingerprint"],
       "report_ids" => row["provenance"]["report_ids"] || []
     }
 
-    case ReviewGate.validate(stored, review, expected) do
+    case ReviewGate.validate(stored, review, approval.approver) do
       :ok -> :ok
       {:error, reason} -> rollback(repo, reason)
     end
 
     %{
-      expected: expected,
-      review: review,
-      actor: actor,
-      review_hash: CanonicalJSON.hash(review),
+      approval: approval,
+      approval_hash: Approval.fingerprint(approval),
+      review_hash: Fount.Writing.Review.fingerprint(review),
       model: model,
       stored: stored
     }
+  end
+
+  defp stored_checks(provenance) do
+    checks = Map.get(provenance, "checks", [])
+    application = Map.get(provenance, "application_checks", [])
+    seen = MapSet.new(Enum.map(checks, &Map.get(&1, "constraint_id")))
+    checks ++ Enum.reject(application, &MapSet.member?(seen, Map.get(&1, "constraint_id")))
   end
 
   defp permitted_report_sources(repo, row, model) do
@@ -430,18 +550,30 @@ defmodule Fount.Persistence do
   end
 
   defp finalize_candidate_acceptance(repo, candidate_id, screenplay, row, context) do
+    existing =
+      one(
+        repo,
+        "SELECT candidate_id,result_revision_id,approval_hash FROM acceptances WHERE approval_id=$1::uuid",
+        [context.approval.id]
+      )
+
     cond do
+      existing &&
+          existing["candidate_id"] == candidate_id &&
+          existing["result_revision_id"] == row["result_revision_id"] &&
+          existing["approval_hash"] == context.approval_hash ->
+        context.model
+
+      existing ->
+        rollback(repo, :approval_identity_conflict)
+
       row["decision"] == "rejected" ->
         rollback(repo, :already_rejected)
-
-      row["decision"] == "accepted" and row["review_hash"] == context.review_hash and
-          row["decision_actor"] == context.actor ->
-        context.model
 
       row["decision"] == "accepted" ->
         rollback(repo, :acceptance_identity_conflict)
 
-      screenplay["head_revision_id"] != context.expected ->
+      screenplay["head_revision_id"] != context.approval.base_revision_id ->
         rollback(repo, {:stale_revision, screenplay["head_revision_id"]})
 
       true ->
@@ -450,26 +582,59 @@ defmodule Fount.Persistence do
   end
 
   defp record_candidate_acceptance(repo, candidate_id, row, context) do
-    operations = Enum.flat_map(row["change_groups"], & &1["operations"])
-
-    acceptance(repo, context.model, context.expected, %{
-      actor: context.actor,
-      origin: :mixed,
-      operations: operations,
-      provenance: row["provenance"],
-      review: context.review,
-      candidate_id: candidate_id
-    })
+    operations = Enum.flat_map(row["change_groups"] || [], &Map.get(&1, "operations", []))
+    approval = context.approval
+    review = approval.review
+    approval_map = Approval.to_map(approval)
+    review_map = Fount.Writing.Review.to_map(review)
+    origin = accepted_origin(row["provenance"] || %{})
 
     q(
       repo,
-      "UPDATE writing_candidates SET decision='accepted',decision_actor=$2,decided_at=now(),review_hash=$3 WHERE id=$1::uuid",
-      [candidate_id, context.actor, context.review_hash]
+      "INSERT INTO acceptances(id,screenplay_id,base_revision_id,result_revision_id,candidate_id,actor,origin,operations,provenance,review,acceptance_kind,approval_id,approval_hash,approval,approver_type,approver_id,reviewer_type,reviewer_id,review_hash,check_set_fingerprint,report_ids,run_id,run_policy_version,run_policy_fingerprint) VALUES($1::uuid,$2::uuid,$3::uuid,$4::uuid,$5::uuid,$6,$7,$8::jsonb,$9::jsonb,$10::jsonb,$11,$12::uuid,$13,$14::jsonb,$15,$16,$17,$18,$19,$20,$21::jsonb,$22::uuid,$23,$24)",
+      [
+        ID.v4(),
+        context.model.id,
+        approval.base_revision_id,
+        context.model.revision.id,
+        candidate_id,
+        approval.approver.id,
+        origin,
+        json(operations),
+        json(row["provenance"] || %{}),
+        json(review_map),
+        "approved",
+        approval.id,
+        context.approval_hash,
+        json(approval_map),
+        Atom.to_string(approval.approver.type),
+        approval.approver.id,
+        Atom.to_string(review.reviewer.type),
+        review.reviewer.id,
+        context.review_hash,
+        row["check_set_fingerprint"],
+        json(review.report_ids),
+        approval.run_id,
+        approval.run_policy_version,
+        approval.run_policy_fingerprint
+      ]
+    )
+
+    q(
+      repo,
+      "UPDATE writing_candidates SET decision='accepted',decision_actor=$2,decided_at=now(),review_hash=$3,approval_id=$4::uuid WHERE id=$1::uuid",
+      [candidate_id, approval.approver.id, context.review_hash, approval.id]
     )
 
     set_head(repo, context.model.id, context.model.revision.id)
     context.model
   end
+
+  defp accepted_origin(%{"origin" => origin})
+       when origin in ["writer_edit", "imported_text", "generated_text", "generated_structural_edit", "mixed"],
+       do: origin
+
+  defp accepted_origin(_), do: "mixed"
 
   @doc "Rejects a candidate while preserving its material for history and recovery."
   def reject_candidate(repo, candidate_id, opts) when is_list(opts) do
@@ -865,7 +1030,7 @@ defmodule Fount.Persistence do
   defp acceptance(repo, model, parent, details) do
     q(
       repo,
-      "INSERT INTO acceptances(id,screenplay_id,base_revision_id,result_revision_id,candidate_id,actor,origin,operations,provenance,review) VALUES($1::uuid,$2::uuid,$3::uuid,$4::uuid,$5::uuid,$6,$7,$8::jsonb,$9::jsonb,$10::jsonb)",
+      "INSERT INTO acceptances(id,screenplay_id,base_revision_id,result_revision_id,candidate_id,actor,origin,operations,provenance,review,acceptance_kind) VALUES($1::uuid,$2::uuid,$3::uuid,$4::uuid,$5::uuid,$6,$7,$8::jsonb,$9::jsonb,$10::jsonb,$11)",
       [
         ID.v4(),
         model.id,
@@ -876,7 +1041,8 @@ defmodule Fount.Persistence do
         to_string(details.origin),
         json(details.operations),
         json(details.provenance),
-        json(details.review)
+        json(details.review),
+        "genesis"
       ]
     )
   end
@@ -917,7 +1083,10 @@ defmodule Fount.Persistence do
                "result_revision_id",
                "primary_revision_id",
                "revision_id",
-               "session_id"
+               "session_id",
+               "candidate_id",
+               "approval_id",
+               "run_id"
              ] ->
           {:ok, id} = Ecto.UUID.load(value)
           {column, id}

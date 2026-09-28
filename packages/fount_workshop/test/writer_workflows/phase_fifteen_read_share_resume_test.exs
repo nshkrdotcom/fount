@@ -76,27 +76,20 @@ defmodule FountWorkshop.PhaseFifteenReadShareResumeTest do
                label: "Unchosen alternate"
              )
 
-    review = review(accepted_candidate)
-
     assert {:ok, accepted} =
-             Acceptance.accept(accepted_candidate["id"], base.revision.id, review, services)
+             FountWorkshop.TestApproval.accept(services, accepted_candidate["id"])
 
     assert accepted.id == base.id
 
     # Retrying the same writer decision is idempotent: no duplicate edit or second accepted revision.
     assert {:ok, retried} =
-             Acceptance.accept(accepted_candidate["id"], base.revision.id, review, services)
+             FountWorkshop.TestApproval.accept(services, accepted_candidate["id"])
 
     assert retried.revision.id == accepted.revision.id
 
     # A sibling generated from the old base cannot overwrite a manual/accepted head.
     assert {:error, {:stale_revision, current_revision}} =
-             Acceptance.accept(
-               remaining_candidate["id"],
-               base.revision.id,
-               review(remaining_candidate),
-               services
-             )
+             FountWorkshop.TestApproval.accept(services, remaining_candidate["id"])
 
     assert current_revision == accepted.revision.id
     assert {:ok, _} = Acceptance.reject(rejected_candidate["id"], "writer", services)
@@ -168,15 +161,6 @@ defmodule FountWorkshop.PhaseFifteenReadShareResumeTest do
     }
   end
 
-  defp review(candidate) do
-    %{
-      "candidate_id" => candidate["id"],
-      "content_hash" => candidate["screenplay"].revision.content_hash,
-      "actor" => "writer",
-      "report_ids" => candidate["provenance"]["report_ids"] || [],
-      "overrides" => []
-    }
-  end
 
   defp request(base) do
     %{

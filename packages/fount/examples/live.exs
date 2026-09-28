@@ -51,8 +51,14 @@ case mode do
     op = %{"kind" => "replace_text", "target" => %{"kind" => "element", "id" => line.id},
       "value" => String.replace(line.text, "She pockets it.", "She drops it, then snatches it back.")}
     {:ok, edited, changes} = Fount.Screenplay.apply(loaded, [op], [])
-    {:ok, _} = Fount.Persistence.save_edit(Fount.Repo, key, edited,
-      expected_revision: loaded.revision.id, actor: "live example", operations: changes.operations)
+    {:ok, candidate} = Fount.Persistence.save_edit_candidate(Fount.Repo, key, edited,
+      expected_revision: loaded.revision.id, operations: changes.operations)
+    {:ok, stored} = Fount.Persistence.candidate(Fount.Repo, candidate.id)
+    {:ok, principal} = Fount.Writing.Principal.new(:human, "live example")
+    {:ok, authority} = Fount.Writing.Authority.new(principal, model.id, [:approve])
+    approval_id = Fount.ID.v5(model.id, ["core-live-example:", candidate.id])
+    {:ok, approval} = Fount.Writing.Approval.direct(stored, principal, approval_id)
+    {:ok, _} = Fount.Persistence.accept_candidate(Fount.Repo, candidate.id, approval: approval, authority: authority)
     {:ok, current} = Fount.Persistence.load(Fount.Repo, key)
     {:ok, previous} = Fount.Persistence.load_revision(Fount.Repo, model.id, model.revision.id)
     if Fount.Query.node(previous, line.id).text != line.text, do: raise "historical revision changed"

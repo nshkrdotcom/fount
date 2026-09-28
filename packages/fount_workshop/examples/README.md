@@ -106,7 +106,7 @@ FOUNT_EXAMPLE_OUT="/tmp/workshop_demo" mix run examples/live.exs --mode recover
 
 ## Phase 1 writer preservation demonstration
 
-`mix run examples/phase_one.exs --out examples/_output/phase_one --decision reject` uses real PostgreSQL persistence, explicit Mock/Sandbox answers, targeted revision, comparison, review, rejection, Fountain export and an HTML table read. `--decision accept --pdf` additionally exercises acceptance and real PDF output. Neither command was executed in the offline delivery. See the package README and `integration/phase_one_writer_demo_test.exs`.
+`mix run examples/phase_one.exs --out examples/_output/phase_one --decision reject` uses real PostgreSQL persistence, explicit Mock/Sandbox answers, targeted revision, comparison, review, rejection, Fountain export and an HTML table read. `--decision accept --pdf` additionally exercises acceptance and real PDF output. The acceptance branch now constructs a typed authenticated principal/authority and a stable deterministic approval payload before calling the same Core candidate-acceptance transaction. Neither command was executed in the offline delivery. See the package README and `integration/phase_one_writer_demo_test.exs`.
 
 ## Read-only analysis examples
 

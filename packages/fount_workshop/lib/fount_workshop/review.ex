@@ -3,7 +3,6 @@ defmodule FountWorkshop.Review do
   alias Fount.Persistence
   alias Fount.Screenplay
   alias FountWorkshop.Comparison
-  alias FountWorkshop.Writing.ReviewGate
 
   def export(session_id, directory, services, opts \\ []),
     do: FountWorkshop.ReviewExport.export(session_id, directory, services, opts)
@@ -22,6 +21,7 @@ defmodule FountWorkshop.Review do
       proposed = Screenplay.to_fountain(draft)
 
       packet = %{
+        "screenplay_id" => candidate["screenplay_id"],
         "candidate_id" => candidate_id,
         "base_revision_id" => base.revision.id,
         "result_revision_id" => draft.revision.id,
@@ -35,6 +35,8 @@ defmodule FountWorkshop.Review do
         "lineage" => candidate["lineage"],
         "provenance" => candidate["provenance"],
         "checks" => candidate["provenance"]["checks"] || [],
+        "required_checks" => candidate["required_checks"] || [],
+        "check_set_fingerprint" => candidate["check_set_fingerprint"],
         "report_ids" => candidate["provenance"]["report_ids"] || []
       }
 
@@ -71,29 +73,12 @@ defmodule FountWorkshop.Review do
   defp fallback(nil, default), do: default
   defp fallback(value, _default), do: value
 
-  @doc "Accepts only after the writer supplies a review matching exact candidate content."
-  def accept(repo, candidate_id, expected_revision, review) do
-    with {:ok, candidate} <- Persistence.candidate(repo, candidate_id),
-         :ok <-
-           ReviewGate.validate(
-             %{
-               "id" => candidate_id,
-               "base_revision_id" => candidate["base_revision_id"],
-               "content_hash" => candidate["screenplay"].revision.content_hash,
-               "structural_errors" => [],
-               "checks" => candidate["provenance"]["checks"] || [],
-               "report_ids" => candidate["provenance"]["report_ids"] || []
-             },
-             review,
-             expected_revision
-           ) do
-      Persistence.accept_candidate(repo, candidate_id,
-        expected_revision: expected_revision,
-        actor: review["actor"],
-        review: review
-      )
-    end
-  end
+  @doc "Accepts only with a typed stable approval and trusted host authority."
+  def accept(repo, candidate_id, %Fount.Writing.Approval{} = approval, %Fount.Writing.Authority{} = authority),
+    do: Persistence.accept_candidate(repo, candidate_id, approval: approval, authority: authority)
+
+  def accept(_repo, _candidate_id, _legacy_expected_revision, _legacy_review),
+    do: {:error, :authorized_approval_required}
 
   def reject(repo, candidate_id, actor),
     do: Persistence.reject_candidate(repo, candidate_id, actor: actor)

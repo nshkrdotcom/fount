@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "workflow": "develop",
+  "mode": "draft",
+  "base_revision_id": null,
+  "instruction": "Start only from this image. Do not invent a global plot: at a closed swimming pool, two estranged siblings fold a wet paper map.",
+  "selection": {"whole_screenplay": true},
+  "constraints": [],
+  "options": {
+    "placement": {"kind": "start"},
+    "protected_strengths": ["wet paper map", "estranged siblings"],
+    "pending_question": "Do they recognize the handwriting?"
+  }
+}

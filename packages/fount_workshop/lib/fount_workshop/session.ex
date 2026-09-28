@@ -4,6 +4,7 @@ defmodule FountWorkshop.Session do
   alias Fount.Screenplay.Model
   alias Fount.Writing.CanonicalJSON
   alias FountWorkshop.Candidate
+  alias FountWorkshop.Discovery
   alias FountWorkshop.Request
   alias FountWorkshop.Store
   alias FountWorkshop.Strategy
@@ -33,28 +34,43 @@ defmodule FountWorkshop.Session do
     end
   end
 
+  @doc "Opens a durable writer session without generation or provider credentials."
+  def open(model, request, services, opts \\ []) do
+    with {:ok, request} <- Request.validate(model, request),
+         :ok <- store_service(services),
+         {:ok, preflight} <- preflight(model, request, opts) do
+      progress = %{
+        "branches" => %{},
+        "report_ids" => [],
+        "spent" => %{},
+        "discovery" => Discovery.initial(request)
+      }
+
+      Store.call(services[:store], :save_session, [
+        %{
+          "id" => Fount.ID.v4(),
+          "screenplay_id" => model.id,
+          "base_revision_id" => model.revision.id,
+          "workflow" => request["workflow"],
+          "request" => request,
+          "status" => "open",
+          "strategies" => [],
+          "progress" => progress,
+          "provenance" => %{
+            "limits" => limits(opts),
+            "implementation" => "creative-workflows-v1",
+            "phase9_preflight" => preflight,
+            "phase12_open" => %{"provider_calls" => 0, "changes_canon" => false}
+          }
+        }
+      ])
+    end
+  end
+
   def start(model, request, services, opts \\ []) do
     with {:ok, request} <- Request.validate(model, request),
          :ok <- services(services),
-         {:ok, preflight} <- preflight(model, request, opts),
-         {:ok, session} <-
-           Store.call(services[:store], :save_session, [
-             %{
-               "id" => Fount.ID.v4(),
-               "screenplay_id" => model.id,
-               "base_revision_id" => model.revision.id,
-               "workflow" => request["workflow"],
-               "request" => request,
-               "status" => "open",
-               "strategies" => [],
-               "progress" => %{"branches" => %{}, "report_ids" => [], "spent" => %{}},
-               "provenance" => %{
-                 "limits" => limits(opts),
-                 "implementation" => "creative-workflows-v1",
-                 "phase9_preflight" => preflight
-               }
-             }
-           ]) do
+         {:ok, session} <- open(model, request, services, opts) do
       execute(model, session, services, opts)
     end
   end
@@ -76,6 +92,24 @@ defmodule FountWorkshop.Session do
     end
   end
 
+  @doc "Reloads a session for another invocation without resuming generation."
+  def resume_view(id, services) do
+    with :ok <- store_service(services),
+         {:ok, session} <- get(id, services) do
+      discovery = session["discovery"] || %{}
+
+      {:ok,
+       session
+       |> Map.put("current_mode", discovery["current_mode"] || session["request"]["mode"])
+       |> Map.put("pending_question", discovery["pending_question"])
+       |> Map.put("selected_candidate_id", discovery["selected_candidate_id"])
+       |> Map.put("optional_next_action", optional_next_action(session, discovery))}
+    end
+  end
+
+  @doc "Switches the explicit session mode; the immutable opening request remains preserved for provenance."
+  def switch_mode(id, mode, services, opts \\ []), do: Discovery.switch_mode(id, mode, services, opts)
+
   def get(id, services) do
     with {:ok, session} <- Store.call(services[:store], :session, [id]) do
       candidates = Store.call(services[:store], :candidates_for_session, [id])
@@ -89,9 +123,13 @@ defmodule FountWorkshop.Session do
             get_in(session, ["progress", "preparation", "context", "data", "writer_intelligence"]) ||
               %{}
 
+          discovery =
+            get_in(session, ["progress", "discovery"]) || Discovery.initial(session["request"])
+
           {:ok,
            session
            |> Map.put("candidates", list)
+           |> Map.put("discovery", discovery)
            |> Map.put("writer_packet", writer_packet)
            |> Map.put(
              "resource_preflight",
@@ -115,7 +153,7 @@ defmodule FountWorkshop.Session do
     # Keep explicit room for strategies and actual pages before spending on supporting inspections.
     reserve =
       if session["strategies"] == [],
-        do: 1 + 2 * session["request"]["alternatives"],
+        do: 1 + 2 * request(session)["alternatives"],
         else:
           2 *
             length(Keyword.get(opts, :strategy_ids, Enum.map(session["strategies"], & &1["id"])))
@@ -144,7 +182,7 @@ defmodule FountWorkshop.Session do
           Keyword.get(
             opts,
             :strategy_ids,
-            default_materialization(session["request"], session["strategies"])
+            default_materialization(request(session), session["strategies"])
           )
 
         result =
@@ -220,6 +258,7 @@ defmodule FountWorkshop.Session do
     with {:ok, sources} <- load_cached_revisions(services, source_pairs),
          {:ok, historical} <- load_cached_revisions(services, historical_pairs) do
       context = cached_context(cached, sources, historical)
+      context = put_in(context, [:data, "request"], request(session))
 
       if get_in(session, ["progress", "preparation", "status"]) == "partial",
         do: retry_cached(model, session, context, services, opts),
@@ -264,7 +303,7 @@ defmodule FountWorkshop.Session do
   end
 
   defp retry_cached(model, session, context, services, opts) do
-    if Preparation.retry_requests(model, session["request"], context) == [] do
+    if Preparation.retry_requests(model, request(session), context) == [] do
       {:ok, context, session}
     else
       retry_cached_reports(model, session, context, services, opts)
@@ -273,7 +312,7 @@ defmodule FountWorkshop.Session do
 
   defp retry_cached_reports(model, session, context, services, opts) do
     with {:ok, retried} <-
-           Preparation.retry_failed(model, session["request"], context, services, opts),
+           Preparation.retry_failed(model, request(session), context, services, opts),
          {:ok, report_ids} <-
            save_reports(retried.reports, session["id"], services, retried.source_models) do
       save_retried_context(session, retried, report_ids, services, opts)
@@ -305,7 +344,7 @@ defmodule FountWorkshop.Session do
   end
 
   defp prepare_fresh(model, session, services, opts) do
-    with {:ok, context} <- Preparation.run(model, session["request"], services, opts),
+    with {:ok, context} <- Preparation.run(model, request(session), services, opts),
          {:ok, report_ids} <-
            save_reports(context.reports, session["id"], services, context.source_models) do
       updated =
@@ -350,7 +389,7 @@ defmodule FountWorkshop.Session do
 
   defp strategies(model, session, context, services, opts) do
     with {:ok, strategies, traces} <-
-           Strategy.generate(model, session["request"], context, services, opts) do
+           Strategy.generate(model, request(session), context, services, opts) do
       updated =
         session
         |> Map.put("strategies", strategies)
@@ -417,10 +456,10 @@ defmodule FountWorkshop.Session do
 
   defp generate_save(model, session, strategy, context, services, opts) do
     with {:ok, candidate} <-
-           Generation.propose(model, session["request"], strategy, context, services, opts),
+           Generation.propose(model, request(session), strategy, context, services, opts),
          check_opts =
            opts
-           |> Keyword.put(:workshop_request, session["request"])
+           |> Keyword.put(:workshop_request, request(session))
            |> Keyword.put(:workshop_context, context)
            |> Keyword.put(:session_strategies, session["strategies"]),
          {:ok, candidate, reports} <- Candidate.check(model, candidate, services, check_opts),
@@ -564,7 +603,29 @@ defmodule FountWorkshop.Session do
     end
   end
 
-  defp default_materialization(%{"mode" => mode}, _) when mode in ["explore", "diagnose"], do: []
+  defp request(session) do
+    discovery = get_in(session, ["progress", "discovery"]) || %{}
+    brief = discovery["brief"] || %{}
+    original = session["request"]
+    mode = discovery["current_mode"] || original["mode"]
+
+    options =
+      (original["options"] || %{})
+      |> put_if_present("protected_strengths", brief["protected_strengths"])
+      |> put_if_present("intended_effect", brief["desired_experience"])
+      |> put_if_present("pending_question", discovery["pending_question"])
+      |> put_if_present("allow_brief_departure", brief["permission_to_depart"])
+
+    original
+    |> Map.put("mode", mode)
+    |> Map.put("options", options)
+    |> Map.put("discovery_brief", brief)
+  end
+
+  defp put_if_present(map, _key, nil), do: map
+  defp put_if_present(map, key, value), do: Map.put(map, key, value)
+
+  defp default_materialization(%{"mode" => mode}, _) when mode in ["explore", "inspect", "diagnose"], do: []
 
   defp default_materialization(
          %{"workflow" => "investigate", "options" => %{"write_fixes" => false}},
@@ -576,7 +637,19 @@ defmodule FountWorkshop.Session do
     do: strategies |> Enum.take(2) |> Enum.map(& &1["id"])
 
   defp default_materialization(_, strategies), do: Enum.map(strategies, & &1["id"])
+
+  defp optional_next_action(session, discovery) do
+    cond do
+      discovery["pending_question"] -> "answer_pending_question"
+      discovery["selected_candidate_id"] -> "continue_from_selected_draft"
+      session["status"] == "strategies_ready" -> "materialize_or_reject_alternatives"
+      session["status"] == "review_ready" -> "review_candidates"
+      true -> "continue_when_ready"
+    end
+  end
   defp services(%{store: %Store{}, inference: %Inference.Client{}}), do: :ok
+  defp store_service(%{store: %Store{}}), do: :ok
+  defp store_service(_), do: {:error, :explicit_store_required}
   defp services(_), do: {:error, :explicit_store_and_inference_services_required}
 
   defp safe_error(%Inference.Error{category: category, reason: reason}),

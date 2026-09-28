@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased - Phase 12 offline implementation
+
+- Add provider-free durable discovery sessions with explicit Draft/Explore/Inspect/Revise modes, evolving briefs, fragment history, reverse outlines and noncanonical card-reorder proposals.
+- Add writer-origin candidate creation/editing through the existing typed edit and review/acceptance boundary, plus explicit keep-both and reject-all decisions.
+- Add treatment contracts for materially distinct action/revelation/relationship alternatives, with tradeoffs, protected material and explicit brief-departure disclosure.
+- Add CLI/example and deterministic A01-A03/A10 regression coverage. Phase 13 is not implemented; Mix/PostgreSQL/runtime checks remain for Codex.
+
 ## Unreleased - Phase 11 offline implementation
 
 - Add the Intelligence evaluation layer for rights-aware corpora, semantic human annotations/disagreement, calibration and abstention metrics, descriptive drift, frozen current-contract fixtures, nonlinear regressions and longitudinal resource calibration.

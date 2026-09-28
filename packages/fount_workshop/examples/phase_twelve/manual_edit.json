@@ -1,0 +1,9 @@
+{
+  "operations": [
+    {
+      "kind": "replace_text",
+      "target": {"kind": "element", "id": "new:map_action"},
+      "value": "They fold the wet paper map on the concrete. Neither lets go first."
+    }
+  ]
+}

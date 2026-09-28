@@ -111,3 +111,7 @@ FOUNT_EXAMPLE_OUT="/tmp/workshop_demo" mix run examples/live.exs --mode recover
 ## Read-only analysis examples
 
 `mix run examples/analysis.exs --mode knowledge` runs the migrated inspection example through Workshop-owned configuration. Other modes remain `tools`, `voice`, `knowledge_access` and `consequences`; inspect the runner for their database/completion prerequisites. These live commands require explicit provider authorization. Intelligence itself has no completion or environment dependency.
+## Phase 12 provider-free discovery walkthrough
+
+`examples/phase_twelve/README.md` documents a PostgreSQL-backed CLI path that opens a discovery session, captures an unattached image, evolves the brief, creates a writer-origin candidate from typed edits, manually edits it, accepts it explicitly, switches to Inspect, and resumes without provider credentials. The deterministic Phase-12 tests separately exercise generated three-route alternatives using `ScriptedCompletion`; no live-provider result is claimed by the offline implementation.
+

@@ -150,20 +150,14 @@ class PhaseElevenSourceTests(unittest.TestCase):
         self.assertIn("durable analysis history can calibrate preflight estimates", history)
         self.assertIn("summarize_resource_history", history)
 
-    def test_no_phase_twelve_implementation_is_introduced(self) -> None:
-        changed_roots = [
-            ROOT / "packages" / "fount_intelligence" / "lib" / "fount" / "intelligence" / "evaluation",
-            ROOT / "packages" / "fount_intelligence" / "priv" / "evaluation",
-        ]
-        text = "\n".join(
-            path.read_text(encoding="utf-8")
-            for root in changed_roots
-            for path in root.rglob("*")
-            if path.is_file()
+    def test_phase_eleven_evaluation_assets_remain_unchanged_by_later_work(self) -> None:
+        suite = self.read("packages/fount_intelligence/priv/evaluation/phase_eleven_suite.json")
+        benchmark = self.read(
+            "packages/fount_intelligence/lib/fount/intelligence/evaluation/benchmark.ex"
         )
-        self.assertNotIn("Phase 12", text)
-        self.assertNotIn("W01", text)
-        self.assertNotIn("fragment-to-scene", text)
+        self.assertIn('"capability_families"', suite)
+        self.assertIn("stale_output_contract_fixture", benchmark)
+        self.assertNotIn("FountWorkshop.Discovery", benchmark)
 
 
 if __name__ == "__main__":

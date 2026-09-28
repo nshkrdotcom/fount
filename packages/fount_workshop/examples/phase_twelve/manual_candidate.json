@@ -1,0 +1,24 @@
+{
+  "label": "Pool image - writer draft",
+  "summary": "Writer-authored opening from the captured image.",
+  "operations": [
+    {
+      "kind": "insert_scene",
+      "value": {
+        "after_scene_id": null,
+        "scene": {
+          "local_id": "new:pool_open",
+          "heading": "EXT. CLOSED SWIMMING POOL - NIGHT",
+          "elements": [
+            {
+              "local_id": "new:map_action",
+              "type": "action",
+              "text": "Two siblings fold a wet paper map against the locked gate.",
+              "attrs": {}
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

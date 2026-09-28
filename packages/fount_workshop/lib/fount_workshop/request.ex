@@ -4,12 +4,12 @@ defmodule FountWorkshop.Request do
   alias Fount.Writing.Schema
   alias Fount.Writing.UTF8Span
 
-  @common_options ~w(protected_strengths intended_effect)
+  @common_options ~w(protected_strengths intended_effect pending_question)
 
   @options %{
     "develop" =>
       ~w(placement brief brief_item_id story_plan_id entry_requirements exit_requirements),
-    "alternatives" => ~w(strategy_ids approaches candidate_ids),
+    "alternatives" => ~w(strategy_ids approaches candidate_ids treatments allow_brief_departure),
     "propagate" => ~w(change destination repair_scope),
     "sequence" => ~w(target_scene_count page_reduction entry_requirements exit_requirements),
     "character" => ~w(character_id direction exemplar_targets change_agency),
@@ -41,6 +41,7 @@ defmodule FountWorkshop.Request do
          {:ok, constraints} <-
            Constraints.resolve(model, request["constraints"]),
          :ok <- common_options(request["options"]),
+         :ok <- treatment_count(request),
          :ok <- options(model, workflow, request["options"]) do
       {:ok, Map.put(request, "constraints", constraints)}
     end
@@ -48,6 +49,7 @@ defmodule FountWorkshop.Request do
 
   def validate(_, _), do: {:error, :invalid_request}
   defp default_alternatives(%{"mode" => "explore"}), do: 3
+  defp default_alternatives(%{"mode" => "draft"}), do: 1
   defp default_alternatives(%{"workflow" => "pass"}), do: 1
   defp default_alternatives(_), do: 2
 
@@ -62,6 +64,10 @@ defmodule FountWorkshop.Request do
 
       not is_nil(effect) and (not is_binary(effect) or String.trim(effect) == "") ->
         {:error, :invalid_intended_effect}
+
+      not is_nil(opts["pending_question"]) and
+          (not is_binary(opts["pending_question"]) or String.trim(opts["pending_question"]) == "") ->
+        {:error, :invalid_pending_question}
 
       true ->
         :ok
@@ -113,6 +119,15 @@ defmodule FountWorkshop.Request do
          is_list(Map.get(opts, "external_notes", [])), do: :ok, else: {:error, :invalid_notes}
   end
 
+  defp options(_, "alternatives", opts) do
+    with :ok <- treatments(Map.get(opts, "treatments")),
+         true <-
+           (is_nil(opts["allow_brief_departure"]) or is_boolean(opts["allow_brief_departure"])) or
+             {:error, :invalid_brief_departure_permission} do
+      :ok
+    end
+  end
+
   defp options(_, "pass", opts) do
     if opts["profile"] in ~w(dialogue_subtext action_visual brevity dry_comedy tension custom) and
          (opts["profile"] != "custom" or
@@ -134,6 +149,38 @@ defmodule FountWorkshop.Request do
   end
 
   defp options(_, _, _), do: :ok
+
+  defp treatment_count(%{"workflow" => "alternatives", "alternatives" => count, "options" => opts}) do
+    case opts["treatments"] do
+      nil -> :ok
+      treatments when is_list(treatments) and length(treatments) == count -> :ok
+      _ -> {:error, :treatments_must_match_alternative_count}
+    end
+  end
+
+  defp treatment_count(_request), do: :ok
+
+  defp treatments(nil), do: :ok
+
+  defp treatments(values) when is_list(values) and values != [] do
+    valid_shape? =
+      Enum.all?(values, fn value ->
+        is_map(value) and
+          Map.keys(value) -- ~w(id mechanism_kind instruction) == [] and
+          is_binary(value["id"]) and String.trim(value["id"]) != "" and
+          value["mechanism_kind"] in ~w(action revelation relationship mixed) and
+          is_binary(value["instruction"]) and String.trim(value["instruction"]) != ""
+      end)
+
+    if valid_shape? do
+      ids = Enum.map(values, & &1["id"])
+      if length(ids) == length(Enum.uniq(ids)), do: :ok, else: {:error, :duplicate_treatment_id}
+    else
+      {:error, :invalid_treatment}
+    end
+  end
+
+  defp treatments(_), do: {:error, :invalid_treatments}
   def placement(_model, %{"kind" => "start"} = p), do: only(p, ~w(kind))
 
   def placement(model, %{"kind" => "after_scene", "after_scene_id" => id} = p) do

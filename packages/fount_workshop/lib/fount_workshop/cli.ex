@@ -4,6 +4,7 @@ defmodule FountWorkshop.CLI do
   alias Fount.Screenplay.Model
   alias FountWorkshop.Acceptance
   alias FountWorkshop.Candidate
+  alias FountWorkshop.Discovery
   alias FountWorkshop.Export.PDF
   alias FountWorkshop.Session
   alias FountWorkshop.Store
@@ -30,7 +31,16 @@ defmodule FountWorkshop.CLI do
   ]
   @required %{
     "write" => [:key, :request, :output],
+    "open" => [:key, :request, :output],
     "session" => [:id, :output],
+    "fragment" => [:session, :request, :output],
+    "brief" => [:session, :request, :output],
+    "mode" => [:session, :request, :output],
+    "outline" => [:session, :output],
+    "reorder" => [:session, :request, :output],
+    "manual" => [:session, :request, :output, :actor],
+    "edit" => [:candidate, :request, :output, :actor],
+    "decide" => [:session, :request, :output, :actor],
     "materialize" => [:session, :strategies, :output],
     "select" => [:candidate, :groups, :output],
     "combine" => [:request, :output],
@@ -89,11 +99,165 @@ defmodule FountWorkshop.CLI do
     end
   end
 
+  defp dispatch("open", opts, services) do
+    with {:ok, request} <- S.json_file(opts[:request]),
+         {:ok, model, request} <- base(opts, request, services),
+         {:ok, session} <- Session.open(model, request, services, runtime_opts(opts)) do
+      phase12_result(opts[:output], "session.json", session)
+    end
+  end
+
+  defp dispatch("fragment", opts, services) do
+    with {:ok, request} <- S.json_file(opts[:request]) do
+      result =
+        case request["action"] do
+          nil ->
+            Discovery.add_fragment(opts[:session], request, services, actor: opts[:actor] || "writer")
+
+          "capture" ->
+            Discovery.add_fragment(
+              opts[:session],
+              Map.delete(request, "action"),
+              services,
+              actor: opts[:actor] || "writer"
+            )
+
+          "link" ->
+            Discovery.link_fragment(
+              opts[:session],
+              request["fragment_id"],
+              request["scene_id"],
+              services,
+              actor: opts[:actor] || "writer"
+            )
+
+          "classify" ->
+            Discovery.classify_fragment(
+              opts[:session],
+              request["fragment_id"],
+              request["classification"],
+              services,
+              actor: opts[:actor] || "writer"
+            )
+
+          "retire" ->
+            Discovery.retire_fragment(
+              opts[:session],
+              request["fragment_id"],
+              services,
+              actor: opts[:actor] || "writer"
+            )
+
+          "adopt" ->
+            Discovery.adopt_fragment(
+              opts[:session],
+              request["fragment_id"],
+              request["candidate_id"],
+              services,
+              actor: opts[:actor] || "writer"
+            )
+
+          _ ->
+            {:error, :unknown_fragment_action}
+        end
+
+      case result do
+        {:ok, saved} -> phase12_result(opts[:output], "fragment.json", saved)
+        error -> error
+      end
+    end
+  end
+
+  defp dispatch("brief", opts, services) do
+    with {:ok, patch} <- S.json_file(opts[:request]),
+         {:ok, saved} <- Discovery.update_brief(opts[:session], patch, services, actor: opts[:actor] || "writer") do
+      phase12_result(opts[:output], "brief.json", saved)
+    end
+  end
+
+  defp dispatch("mode", opts, services) do
+    with {:ok, request} <- S.json_file(opts[:request]),
+         mode when is_binary(mode) <- request["mode"],
+         {:ok, saved} <- Discovery.switch_mode(opts[:session], mode, services, actor: opts[:actor] || "writer") do
+      phase12_result(opts[:output], "mode.json", saved)
+    else
+      nil -> {:error, :mode_required}
+      error -> error
+    end
+  end
+
+  defp dispatch("outline", opts, services) do
+    with {:ok, outline} <- Discovery.reverse_outline(opts[:session], services) do
+      phase12_result(opts[:output], "reverse-outline.json", outline)
+    end
+  end
+
+  defp dispatch("reorder", opts, services) do
+    with {:ok, request} <- S.json_file(opts[:request]),
+         scene_ids when is_list(scene_ids) <- request["scene_ids"],
+         {:ok, proposal} <- Discovery.propose_reorder(opts[:session], scene_ids, services, actor: opts[:actor] || "writer") do
+      phase12_result(opts[:output], "card-reorder.json", proposal)
+    else
+      nil -> {:error, :scene_ids_required}
+      error -> error
+    end
+  end
+
+  defp dispatch("manual", opts, services) do
+    with {:ok, request} <- S.json_file(opts[:request]),
+         operations when is_list(operations) <- request["operations"],
+         {:ok, candidate} <-
+           Candidate.manual(
+             opts[:session],
+             operations,
+             services,
+             actor: opts[:actor],
+             label: request["label"] || "Writer fragment",
+             summary: request["summary"] || "Writer-authored candidate"
+           ) do
+      phase12_candidate_result(candidate, opts, services)
+    else
+      nil -> {:error, :operations_required}
+      error -> error
+    end
+  end
+
+  defp dispatch("edit", opts, services) do
+    with {:ok, request} <- S.json_file(opts[:request]),
+         operations when is_list(operations) <- request["operations"],
+         {:ok, candidate} <- Candidate.edit(opts[:candidate], operations, services, actor: opts[:actor]) do
+      phase12_candidate_result(candidate, opts, services)
+    else
+      nil -> {:error, :operations_required}
+      error -> error
+    end
+  end
+
+  defp dispatch("decide", opts, services) do
+    with {:ok, request} <- S.json_file(opts[:request]),
+         candidate_ids when is_list(candidate_ids) <- request["candidate_ids"] do
+      result =
+        case request["action"] do
+          "keep_both" -> Discovery.keep_both(opts[:session], candidate_ids, services, actor: opts[:actor])
+          "reject_all" -> Discovery.reject_all(opts[:session], candidate_ids, opts[:actor], services)
+          _ -> {:error, :unknown_phase12_decision}
+        end
+
+      case result do
+        {:ok, value} -> phase12_result(opts[:output], "decision.json", value)
+        error -> error
+      end
+    else
+      nil -> {:error, :candidate_ids_required}
+      error -> error
+    end
+  end
+
   defp dispatch("session", opts, services) do
     result =
       if opts[:resume],
         do: Session.resume(opts[:id], services, runtime_opts(opts)),
-        else: Session.get(opts[:id], services)
+        else: Session.resume_view(opts[:id], services)
 
     export_result(result, opts[:output], services, runtime_opts(opts))
   end
@@ -165,7 +329,11 @@ defmodule FountWorkshop.CLI do
     with {:ok, candidate} <- Store.call(services.store, :candidate, [opts[:candidate]]),
          {:ok, review} <- review(opts, candidate),
          {:ok, model} <-
-           Acceptance.accept(opts[:candidate], opts[:expected_revision], review, services) do
+           Acceptance.accept(opts[:candidate], opts[:expected_revision], review, services),
+         {:ok, _} <-
+           Discovery.record_acceptance(candidate["session_id"], opts[:candidate], services,
+             actor: opts[:actor]
+           ) do
       {:ok, Fount.CLI.summary(model)}
     end
   end
@@ -284,6 +452,17 @@ defmodule FountWorkshop.CLI do
     end
   end
 
+  defp phase12_candidate_result(candidate, opts, services) do
+    with {:ok, _} <-
+           phase12_result(opts[:output], "candidate.json", %{
+             "candidate_id" => candidate["id"],
+             "base_revision_id" => candidate["base_revision_id"],
+             "result_revision_id" => candidate["result_revision_id"]
+           }) do
+      candidate_result(candidate, opts, services)
+    end
+  end
+
   defp candidate_result(c, opts, services) do
     with {:ok, packet} <-
            FountWorkshop.Review.export(
@@ -295,6 +474,8 @@ defmodule FountWorkshop.CLI do
       {:ok, %{"candidate_id" => c["id"], "review" => packet}}
     end
   end
+
+  defp phase12_result(output, name, value), do: S.write_json(Path.join(output, name), value)
 
   def export_result({:ok, session}, output, services, opts),
     do: FountWorkshop.Review.export(session["id"], output, services, opts)

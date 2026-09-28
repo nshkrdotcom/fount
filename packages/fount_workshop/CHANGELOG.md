@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased - Phase 12 offline implementation
+
+- Add `Session.open/4` and `Session.resume_view/2` for provider-free durable discovery and explicit Draft/Explore/Inspect/Revise mode persistence.
+- Add noncanonical evolving briefs, wanted/connective fragments, reverse outlines, scene-card reorder proposals, pending questions and selected-candidate resume state.
+- Add public writer-origin `Candidate.manual/4`, provider-free CLI capture/edit/decision commands, and explicit keep-both/reject-all decisions without advancing canon.
+- Add optional treatment contracts that bind alternatives to action/revelation/relationship mechanisms and require tradeoffs plus brief-departure disclosure.
+- Add deterministic A01-A03/A10 writer-workflow regressions and a provider-free fragment-to-acceptance CLI walkthrough. Runtime verification remains pending.
+
 ## Unreleased - Phase 11 offline implementation
 
 - Add an explicitly gated `phase_eleven_qc` live mode limited to one scene and one generated candidate, with Observe disabled and writer acceptance forced off.

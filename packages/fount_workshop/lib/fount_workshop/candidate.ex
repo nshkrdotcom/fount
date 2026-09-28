@@ -112,6 +112,10 @@ defmodule FountWorkshop.Candidate do
     end
   end
 
+  @doc "Builds a writer-origin candidate from explicit typed operations without provider calls."
+  def manual(session_id, operations, services, opts \\ []) when is_binary(session_id),
+    do: FountWorkshop.CandidateAPI.manual(session_id, operations, services, opts)
+
   def edit(id, operations, services) when is_binary(id),
     do: FountWorkshop.CandidateAPI.edit(id, operations, services, [])
 

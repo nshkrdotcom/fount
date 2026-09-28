@@ -11,6 +11,34 @@ defmodule FountWorkshop.CandidateAPI do
   alias FountWorkshop.Writing.Completion
   alias FountWorkshop.Writing.ProposalGuide
 
+  @doc "Builds a writer-origin candidate from explicit typed operations without an inference client."
+  def manual(session_id, operations, services, opts \\ []) when is_list(operations) and operations != [] do
+    actor = Keyword.get(opts, :actor)
+
+    with true <- is_binary(actor) and String.trim(actor) != "" or {:error, :missing_actor},
+         {:ok, session} <- Store.call(services[:store], :session, [session_id]),
+         {:ok, base} <-
+           Store.call(services[:store], :load_revision, [
+             session["screenplay_id"],
+             session["base_revision_id"]
+           ]),
+         proposal <- manual_proposal(base, operations, actor, opts),
+         {:ok, candidate} <-
+           Candidate.compile(
+             base,
+             proposal,
+             writer_edit: true,
+             editable_selection: session["request"]["selection"],
+             placement: get_in(session, ["request", "options", "placement"]),
+             constraints: session["request"]["constraints"] || [],
+             label: Keyword.get(opts, :label, "Writer fragment")
+           ) do
+      save_checked(base, candidate, session_id, services, opts)
+    end
+  end
+
+  def manual(_session_id, _operations, _services, _opts), do: {:error, :manual_candidate_requires_operations}
+
   def select(id, group_ids, services, opts \\ []) do
     with {:ok, c} <- Store.call(services[:store], :candidate, [id]),
          {:ok, base} <-
@@ -65,6 +93,29 @@ defmodule FountWorkshop.CandidateAPI do
          {:ok, saved} <- Store.call(services[:store], :save_candidate, [session_id, checked]) do
       {:ok, Map.put(saved, "session_id", session_id)}
     end
+  end
+
+  defp manual_proposal(base, operations, actor, opts) do
+    %{
+      "version" => 1,
+      "base_revision_id" => base.revision.id,
+      "strategy_id" => nil,
+      "summary" => Keyword.get(opts, :summary, "Writer-authored candidate"),
+      "groups" => [
+        %{
+          "id" => "writer-" <> Fount.ID.v4(),
+          "title" => Keyword.get(opts, :title, "Writer fragment"),
+          "reason" => "Explicit writer edit by " <> actor,
+          "depends_on" => [],
+          "addresses_notes" => [],
+          "evidence_ids" => [],
+          "operations" => operations,
+          "origin" => "writer_edit"
+        }
+      ],
+      "inventions" => [],
+      "unresolved_questions" => []
+    }
   end
 
   defp load_candidates(ids, services) when is_list(ids) and ids != [] do

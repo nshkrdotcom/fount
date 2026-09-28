@@ -200,7 +200,6 @@ defmodule FountWorkshop.PhaseTwelveDiscoveryTest do
 
     assert adopted["status"] == "adopted"
 
-
     assert {:ok, accepted} = FountWorkshop.TestApproval.accept(services, edited["id"])
     assert accepted.revision.id == edited["screenplay"].revision.id
     assert {:ok, _} = Discovery.record_acceptance(session["id"], edited["id"], services)
@@ -208,7 +207,6 @@ defmodule FountWorkshop.PhaseTwelveDiscoveryTest do
     # Retrying the same explicit acceptance remains idempotent and creates no second draft.
     assert {:ok, retried} = FountWorkshop.TestApproval.accept(services, edited["id"])
     assert retried.revision.id == accepted.revision.id
-
 
     assert {:error, {:stale_revision, current}} =
              FountWorkshop.TestApproval.accept(services, alternate["id"])

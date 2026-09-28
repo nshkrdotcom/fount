@@ -13,6 +13,8 @@ mix fount.open --new --key phase12-pool \
   --request examples/phase_twelve/open_request.json --output "$OUT"
 SESSION_ID=$(python3 -c 'import json; print(json.load(open("examples/_output/phase_twelve/session.json"))["id"])')
 BASE_REVISION=$(python3 -c 'import json; print(json.load(open("examples/_output/phase_twelve/session.json"))["base_revision_id"])')
+export FOUNT_LOCAL_SCREENPLAY_ID=$(python3 -c 'import json; print(json.load(open("examples/_output/phase_twelve/session.json"))["screenplay_id"])')
+export FOUNT_LOCAL_OWNER_ID=phase12-writer
 
 mix fount.fragment --session "$SESSION_ID" \
   --request examples/phase_twelve/image_fragment.json --output "$OUT"
@@ -36,8 +38,11 @@ mix fount.edit --candidate "$CANDIDATE_ID" --actor phase12-writer \
 EDITED_ID=$(python3 -c 'import json; print(json.load(open("examples/_output/phase_twelve/review-2/candidate.json"))["candidate_id"])')
 
 # Review the actual candidate pages/diff before this explicit decision.
+APPROVAL_ID=$(python3 -c 'import uuid; print(uuid.uuid4())')
+# Retain APPROVAL_ID with the reviewed candidate to retry the same decision safely.
 mix fount.accept --candidate "$EDITED_ID" \
-  --expected-revision "$BASE_REVISION" --actor phase12-writer
+  --expected-revision "$BASE_REVISION" --actor phase12-writer \
+  --principal-type human --approval-id "$APPROVAL_ID"
 
 # Switch is explicit; the immutable opening request remains in provenance.
 mix fount.mode --session "$SESSION_ID" \

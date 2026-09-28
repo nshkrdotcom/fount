@@ -72,9 +72,10 @@ defmodule Fount.Writing.Review do
 
   @spec from_map(map()) :: {:ok, t()} | {:error, term()}
   def from_map(map) when is_map(map) do
-    allowed = MapSet.new(~w(reviewer candidate_id base_revision_id content_hash report_ids check_set_fingerprint findings recommendation overrides))
+    allowed =
+      ~w(reviewer candidate_id base_revision_id content_hash report_ids check_set_fingerprint findings recommendation overrides)
 
-    if MapSet.subset?(MapSet.new(Map.keys(map)), allowed) do
+    if Enum.all?(Map.keys(map), &(&1 in allowed)) do
       with {:ok, reviewer} <- Principal.from_map(map["reviewer"] || %{}) do
         new(Map.put(map, "reviewer", reviewer))
       end
@@ -90,16 +91,42 @@ defmodule Fount.Writing.Review do
 
   defp validate(%__MODULE__{} = review) do
     cond do
-      not match?(%Principal{}, review.reviewer) -> {:error, :invalid_reviewer}
-      not nonblank?(review.candidate_id) -> {:error, :invalid_review_candidate}
-      not nonblank?(review.base_revision_id) -> {:error, :invalid_review_base}
-      not nonblank?(review.content_hash) -> {:error, :invalid_review_content_hash}
-      not nonblank?(review.check_set_fingerprint) -> {:error, :invalid_check_set_fingerprint}
-      review.recommendation not in [:approve, :reject] -> {:error, :invalid_review_recommendation}
-      not string_list?(review.report_ids) or length(review.report_ids) != length(Enum.uniq(review.report_ids)) -> {:error, :invalid_review_reports}
-      not is_list(review.findings) or not Enum.all?(review.findings, &is_map/1) -> {:error, :invalid_review_findings}
-      not valid_overrides?(review.overrides) -> {:error, :invalid_overrides}
-      true -> :ok
+      not match?(%Principal{}, review.reviewer) ->
+        {:error, :invalid_reviewer}
+
+      not nonblank?(review.candidate_id) ->
+        {:error, :invalid_review_candidate}
+
+      not nonblank?(review.base_revision_id) ->
+        {:error, :invalid_review_base}
+
+      not nonblank?(review.content_hash) ->
+        {:error, :invalid_review_content_hash}
+
+      not nonblank?(review.check_set_fingerprint) ->
+        {:error, :invalid_check_set_fingerprint}
+
+      review.recommendation not in [:approve, :reject] ->
+        {:error, :invalid_review_recommendation}
+
+      true ->
+        validate_review_details(review)
+    end
+  end
+
+  defp validate_review_details(review) do
+    cond do
+      not string_list?(review.report_ids) or length(review.report_ids) != length(Enum.uniq(review.report_ids)) ->
+        {:error, :invalid_review_reports}
+
+      not is_list(review.findings) or not Enum.all?(review.findings, &is_map/1) ->
+        {:error, :invalid_review_findings}
+
+      not valid_overrides?(review.overrides) ->
+        {:error, :invalid_overrides}
+
+      true ->
+        :ok
     end
   end
 

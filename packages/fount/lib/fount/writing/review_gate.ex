@@ -28,12 +28,23 @@ defmodule Fount.Writing.ReviewGate do
 
   defp validate_identity(candidate, review) do
     cond do
-      review.base_revision_id != candidate["base_revision_id"] -> {:error, :candidate_base_mismatch}
-      review.candidate_id != candidate["id"] -> {:error, :review_candidate_mismatch}
-      review.content_hash != candidate["content_hash"] -> {:error, :review_content_mismatch}
-      review.check_set_fingerprint != candidate["check_set_fingerprint"] -> {:error, :review_check_set_mismatch}
-      MapSet.new(review.report_ids) != MapSet.new(Map.get(candidate, "report_ids", [])) -> {:error, :review_reports_mismatch}
-      true -> :ok
+      review.base_revision_id != candidate["base_revision_id"] ->
+        {:error, :candidate_base_mismatch}
+
+      review.candidate_id != candidate["id"] ->
+        {:error, :review_candidate_mismatch}
+
+      review.content_hash != candidate["content_hash"] ->
+        {:error, :review_content_mismatch}
+
+      review.check_set_fingerprint != candidate["check_set_fingerprint"] ->
+        {:error, :review_check_set_mismatch}
+
+      MapSet.new(review.report_ids) != MapSet.new(Map.get(candidate, "report_ids", [])) ->
+        {:error, :review_reports_mismatch}
+
+      true ->
+        :ok
     end
   end
 
@@ -51,29 +62,39 @@ defmodule Fount.Writing.ReviewGate do
     checks = Map.new(Map.get(candidate, "checks", []), &{&1["constraint_id"], &1})
     required = Map.get(candidate, "required_checks", [])
     overrides = Map.new(review.overrides, &{field(&1, :constraint_id), field(&1, :reason)})
-    allowed_override_ids = MapSet.new(for definition <- required, definition["overridable"], do: definition["constraint_id"])
 
-    cond do
-      Enum.any?(Map.keys(overrides), &(not MapSet.member?(allowed_override_ids, &1))) ->
-        {:error, :invalid_override_target}
+    allowed_override_ids =
+      MapSet.new(for definition <- required, definition["overridable"], do: definition["constraint_id"])
 
-      true ->
-        blockers =
-          Enum.flat_map(required, fn definition ->
-            check = checks[definition["constraint_id"]]
-            blocker(definition, check, overrides, approver)
-          end)
+    if Enum.any?(Map.keys(overrides), &(not MapSet.member?(allowed_override_ids, &1))) do
+      {:error, :invalid_override_target}
+    else
+      blockers =
+        Enum.flat_map(required, fn definition ->
+          check = checks[definition["constraint_id"]]
+          blocker(definition, check, overrides, approver)
+        end)
 
-        if blockers == [], do: :ok, else: {:error, {:review_blockers, blockers}}
+      if blockers == [], do: :ok, else: {:error, {:review_blockers, blockers}}
     end
   end
 
   defp blocker(_definition, %{"status" => "pass"}, _overrides, _approver), do: []
 
-  defp blocker(%{"evaluation" => "semantic", "overridable" => true, "constraint_id" => id}, check, overrides, %Principal{type: :human}) do
+  defp blocker(
+         %{"evaluation" => "semantic", "overridable" => true, "constraint_id" => id},
+         check,
+         overrides,
+         %Principal{type: :human}
+       ) do
     case Map.get(overrides, id) do
-      reason when is_binary(reason) and byte_size(String.trim(reason)) > 0 -> []
-      _ -> [%{"constraint_id" => id, "reason" => "human_override_required", "status" => status(check)}]
+      reason when is_binary(reason) ->
+        if String.trim(reason) == "",
+          do: [%{"constraint_id" => id, "reason" => "human_override_required", "status" => status(check)}],
+          else: []
+
+      _ ->
+        [%{"constraint_id" => id, "reason" => "human_override_required", "status" => status(check)}]
     end
   end
 

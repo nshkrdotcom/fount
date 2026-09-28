@@ -17,11 +17,12 @@ defmodule Fount.Writing.CheckSet do
     report_ids = Map.get(provenance, "report_ids", [])
     constraints = trusted_constraints(session, provenance)
     overridable = overridable_ids(session)
-    all_checks = merge_checks(checks, application_checks)
 
     with :ok <- validate_checks(checks),
          :ok <- validate_checks(application_checks),
+         :ok <- validate_cross_check_identity(checks, application_checks),
          :ok <- validate_report_ids(report_ids),
+         all_checks = merge_checks(checks, application_checks),
          {:ok, required} <- required_inventory(constraints, application_checks, checks, overridable),
          :ok <- ensure_required_results(required, all_checks) do
       payload = %{
@@ -65,6 +66,21 @@ defmodule Fount.Writing.CheckSet do
   defp merge_checks(checks, application_checks) do
     seen = MapSet.new(Enum.map(checks, &Map.get(&1, "constraint_id")))
     checks ++ Enum.reject(application_checks, &MapSet.member?(seen, Map.get(&1, "constraint_id")))
+  end
+
+  defp validate_cross_check_identity(checks, application_checks) do
+    application_by_id = Map.new(application_checks, &{&1["constraint_id"], &1})
+
+    if Enum.any?(checks, &conflicts_with_application?(&1, application_by_id)),
+      do: {:error, :conflicting_check_results},
+      else: :ok
+  end
+
+  defp conflicts_with_application?(check, application_by_id) do
+    case Map.fetch(application_by_id, check["constraint_id"]) do
+      {:ok, application_check} -> application_check != check
+      :error -> false
+    end
   end
 
   defp trusted_constraints(session, provenance) do
@@ -119,10 +135,14 @@ defmodule Fount.Writing.CheckSet do
       end)
 
     cond do
-      Map.has_key?(required, :invalid) -> {:error, :invalid_required_check}
+      Map.has_key?(required, :invalid) ->
+        {:error, :invalid_required_check}
+
       Enum.any?(Map.values(required), &(Map.get(&1, "evaluation") not in ["deterministic", "semantic", "external"])) ->
         {:error, :unknown_check_evaluation}
-      true -> {:ok, required |> Map.values() |> Enum.sort_by(& &1["constraint_id"])}
+
+      true ->
+        {:ok, required |> Map.values() |> Enum.sort_by(& &1["constraint_id"])}
     end
   end
 
@@ -155,8 +175,12 @@ defmodule Fount.Writing.CheckSet do
 
       Enum.any?(required, fn definition ->
         case Map.get(grouped, definition["constraint_id"]) do
-          [check] -> Map.get(check, "evaluation") != definition["evaluation"]
-          _ -> true
+          [check] ->
+            Map.get(check, "evaluation") != definition["evaluation"] or
+                Map.get(check, "severity") != "required"
+
+          _ ->
+            true
         end
       end) ->
         {:error, :missing_required_check}

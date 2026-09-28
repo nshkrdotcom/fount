@@ -1,5 +1,6 @@
 defmodule Fount.WritingPersistenceIntegrationTest do
   use ExUnit.Case, async: false
+  alias Ecto.Adapters.SQL
   alias Fount.{ID, Persistence, Query, Repo, Screenplay}
   alias Fount.Writing.{Approval, Authority, Principal}
 
@@ -215,6 +216,74 @@ defmodule Fount.WritingPersistenceIntegrationTest do
     assert accepted.revision.id == root.revision.id
   end
 
+  test "an exact pending candidate replay attaches the required-check snapshot after upgrade" do
+    root = Screenplay.new()
+    key = "pending-upgrade-#{ID.v4()}"
+    assert {:ok, _} = Persistence.create(Repo, key, root)
+
+    assert {:ok, session} =
+             Persistence.save_session(Repo, %{
+               screenplay_id: root.id,
+               base_revision_id: root.revision.id,
+               workflow: "pass",
+               request: %{},
+               status: "open"
+             })
+
+    operation = %{
+      "kind" => "insert_scene",
+      "value" => %{
+        "after_scene_id" => nil,
+        "scene" => %{
+          "local_id" => "new:scene",
+          "heading" => "INT. ROOM - DAY",
+          "elements" => [
+            %{"local_id" => "new:action", "type" => "action", "text" => "Mara waits.", "attrs" => %{}}
+          ]
+        }
+      }
+    }
+
+    assert {:ok, draft, _} = Screenplay.apply(root, [operation], [])
+    input = %{id: ID.v4(), screenplay: draft, label: "Legacy pending"}
+    assert {:ok, candidate} = Persistence.save_candidate(Repo, session.id, input)
+
+    SQL.query!(
+      Repo,
+      "UPDATE writing_candidates SET required_checks='[]'::jsonb,check_set_fingerprint=NULL WHERE id=$1::text::uuid",
+      [candidate.id],
+      log: false
+    )
+
+    assert {:ok, replayed} = Persistence.save_candidate(Repo, session.id, input)
+    assert replayed.id == candidate.id
+    assert {:ok, stored} = Persistence.candidate(Repo, candidate.id)
+    assert is_binary(stored["check_set_fingerprint"])
+    assert {:error, :candidate_identity_conflict} =
+             Persistence.save_candidate(Repo, session.id, %{input | label: "Changed payload"})
+
+    changed_revision_metadata = %{draft | revision: %{draft.revision | actor: "forged-replay"}}
+    assert {:error, :candidate_identity_conflict} =
+             Persistence.save_candidate(Repo, session.id, %{input | screenplay: changed_revision_metadata})
+
+    {approval, authority} = direct_approval(candidate.id)
+    assert {:ok, _} = Persistence.accept_candidate(Repo, candidate.id, approval: approval, authority: authority)
+
+    SQL.query!(
+      Repo,
+      "UPDATE writing_candidates SET required_checks='[]'::jsonb,check_set_fingerprint=NULL WHERE id=$1::text::uuid",
+      [candidate.id],
+      log: false
+    )
+
+    assert {:error, :candidate_identity_conflict} = Persistence.save_candidate(Repo, session.id, input)
+    assert {:ok, historical} = Persistence.candidate(Repo, candidate.id)
+    assert historical["check_set_fingerprint"] == nil
+
+    assert {:ok, head} = Persistence.load(Repo, key)
+    assert head.revision.id == draft.revision.id
+  end
+
   test "imported Fountain bytes survive a round trip through PostgreSQL" do
     raw = "Title: The Debt\r\n\r\nINT. VAULT - NIGHT\r\n\r\nMARA\r\nGive me the clé.\r\n"
     key = "fountain-#{ID.v4()}"
@@ -395,8 +464,11 @@ defmodule Fount.WritingPersistenceIntegrationTest do
       row = Ecto.Adapters.SQL.query!(Repo,
         "SELECT acceptance_kind,approver_type,approver_id,reviewer_type,reviewer_id,approval_hash FROM acceptances WHERE approval_id=$1::text::uuid",
         [approval.id], log: false)
-      assert [["approved", principal_type, "#{type}-approver", principal_type, "#{type}-approver", approval_hash]] = row.rows
+      assert [["approved", principal_type, approver_id, reviewer_type, reviewer_id, approval_hash]] = row.rows
       assert principal_type == to_string(type)
+      assert reviewer_type == principal_type
+      assert approver_id == "#{type}-approver"
+      assert reviewer_id == approver_id
       assert approval_hash == Fount.Writing.Approval.fingerprint(approval)
     end)
   end
@@ -420,9 +492,29 @@ defmodule Fount.WritingPersistenceIntegrationTest do
 
     assert {:error, :missing_required_check} =
              Persistence.save_candidate(Repo, session.id, %{screenplay: draft, provenance: %{"constraints" => [semantic], "checks" => []}})
+    assert {:error, :not_found} = Persistence.load_revision(Repo, root.id, draft.revision.id)
 
     check = %{"constraint_id" => "story-truth", "kind" => "semantic", "severity" => "required",
       "evaluation" => "semantic", "status" => "unknown"}
+    advisory_substitution = %{check | "severity" => "advisory", "status" => "pass"}
+    assert {:error, :missing_required_check} =
+             Persistence.save_candidate(Repo, session.id, %{
+               screenplay: draft,
+               provenance: %{"constraints" => [semantic], "checks" => [advisory_substitution]}
+             })
+
+    passing = %{check | "status" => "pass"}
+    failing_application = %{check | "status" => "fail"}
+    assert {:error, :conflicting_check_results} =
+             Persistence.save_candidate(Repo, session.id, %{
+               screenplay: draft,
+               provenance: %{
+                 "constraints" => [semantic],
+                 "checks" => [passing],
+                 "application_checks" => [failing_application]
+               }
+             })
+
     assert {:ok, candidate} = Persistence.save_candidate(Repo, session.id, %{
       screenplay: draft, provenance: %{"constraints" => [semantic], "checks" => [check], "report_ids" => []}
     })
@@ -446,6 +538,12 @@ defmodule Fount.WritingPersistenceIntegrationTest do
     forged_reports = %{approval.review | report_ids: [ID.v4()]}
     assert {:error, :review_reports_mismatch} =
              Persistence.accept_candidate(Repo, candidate.id, approval: %{approval | review: forged_reports}, authority: authority)
+
+    assert {:error, :approval_candidate_mismatch} =
+             Persistence.accept_candidate(Repo, candidate.id, approval: %{approval | candidate_id: ID.v4()}, authority: authority)
+
+    assert {:error, :approval_base_mismatch} =
+             Persistence.accept_candidate(Repo, candidate.id, approval: %{approval | base_revision_id: ID.v4()}, authority: authority)
 
     {:ok, intruder} = Principal.new(:human, "intruder")
     {:ok, forged_authority} = Authority.new(intruder, root.id, [:approve])

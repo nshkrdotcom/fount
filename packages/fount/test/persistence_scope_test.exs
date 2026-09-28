@@ -28,7 +28,11 @@ defmodule Fount.PersistenceScopeTest do
     id = Fount.ID.v4()
     base = Fount.ID.v4()
     required = [%{"constraint_id" => "pin", "evaluation" => "deterministic", "overridable" => false}]
-    checks = [%{"constraint_id" => "pin", "severity" => "required", "status" => "fail", "evaluation" => "deterministic"}]
+
+    checks = [
+      %{"constraint_id" => "pin", "severity" => "required", "status" => "fail", "evaluation" => "deterministic"}
+    ]
+
     fingerprint = CanonicalJSON.hash(%{"required_checks" => required, "checks" => checks, "report_ids" => []})
 
     candidate = %{
@@ -43,9 +47,18 @@ defmodule Fount.PersistenceScopeTest do
     }
 
     {:ok, principal} = Principal.new(:human, "writer")
-    {:ok, review} = Review.new(reviewer: principal, candidate_id: id, base_revision_id: base,
-      content_hash: "hash", report_ids: [], check_set_fingerprint: fingerprint,
-      recommendation: :approve, overrides: [])
+
+    {:ok, review} =
+      Review.new(
+        reviewer: principal,
+        candidate_id: id,
+        base_revision_id: base,
+        content_hash: "hash",
+        report_ids: [],
+        check_set_fingerprint: fingerprint,
+        recommendation: :approve,
+        overrides: []
+      )
 
     assert {:error, {:review_blockers, _}} = ReviewGate.validate(candidate, review, principal)
   end

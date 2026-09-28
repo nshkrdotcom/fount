@@ -19,12 +19,19 @@ defmodule Fount.Writing.Authority do
         }
 
   @spec new(Principal.t(), String.t(), [atom()]) :: {:ok, t()} | {:error, term()}
-  def new(%Principal{} = principal, screenplay_id, permissions \\ [:approve])
+  def new(principal, screenplay_id, permissions \\ [:approve])
+
+  def new(%Principal{} = principal, screenplay_id, permissions)
       when is_binary(screenplay_id) and is_list(permissions) do
     cond do
-      String.trim(screenplay_id) == "" -> {:error, :invalid_authority_screenplay}
-      Enum.any?(permissions, &(not is_atom(&1))) -> {:error, :invalid_authority_permissions}
-      true -> {:ok, %__MODULE__{principal: principal, screenplay_id: screenplay_id, permissions: MapSet.new(permissions)}}
+      String.trim(screenplay_id) == "" ->
+        {:error, :invalid_authority_screenplay}
+
+      Enum.any?(permissions, &(not is_atom(&1))) ->
+        {:error, :invalid_authority_permissions}
+
+      true ->
+        {:ok, %__MODULE__{principal: principal, screenplay_id: screenplay_id, permissions: MapSet.new(permissions)}}
     end
   end
 

@@ -148,7 +148,6 @@ defmodule FountWorkshop.PhaseTwelveA01DemoTest do
 
     [chosen, rejected, unchosen] = state["candidates"]
 
-
     assert {:ok, accepted} =
              FountWorkshop.TestApproval.accept(%{store: store}, chosen["id"])
 

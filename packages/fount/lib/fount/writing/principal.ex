@@ -32,6 +32,7 @@ defmodule Fount.Writing.Principal do
   def from_map(_), do: {:error, :invalid_principal}
 
   defp normalize_type(type) when type in @types, do: {:ok, type}
+
   defp normalize_type(type) when is_binary(type) do
     case Enum.find(@types, &(Atom.to_string(&1) == type)) do
       nil -> {:error, :invalid_principal_type}

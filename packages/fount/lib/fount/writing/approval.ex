@@ -52,11 +52,11 @@ defmodule Fount.Writing.Approval do
 
   def new(_), do: {:error, :invalid_approval}
 
-
   @doc "Builds a direct approval payload from an already loaded stored candidate; it does not create host authority."
   def direct(candidate, %Principal{} = principal, approval_id, opts \\ []) when is_map(candidate) do
     screenplay = value(candidate, :screenplay)
     provenance = value(candidate, :provenance) || %{}
+
     content_hash =
       case screenplay do
         %{revision: %{content_hash: hash}} -> hash
@@ -108,9 +108,10 @@ defmodule Fount.Writing.Approval do
 
   @spec from_map(map()) :: {:ok, t()} | {:error, term()}
   def from_map(map) when is_map(map) do
-    allowed = MapSet.new(~w(approval_id approver screenplay_id candidate_id base_revision_id content_hash review run_id run_policy_version run_policy_fingerprint))
+    allowed =
+      ~w(approval_id approver screenplay_id candidate_id base_revision_id content_hash review run_id run_policy_version run_policy_fingerprint)
 
-    if MapSet.subset?(MapSet.new(Map.keys(map)), allowed) do
+    if Enum.all?(Map.keys(map), &(&1 in allowed)) do
       with {:ok, approver} <- Principal.from_map(map["approver"] || %{}),
            {:ok, review} <- Review.from_map(map["review"] || %{}) do
         new(%{
@@ -137,21 +138,54 @@ defmodule Fount.Writing.Approval do
   def fingerprint(%__MODULE__{} = approval), do: approval |> to_map() |> CanonicalJSON.hash()
 
   defp validate(%__MODULE__{} = approval) do
+    cond do
+      Ecto.UUID.cast(approval.id) == :error ->
+        {:error, :invalid_approval_id}
+
+      not match?(%Principal{}, approval.approver) ->
+        {:error, :invalid_approver}
+
+      not nonblank?(approval.screenplay_id) ->
+        {:error, :invalid_approval_screenplay}
+
+      not nonblank?(approval.candidate_id) ->
+        {:error, :invalid_approval_candidate}
+
+      not nonblank?(approval.base_revision_id) ->
+        {:error, :invalid_approval_base}
+
+      not nonblank?(approval.content_hash) ->
+        {:error, :invalid_approval_content_hash}
+
+      not match?(%Review{}, approval.review) ->
+        {:error, :invalid_approval_review}
+
+      true ->
+        validate_run_provenance(approval)
+    end
+  end
+
+  defp validate_run_provenance(approval) do
     run_values = [approval.run_id, approval.run_policy_version, approval.run_policy_fingerprint]
 
     cond do
-      Ecto.UUID.cast(approval.id) == :error -> {:error, :invalid_approval_id}
-      not match?(%Principal{}, approval.approver) -> {:error, :invalid_approver}
-      not nonblank?(approval.screenplay_id) -> {:error, :invalid_approval_screenplay}
-      not nonblank?(approval.candidate_id) -> {:error, :invalid_approval_candidate}
-      not nonblank?(approval.base_revision_id) -> {:error, :invalid_approval_base}
-      not nonblank?(approval.content_hash) -> {:error, :invalid_approval_content_hash}
-      not match?(%Review{}, approval.review) -> {:error, :invalid_approval_review}
-      Enum.all?(run_values, &is_nil/1) -> :ok
-      Enum.any?(run_values, &is_nil/1) -> {:error, :incomplete_run_provenance}
-      not nonblank?(approval.run_id) or not is_integer(approval.run_policy_version) or approval.run_policy_version < 1 or not nonblank?(approval.run_policy_fingerprint) -> {:error, :invalid_run_provenance}
-      true -> :ok
+      Enum.all?(run_values, &is_nil/1) ->
+        :ok
+
+      Enum.any?(run_values, &is_nil/1) ->
+        {:error, :incomplete_run_provenance}
+
+      not valid_run_provenance?(approval) ->
+        {:error, :invalid_run_provenance}
+
+      true ->
+        :ok
     end
+  end
+
+  defp valid_run_provenance?(approval) do
+    nonblank?(approval.run_id) and is_integer(approval.run_policy_version) and
+      approval.run_policy_version >= 1 and nonblank?(approval.run_policy_fingerprint)
   end
 
   defp nonblank?(value), do: is_binary(value) and String.trim(value) != ""

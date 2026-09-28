@@ -74,8 +74,14 @@ defmodule FountWorkshop.Review do
   defp fallback(value, _default), do: value
 
   @doc "Accepts only with a typed stable approval and trusted host authority."
-  def accept(repo, candidate_id, %Fount.Writing.Approval{} = approval, %Fount.Writing.Authority{} = authority),
-    do: Persistence.accept_candidate(repo, candidate_id, approval: approval, authority: authority)
+  def accept(
+        repo,
+        candidate_id,
+        %Fount.Writing.Approval{} = approval,
+        %Fount.Writing.Authority{} = authority
+      ),
+      do:
+        Persistence.accept_candidate(repo, candidate_id, approval: approval, authority: authority)
 
   def accept(_repo, _candidate_id, _legacy_expected_revision, _legacy_review),
     do: {:error, :authorized_approval_required}

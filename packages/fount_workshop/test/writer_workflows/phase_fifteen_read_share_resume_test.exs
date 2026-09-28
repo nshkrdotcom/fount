@@ -161,7 +161,6 @@ defmodule FountWorkshop.PhaseFifteenReadShareResumeTest do
     }
   end
 
-
   defp request(base) do
     %{
       "version" => 1,

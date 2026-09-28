@@ -297,9 +297,11 @@ defmodule FountWorkshop.CLI do
 
   defp dispatch("accept", opts, services) do
     with {:ok, candidate} <- Store.call(services.store, :candidate, [opts[:candidate]]),
-         true <- candidate["base_revision_id"] == opts[:expected_revision] or {:error, :candidate_base_mismatch},
+         true <-
+           candidate["base_revision_id"] == opts[:expected_revision] or
+             {:error, :candidate_base_mismatch},
          {:ok, principal} <- WritingPrincipal.new(opts[:principal_type], opts[:actor]),
-         {:ok, authority} <- WritingAuthority.new(principal, candidate["screenplay_id"], [:approve]),
+         {:ok, authority} <- local_approval_authority(candidate, principal),
          {:ok, review} <- review(opts, candidate, principal),
          {:ok, approval} <-
            WritingApproval.new(
@@ -465,6 +467,25 @@ defmodule FountWorkshop.CLI do
     end
   end
 
+  defp local_approval_authority(candidate, principal) do
+    owner_id = System.get_env("FOUNT_LOCAL_OWNER_ID")
+    screenplay_id = System.get_env("FOUNT_LOCAL_SCREENPLAY_ID")
+
+    cond do
+      not nonblank?(owner_id) or not nonblank?(screenplay_id) ->
+        {:error, :local_approval_authority_unconfigured}
+
+      principal.type != :human or principal.id != owner_id or
+          candidate["screenplay_id"] != screenplay_id ->
+        {:error, :local_approval_authority_mismatch}
+
+      true ->
+        WritingAuthority.new(principal, screenplay_id, [:approve])
+    end
+  end
+
+  defp nonblank?(value), do: is_binary(value) and String.trim(value) != ""
+
   defp review(opts, candidate, principal) do
     if opts[:review] do
       with {:ok, payload} <- S.json_file(opts[:review]),
@@ -539,5 +560,10 @@ defmodule FountWorkshop.CLI do
           @required[command],
           " ",
           &("--" <> (Atom.to_string(&1) |> String.replace("_", "-")) <> " VALUE")
-        ) <> "; see guides/creative-workflows.md for request examples"
+        ) <>
+        if(command == "accept",
+          do:
+            "; configure FOUNT_LOCAL_OWNER_ID and FOUNT_LOCAL_SCREENPLAY_ID for the human owner",
+          else: "; see guides/creative-workflows.md for request examples"
+        )
 end

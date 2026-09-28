@@ -183,15 +183,6 @@ defmodule FountWorkshop.PhaseNineWriterLoopTest do
     }
   end
 
-  defp review(id, hash, packet),
-    do: %{
-      "candidate_id" => id,
-      "content_hash" => hash,
-      "actor" => "fixture-writer",
-      "report_ids" => packet["report_ids"],
-      "overrides" => []
-    }
-
   defp answers(questions) do
     Map.new(questions, fn {key, question} ->
       value =

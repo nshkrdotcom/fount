@@ -15,8 +15,13 @@ defmodule FountWorkshop do
 
   def review(repo, candidate_id), do: Review.packet(repo, candidate_id)
 
-  def accept(repo, candidate_id, %Fount.Writing.Approval{} = approval, %Fount.Writing.Authority{} = authority),
-    do: Review.accept(repo, candidate_id, approval, authority)
+  def accept(
+        repo,
+        candidate_id,
+        %Fount.Writing.Approval{} = approval,
+        %Fount.Writing.Authority{} = authority
+      ),
+      do: Review.accept(repo, candidate_id, approval, authority)
 
   def accept(_repo, _candidate_id, _legacy_expected_revision, _legacy_review),
     do: {:error, :authorized_approval_required}

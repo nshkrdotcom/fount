@@ -1,6 +1,6 @@
 defmodule Fount.WritingContractsTest do
   use ExUnit.Case, async: true
-  alias Fount.Writing.{Approval, CanonicalJSON, Principal, Review, ReviewGate, LocalReferences, UTF8Span}
+  alias Fount.Writing.{Approval, CanonicalJSON, LocalReferences, Principal, Review, ReviewGate, UTF8Span}
 
   test "spans are bytes, cannot split codepoints, and require exact excerpts" do
     assert {:ok, "é"} = UTF8Span.extract("café.", {3, 5})
@@ -81,9 +81,15 @@ defmodule Fount.WritingContractsTest do
   test "approval gate rejects automated overrides and hard required failures" do
     {:ok, human} = Principal.new(:human, "owner-1")
     {:ok, agent} = Principal.new(:agent, "reviewer-1")
+    {:ok, service} = Principal.new(:service, "service-1")
     required = [%{"constraint_id" => "knowledge", "evaluation" => "semantic", "overridable" => true}]
-    checks = [%{"constraint_id" => "knowledge", "severity" => "required", "evaluation" => "semantic", "status" => "unknown"}]
+
+    checks = [
+      %{"constraint_id" => "knowledge", "severity" => "required", "evaluation" => "semantic", "status" => "unknown"}
+    ]
+
     fingerprint = CanonicalJSON.hash(%{"required_checks" => required, "checks" => checks, "report_ids" => []})
+
     candidate = %{
       "id" => "candidate-1",
       "base_revision_id" => "base-1",
@@ -110,12 +116,30 @@ defmodule Fount.WritingContractsTest do
 
     {:ok, agent_review} = Review.new(Keyword.put(attrs, :reviewer, agent))
     assert {:error, :automated_override_forbidden} = ReviewGate.validate(candidate, agent_review, agent)
+    {:ok, service_review} = Review.new(Keyword.put(attrs, :reviewer, service))
+    assert {:error, :automated_override_forbidden} = ReviewGate.validate(candidate, service_review, service)
+
+    assert {:error, :invalid_overrides} =
+             Review.new(
+               Keyword.merge(attrs, reviewer: human, overrides: [%{"constraint_id" => "knowledge", "reason" => "  "}])
+             )
 
     hard_checks = [Map.merge(hd(checks), %{"evaluation" => "deterministic", "status" => "fail"})]
     hard_required = [%{"constraint_id" => "knowledge", "evaluation" => "deterministic", "overridable" => false}]
     hard_fp = CanonicalJSON.hash(%{"required_checks" => hard_required, "checks" => hard_checks, "report_ids" => []})
-    hard_candidate = %{candidate | "required_checks" => hard_required, "checks" => hard_checks, "check_set_fingerprint" => hard_fp}
-    {:ok, hard_review} = Review.new(Keyword.merge(attrs, reviewer: human, check_set_fingerprint: hard_fp, overrides: []))
-    assert {:error, {:review_blockers, _}} = ReviewGate.validate(hard_candidate, hard_review, human)
+
+    hard_candidate = %{
+      candidate
+      | "required_checks" => hard_required,
+        "checks" => hard_checks,
+        "check_set_fingerprint" => hard_fp
+    }
+
+    for principal <- [human, agent, service] do
+      {:ok, hard_review} =
+        Review.new(Keyword.merge(attrs, reviewer: principal, check_set_fingerprint: hard_fp, overrides: []))
+
+      assert {:error, {:review_blockers, _}} = ReviewGate.validate(hard_candidate, hard_review, principal)
+    end
   end
 end

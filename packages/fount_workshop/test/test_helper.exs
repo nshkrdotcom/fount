@@ -20,9 +20,18 @@ defmodule FountWorkshop.TestApproval do
     principal_id = Keyword.get(opts, :id, "writer")
     {:ok, principal} = Principal.new(type, principal_id)
     {:ok, authority} = Authority.new(principal, candidate["screenplay_id"], [:approve])
+
     approval_id =
       Keyword.get(opts, :approval_id) ||
-        Fount.ID.v5(candidate["screenplay_id"], ["test-approval:", candidate["id"], ":", to_string(type), ":", principal_id])
+        Fount.ID.v5(candidate["screenplay_id"], [
+          "test-approval:",
+          candidate["id"],
+          ":",
+          to_string(type),
+          ":",
+          principal_id
+        ])
+
     {:ok, approval} = Approval.direct(candidate, principal, approval_id, opts)
     {approval, authority}
   end

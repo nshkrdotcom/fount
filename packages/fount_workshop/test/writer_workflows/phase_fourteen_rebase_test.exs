@@ -70,7 +70,6 @@ defmodule FountWorkshop.PhaseFourteenRebaseTest do
     }
   end
 
-
   defp request(base) do
     %{
       "version" => 1,

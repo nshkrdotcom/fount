@@ -53,6 +53,8 @@ mix fount.manual --session SESSION_ID --request manual_candidate.json --output o
 mix fount.edit --candidate CANDIDATE_ID --request manual_edit.json --output out/compare --actor writer
 
 # 6. Decide explicitly. Acceptance advances canon; rejection does not.
+export FOUNT_LOCAL_OWNER_ID=writer
+export FOUNT_LOCAL_SCREENPLAY_ID=SCREENPLAY_ID
 mix fount.accept --candidate CANDIDATE_ID --expected-revision BASE_REVISION_ID --actor writer --principal-type human --approval-id STABLE_APPROVAL_UUID
 # or:
 mix fount.reject --candidate CANDIDATE_ID --actor writer
@@ -64,7 +66,7 @@ mix fount.read --key SCRIPT --output out/read
 mix fount.session --id SESSION_ID --output out/resume
 ```
 
-The accepted revision ID remains the source identity for the human-read packet and clean share. Stale siblings still require reconciliation and cannot overwrite a newer accepted/manual head. Retrying the same explicit acceptance remains idempotent through the existing persistence boundary.
+The local CLI requires an explicitly configured human owner and screenplay ID; `--actor` and `--principal-type` must match that owner, and the candidate must belong to the configured screenplay. Retain the approval UUID for retries. The accepted revision ID remains the source identity for the human-read packet and clean share. Stale siblings still require reconciliation and cannot overwrite a newer accepted/manual head. Retrying the same explicit acceptance remains idempotent through the existing persistence boundary.
 
 ## Three evaluation conditions
 

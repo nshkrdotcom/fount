@@ -1,8 +1,12 @@
 defmodule FountWorkshop.LiveExample do
   @moduledoc false
   alias Fount.CLI.Support
+  alias Fount.ID
   alias Fount.Intelligence.Reporting.Report
   alias Fount.LiveArtifacts, as: A
+  alias Fount.Persistence
+  alias Fount.Writing.{Approval, Authority, Principal}
+  alias FountWorkshop.Acceptance
   alias FountWorkshop.Candidate
   alias FountWorkshop.Session
   alias FountWorkshop.Store
@@ -16,8 +20,8 @@ defmodule FountWorkshop.LiveExample do
     A.run(mode, output, fn directory ->
       repo = Support.connect() |> A.require!()
       {root, _} = A.fixture()
-      key = "writer-#{mode}-#{Fount.ID.v4()}"
-      Fount.Persistence.create(repo, key, root) |> A.require!()
+      key = "writer-#{mode}-#{ID.v4()}"
+      Persistence.create(repo, key, root) |> A.require!()
       clients = FountWorkshop.Launcher.clients(observe: mode != "phase_eleven_qc") |> A.require!()
 
       services = %{
@@ -61,7 +65,7 @@ defmodule FountWorkshop.LiveExample do
           |> A.require!()
         end)
 
-      head = Fount.Persistence.load(repo, key) |> A.require!()
+      head = Persistence.load(repo, key) |> A.require!()
       if head.revision.id != base.revision.id, do: raise("Generation moved the accepted head")
 
       decision =
@@ -620,23 +624,29 @@ defmodule FountWorkshop.LiveExample do
     {:ok, edited, changes} = Fount.Screenplay.apply(root, ops, [])
 
     candidate =
-      Fount.Persistence.save_edit_candidate(services.store.repo, key, edited,
+      Persistence.save_edit_candidate(services.store.repo, key, edited,
         expected_revision: root.revision.id,
         operations: changes.operations
       )
       |> A.require!()
 
-    stored = Fount.Persistence.candidate(services.store.repo, candidate.id) |> A.require!()
-    {:ok, principal} = Fount.Writing.Principal.new(:human, "live-example-writer")
-    {:ok, authority} = Fount.Writing.Authority.new(principal, root.id, [:approve])
-    approval_id = Fount.ID.v5(root.id, ["live-example-manual:", candidate.id])
-    {:ok, approval} = Fount.Writing.Approval.direct(stored, principal, approval_id)
-    saved = Fount.Persistence.accept_candidate(services.store.repo, candidate.id, approval: approval, authority: authority) |> A.require!()
+    stored = Persistence.candidate(services.store.repo, candidate.id) |> A.require!()
+    {:ok, principal} = Principal.new(:human, "live-example-writer")
+    {:ok, authority} = Authority.new(principal, root.id, [:approve])
+    approval_id = ID.v5(root.id, ["live-example-manual:", candidate.id])
+    {:ok, approval} = Approval.direct(stored, principal, approval_id)
+
+    saved =
+      Persistence.accept_candidate(services.store.repo, candidate.id,
+        approval: approval,
+        authority: authority
+      )
+      |> A.require!()
 
     {saved, changes}
   end
 
-  defp accept_demo(sessions, base, services) do
+  defp accept_demo(sessions, _base, services) do
     [first_session | _] = sessions
 
     candidate =
@@ -655,13 +665,18 @@ defmodule FountWorkshop.LiveExample do
            %{"reason" => "No candidate passes required checks; demo does not invent overrides."}}
         )
 
-    {:ok, principal} = Fount.Writing.Principal.new(:human, "live-example-explicit-approval")
-    {:ok, authority} = Fount.Writing.Authority.new(principal, candidate["screenplay_id"], [:approve])
-    approval_id = Fount.ID.v5(candidate["screenplay_id"], ["live-example-candidate:", candidate["id"]])
-    {:ok, approval} = Fount.Writing.Approval.direct(candidate, principal, approval_id)
+    {:ok, principal} = Principal.new(:human, "live-example-explicit-approval")
+
+    {:ok, authority} =
+      Authority.new(principal, candidate["screenplay_id"], [:approve])
+
+    approval_id =
+      ID.v5(candidate["screenplay_id"], ["live-example-candidate:", candidate["id"]])
+
+    {:ok, approval} = Approval.direct(candidate, principal, approval_id)
 
     accepted =
-      FountWorkshop.Acceptance.accept(candidate["id"], approval, authority, services)
+      Acceptance.accept(candidate["id"], approval, authority, services)
       |> A.require!()
 
     %{

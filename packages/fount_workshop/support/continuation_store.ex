@@ -91,6 +91,7 @@ defmodule FountWorkshop.TestSupport.ContinuationStore do
              %Authority{} <- authority,
              true <- not is_nil(candidate) or {:error, :not_found},
              :ok <- Authority.authorize(authority, :approve, candidate["screenplay_id"], approval.approver),
+             true <- approval.screenplay_id == candidate["screenplay_id"] or {:error, :approval_screenplay_mismatch},
              true <- approval.candidate_id == id or {:error, :approval_candidate_mismatch},
              true <- approval.base_revision_id == candidate["base_revision_id"] or {:error, :approval_base_mismatch},
              true <- approval.content_hash == candidate["screenplay"].revision.content_hash or {:error, :approval_content_mismatch},

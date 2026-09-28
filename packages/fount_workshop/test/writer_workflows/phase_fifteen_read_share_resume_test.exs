@@ -36,7 +36,12 @@ defmodule FountWorkshop.PhaseFifteenReadShareResumeTest do
 
   test "A09/A10/A11 human read, safe share, stale protection, retry and resume use one accepted source identity" do
     base = @source |> Fount.parse!() |> Screenplay.from_document()
-    action = Enum.find(base.ir.elements, &(&1.type == :action and String.contains?(&1.text, "rain bead")))
+
+    action =
+      Enum.find(
+        base.ir.elements,
+        &(&1.type == :action and String.contains?(&1.text, "rain bead"))
+      )
 
     {:ok, repo} = ContinuationStore.start_link(base)
     on_exit(fn -> if Process.alive?(repo), do: Agent.stop(repo) end)
@@ -118,6 +123,7 @@ defmodule FountWorkshop.PhaseFifteenReadShareResumeTest do
     assert reaction["source"]["revision_id"] == accepted.revision.id
     assert reaction["reader_delivery"] == "neutral read"
     assert reaction["listening_conditions"] == "in-room table read"
+
     assert {:error, :human_observer_required} =
              TableRead.record_reaction(packet, %{"observer" => "tts", "reaction" => "laughed"})
 
@@ -178,7 +184,8 @@ defmodule FountWorkshop.PhaseFifteenReadShareResumeTest do
       "workflow" => "alternatives",
       "mode" => "revise",
       "base_revision_id" => base.revision.id,
-      "instruction" => "Try scene-local revisions while preserving the accepted draft until I decide.",
+      "instruction" =>
+        "Try scene-local revisions while preserving the accepted draft until I decide.",
       "selection" => %{"whole_screenplay" => true},
       "constraints" => [],
       "alternatives" => 3,

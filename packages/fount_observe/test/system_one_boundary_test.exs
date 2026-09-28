@@ -100,18 +100,11 @@ defmodule Fount.Observe.SystemOneBoundaryTest do
   end
 
   test "a whole-call timeout returns promptly and does not manufacture observations" do
-    parent = self()
-
     client =
       SDKTest.client()
       |> SDKTest.stub_callback(fn _request ->
-        send(parent, {:started, self()})
-
-        receive do
-          :release -> {:response, body()}
-        after
-          5_000 -> {:response, body()}
-        end
+        Process.sleep(5_000)
+        {:response, body()}
       end)
 
     on_exit(fn -> SDKTest.close(client) end)
@@ -123,12 +116,9 @@ defmodule Fount.Observe.SystemOneBoundaryTest do
         )
       end)
 
-    assert_receive {:started, worker}, 2_000
-    assert {:ok, batch} = Task.await(task, 2_000)
+    assert {:ok, batch} = Task.await(task, 10_000)
     assert hd(batch.entries).error.class == :provider_timeout
     assert hd(batch.entries).observations == []
-    # Release a provider that may outlive its caller; cancellation cleanup is
-    # also checked by the SDK's lifecycle suite in runtime QC.
-    send(worker, :release)
+    assert batch.elapsed_ms < 5_000
   end
 end

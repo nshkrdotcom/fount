@@ -144,6 +144,7 @@ defmodule FountWorkshop.ReviewExport do
     %{
       "id" => id,
       "label" => candidate["label"],
+      "decision" => candidate["decision"] || "proposed",
       "pages" => pages,
       "review" => review,
       "word_delta" => words(model) - words(base),
@@ -154,7 +155,7 @@ defmodule FountWorkshop.ReviewExport do
           else: nil
         ),
       "status_note" =>
-        "Decision: #{candidate["status"] || "open"}. Failed and uncertain checks remain visible; explicit writer approval is required."
+        "Decision: #{candidate["decision"] || "proposed"}. Failed and uncertain checks remain visible."
     }
   end
 

@@ -34,7 +34,9 @@ defmodule FountWorkshop.TableRead do
 
   @doc "Builds a provider-free human read packet with exact selected material, scene context and roles."
   @spec packet(Screenplay.t(), map(), keyword()) :: {:ok, map()} | {:error, term()}
-  def packet(%Screenplay{} = model, selection \\ %{"whole_screenplay" => true}, opts \\ [])
+  def packet(model, selection \\ %{"whole_screenplay" => true}, opts \\ [])
+
+  def packet(%Screenplay{} = model, selection, opts)
       when is_map(selection) do
     with {:ok, selected_ids} <- Selection.selected_ids(model, selection),
          {:ok, units} <- Selection.select(model, selection),
@@ -84,8 +86,14 @@ defmodule FountWorkshop.TableRead do
   def packet(_, _, _), do: {:error, :invalid_table_read_packet_request}
 
   @doc "Writes a human table-read packet. No speech engine is required."
-  @spec export_packet(Screenplay.t(), Path.t(), map(), keyword()) :: {:ok, map()} | {:error, term()}
-  def export_packet(%Screenplay{} = model, path, selection \\ %{"whole_screenplay" => true}, opts \\ [])
+  @spec export_packet(Screenplay.t(), Path.t(), map(), keyword()) ::
+          {:ok, map()} | {:error, term()}
+  def export_packet(
+        %Screenplay{} = model,
+        path,
+        selection \\ %{"whole_screenplay" => true},
+        opts \\ []
+      )
       when is_binary(path) do
     with {:ok, packet} <- packet(model, selection, opts),
          body <- Jason.encode!(packet, pretty: true),
@@ -284,7 +292,8 @@ defmodule FountWorkshop.TableRead do
   end
 
   defp scene_context(model, scenes) do
-    ordinal_by_id = model.ir.scenes |> Enum.with_index(1) |> Map.new(fn {scene, n} -> {scene.id, n} end)
+    ordinal_by_id =
+      model.ir.scenes |> Enum.with_index(1) |> Map.new(fn {scene, n} -> {scene.id, n} end)
 
     Enum.map(scenes, fn scene ->
       heading = Screenplay.node(model, scene.heading_id)
@@ -343,7 +352,7 @@ defmodule FountWorkshop.TableRead do
 
   @doc "Synthesizes each speaking turn; voices may be keyed by cast ID or literal cue."
   @spec synthesize(Screenplay.t(), String.t(), map(), (String.t(), term() ->
-                                                          {:ok, term()} | {:error, term()})) ::
+                                                         {:ok, term()} | {:error, term()})) ::
           {:ok, [map()]} | {:error, term()}
   def synthesize(model, scene_id, voices, speech)
       when is_map(voices) and is_function(speech, 2) do

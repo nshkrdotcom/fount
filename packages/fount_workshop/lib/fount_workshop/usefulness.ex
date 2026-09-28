@@ -39,7 +39,9 @@ defmodule FountWorkshop.Usefulness do
 
   @doc "Returns the supplied records without scoring, ordering, or choosing a winning condition."
   @spec report([map()], keyword()) :: {:ok, map()} | {:error, term()}
-  def report(records, opts \\ []) when is_list(records) do
+  def report(records, opts \\ [])
+
+  def report(records, opts) when is_list(records) do
     with :ok <- validate_records(records) do
       {:ok,
        %{
@@ -48,7 +50,8 @@ defmodule FountWorkshop.Usefulness do
          "evidence_status" => Keyword.get(opts, :evidence_status, "recorded"),
          "human_study" => Keyword.get(opts, :human_study, "not_run"),
          "records" => records,
-         "conditions_present" => records |> Enum.map(& &1["condition"]) |> Enum.uniq() |> Enum.sort(),
+         "conditions_present" =>
+           records |> Enum.map(& &1["condition"]) |> Enum.uniq() |> Enum.sort(),
          "dimensions_kept_separate" => @dimensions,
          "claims" => %{
            "aggregate_screenplay_score" => false,
@@ -111,14 +114,16 @@ defmodule FountWorkshop.Usefulness do
     if Enum.all?(records, &valid_record?/1), do: :ok, else: {:error, :invalid_usefulness_record}
   end
 
-  defp valid_record?(%{
-         "version" => 1,
-         "task_id" => task_id,
-         "condition" => condition,
-         "output_refs" => output_refs,
-         "engineering" => engineering,
-         "human_response" => response
-       } = record) do
+  defp valid_record?(
+         %{
+           "version" => 1,
+           "task_id" => task_id,
+           "condition" => condition,
+           "output_refs" => output_refs,
+           "engineering" => engineering,
+           "human_response" => response
+         } = record
+       ) do
     Map.keys(record) |> Enum.sort() ==
       Enum.sort(~w(version task_id condition output_refs engineering human_response)) and
       is_binary(task_id) and condition in @conditions and is_list(output_refs) and

@@ -18,7 +18,9 @@ defmodule FountWorkshop.Share do
 
   @doc "Exports a clean whole-screenplay or scene selection plus a privacy/fidelity manifest."
   @spec export(Screenplay.t(), map(), Path.t(), keyword()) :: {:ok, map()} | {:error, term()}
-  def export(%Screenplay{} = model, selection, directory, opts \\ [])
+  def export(model, selection, directory, opts \\ [])
+
+  def export(%Screenplay{} = model, selection, directory, opts)
       when is_map(selection) and is_binary(directory) do
     formats = Keyword.get(opts, :formats, @formats)
 
@@ -71,9 +73,8 @@ defmodule FountWorkshop.Share do
   @doc false
   def project(%Screenplay{} = model, selection) when is_map(selection) do
     with :ok <- validate_selection(selection),
-         {:ok, selected_ids} <- Selection.selected_ids(model, selection),
-         {:ok, projection, privacy} <- projection(model, selected_ids) do
-      {:ok, projection, privacy}
+         {:ok, selected_ids} <- Selection.selected_ids(model, selection) do
+      projection(model, selected_ids)
     end
   end
 
@@ -125,31 +126,26 @@ defmodule FountWorkshop.Share do
 
   defp write_exports(model, formats, directory) do
     Enum.reduce_while(formats, {:ok, %{}}, fn format, {:ok, acc} ->
-      case export_data(model, format) do
-        {:ok, data, losses} ->
-          name = filename(format)
-          path = Path.join(directory, name)
-
-          case File.write(path, data) do
-            :ok ->
-              item = %{
-                "path" => name,
-                "format" => to_string(format),
-                "sha256" => sha256(data),
-                "bytes" => byte_size(data),
-                "losses" => Enum.uniq(losses)
-              }
-
-              {:cont, {:ok, Map.put(acc, to_string(format), item)}}
-
-            error ->
-              {:halt, error}
-          end
-
-        error ->
-          {:halt, error}
+      case write_export(model, format, directory) do
+        {:ok, item} -> {:cont, {:ok, Map.put(acc, to_string(format), item)}}
+        error -> {:halt, error}
       end
     end)
+  end
+
+  defp write_export(model, format, directory) do
+    with {:ok, data, losses} <- export_data(model, format),
+         name <- filename(format),
+         :ok <- File.write(Path.join(directory, name), data) do
+      {:ok,
+       %{
+         "path" => name,
+         "format" => to_string(format),
+         "sha256" => sha256(data),
+         "bytes" => byte_size(data),
+         "losses" => Enum.uniq(losses)
+       }}
+    end
   end
 
   defp export_data(model, :fountain) do

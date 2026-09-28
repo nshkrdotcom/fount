@@ -67,6 +67,7 @@ defmodule FountWorkshop.PhaseFifteenUsefulnessTest do
 
     assert report["human_study"] == "not_run"
     assert report["conditions_present"] == ["basic_llm", "fount_assisted", "human_only"]
+
     assert Enum.map(report["records"], & &1["human_response"]["outcome"]) == [
              "neutral",
              "negative",

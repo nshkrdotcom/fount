@@ -70,3 +70,8 @@ If any speaking character in the scene lacks a voice mapping in `voices`, `Table
 {:error, {:voice_not_configured, "UNMAPPED_CHARACTER"}}
 ```
 This guarantees that missing character voices are surfaced immediately rather than generating partial, confusing table reads.
+## Phase 15 human-read packets and clean sharing
+
+For writer/reader work that does not need synthesized speech, use `FountWorkshop.TableRead.packet/3` or the existing `mix fount.read` command. The packet keeps the exact screenplay revision/selection, selected performed material, roles, and caller-supplied human reactions together. Reactions keep script wording, reader delivery, and listening conditions separate; TTS output is never treated as measured audience response.
+
+`mix fount.read` also writes a `share/` directory through `FountWorkshop.Share.export/4`. That reader copy is derived only from accepted canonical screenplay material, excludes private notes/boneyards/omitted scenes and Workshop/provider state, and records Fountain/FDX fidelity losses explicitly. See `read-share-resume-and-usefulness.md`.

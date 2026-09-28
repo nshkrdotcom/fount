@@ -29,6 +29,8 @@ Phase 13 adds cinematic pass lenses for sound/space, playable stillness/rhythm a
 
 Phase 14 adds provenance-safe research dossiers, durable note triage that keeps concern separate from treatment, exact/ambiguous/orphaned anchor tracking across drafts, and consequence review tied to actual candidate page changes. Research and note records stay noncanonical until the writer chooses a normal candidate and explicitly accepts it. See [`guides/research-notes-and-consequences.md`](guides/research-notes-and-consequences.md) and [`examples/phase_fourteen/README.md`](examples/phase_fourteen/README.md).
 
+Phase 15 adds provider-free human table-read packets, revision-linked human reaction records, clean accepted-draft Fountain/FDX sharing with explicit privacy and fidelity reporting, and usefulness evidence that keeps engineering behavior separate from writer response. `mix fount.read` now emits the human packet and clean share alongside its existing JSON/HTML table read; optional speech remains a convenience, not audience evidence. See [`guides/read-share-resume-and-usefulness.md`](guides/read-share-resume-and-usefulness.md) and [`examples/phase_fifteen/README.md`](examples/phase_fifteen/README.md).
+
 ## A complete writer demonstration
 
 After configuring a disposable PostgreSQL database and applying Fount's migrations:
@@ -82,7 +84,7 @@ For a project starting from a brief, use `Develop.run/5` or the public `FountWor
 
 Run `npm ci` in this package for the existing renderer; PDF inspection requires Poppler. Database workflows require `FOUNT_DATABASE_URL` and Fount's migrations. For the newly inspected SDK source, set `FOUNT_SYSTEM_ONE_SDK_PATH` before resolving dependencies; details are in Observe's guide.
 
-Run `mix test` for package tests and `MIX_ENV=test mix test integration` for the explicit integration directory after preparing the database/PDF prerequisites. Phase 13 is the applied/runtime-verified baseline in this snapshot. Phase 14 source changes require Codex runtime repair/QC before the phase can be marked complete; this source-writing handoff does not claim Mix/PostgreSQL/provider or human-study execution.
+Run `mix test` for package tests and `MIX_ENV=test mix test integration` for the explicit integration directory after preparing the database/PDF prerequisites. The supplied snapshot records Phases 1–14 as applied/runtime-complete. Phase 15 in this overlay is an offline source implementation pending Codex runtime repair/QC; it does not claim Mix/PostgreSQL/provider/TTS/PDF or human-study execution.
 
 ## License
 

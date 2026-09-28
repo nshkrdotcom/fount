@@ -1,5 +1,8 @@
 defmodule FountWorkshop.TableRead do
-  @moduledoc "Routes ordered screenplay dialogue to a caller-supplied speech engine."
+  @moduledoc "Routes ordered screenplay dialogue to human table-read packets and optional caller-supplied speech engines."
+  alias Fount.Screenplay
+  alias Fount.Selection
+  alias Fount.Writing.CanonicalJSON
   alias FountWorkshop.Speech.Espeak
 
   @doc "Exports all active speaking turns as actual JSON or a readable HTML table read."
@@ -21,13 +24,125 @@ defmodule FountWorkshop.TableRead do
            path: path,
            format: format,
            turn_count: length(turns),
-           sha256: :crypto.hash(:sha256, body) |> Base.encode16(case: :lower)
+           sha256: sha256(body)
          }}
       end
     end
   end
 
   def export(_, _, _), do: {:error, :invalid_export_request}
+
+  @doc "Builds a provider-free human read packet with exact selected material, scene context and roles."
+  @spec packet(Screenplay.t(), map(), keyword()) :: {:ok, map()} | {:error, term()}
+  def packet(%Screenplay{} = model, selection \\ %{"whole_screenplay" => true}, opts \\ [])
+      when is_map(selection) do
+    with {:ok, selected_ids} <- Selection.selected_ids(model, selection),
+         {:ok, units} <- Selection.select(model, selection),
+         {:ok, turns} <- selected_turns(model, selected_ids) do
+      scenes = selected_scenes(model, selected_ids)
+      pages = selected_pages(model, scenes, units)
+      roles = roles(turns)
+      source = %{"screenplay_id" => model.id, "revision_id" => model.revision.id}
+      selection_sha256 = CanonicalJSON.hash(selection)
+
+      packet_id =
+        "read_" <>
+          (CanonicalJSON.hash(%{
+             "source" => source,
+             "selection" => selection,
+             "turn_ids" => Enum.map(turns, & &1.id)
+           })
+           |> String.slice(0, 24))
+
+      {:ok,
+       %{
+         "version" => 1,
+         "id" => packet_id,
+         "kind" => "fount.human_table_read",
+         "source" => source,
+         "selection" => selection,
+         "selection_sha256" => selection_sha256,
+         "scene_context" => scene_context(model, scenes),
+         "roles" => roles,
+         "selected_pages" => pages,
+         "turns" => Enum.map(turns, &plain_turn/1),
+         "reactions" => [],
+         "reading" => %{
+           "speech_required" => false,
+           "delivery" => Keyword.get(opts, :delivery, "human"),
+           "listening_conditions" => Keyword.get(opts, :listening_conditions)
+         },
+         "claims" => %{
+           "audience_response_measured" => false,
+           "generated_transcript_is_audience_feedback" => false,
+           "synthesized_voice_is_performance_validation" => false
+         }
+       }}
+    end
+  end
+
+  def packet(_, _, _), do: {:error, :invalid_table_read_packet_request}
+
+  @doc "Writes a human table-read packet. No speech engine is required."
+  @spec export_packet(Screenplay.t(), Path.t(), map(), keyword()) :: {:ok, map()} | {:error, term()}
+  def export_packet(%Screenplay{} = model, path, selection \\ %{"whole_screenplay" => true}, opts \\ [])
+      when is_binary(path) do
+    with {:ok, packet} <- packet(model, selection, opts),
+         body <- Jason.encode!(packet, pretty: true),
+         :ok <- File.mkdir_p(Path.dirname(path)),
+         :ok <- File.write(path, body) do
+      {:ok,
+       %{
+         path: path,
+         format: :json,
+         packet_id: packet["id"],
+         scene_count: length(packet["scene_context"]),
+         role_count: length(packet["roles"]),
+         sha256: sha256(body)
+       }}
+    end
+  end
+
+  @doc "Adds one caller-supplied human reaction while retaining wording, delivery and conditions as separate fields."
+  @spec record_reaction(map(), map()) :: {:ok, map()} | {:error, term()}
+  def record_reaction(%{"kind" => "fount.human_table_read"} = packet, attrs) when is_map(attrs) do
+    observer = Map.get(attrs, "observer", "human")
+    reaction = attrs["reaction"]
+
+    cond do
+      observer != "human" ->
+        {:error, :human_observer_required}
+
+      not is_binary(reaction) or String.trim(reaction) == "" ->
+        {:error, :reaction_required}
+
+      true ->
+        item = %{
+          "id" =>
+            "reaction_" <>
+              (CanonicalJSON.hash(%{
+                 "packet_id" => packet["id"],
+                 "index" => length(packet["reactions"] || []),
+                 "reaction" => reaction,
+                 "reader_id" => attrs["reader_id"]
+               })
+               |> String.slice(0, 24)),
+          "observer" => "human",
+          "reader_id" => attrs["reader_id"],
+          "reaction" => reaction,
+          "script_wording" => attrs["script_wording"],
+          "reader_delivery" => attrs["reader_delivery"],
+          "listening_conditions" => attrs["listening_conditions"],
+          "source" => packet["source"],
+          "read_packet_id" => packet["id"],
+          "selection_sha256" => packet["selection_sha256"]
+        }
+
+        {:ok, Map.update(packet, "reactions", [item], &(&1 ++ [item]))}
+    end
+  end
+
+  def record_reaction(_, _), do: {:error, :invalid_table_read_packet}
 
   @doc "Writes real per-turn WAV clips and a synchronization manifest; simultaneous pairs share a start time."
   def render_audio(model, directory, voices, opts \\ []) when is_map(voices) do
@@ -135,6 +250,73 @@ defmodule FountWorkshop.TableRead do
     end)
   end
 
+  defp selected_turns(model, selected_ids) do
+    selected_blocks =
+      model.ir.dialogue_blocks
+      |> Enum.filter(fn block ->
+        Enum.any?([block.cue_id | block.body_ids], &MapSet.member?(selected_ids, &1))
+      end)
+      |> MapSet.new(& &1.id)
+
+    with {:ok, turns} <- all_turns(model) do
+      {:ok, Enum.filter(turns, &MapSet.member?(selected_blocks, &1.id))}
+    end
+  end
+
+  defp selected_scenes(model, selected_ids) do
+    Enum.filter(model.ir.scenes, fn scene ->
+      not scene.omitted? and Enum.any?(scene.element_ids, &MapSet.member?(selected_ids, &1))
+    end)
+  end
+
+  defp selected_pages(model, scenes, units) do
+    by_scene = Enum.group_by(units, & &1["scene_id"])
+
+    Enum.map(scenes, fn scene ->
+      heading = Screenplay.node(model, scene.heading_id)
+
+      %{
+        "scene_id" => scene.id,
+        "heading" => heading && heading.text,
+        "elements" => Map.get(by_scene, scene.id, [])
+      }
+    end)
+  end
+
+  defp scene_context(model, scenes) do
+    ordinal_by_id = model.ir.scenes |> Enum.with_index(1) |> Map.new(fn {scene, n} -> {scene.id, n} end)
+
+    Enum.map(scenes, fn scene ->
+      heading = Screenplay.node(model, scene.heading_id)
+
+      %{
+        "scene_id" => scene.id,
+        "ordinal" => ordinal_by_id[scene.id],
+        "heading" => heading && heading.text,
+        "scene_number" => scene.number
+      }
+    end)
+  end
+
+  defp roles(turns) do
+    turns
+    |> Enum.map(&%{"character_id" => &1.character_id, "cue" => &1.cue})
+    |> Enum.uniq()
+  end
+
+  defp plain_turn(turn) do
+    %{
+      "id" => turn.id,
+      "scene_id" => turn.scene_id,
+      "cue" => turn.cue,
+      "character_id" => turn.character_id,
+      "dialogue" => turn.dialogue,
+      "parentheticals" => turn.parentheticals,
+      "dual_with" => turn.dual_with,
+      "side" => turn.side && to_string(turn.side)
+    }
+  end
+
   defp html(model, turns) do
     rows =
       Enum.map_join(turns, "\n", fn turn ->
@@ -160,8 +342,8 @@ defmodule FountWorkshop.TableRead do
   end
 
   @doc "Synthesizes each speaking turn; voices may be keyed by cast ID or literal cue."
-  @spec synthesize(Fount.Screenplay.t(), String.t(), map(), (String.t(), term() ->
-                                                               {:ok, term()} | {:error, term()})) ::
+  @spec synthesize(Screenplay.t(), String.t(), map(), (String.t(), term() ->
+                                                          {:ok, term()} | {:error, term()})) ::
           {:ok, [map()]} | {:error, term()}
   def synthesize(model, scene_id, voices, speech)
       when is_map(voices) and is_function(speech, 2) do
@@ -195,4 +377,6 @@ defmodule FountWorkshop.TableRead do
       end
     end
   end
+
+  defp sha256(data), do: :crypto.hash(:sha256, data) |> Base.encode16(case: :lower)
 end

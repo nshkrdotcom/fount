@@ -122,3 +122,7 @@ FOUNT_EXAMPLE_OUT="/tmp/workshop_demo" mix run examples/live.exs --mode recover
 ## Phase 14 research, notes, and consequence review
 
 `examples/phase_fourteen/README.md` maps A06–A08 to the deterministic Phase-14 tests and public APIs: research provenance with untrusted-source handling, conflicting note triage and re-anchoring, a note-linked reveal-move candidate with visible consequence review, stale concurrent-edit reconciliation, and exact undo. The offline handoff does not claim ExUnit/PostgreSQL or optional human-review execution.
+
+## Phase 15 read/share/resume and usefulness
+
+`examples/phase_fifteen/README.md` documents the provider-free A09–A12 path: human table-read packets with revision-linked reactions, privacy-safe accepted-draft Fountain/FDX sharing, stale/idempotent acceptance and session resume, and usefulness evidence that can record kept-original or generic-output outcomes without producing a screenplay score. The optional D046 human study remains NOT_RUN in the offline delivery.

@@ -70,12 +70,15 @@ defmodule FountWorkshop.MixProject do
         "guides/pdf-export-and-inspection.md",
         "guides/submission-checks.md",
         "guides/table-reads-and-audio.md",
+        "guides/read-share-resume-and-usefulness.md",
         {"examples/phase_twelve/README.md",
          filename: "phase-twelve-example", title: "Phase 12 Example"},
         {"examples/phase_thirteen/README.md",
          filename: "phase-thirteen-example", title: "Phase 13 Example"},
         {"examples/phase_fourteen/README.md",
          filename: "phase-fourteen-example", title: "Phase 14 Example"},
+        {"examples/phase_fifteen/README.md",
+         filename: "phase-fifteen-example", title: "Phase 15 Example"},
         {"examples/README.md", filename: "examples", title: "Live Examples"}
       ],
       groups_for_extras: [
@@ -83,7 +86,7 @@ defmodule FountWorkshop.MixProject do
         "Agent Workflows":
           ~r/guides\/(architecture|creative-workflows|discovery-and-scene-exploration|cinematic-revision-rehearsal-and-voice|research-notes-and-consequences|intelligence-integration|scene-revision-loop|proposals-and-diffs)/,
         "Export & Inspection": ~r/guides\/(pdf-export-and-inspection|submission-checks)/,
-        "Rehearsal & Audio": ~r/guides\/table-reads-and-audio/,
+        "Rehearsal & Audio": ~r/guides\/(table-reads-and-audio|read-share-resume-and-usefulness)/,
         "Live Examples": ~r/examples/
       ],
       groups_for_modules: [
@@ -100,6 +103,8 @@ defmodule FountWorkshop.MixProject do
           FountWorkshop.CharacterRewrite,
           FountWorkshop.Recover,
           FountWorkshop.TableRead,
+          FountWorkshop.Share,
+          FountWorkshop.Usefulness,
           FountWorkshop.Speech.Espeak
         ],
         Export: [

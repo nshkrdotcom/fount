@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased - Phase 15 offline implementation
+
+- Add provider-free human table-read packets, revision-linked reaction records and privacy-safe accepted-draft Fountain/FDX sharing with explicit fidelity-loss reporting.
+- Extend the existing read command rather than adding a second writer workflow; optional speech remains available but is never treated as audience measurement or performance validation.
+- Add usefulness evidence for human-only, basic-LLM and Fount-assisted conditions while keeping engineering data separate from writer response and forbidding aggregate screenplay scores or automatic winners.
+- Add deterministic A09–A12 source regressions, a PostgreSQL durability regression for Codex, and a complete capture/explore/revise/compare/decide/share/resume guide. Runtime Mix/PostgreSQL/provider/TTS/PDF checks and the optional D046 human study remain unrun in this offline delivery.
+
 ## Unreleased - Phase 14 offline implementation
 
 - Add durable noncanonical research dossiers with explicit source provenance, sourced/disputed/unverified/deliberately-fictionalized claim status, host-web-unavailable questions, and untrusted-source instruction isolation.

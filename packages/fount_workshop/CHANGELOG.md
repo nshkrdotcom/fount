@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased - Phase 15 offline implementation
+
+- Add provider-free human table-read packets with exact revision/selection identity, roles, selected material and explicitly human reaction records that keep wording, delivery and listening conditions distinct.
+- Extend `mix fount.read` to emit the human packet plus privacy-safe accepted-draft Fountain/FDX sharing while retaining existing JSON/HTML and optional speech outputs.
+- Add clean-share fidelity/privacy manifests that exclude notes, boneyards, omitted scenes, Workshop candidates and provider metadata while surfacing adapter losses instead of silently dropping unsupported output.
+- Add usefulness evidence records for human-only, basic-LLM and Fount-assisted conditions without aggregate screenplay scoring, automatic winners, fabricated endorsements or representative-sample claims.
+- Add deterministic A09–A12 regression coverage and a coherent capture → explore → revise → compare → accept/reject → export → resume guide. Runtime Mix/PostgreSQL/provider/TTS/PDF checks remain for Codex; the optional D046 human study remains NOT_RUN.
+
 ## Unreleased - Phase 14 offline implementation
 
 - Add durable noncanonical research dossiers with explicit source provenance, sourced/disputed/unverified/deliberately-fictionalized claim status, host-web-unavailable questions, and untrusted-source instruction isolation.

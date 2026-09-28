@@ -7,6 +7,7 @@ defmodule FountWorkshop.CLI do
   alias FountWorkshop.Discovery
   alias FountWorkshop.Export.PDF
   alias FountWorkshop.Session
+  alias FountWorkshop.Share
   alias FountWorkshop.Store
   alias FountWorkshop.Strategy
 
@@ -311,6 +312,8 @@ defmodule FountWorkshop.CLI do
   end
 
   defp dispatch("read", opts, services) do
+    selection = %{"whole_screenplay" => true}
+
     with {:ok, model} <- S.load(services.store.repo, opts),
          {:ok, json} <-
            FountWorkshop.TableRead.export(
@@ -323,12 +326,21 @@ defmodule FountWorkshop.CLI do
              model,
              Path.join(opts[:output], "table-read.html"),
              :html
-           ) do
-      read_result(model, opts, services, json, html)
+           ),
+         {:ok, packet} <-
+           FountWorkshop.TableRead.export_packet(
+             model,
+             Path.join(opts[:output], "table-read.packet.json"),
+             selection
+           ),
+         {:ok, share} <- Share.export(model, selection, Path.join(opts[:output], "share")) do
+      read_result(model, opts, services, json, html, packet, share)
     end
   end
 
-  defp read_result(model, opts, services, json, html) do
+  defp read_result(model, opts, services, json, html, packet, share) do
+    base = %{json: json, html: html, packet: packet, share: share}
+
     if opts[:speech] do
       with {:ok, audio} <-
              FountWorkshop.TableRead.render_audio(
@@ -336,10 +348,10 @@ defmodule FountWorkshop.CLI do
                Path.join(opts[:output], "audio"),
                services.voices
              ) do
-        {:ok, %{json: json, html: html, audio: audio}}
+        {:ok, Map.put(base, :audio, audio)}
       end
     else
-      {:ok, %{json: json, html: html}}
+      {:ok, base}
     end
   end
 

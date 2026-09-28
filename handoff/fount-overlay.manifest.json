@@ -1,149 +1,178 @@
 {
   "format_version": 1,
+  "phase": 15,
+  "created_date": "2026-09-27",
+  "description": "Fount Phase 15 Read, Share, Resume, and Prove Usefulness overlay",
   "files": [
     {
       "path": "CHANGELOG.md",
       "action": "modify",
-      "original_sha256": "21fcdde14d89bed6bad8fe84f1eef536770b1658613a5dcf565937d9896f0085",
-      "original_terminal_lf_sha256": "3499c472b3f9518fecaf931237b94af98155ad5e26e3c3ceeb994e0c855d2590",
-      "result_sha256": "4cabd61ecf1e0ab68be84800df12a2ce063a4424ecfc296acfbff147bde7185a",
-      "mode": 420
+      "original_sha256": "4cabd61ecf1e0ab68be84800df12a2ce063a4424ecfc296acfbff147bde7185a",
+      "original_terminal_lf_sha256": "1b1c42aaa4a80ea5257b698b9a82b1a1ed4a51af16161bcd0d077ad73c104809",
+      "result_sha256": "ea54397720731dba3426fe02d1f38c697a00768b9a8b4d6bec0f2979138c03e7",
+      "mode": 420,
+      "original_bytes": 5928,
+      "result_bytes": 6832
     },
     {
       "path": "packages/fount_workshop/CHANGELOG.md",
       "action": "modify",
-      "original_sha256": "48b5e546e3602ba7e221f438ed62d08d6fe62601abcc82894f90578bc09f1d05",
-      "original_terminal_lf_sha256": "3c0a7df297c21b6ce6637446b6476310ca2f41f7e9f95f97ff6ce162850b1fb2",
-      "result_sha256": "393cee40b63eda119b564723de8f327aab0008b017f1cb6861b9e720b8556f2a",
-      "mode": 420
+      "original_sha256": "393cee40b63eda119b564723de8f327aab0008b017f1cb6861b9e720b8556f2a",
+      "original_terminal_lf_sha256": "e78363ccfd2471a79d82c8389a3eae2472f13ca33761e35a9d62238fb1d0ebb8",
+      "result_sha256": "7f13fe59ca7a43a26eb447d87b7fbb7f7ab7b3953f5495ad4fffd45fc547371e",
+      "mode": 420,
+      "original_bytes": 5714,
+      "result_bytes": 6829
     },
     {
       "path": "packages/fount_workshop/README.md",
       "action": "modify",
-      "original_sha256": "91aee225fe9e9dcc53eb848c7625c987739658cfe90b5ef0eb88a08307f35b01",
-      "original_terminal_lf_sha256": "f22f204ffeed5c8c0be8f417b4e2686f624f6b9cec0376c960ae8a38f72a2e07",
-      "result_sha256": "d0df2c5c207a6e99a7c2d3b3d566d1975d1546e2f59b4419f8022b2d456e327f",
-      "mode": 420
+      "original_sha256": "d0df2c5c207a6e99a7c2d3b3d566d1975d1546e2f59b4419f8022b2d456e327f",
+      "original_terminal_lf_sha256": "9114bab9e1ae97aaed01d143e08e1e9aa85eef4e943da62a5d917f3943453ec0",
+      "result_sha256": "58bbf3ea8317b10e6b64bb4a4a8b8458b14a2fc5b2be9b632ffa8fea1925b901",
+      "mode": 420,
+      "original_bytes": 8210,
+      "result_bytes": 8803
     },
     {
       "path": "packages/fount_workshop/examples/README.md",
       "action": "modify",
-      "original_sha256": "170a492fb50ea960d5e2eabbf67557cbe53394a6fb9c8cc5a2f239f8c986fe40",
-      "original_terminal_lf_sha256": "ea8c5af8e1f5f7c3faaef91a37fe03d2cb901cf689436eb94bc9f993aad8a9fa",
-      "result_sha256": "badf0ad02add0a4ada7fbf809961ddb13e3f13d8bc943c265d0cb68ce008fa2b",
-      "mode": 420
+      "original_sha256": "0a169d8736e64756b902b7ec34462e55a7dd08c1339f7ef9be6ed13aa865cf78",
+      "original_terminal_lf_sha256": "badf0ad02add0a4ada7fbf809961ddb13e3f13d8bc943c265d0cb68ce008fa2b",
+      "result_sha256": "029daba202bea0183c70499e684930e5880d308a4843729c42fbe31a7f2eea10",
+      "mode": 420,
+      "original_bytes": 6859,
+      "result_bytes": 7331
     },
     {
-      "path": "packages/fount_workshop/examples/phase_fourteen/README.md",
+      "path": "packages/fount_workshop/examples/phase_fifteen/README.md",
       "action": "add",
       "original_sha256": null,
       "original_terminal_lf_sha256": null,
-      "result_sha256": "5a342886f1e4df9ad0475b7db1cf6ba6b8302b13bc22a983136e84bebb204677",
-      "mode": 420
+      "result_sha256": "7f1a69fe8c8b3a60c57118aca0fbaf856a3073d4b93a6e3528ad004ec721cc64",
+      "mode": 420,
+      "original_bytes": null,
+      "result_bytes": 1363
     },
     {
-      "path": "packages/fount_workshop/guides/research-notes-and-consequences.md",
+      "path": "packages/fount_workshop/guides/read-share-resume-and-usefulness.md",
       "action": "add",
       "original_sha256": null,
       "original_terminal_lf_sha256": null,
-      "result_sha256": "7764ede644447bce5647fb3d2eda65811700be39543fe3272c64cc06018bac00",
-      "mode": 420
+      "result_sha256": "85e78482840038ed1741aaa22f6069cc55480e4e5a67455975fa36480b876f9a",
+      "mode": 420,
+      "original_bytes": null,
+      "result_bytes": 6155
     },
     {
-      "path": "packages/fount_workshop/integration/phase_fourteen_research_notes_durability_test.exs",
-      "action": "add",
-      "original_sha256": null,
-      "original_terminal_lf_sha256": null,
-      "result_sha256": "727ce37666afa9e926402dd933a6c378d3deba566f0a4343b51006529dded16a",
-      "mode": 420
-    },
-    {
-      "path": "packages/fount_workshop/lib/fount_workshop/candidate_api.ex",
+      "path": "packages/fount_workshop/guides/table-reads-and-audio.md",
       "action": "modify",
-      "original_sha256": "1847d33484fc786c42a7feb12048feb83c647f4c9a285843d10a69d7e5047bc7",
-      "original_terminal_lf_sha256": "10fc33eeb08fb9d45e055db49eda70eec6ba79adf0663d915f8a4530471d16dc",
-      "result_sha256": "73b4857913300f37e36f4c2c7a777d52f85c9967eeabdb26cd1dabcf6abb8b0f",
-      "mode": 420
+      "original_sha256": "c5845ec6e629de169058a7adcc94772c9d10575e270dc4f4146afa98c8196fa1",
+      "original_terminal_lf_sha256": "0738198ee2a2c51a63140d131f4caa97fae8093287159586d9f128721240beb9",
+      "result_sha256": "a56b0f33796654c778769a88c217215bdbdee4d2df8e9636bdc64fc58d04ee1e",
+      "mode": 420,
+      "original_bytes": 2506,
+      "result_bytes": 3324
     },
     {
-      "path": "packages/fount_workshop/lib/fount_workshop/comparison.ex",
+      "path": "packages/fount_workshop/integration/phase_fifteen_read_share_resume_test.exs",
+      "action": "add",
+      "original_sha256": null,
+      "original_terminal_lf_sha256": null,
+      "result_sha256": "30d4512a8e68d21be841b4c35c81f2d2e19f356567d90d081b853c492747075b",
+      "mode": 420,
+      "original_bytes": null,
+      "result_bytes": 3853
+    },
+    {
+      "path": "packages/fount_workshop/lib/fount_workshop.ex",
       "action": "modify",
-      "original_sha256": "e5c57135eadc08877762b6d3e7ba2b5148980b31103607818b20d64017637a54",
-      "original_terminal_lf_sha256": "121b8108ff1890aaaa452b4138ac6f5d834f09c5cbb14140ba6695f5c7165fa1",
-      "result_sha256": "fce0c7b7f4fee117d9b941c63074a82a01ecc82e7ec2874801a6209d49a6a941",
-      "mode": 420
+      "original_sha256": "4c094ca0d77ece2e30b65374d9bedb69dec1048effaf8ce5592659ddb22670cc",
+      "original_terminal_lf_sha256": "00a9af79d75176ed430e512b4e18ec9d1457f1ec3b390d301d0d6d1e4e37f9aa",
+      "result_sha256": "2b7e713f0f52e985a349fee6821b0dab702f341a2cde1d6ada145e20442dce8a",
+      "mode": 420,
+      "original_bytes": 811,
+      "result_bytes": 1646
     },
     {
-      "path": "packages/fount_workshop/lib/fount_workshop/consequence_review.ex",
-      "action": "add",
-      "original_sha256": null,
-      "original_terminal_lf_sha256": null,
-      "result_sha256": "174a8437d2713a5a1516d644edbf1a7d4d4a080d4422ccbcd7f75ec8ca323258",
-      "mode": 420
-    },
-    {
-      "path": "packages/fount_workshop/lib/fount_workshop/note_triage.ex",
-      "action": "add",
-      "original_sha256": null,
-      "original_terminal_lf_sha256": null,
-      "result_sha256": "157050e371400ad81daff539c18794ca058f13bef605cff0701d1a6b37f2566c",
-      "mode": 420
-    },
-    {
-      "path": "packages/fount_workshop/lib/fount_workshop/research.ex",
-      "action": "add",
-      "original_sha256": null,
-      "original_terminal_lf_sha256": null,
-      "result_sha256": "349df73cf5ae531a3092747a70c521a818397c81505cebf6aae32bbc31cecfaf",
-      "mode": 420
-    },
-    {
-      "path": "packages/fount_workshop/lib/fount_workshop/review.ex",
+      "path": "packages/fount_workshop/lib/fount_workshop/cli.ex",
       "action": "modify",
-      "original_sha256": "533bfea6c1f0f4c9c89795ec0e44b423897aaa8af9ff81ab4228e1690e2fbfa6",
-      "original_terminal_lf_sha256": "cf57a96596ec637fbddda4ece474b4cca1b5fc952bdf2b3d6597458aa4f6aef6",
-      "result_sha256": "34980692307f587d86c2679da16b5a0b62047d9a6adfd15d1dfd94e76ec5a64a",
-      "mode": 420
+      "original_sha256": "a744f7ab30040c68100e7c0f1cd38defac0571c49c8c7724e572fc49fed39b8b",
+      "original_terminal_lf_sha256": "81d4c847a48a6571cfa6b2c02a2da371d72dbeb19bc1a3bcfe7bdefc54ada759",
+      "result_sha256": "ab2e2025b9546c913749536ae7373ab7d2d44863471c18d252349ed7283f45cd",
+      "mode": 420,
+      "original_bytes": 16534,
+      "result_bytes": 16965
     },
     {
-      "path": "packages/fount_workshop/test/writer_workflows/phase_fourteen_consequence_test.exs",
+      "path": "packages/fount_workshop/lib/fount_workshop/share.ex",
       "action": "add",
       "original_sha256": null,
       "original_terminal_lf_sha256": null,
-      "result_sha256": "a591b5f419279a5d7c2f20ff68834023aaf214990c42008a914e6e3403c607fb",
-      "mode": 420
+      "result_sha256": "5a7f0112a53bb0250beb915fb47a3995d8fabed6d95c84c7e87988904683355e",
+      "mode": 420,
+      "original_bytes": null,
+      "result_bytes": 6349
     },
     {
-      "path": "packages/fount_workshop/test/writer_workflows/phase_fourteen_notes_test.exs",
+      "path": "packages/fount_workshop/lib/fount_workshop/table_read.ex",
+      "action": "modify",
+      "original_sha256": "a7f68abc05bbf6bdb35e2e3ff1e610514d6f0c84cf8d666c952c4c2b86dac601",
+      "original_terminal_lf_sha256": "da9f5a7af9bf51fcbf025ac43ca253f4212c91b726f4e20e20d8ce7ad0fb9c1a",
+      "result_sha256": "89fdae714e31ef31a11e2880b56b201a5eea5f920b5c6a730b09742cc66051bd",
+      "mode": 420,
+      "original_bytes": 6705,
+      "result_bytes": 13010
+    },
+    {
+      "path": "packages/fount_workshop/lib/fount_workshop/usefulness.ex",
       "action": "add",
       "original_sha256": null,
       "original_terminal_lf_sha256": null,
-      "result_sha256": "c6261f391eecf8e68f337adadebf206800579658e97681ae2935d582f182c200",
-      "mode": 420
+      "result_sha256": "51c87119e87bb76e06861ef70dfccb03b699e864a5a3e99cda3e5252b9c5d42f",
+      "mode": 420,
+      "original_bytes": null,
+      "result_bytes": 6232
     },
     {
-      "path": "packages/fount_workshop/test/writer_workflows/phase_fourteen_rebase_test.exs",
+      "path": "packages/fount_workshop/mix.exs",
+      "action": "modify",
+      "original_sha256": "65d475fee3a7a27522989efa6c1988fb099a4efd1df298c90ade4127644218f6",
+      "original_terminal_lf_sha256": "c05d4cad3f068ddc7171bacc945464a5a8f0f427c65abcd14722a35166d4401c",
+      "result_sha256": "234afadb20b3f61d790f3e46a622be70a07275bc8f441c051a95bfdaefafb39a",
+      "mode": 420,
+      "original_bytes": 4046,
+      "result_bytes": 4319
+    },
+    {
+      "path": "packages/fount_workshop/test/writer_workflows/phase_fifteen_read_share_resume_test.exs",
       "action": "add",
       "original_sha256": null,
       "original_terminal_lf_sha256": null,
-      "result_sha256": "24d13365c4d1e3877d7d81575255c5519498af798ebc3ae9385d326c448337c0",
-      "mode": 420
+      "result_sha256": "80f84a1f59cafad65582e323a2ffe5587685a1ecb7bd0871a5eca475adfd9295",
+      "mode": 420,
+      "original_bytes": null,
+      "result_bytes": 7176
     },
     {
-      "path": "packages/fount_workshop/test/writer_workflows/phase_fourteen_research_test.exs",
+      "path": "packages/fount_workshop/test/writer_workflows/phase_fifteen_usefulness_test.exs",
       "action": "add",
       "original_sha256": null,
       "original_terminal_lf_sha256": null,
-      "result_sha256": "a3ad7ef45e4cd4de156cebe9f89c489f9648a9285e9145c835508d852a849d8f",
-      "mode": 420
+      "result_sha256": "baff99004175dc238bcd19f0d5a935c9e04ac1f9593bda454fc63b4f450c4e0b",
+      "mode": 420,
+      "original_bytes": null,
+      "result_bytes": 3252
     },
     {
-      "path": "scripts/tests/test_phase_fourteen_source.py",
+      "path": "scripts/tests/test_phase_fifteen_source.py",
       "action": "add",
       "original_sha256": null,
       "original_terminal_lf_sha256": null,
-      "result_sha256": "3496e624b5f56a671ed770c8f7b0037d8eaa339a4b39bf2fbabfc0291be64c1b",
-      "mode": 420
+      "result_sha256": "2d4e8804c1d0e3e57c110f440b04588eda2e402ee80ddedd39fb3980faeccfec",
+      "mode": 420,
+      "original_bytes": null,
+      "result_bytes": 5828
     }
   ],
   "deletions": []

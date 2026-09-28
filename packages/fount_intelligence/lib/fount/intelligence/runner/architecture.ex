@@ -251,12 +251,23 @@ defmodule Fount.Intelligence.Runner.Architecture do
   defp physical_forbidden?("fount", dep),
     do:
       Enum.any?(
-        ["Fount.Observe", "Fount.Intelligence", "FountWorkshop", "FountRun", "SystemOneSDK", "Inference"],
+        [
+          "Fount.Observe",
+          "Fount.Intelligence",
+          "FountWorkshop",
+          "FountRun",
+          "SystemOneSDK",
+          "Inference"
+        ],
         &prefix?(dep, &1)
       )
 
   defp physical_forbidden?("fount_observe", dep),
-    do: Enum.any?(["Fount.Intelligence", "FountWorkshop", "FountRun", "Inference"], &prefix?(dep, &1))
+    do:
+      Enum.any?(
+        ["Fount.Intelligence", "FountWorkshop", "FountRun", "Inference"],
+        &prefix?(dep, &1)
+      )
 
   defp physical_forbidden?("fount_intelligence", dep),
     do: Enum.any?(["FountWorkshop", "FountRun", "Inference"], &prefix?(dep, &1))
@@ -265,7 +276,18 @@ defmodule Fount.Intelligence.Runner.Architecture do
     do: prefix?(dep, "FountRun")
 
   defp physical_forbidden?("fount_run", dep),
-    do: Enum.any?(["Fount.Observe", "Fount.Intelligence", "SystemOneSDK", "Inference"], &prefix?(dep, &1))
+    do:
+      Enum.any?(
+        [
+          "Fount.Observe",
+          "Fount.Intelligence",
+          "FountWorkshop",
+          "AgentSessionManager",
+          "SystemOneSDK",
+          "Inference"
+        ],
+        &prefix?(dep, &1)
+      )
 
   defp physical_forbidden?(_, _), do: false
 
@@ -367,11 +389,12 @@ defmodule Fount.Intelligence.Runner.Architecture do
       "fount" => [],
       "fount_observe" => ["fount", "system_one_sdk"],
       "fount_intelligence" => ["fount", "fount_observe"],
-      "fount_workshop" => ["fount", "fount_intelligence", "inference"],
-      "fount_run" => ["fount", "fount_workshop"]
+      "fount_workshop" => ["fount", "fount_intelligence", "inference", "agent_session_manager"],
+      "fount_run" => ["fount"]
     }
 
-    internal = @apps ++ ["fount_" <> "probe", "system_one_sdk", "inference", "agent_session_manager"]
+    internal =
+      @apps ++ ["fount_" <> "probe", "system_one_sdk", "inference", "agent_session_manager"]
 
     dependency in internal and dependency != owner and
       dependency not in Map.get(allowed, owner, [])

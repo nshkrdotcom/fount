@@ -9,7 +9,19 @@ defmodule FountRun.Plan do
   @notes_keys ~w(reference sha256)
   @operation_keys ~w(workflow request_fingerprint selection_fingerprint)
 
-  @enforce_keys [:screenplay_id, :base_revision_id, :goal, :scope, :constraints, :protected_material, :input_brief, :input_notes, :operation_parameters, :fingerprint, :author]
+  @enforce_keys [
+    :screenplay_id,
+    :base_revision_id,
+    :goal,
+    :scope,
+    :constraints,
+    :protected_material,
+    :input_brief,
+    :input_notes,
+    :operation_parameters,
+    :fingerprint,
+    :author
+  ]
   defstruct @enforce_keys
 
   @type t :: %__MODULE__{}
@@ -22,7 +34,8 @@ defmodule FountRun.Plan do
          {:ok, goal} <- required_string(attrs, "goal"),
          {:ok, scope} <- json_object(Map.get(attrs, "scope"), :invalid_scope),
          {:ok, constraints} <- json_list(Map.get(attrs, "constraints", []), :invalid_constraints),
-         {:ok, protected} <- json_list(Map.get(attrs, "protected_material", []), :invalid_protected_material),
+         {:ok, protected} <-
+           json_list(Map.get(attrs, "protected_material", []), :invalid_protected_material),
          {:ok, input_brief} <- input_ref(Map.get(attrs, "input_brief")),
          {:ok, input_notes} <- note_refs(Map.get(attrs, "input_notes", [])),
          {:ok, operation} <- operation(Map.get(attrs, "operation_parameters", %{})) do
@@ -83,12 +96,18 @@ defmodule FountRun.Plan do
     if ClosedMap.uuid_string(value), do: {:ok, value}, else: {:error, {:invalid_field, key}}
   end
 
-  defp json_object(value, error) when is_map(value), do: if(ClosedMap.json?(value), do: {:ok, value}, else: {:error, error})
+  defp json_object(value, error) when is_map(value),
+    do: if(ClosedMap.json?(value), do: {:ok, value}, else: {:error, error})
+
   defp json_object(_, error), do: {:error, error}
-  defp json_list(value, error) when is_list(value), do: if(ClosedMap.json?(value), do: {:ok, value}, else: {:error, error})
+
+  defp json_list(value, error) when is_list(value),
+    do: if(ClosedMap.json?(value), do: {:ok, value}, else: {:error, error})
+
   defp json_list(_, error), do: {:error, error}
 
   defp input_ref(nil), do: {:ok, nil}
+
   defp input_ref(value) do
     with {:ok, value} <- ClosedMap.normalize(value, @input_keys),
          true <- ClosedMap.nonempty_string(Map.get(value, "reference")),
@@ -116,6 +135,7 @@ defmodule FountRun.Plan do
       error -> error
     end
   end
+
   defp note_refs(_), do: {:error, :invalid_input_notes}
 
   # Phase 02 supports only durable generic operation identity. Phase 04 expands

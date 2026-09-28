@@ -52,7 +52,13 @@ defmodule FountRun.MixProject do
       source_url: @source_url,
       homepage_url: @source_url,
       canonical: "https://hexdocs.pm/fount_run",
-      extras: ["README.md", "CHANGELOG.md", "LICENSE", "guides/architecture.md", "guides/storage.md"]
+      extras: [
+        "README.md",
+        "CHANGELOG.md",
+        "LICENSE",
+        "guides/architecture.md",
+        "guides/storage.md"
+      ]
     ]
   end
 

@@ -66,13 +66,13 @@ class RunFoundationSource(unittest.TestCase):
         self.assertIn("type in [:agent, :service]", actor_context)
         persistence = self.read("packages/fount_run/lib/fount_run/persistence.ex")
         self.assertIn("validate_start_opts", persistence)
-        self.assertIn('"principal" => Fount.Writing.Principal.to_map(context.principal)', persistence)
+        self.assertIn('"principal" => Principal.to_map(context.principal)', persistence)
 
     def test_core_remains_independent_and_architecture_gate_knows_run(self):
         self.assertNotIn(":fount_run", self.read("packages/fount/mix.exs"))
         architecture = self.read("packages/fount_intelligence/lib/fount/intelligence/runner/architecture.ex")
         self.assertIn("fount_run", architecture)
-        self.assertIn('"fount_run" => ["fount", "fount_workshop"]', architecture)
+        self.assertIn('"fount_run" => ["fount"]', architecture)
         self.assertIn("FountRun", architecture)
         final = self.read("scripts/final_acceptance.py")
         self.assertIn('"fount_run"', final)

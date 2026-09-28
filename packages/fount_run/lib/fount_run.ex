@@ -36,7 +36,10 @@ defmodule FountRun do
   # stop/approve/deliver. Later phases add those commands when their behavior is real.
 
   defp emit({:ok, _value} = result, operation) do
-    :telemetry.execute([:fount_run, operation], %{system_time: System.system_time()}, %{status: :ok})
+    :telemetry.execute([:fount_run, operation], %{system_time: System.system_time()}, %{
+      status: :ok
+    })
+
     result
   end
 

@@ -25,7 +25,7 @@ defmodule FountRun.ClosedMap do
   @spec json?(term()) :: boolean()
   def json?(nil), do: true
   def json?(value) when is_boolean(value) or is_binary(value) or is_integer(value), do: true
-  def json?(value) when is_float(value), do: value == value
+  def json?(value) when is_float(value), do: true
   def json?(value) when is_list(value), do: Enum.all?(value, &json?/1)
 
   def json?(value) when is_map(value) do

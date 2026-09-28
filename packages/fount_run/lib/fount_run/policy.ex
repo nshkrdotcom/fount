@@ -42,11 +42,17 @@ defmodule FountRun.Policy do
         "limits" => limits
       }
 
-      {:ok, %__MODULE__{value: resolved, fingerprint: CanonicalJSON.hash(resolved), author: context.principal}}
+      {:ok,
+       %__MODULE__{
+         value: resolved,
+         fingerprint: CanonicalJSON.hash(resolved),
+         author: context.principal
+       }}
     end
   end
 
   defp gates(nil), do: {:error, {:missing_field, "gates"}}
+
   defp gates(value) do
     with {:ok, value} <- ClosedMap.normalize(value, @gate_keys),
          true <- Enum.sort(Map.keys(value)) == Enum.sort(@gate_keys),
@@ -62,6 +68,7 @@ defmodule FountRun.Policy do
   defp completion(_), do: {:error, :invalid_completion}
 
   defp principal(nil, _context, _label), do: {:ok, nil}
+
   defp principal(value, context, label) do
     with {:ok, value} <- ClosedMap.normalize(value, ~w(type id)),
          {:ok, principal} <- Principal.from_map(value),
@@ -74,6 +81,7 @@ defmodule FountRun.Policy do
   end
 
   defp fallback(nil, _context), do: {:ok, nil}
+
   defp fallback(value, context) do
     with {:ok, principal} <- principal(value, context, :fallback_approver),
          true <- principal.type == :human and ActorContext.owner?(context, principal) do
@@ -85,41 +93,60 @@ defmodule FountRun.Policy do
   end
 
   defp route_choice(nil, _context), do: {:error, {:missing_field, "route_choice"}}
+
   defp route_choice(value, context) do
     with {:ok, value} <- ClosedMap.normalize(value, @route_keys) do
-      case Map.get(value, "rule") do
-        "pause_on_material_tradeoff" ->
-          if Map.has_key?(value, "reviewer_id"), do: {:error, :unexpected_route_reviewer}, else: {:ok, value}
+      route_choice_rule(value, context)
+    end
+  end
 
-        "registered_reviewer" ->
-          reviewer = Map.get(value, "reviewer_id")
-          if ActorContext.allowed_route_reviewer?(context, reviewer), do: {:ok, value}, else: {:error, :unregistered_route_reviewer}
+  defp route_choice_rule(value, context) do
+    case Map.get(value, "rule") do
+      "pause_on_material_tradeoff" ->
+        if Map.has_key?(value, "reviewer_id"),
+          do: {:error, :unexpected_route_reviewer},
+          else: {:ok, value}
 
-        _ ->
-          {:error, :invalid_route_choice}
-      end
+      "registered_reviewer" ->
+        reviewer = Map.get(value, "reviewer_id")
+
+        if ActorContext.allowed_route_reviewer?(context, reviewer),
+          do: {:ok, value},
+          else: {:error, :unregistered_route_reviewer}
+
+      _ ->
+        {:error, :invalid_route_choice}
     end
   end
 
   defp limits(value) do
-    with {:ok, value} <- ClosedMap.normalize(value, @limit_keys) do
-      value = Map.merge(@defaults, value)
-      numeric = @limit_keys -- ["money"]
-
-      cond do
-        not Enum.all?(numeric, &(is_integer(Map.get(value, &1)) and Map.get(value, &1) >= 0)) -> {:error, :invalid_limits}
-        true -> with {:ok, money} <- money(Map.get(value, "money")), do: {:ok, Map.put(value, "money", money)}
-      end
+    with {:ok, value} <- ClosedMap.normalize(value, @limit_keys),
+         value = Map.merge(@defaults, value),
+         true <- valid_limits?(value),
+         {:ok, money} <- money(Map.get(value, "money")) do
+      {:ok, Map.put(value, "money", money)}
+    else
+      false -> {:error, :invalid_limits}
+      error -> error
     end
   end
 
+  defp valid_limits?(value) do
+    Enum.all?(@limit_keys -- ["money"], fn key ->
+      limit = Map.get(value, key)
+      is_integer(limit) and limit >= 0
+    end)
+  end
+
   defp money(nil), do: {:ok, nil}
+
   defp money(value) do
     with {:ok, value} <- ClosedMap.normalize(value, @money_keys),
          true <- Enum.sort(Map.keys(value)) == Enum.sort(@money_keys),
          currency when is_binary(currency) <- Map.get(value, "currency"),
          true <- Regex.match?(~r/^[A-Z]{3}$/, currency),
-         microunits when is_integer(microunits) and microunits >= 0 <- Map.get(value, "max_microunits") do
+         microunits when is_integer(microunits) and microunits >= 0 <-
+           Map.get(value, "max_microunits") do
       {:ok, value}
     else
       _ -> {:error, :invalid_money_limit}
@@ -129,7 +156,9 @@ defmodule FountRun.Policy do
   defp completion_consistency("candidate", nil, nil), do: :ok
   defp completion_consistency("candidate", _, _), do: {:error, :candidate_completion_has_approver}
   defp completion_consistency("accept", %Principal{}, _), do: :ok
-  defp completion_consistency("accept", nil, _), do: {:error, :accept_completion_requires_approver}
+
+  defp completion_consistency("accept", nil, _),
+    do: {:error, :accept_completion_requires_approver}
 
   defp principal_map(nil), do: nil
   defp principal_map(%Principal{} = principal), do: Principal.to_map(principal)

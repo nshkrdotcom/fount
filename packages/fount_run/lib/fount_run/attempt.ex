@@ -43,9 +43,14 @@ defmodule FountRun.Attempt do
   end
 
   defp optional_error(nil), do: :ok
-  defp optional_error(value) when is_map(value), do: if(ClosedMap.json?(value), do: :ok, else: {:error, :invalid_error})
+
+  defp optional_error(value) when is_map(value),
+    do: if(ClosedMap.json?(value), do: :ok, else: {:error, :invalid_error})
+
   defp optional_error(_), do: {:error, :invalid_error}
 
   defp optional_string(nil), do: :ok
-  defp optional_string(value), do: if(ClosedMap.nonempty_string(value), do: :ok, else: {:error, :invalid_string})
+
+  defp optional_string(value),
+    do: if(ClosedMap.nonempty_string(value), do: :ok, else: {:error, :invalid_string})
 end

@@ -32,4 +32,19 @@ defmodule Fount.Intelligence.PhaseSixteenFinalArchitectureTest do
       refute String.contains?(text, name), name
     end
   end
+
+  test "Run source cannot import host or provider packages" do
+    for module <- ~w(FountWorkshop AgentSessionManager SystemOneSDK Inference) do
+      source = "defmodule FountRun.DependencyProbe do\n  def run, do: #{module}.call()\nend"
+
+      assert Enum.any?(
+               Architecture.source_violations(
+                 source,
+                 "packages/fount_run/lib/dependency_probe.ex"
+               ),
+               &(&1["rule"] == "physical_package_graph")
+             ),
+             module
+    end
+  end
 end

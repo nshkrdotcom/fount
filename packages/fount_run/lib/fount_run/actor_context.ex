@@ -11,7 +11,14 @@ defmodule FountRun.ActorContext do
 
   @permissions [:read_run, :manage_run]
   @enforce_keys [:principal, :owner, :screenplay_id, :permissions]
-  defstruct [:principal, :owner, :screenplay_id, :permissions, approvers: MapSet.new(), route_reviewers: MapSet.new()]
+  defstruct [
+    :principal,
+    :owner,
+    :screenplay_id,
+    :permissions,
+    approvers: MapSet.new(),
+    route_reviewers: MapSet.new()
+  ]
 
   @type permission :: :read_run | :manage_run
   @type t :: %__MODULE__{
@@ -23,8 +30,17 @@ defmodule FountRun.ActorContext do
           route_reviewers: MapSet.t(String.t())
         }
 
-  @spec new(Principal.t(), Principal.t(), String.t(), [permission()], keyword()) :: {:ok, t()} | {:error, term()}
-  def new(%Principal{} = principal, %Principal{type: :human} = owner, screenplay_id, permissions, opts \\ []) do
+  @spec new(Principal.t(), Principal.t(), String.t(), [permission()], keyword()) ::
+          {:ok, t()} | {:error, term()}
+  def new(principal, owner, screenplay_id, permissions, opts \\ [])
+
+  def new(
+        %Principal{} = principal,
+        %Principal{type: :human} = owner,
+        screenplay_id,
+        permissions,
+        opts
+      ) do
     with true <- FountRun.ClosedMap.uuid_string(screenplay_id),
          {:ok, permissions} <- normalize_permissions(permissions),
          {:ok, approvers} <- normalize_principals(Keyword.get(opts, :approvers, [])),
@@ -49,7 +65,8 @@ defmodule FountRun.ActorContext do
   def new(_, _, _, _, _), do: {:error, :invalid_actor_context}
 
   @spec authorize(t(), permission(), String.t()) :: :ok | {:error, :unauthorized}
-  def authorize(%__MODULE__{} = context, permission, screenplay_id) when permission in @permissions do
+  def authorize(%__MODULE__{} = context, permission, screenplay_id)
+      when permission in @permissions do
     allowed =
       screenplay_id == context.screenplay_id and
         (MapSet.member?(context.permissions, permission) or
@@ -59,7 +76,8 @@ defmodule FountRun.ActorContext do
   end
 
   @spec owner?(t(), Principal.t()) :: boolean()
-  def owner?(%__MODULE__{owner: owner}, %Principal{} = principal), do: identity(owner) == identity(principal)
+  def owner?(%__MODULE__{owner: owner}, %Principal{} = principal),
+    do: identity(owner) == identity(principal)
 
   @spec allowed_approver?(t(), Principal.t()) :: boolean()
   def allowed_approver?(%__MODULE__{approvers: approvers}, %Principal{} = principal),

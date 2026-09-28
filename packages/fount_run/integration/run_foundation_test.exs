@@ -10,31 +10,36 @@ defmodule FountRun.FoundationIntegrationTest do
     use Ecto.Repo, otp_app: :fount_run, adapter: Ecto.Adapters.Postgres
   end
 
+  defmodule RaceRepoOne do
+    use Ecto.Repo, otp_app: :fount_run, adapter: Ecto.Adapters.Postgres
+  end
+
+  defmodule RaceRepoTwo do
+    use Ecto.Repo, otp_app: :fount_run, adapter: Ecto.Adapters.Postgres
+  end
+
   setup do
     url = System.fetch_env!("FOUNT_DATABASE_URL")
     prefix = "phase02_#{String.replace(ID.v4(), "-", "")}"
     {:ok, admin} = Postgrex.start_link(Ecto.Repo.Supervisor.parse_url(url))
     Postgrex.query!(admin, ~s(CREATE SCHEMA "#{prefix}"), [])
+    GenServer.stop(admin)
+
+    on_exit(fn ->
+      {:ok, cleanup} = Postgrex.start_link(Ecto.Repo.Supervisor.parse_url(url))
+      Postgrex.query!(cleanup, ~s(DROP SCHEMA IF EXISTS "#{prefix}" CASCADE), [])
+      GenServer.stop(cleanup)
+    end)
 
     start_supervised!(
       {Repo,
-       url: url,
-       pool_size: 2,
-       parameters: [search_path: prefix],
-       migration_default_prefix: prefix}
+       url: url, pool_size: 2, parameters: [search_path: prefix], migration_default_prefix: prefix}
     )
 
     Ecto.Migrator.run(Repo, Persistence.migrations_path(), :up, all: true)
     Ecto.Migrator.run(Repo, FountRun.migrations_path(), :up, all: true)
 
-    on_exit(fn ->
-      if Process.alive?(admin) do
-        Postgrex.query!(admin, ~s(DROP SCHEMA IF EXISTS "#{prefix}" CASCADE), [])
-        GenServer.stop(admin)
-      end
-    end)
-
-    %{repo: Repo}
+    %{repo: Repo, prefix: prefix}
   end
 
   test "Core then Run migrations install every prefixed table", %{repo: repo} do
@@ -64,11 +69,40 @@ defmodule FountRun.FoundationIntegrationTest do
     assert first["id"] == replay["id"]
     assert first["current_plan_version"] == 1
     assert first["current_policy_version"] == 1
-    assert {:error, :idempotency_conflict} = FountRun.start_run(repo, put_in(attrs, ["goal"], "Different"), context)
-    assert {:error, :invalid_start_options} = FountRun.start_run(repo, Map.put(attrs, "client_idempotency_key", "key-options"), context, future: true)
+
+    for {table, id_column} <- [
+          {"fount_runs", "id"},
+          {"fount_run_plans", "run_id"},
+          {"fount_run_policies", "run_id"}
+        ] do
+      assert [[1]] =
+               SQL.query!(
+                 repo,
+                 "SELECT count(*) FROM #{table} WHERE #{id_column}=$1::text::uuid",
+                 [first["id"]],
+                 log: false
+               ).rows
+    end
+
+    assert {:error, {:unknown_field, "owner_id"}} =
+             FountRun.start_run(repo, Map.put(attrs, "owner_id", "forged-owner"), context)
+
+    assert {:error, :idempotency_conflict} =
+             FountRun.start_run(repo, put_in(attrs, ["goal"], "Different"), context)
+
+    assert {:error, :invalid_start_options} =
+             FountRun.start_run(
+               repo,
+               Map.put(attrs, "client_idempotency_key", "key-options"),
+               context,
+               future: true
+             )
 
     {:ok, service} = Principal.new(:service, "service-starter")
-    {:ok, service_context} = ActorContext.new(service, owner, screenplay, [:read_run, :manage_run], approvers: [service])
+
+    {:ok, service_context} =
+      ActorContext.new(service, owner, screenplay, [:read_run, :manage_run], approvers: [service])
+
     assert {:error, :idempotency_conflict} = FountRun.start_run(repo, attrs, service_context)
 
     assert {:ok, loaded} = FountRun.get_run(repo, first["id"], context)
@@ -77,15 +111,30 @@ defmodule FountRun.FoundationIntegrationTest do
     assert listed["id"] == first["id"]
 
     {:ok, other_owner} = Principal.new(:human, "other-owner")
-    {:ok, other_context} = ActorContext.new(other_owner, other_owner, screenplay, [:read_run, :manage_run])
+
+    {:ok, other_context} =
+      ActorContext.new(other_owner, other_owner, screenplay, [:read_run, :manage_run])
+
     assert {:error, :unauthorized} = FountRun.get_run(repo, first["id"], other_context)
     assert {:ok, []} = FountRun.list_runs(repo, %{}, other_context)
 
     {:ok, read_only} = ActorContext.new(owner, owner, screenplay, [:read_run])
-    assert {:error, :unauthorized} = FountRun.start_run(repo, start_attrs(screenplay, revision, "key-read-only"), read_only)
+
+    assert {:error, :unauthorized} =
+             FountRun.start_run(
+               repo,
+               start_attrs(screenplay, revision, "key-read-only"),
+               read_only
+             )
+
     assert {:error, :invalid_run_id} = FountRun.get_run(repo, "not-a-uuid", context)
 
-    assert SQL.query!(repo, "SELECT count(*) FROM fount_run_events WHERE run_id=$1::text::uuid", [first["id"]], log: false).rows == [[1]]
+    assert SQL.query!(
+             repo,
+             "SELECT count(*) FROM fount_run_events WHERE run_id=$1::text::uuid",
+             [first["id"]],
+             log: false
+           ).rows == [[1]]
   end
 
   test "plan and policy snapshots append atomically while history stays immutable", %{repo: repo} do
@@ -109,7 +158,11 @@ defmodule FountRun.FoundationIntegrationTest do
     assert plan2["version"] == 2
 
     assert {:ok, policy2} =
-             FountRun.Persistence.append_policy_snapshot(repo, run["id"], attrs["policy"], context,
+             FountRun.Persistence.append_policy_snapshot(
+               repo,
+               run["id"],
+               attrs["policy"],
+               context,
                expected_version: 1
              )
 
@@ -118,6 +171,21 @@ defmodule FountRun.FoundationIntegrationTest do
     assert current["current_plan_version"] == 2
     assert current["current_policy_version"] == 2
     assert current["plan"]["goal"] == "Clarified opening goal"
+    assert current["plan"]["fingerprint"] == plan2["fingerprint"]
+    assert current["policy"]["fingerprint"] == policy2["fingerprint"]
+
+    assert {:ok, canonical_plan} = FountRun.Plan.new(next_plan, owner)
+    assert canonical_plan.fingerprint == plan2["fingerprint"]
+    assert {:ok, canonical_policy} = FountRun.Policy.new(attrs["policy"], context)
+    assert canonical_policy.fingerprint == policy2["fingerprint"]
+
+    assert [[1]] =
+             SQL.query!(
+               repo,
+               "SELECT count(*) FROM fount_run_plans WHERE run_id=$1::text::uuid AND version=1",
+               [run["id"]],
+               log: false
+             ).rows
 
     assert_raise Postgrex.Error, fn ->
       SQL.query!(
@@ -152,9 +220,16 @@ defmodule FountRun.FoundationIntegrationTest do
              )
 
     {:ok, service} = Principal.new(:service, "planner-service")
-    {:ok, service_context} = ActorContext.new(service, owner, screenplay, [:read_run, :manage_run], approvers: [service])
+
+    {:ok, service_context} =
+      ActorContext.new(service, owner, screenplay, [:read_run, :manage_run], approvers: [service])
+
     assert {:error, :owner_required} =
-             FountRun.Persistence.append_plan_snapshot(repo, run["id"], next_plan, service_context,
+             FountRun.Persistence.append_plan_snapshot(
+               repo,
+               run["id"],
+               next_plan,
+               service_context,
                expected_version: 2
              )
   end
@@ -163,7 +238,9 @@ defmodule FountRun.FoundationIntegrationTest do
     {screenplay, revision} = seed_core(repo)
     {:ok, owner} = Principal.new(:human, "owner")
     {:ok, context} = ActorContext.new(owner, owner, screenplay, [:read_run, :manage_run])
-    {:ok, run} = FountRun.start_run(repo, start_attrs(screenplay, revision, "key-decision"), context)
+
+    {:ok, run} =
+      FountRun.start_run(repo, start_attrs(screenplay, revision, "key-decision"), context)
 
     assert {:ok, decision} =
              FountRun.Persistence.put_pending_decision(
@@ -192,21 +269,50 @@ defmodule FountRun.FoundationIntegrationTest do
              )
 
     assert same["id"] == decision["id"]
-    assert {:ok, resolved} = FountRun.Persistence.resolve_decision(repo, decision["id"], %{"choice" => "a"}, context)
+
+    assert {:ok, resolved} =
+             FountRun.Persistence.resolve_decision(
+               repo,
+               decision["id"],
+               %{"choice" => "a"},
+               context
+             )
+
     assert resolved["status"] == "resolved"
-    assert {:ok, _} = FountRun.Persistence.resolve_decision(repo, decision["id"], %{"choice" => "a"}, context)
-    assert {:error, :already_resolved} = FountRun.Persistence.resolve_decision(repo, decision["id"], %{"choice" => "b"}, context)
+
+    assert {:ok, _} =
+             FountRun.Persistence.resolve_decision(
+               repo,
+               decision["id"],
+               %{"choice" => "a"},
+               context
+             )
+
+    assert {:error, :already_resolved} =
+             FountRun.Persistence.resolve_decision(
+               repo,
+               decision["id"],
+               %{"choice" => "b"},
+               context
+             )
 
     assert_raise Postgrex.Error, fn ->
-      SQL.query!(repo, "UPDATE fount_run_decisions SET response='{}'::jsonb WHERE id=$1::text::uuid", [decision["id"]], log: false)
+      SQL.query!(
+        repo,
+        "UPDATE fount_run_decisions SET response='{}'::jsonb WHERE id=$1::text::uuid",
+        [decision["id"]],
+        log: false
+      )
     end
   end
 
-  test "competing decision submissions resolve exactly once", %{repo: repo} do
+  test "competing decision submissions resolve exactly once", %{repo: repo, prefix: prefix} do
     {screenplay, revision} = seed_core(repo)
     {:ok, owner} = Principal.new(:human, "owner")
     {:ok, context} = ActorContext.new(owner, owner, screenplay, [:read_run, :manage_run])
-    {:ok, run} = FountRun.start_run(repo, start_attrs(screenplay, revision, "key-decision-race"), context)
+
+    {:ok, run} =
+      FountRun.start_run(repo, start_attrs(screenplay, revision, "key-decision-race"), context)
 
     {:ok, decision} =
       FountRun.Persistence.put_pending_decision(
@@ -223,24 +329,48 @@ defmodule FountRun.FoundationIntegrationTest do
 
     parent = self()
 
+    for race_repo <- [RaceRepoOne, RaceRepoTwo] do
+      start_supervised!(
+        {race_repo,
+         url: System.fetch_env!("FOUNT_DATABASE_URL"),
+         pool_size: 1,
+         parameters: [search_path: prefix]}
+      )
+    end
+
     tasks =
-      for choice <- ["a", "b"] do
+      for {choice, race_repo} <- Enum.zip(["a", "b"], [RaceRepoOne, RaceRepoTwo]) do
         Task.async(fn ->
-          send(parent, {:ready, self()})
+          backend_pid =
+            race_repo
+            |> SQL.query!("SELECT pg_backend_pid()", [], log: false)
+            |> Map.fetch!(:rows)
+            |> hd()
+            |> hd()
+
+          send(parent, {:ready, self(), backend_pid})
+
           receive do
             :go -> :ok
           end
-          FountRun.Persistence.resolve_decision(repo, decision["id"], %{"choice" => choice}, context)
+
+          FountRun.Persistence.resolve_decision(
+            race_repo,
+            decision["id"],
+            %{"choice" => choice},
+            context
+          )
         end)
       end
 
-    pids =
+    ready =
       for _ <- tasks do
-        assert_receive {:ready, pid}, 1_000
-        pid
+        assert_receive {:ready, pid, backend_pid}, 1_000
+        {pid, backend_pid}
       end
 
-    Enum.each(pids, &send(&1, :go))
+    assert ready |> Enum.map(&elem(&1, 1)) |> Enum.uniq() |> length() == 2
+    Enum.each(ready, fn {pid, _backend_pid} -> send(pid, :go) end)
     results = Enum.map(tasks, &Task.await(&1, 5_000))
 
     assert Enum.count(results, &match?({:ok, %{"status" => "resolved"}}, &1)) == 1
@@ -259,7 +389,9 @@ defmodule FountRun.FoundationIntegrationTest do
     assert is_binary(response_fingerprint) and byte_size(response_fingerprint) == 64
   end
 
-  test "approval attempts preserve exact review and approval identity without advancing canon", %{repo: repo} do
+  test "approval attempts preserve exact review and approval identity without advancing canon", %{
+    repo: repo
+  } do
     {screenplay, revision} = seed_core(repo)
     {:ok, owner} = Principal.new(:human, "owner")
     {:ok, context} = ActorContext.new(owner, owner, screenplay, [:read_run, :manage_run])
@@ -279,8 +411,12 @@ defmodule FountRun.FoundationIntegrationTest do
       "fencing_token" => run["current_fencing_token"]
     }
 
-    assert {:ok, attempt} = FountRun.Persistence.create_approval_attempt(repo, run["id"], attempt_attrs, context)
-    assert {:ok, same_attempt} = FountRun.Persistence.create_approval_attempt(repo, run["id"], attempt_attrs, context)
+    assert {:ok, attempt} =
+             FountRun.Persistence.create_approval_attempt(repo, run["id"], attempt_attrs, context)
+
+    assert {:ok, same_attempt} =
+             FountRun.Persistence.create_approval_attempt(repo, run["id"], attempt_attrs, context)
+
     assert same_attempt["id"] == attempt["id"]
 
     assert {:error, :idempotency_conflict} =
@@ -303,7 +439,13 @@ defmodule FountRun.FoundationIntegrationTest do
       )
 
     assert {:ok, reviewed} =
-             FountRun.Persistence.record_approval_review(repo, attempt["id"], review, "approve", context)
+             FountRun.Persistence.record_approval_review(
+               repo,
+               attempt["id"],
+               review,
+               "approve",
+               context
+             )
 
     assert reviewed["outcome"] == "reviewed"
 
@@ -332,10 +474,45 @@ defmodule FountRun.FoundationIntegrationTest do
 
     assert ready["outcome"] == "ready"
     assert ready["approval_id"] == approval.id
+
     assert {:error, :acceptance_bridge_required} =
-             FountRun.Persistence.record_approval_outcome(repo, attempt["id"], "accepted", nil, context)
+             FountRun.Persistence.record_approval_outcome(
+               repo,
+               attempt["id"],
+               "accepted",
+               nil,
+               context
+             )
 
     assert SQL.query!(repo, "SELECT count(*) FROM acceptances", [], log: false).rows == [[0]]
+
+    for outcome <- ~w(rejected invalid fenced failed unknown) do
+      attrs = Map.put(attempt_attrs, "callback_operation_id", "approval-op-#{outcome}")
+
+      assert {:ok, retained} =
+               FountRun.Persistence.create_approval_attempt(repo, run["id"], attrs, context)
+
+      assert {:ok, recorded} =
+               FountRun.Persistence.record_approval_outcome(
+                 repo,
+                 retained["id"],
+                 outcome,
+                 "fixture_reason",
+                 context
+               )
+
+      assert recorded["outcome"] == outcome
+
+      assert [[^outcome]] =
+               SQL.query!(
+                 repo,
+                 "SELECT outcome FROM fount_run_approval_attempts WHERE id=$1::text::uuid",
+                 [retained["id"]],
+                 log: false
+               ).rows
+    end
+
+    assert [[0]] = SQL.query!(repo, "SELECT count(*) FROM acceptances", [], log: false).rows
 
     assert_raise Postgrex.Error, fn ->
       SQL.query!(
@@ -345,13 +522,26 @@ defmodule FountRun.FoundationIntegrationTest do
         log: false
       )
     end
+
+    assert_raise Postgrex.Error, fn ->
+      SQL.query!(
+        repo,
+        "UPDATE fount_run_approval_attempts SET approval_payload='{}'::jsonb WHERE id=$1::text::uuid",
+        [attempt["id"]],
+        log: false
+      )
+    end
   end
 
-  test "step lease, usage and delivery identities survive reload and reject conflicting replay", %{repo: repo} do
+  test "step lease, usage and delivery identities survive reload and reject conflicting replay",
+       %{repo: repo} do
     {screenplay, revision} = seed_core(repo)
     {:ok, owner} = Principal.new(:human, "owner")
     {:ok, context} = ActorContext.new(owner, owner, screenplay, [:read_run, :manage_run])
-    {:ok, run} = FountRun.start_run(repo, start_attrs(screenplay, revision, "key-storage"), context)
+
+    {:ok, run} =
+      FountRun.start_run(repo, start_attrs(screenplay, revision, "key-storage"), context)
+
     candidate = seed_candidate(repo, screenplay, revision)
 
     step_attrs = %{
@@ -364,10 +554,19 @@ defmodule FountRun.FoundationIntegrationTest do
     }
 
     assert {:ok, step} = FountRun.Persistence.create_step(repo, run["id"], step_attrs, context)
-    assert {:ok, same_step} = FountRun.Persistence.create_step(repo, run["id"], step_attrs, context)
+
+    assert {:ok, same_step} =
+             FountRun.Persistence.create_step(repo, run["id"], step_attrs, context)
+
     assert same_step["id"] == step["id"]
+
     assert {:error, :idempotency_conflict} =
-             FountRun.Persistence.create_step(repo, run["id"], Map.put(step_attrs, "stage", "check"), context)
+             FountRun.Persistence.create_step(
+               repo,
+               run["id"],
+               Map.put(step_attrs, "stage", "check"),
+               context
+             )
 
     assert {:ok, lease} =
              FountRun.Persistence.store_active_lease(
@@ -392,8 +591,12 @@ defmodule FountRun.FoundationIntegrationTest do
       "knowledge_state" => "unknown"
     }
 
-    assert {:ok, usage} = FountRun.Persistence.reserve_usage(repo, run["id"], usage_attrs, context)
-    assert {:ok, same_usage} = FountRun.Persistence.reserve_usage(repo, run["id"], usage_attrs, context)
+    assert {:ok, usage} =
+             FountRun.Persistence.reserve_usage(repo, run["id"], usage_attrs, context)
+
+    assert {:ok, same_usage} =
+             FountRun.Persistence.reserve_usage(repo, run["id"], usage_attrs, context)
+
     assert same_usage["id"] == usage["id"]
 
     assert {:ok, settled} =
@@ -411,12 +614,68 @@ defmodule FountRun.FoundationIntegrationTest do
              )
 
     assert settled["settled_cost_microunits"] == 1250
-    assert {:error, :already_settled} =
-             FountRun.Persistence.settle_usage(repo, usage["id"], %{"settled_quantity" => 2}, context)
 
-    delivery_attrs = %{"candidate_id" => candidate.id, "format" => "fountain", "options" => %{"mode" => "review"}}
-    assert {:ok, delivery} = FountRun.Persistence.create_delivery(repo, run["id"], delivery_attrs, context)
-    assert {:ok, same_delivery} = FountRun.Persistence.create_delivery(repo, run["id"], delivery_attrs, context)
+    assert {:ok, settled_replay} =
+             FountRun.Persistence.settle_usage(
+               repo,
+               usage["id"],
+               %{
+                 "settled_quantity" => 1,
+                 "settled_cost_microunits" => 1250,
+                 "provider_request_id" => "provider-1",
+                 "knowledge_state" => "known",
+                 "reconciliation_state" => "settled"
+               },
+               context
+             )
+
+    assert settled_replay == settled
+
+    assert {:error, :already_settled} =
+             FountRun.Persistence.settle_usage(
+               repo,
+               usage["id"],
+               %{"settled_quantity" => 2},
+               context
+             )
+
+    delivery_attrs = %{
+      "candidate_id" => candidate.id,
+      "format" => "fountain",
+      "options" => %{"mode" => "review"}
+    }
+
+    assert {:error, :invalid_delivery} =
+             FountRun.Persistence.create_delivery(
+               repo,
+               run["id"],
+               Map.delete(delivery_attrs, "candidate_id"),
+               context
+             )
+
+    assert {:error, :invalid_delivery} =
+             FountRun.Persistence.create_delivery(
+               repo,
+               run["id"],
+               Map.put(delivery_attrs, "accepted_revision_id", ID.v4()),
+               context
+             )
+
+    assert {:ok, delivery} =
+             FountRun.Persistence.create_delivery(repo, run["id"], delivery_attrs, context)
+
+    assert_raise Postgrex.Error, fn ->
+      SQL.query!(
+        repo,
+        "UPDATE fount_run_deliveries SET candidate_id=NULL WHERE id=$1::text::uuid",
+        [delivery["id"]],
+        log: false
+      )
+    end
+
+    assert {:ok, same_delivery} =
+             FountRun.Persistence.create_delivery(repo, run["id"], delivery_attrs, context)
+
     assert same_delivery["id"] == delivery["id"]
 
     assert {:ok, ready} =
@@ -432,7 +691,8 @@ defmodule FountRun.FoundationIntegrationTest do
              )
 
     assert ready["state"] == "ready"
-    assert {:error, :already_resolved} =
+
+    assert {:ok, ready_replay} =
              FountRun.Persistence.record_delivery_result(
                repo,
                delivery["id"],
@@ -443,13 +703,29 @@ defmodule FountRun.FoundationIntegrationTest do
                },
                context
              )
+
+    assert ready_replay == ready
+
+    assert {:error, :already_resolved} =
+             FountRun.Persistence.record_delivery_result(
+               repo,
+               delivery["id"],
+               %{
+                 "state" => "ready",
+                 "output_checksum" => String.duplicate("e", 64),
+                 "output_location" => "artifact://review/fountain"
+               },
+               context
+             )
   end
 
   test "attempt storage is controlled and events retain step/attempt identity", %{repo: repo} do
     {screenplay, revision} = seed_core(repo)
     {:ok, owner} = Principal.new(:human, "owner")
     {:ok, context} = ActorContext.new(owner, owner, screenplay, [:read_run, :manage_run])
-    {:ok, run} = FountRun.start_run(repo, start_attrs(screenplay, revision, "attempt-run"), context)
+
+    {:ok, run} =
+      FountRun.start_run(repo, start_attrs(screenplay, revision, "attempt-run"), context)
 
     {:ok, step} =
       FountRun.Persistence.create_step(
@@ -478,9 +754,14 @@ defmodule FountRun.FoundationIntegrationTest do
       "provider_request_id" => "request-1"
     }
 
-    assert {:ok, finished} = FountRun.Persistence.finish_attempt(repo, step["id"], 1, result, context)
+    assert {:ok, finished} =
+             FountRun.Persistence.finish_attempt(repo, step["id"], 1, result, context)
+
     assert finished["outcome"] == "unknown"
-    assert {:ok, replay_finished} = FountRun.Persistence.finish_attempt(repo, step["id"], 1, result, context)
+
+    assert {:ok, replay_finished} =
+             FountRun.Persistence.finish_attempt(repo, step["id"], 1, result, context)
+
     assert replay_finished["outcome"] == "unknown"
 
     assert SQL.query!(
@@ -497,8 +778,13 @@ defmodule FountRun.FoundationIntegrationTest do
     other_candidate = seed_candidate(repo, other_screenplay, other_revision)
     {:ok, owner} = Principal.new(:human, "owner")
     {:ok, context} = ActorContext.new(owner, owner, screenplay, [:read_run, :manage_run])
-    {:ok, run} = FountRun.start_run(repo, start_attrs(screenplay, revision, "key-cross-1"), context)
-    {:ok, run2} = FountRun.start_run(repo, start_attrs(screenplay, revision, "key-cross-2"), context)
+
+    {:ok, run} =
+      FountRun.start_run(repo, start_attrs(screenplay, revision, "key-cross-1"), context)
+
+    {:ok, run2} =
+      FountRun.start_run(repo, start_attrs(screenplay, revision, "key-cross-2"), context)
+
     {:ok, foreign_step} =
       FountRun.Persistence.create_step(
         repo,
@@ -506,6 +792,103 @@ defmodule FountRun.FoundationIntegrationTest do
         %{"stage" => "write", "idempotency_key" => "foreign-step", "request" => %{}},
         context
       )
+
+    {:ok, own_step} =
+      FountRun.Persistence.create_step(
+        repo,
+        run["id"],
+        %{"stage" => "write", "idempotency_key" => "own-step", "request" => %{}},
+        context
+      )
+
+    attrs = start_attrs(screenplay, revision, "unused")
+
+    assert {:ok, _} =
+             FountRun.Persistence.append_plan_snapshot(
+               repo,
+               run2["id"],
+               Map.drop(attrs, ["policy", "client_idempotency_key"]),
+               context,
+               expected_version: 1
+             )
+
+    assert {:ok, _} =
+             FountRun.Persistence.append_policy_snapshot(
+               repo,
+               run2["id"],
+               attrs["policy"],
+               context,
+               expected_version: 1
+             )
+
+    for column <- ["plan_version", "policy_version"] do
+      assert_raise Postgrex.Error, fn ->
+        SQL.query!(
+          repo,
+          "UPDATE fount_run_steps SET #{column}=2 WHERE id=$1::text::uuid",
+          [own_step["id"]],
+          log: false
+        )
+      end
+    end
+
+    assert {:error, :storage_error} =
+             FountRun.Persistence.append_event(
+               repo,
+               run["id"],
+               "foreign_step",
+               %{},
+               context,
+               step_id: foreign_step["id"]
+             )
+
+    usage_attrs = %{
+      "operation_id" => "cross-link",
+      "step_id" => foreign_step["id"],
+      "resource" => "inference_calls",
+      "reserved_quantity" => 1,
+      "knowledge_state" => "unknown"
+    }
+
+    assert {:error, :storage_error} =
+             FountRun.Persistence.reserve_usage(repo, run["id"], usage_attrs, context)
+
+    assert {:ok, usage} =
+             FountRun.Persistence.reserve_usage(
+               repo,
+               run["id"],
+               %{usage_attrs | "step_id" => own_step["id"]},
+               context
+             )
+
+    for {table, column, value, id} <- [
+          {"fount_runs", "status", "invalid", run["id"]},
+          {"fount_run_steps", "stage", "invalid", own_step["id"]},
+          {"fount_run_usage", "knowledge_state", "invalid", usage["id"]}
+        ] do
+      assert_raise Postgrex.Error, fn ->
+        SQL.query!(repo, "UPDATE #{table} SET #{column}=$2 WHERE id=$1::text::uuid", [id, value],
+          log: false
+        )
+      end
+    end
+
+    assert_raise Postgrex.Error, fn ->
+      SQL.query!(
+        repo,
+        "UPDATE fount_run_usage SET reserved_quantity=-1 WHERE id=$1::text::uuid",
+        [usage["id"]],
+        log: false
+      )
+    end
+
+    assert [[1, 1, "write"]] =
+             SQL.query!(
+               repo,
+               "SELECT plan_version,policy_version,stage FROM fount_run_steps WHERE id=$1::text::uuid",
+               [own_step["id"]],
+               log: false
+             ).rows
 
     assert_raise Postgrex.Error, fn ->
       SQL.query!(
@@ -530,7 +913,12 @@ defmodule FountRun.FoundationIntegrationTest do
     screenplay = ID.v4()
     revision = ID.v4()
 
-    SQL.query!(repo, "INSERT INTO screenplays(id,key) VALUES($1::text::uuid,$2)", [screenplay, "run-#{screenplay}"], log: false)
+    SQL.query!(
+      repo,
+      "INSERT INTO screenplays(id,key) VALUES($1::text::uuid,$2)",
+      [screenplay, "run-#{screenplay}"],
+      log: false
+    )
 
     SQL.query!(
       repo,
@@ -539,7 +927,13 @@ defmodule FountRun.FoundationIntegrationTest do
       log: false
     )
 
-    SQL.query!(repo, "UPDATE screenplays SET head_revision_id=$2::text::uuid WHERE id=$1::text::uuid", [screenplay, revision], log: false)
+    SQL.query!(
+      repo,
+      "UPDATE screenplays SET head_revision_id=$2::text::uuid WHERE id=$1::text::uuid",
+      [screenplay, revision],
+      log: false
+    )
+
     {screenplay, revision}
   end
 
@@ -571,7 +965,12 @@ defmodule FountRun.FoundationIntegrationTest do
       log: false
     )
 
-    %{id: candidate, result_revision_id: result_revision, content_hash: content_hash, check_set_fingerprint: check_set_fingerprint}
+    %{
+      id: candidate,
+      result_revision_id: result_revision,
+      content_hash: content_hash,
+      check_set_fingerprint: check_set_fingerprint
+    }
   end
 
   defp start_attrs(screenplay, revision, key, completion \\ "candidate", owner \\ nil) do

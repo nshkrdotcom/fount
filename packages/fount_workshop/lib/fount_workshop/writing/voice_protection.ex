@@ -9,10 +9,13 @@ defmodule FountWorkshop.Writing.VoiceProtection do
   def validate(model, request) when is_map(request) do
     options = request["options"] || %{}
 
-    with :ok <- validate_text_list(Map.get(options, "style_preferences", []), :invalid_style_preferences),
-         :ok <- validate_targets(model, exemplar_targets(request)),
-         :ok <- validate_passages(model, Map.get(options, "protected_text", [])) do
-      :ok
+    with :ok <-
+           validate_text_list(
+             Map.get(options, "style_preferences", []),
+             :invalid_style_preferences
+           ),
+         :ok <- validate_targets(model, exemplar_targets(request)) do
+      validate_passages(model, Map.get(options, "protected_text", []))
     end
   end
 
@@ -63,7 +66,10 @@ defmodule FountWorkshop.Writing.VoiceProtection do
   defp exemplar_targets(%{"options" => options, "workflow" => workflow}) when is_map(options) do
     common = Map.get(options, "voice_exemplars", [])
     character = if workflow == "character", do: Map.get(options, "exemplar_targets", []), else: []
-    Enum.uniq(common ++ character)
+
+    if is_list(common) and is_list(character),
+      do: Enum.uniq(common ++ character),
+      else: :invalid
   end
 
   defp exemplar_targets(_), do: []
@@ -99,18 +105,19 @@ defmodule FountWorkshop.Writing.VoiceProtection do
   defp validate_passages(model, passages) when is_list(passages) and passages != [] do
     with true <- Enum.all?(passages, &valid_passage_shape?/1) or {:error, :invalid_protected_text},
          true <- unique_ids?(passages) or {:error, :duplicate_protected_text_id} do
-      constraints = Enum.map(passages, &pin_constraint/1)
-
-      case Constraints.deterministic(model, model, constraints) do
-        checks when is_list(checks) ->
-          if Enum.all?(checks, &(&1["status"] == "pass")),
-            do: :ok,
-            else: {:error, :protected_text_not_exactly_located}
-      end
+      verify_exact_passages(model, passages)
     end
   end
 
   defp validate_passages(_, _), do: {:error, :invalid_protected_text}
+
+  defp verify_exact_passages(model, passages) do
+    checks = Constraints.deterministic(model, model, Enum.map(passages, &pin_constraint/1))
+
+    if Enum.all?(checks, &(&1["status"] == "pass")),
+      do: :ok,
+      else: {:error, :protected_text_not_exactly_located}
+  end
 
   defp valid_passage_shape?(passage) when is_map(passage) do
     Map.keys(passage) -- ~w(id target text) == [] and
@@ -138,7 +145,10 @@ defmodule FountWorkshop.Writing.VoiceProtection do
 
   defp unique_constraint_ids(constraints) do
     ids = Enum.map(constraints, & &1["id"])
-    if Enum.all?(ids, &valid_text?/1) and length(ids) == length(Enum.uniq(ids)), do: :ok, else: {:error, :duplicate_constraint_id}
+
+    if Enum.all?(ids, &valid_text?/1) and length(ids) == length(Enum.uniq(ids)),
+      do: :ok,
+      else: {:error, :duplicate_constraint_id}
   end
 
   defp unique_ids?(values) do

@@ -12,8 +12,8 @@ defmodule FountWorkshop.PassTest do
     )
   end
 
-  test "all six profiles load from their real assets" do
-    assert length(Pass.profiles()) == 6
+  test "all nine profiles load from their real assets" do
+    assert length(Pass.profiles()) == 9
 
     for id <- Pass.profiles() do
       assert {:ok, %{"id" => ^id, "goal" => goal, "creative_prompt" => prompt}} = Pass.profile(id)

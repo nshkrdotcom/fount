@@ -255,94 +255,7 @@ defmodule FountWorkshop.Writing.Preparation do
       )
       |> Jason.decode!()
 
-    requests =
-      case opts["profile"] do
-        "dialogue_subtext" ->
-          [
-            request("dialogue", "dialogue", %{
-              "selection" => context.selection,
-              "lenses" => ~w(subtext exposition responsiveness)
-            })
-          ]
-
-        "action_visual" ->
-          [
-            request("action", "action", %{
-              "selection" => context.selection,
-              "direction" => opts["direction"] || profile["goal"]
-            })
-          ]
-
-        "sound_space" ->
-          [
-            request("sound-space-action", "action", %{
-              "selection" => context.selection,
-              "direction" => opts["direction"] || profile["goal"]
-            }),
-            request("sound-space-function", "scene_mechanics", %{
-              "selection" => context.selection,
-              "concern" =>
-                "How offscreen sound, absence, spatial relationship, withheld information or object placement can change the scene without forcing explanatory dialogue."
-            })
-          ]
-
-        "cinematic_rhythm" ->
-          [
-            request("cinematic-rhythm", "scene_mechanics", %{
-              "selection" => context.selection,
-              "concern" =>
-                "Playable timing, intentional stillness, entrances/exits, held beats and performance rhythm. Silence is not automatically a defect."
-            }),
-            request("cinematic-rhythm-action", "action", %{
-              "selection" => context.selection,
-              "direction" => opts["direction"] || profile["goal"]
-            })
-          ]
-
-        "transition" ->
-          [
-            request("transition-function", "scene_mechanics", %{
-              "selection" => context.selection,
-              "concern" =>
-                "Transition and juxtaposition opportunities at scene boundaries: what image, sound, absence or unresolved action carries into the next scene without rewriting it into explanation."
-            })
-          ]
-
-        "brevity" ->
-          [
-            request("rhythm", "dialogue", %{
-              "selection" => context.selection,
-              "lenses" => ~w(repetition rhythm)
-            }),
-            request("function", "scene_mechanics", %{"selection" => context.selection})
-          ]
-
-        "dry_comedy" ->
-          [
-            request("comedy-dialogue", "dialogue", %{
-              "selection" => context.selection,
-              "lenses" => ~w(subtext tactic responsiveness)
-            }),
-            request("comedy-action", "action", %{"selection" => context.selection})
-          ]
-
-        "tension" ->
-          [
-            request("tension-functions", "scene_mechanics", %{
-              "selection" => context.selection,
-              "concern" =>
-                "Sources of resistance, stakes, uncertainty, reversals and meaningful character choice. Silence and direct conflict are both possible."
-            })
-          ]
-
-        "custom" ->
-          [
-            request("custom-mechanics", "scene_mechanics", %{
-              "selection" => context.selection,
-              "concern" => opts["direction"]
-            })
-          ]
-      end
+    requests = pass_requests(opts["profile"], opts, context, profile)
 
     {requests,
      %{
@@ -362,6 +275,102 @@ defmodule FountWorkshop.Writing.Preparation do
        }}
 
   defp inspections(_, %{"workflow" => "investigate"}, _), do: {[], %{}}
+
+  defp pass_requests("dialogue_subtext", _opts, context, _profile) do
+    [
+      request("dialogue", "dialogue", %{
+        "selection" => context.selection,
+        "lenses" => ~w(subtext exposition responsiveness)
+      })
+    ]
+  end
+
+  defp pass_requests("action_visual", opts, context, profile) do
+    [
+      request("action", "action", %{
+        "selection" => context.selection,
+        "direction" => opts["direction"] || profile["goal"]
+      })
+    ]
+  end
+
+  defp pass_requests("sound_space", opts, context, profile) do
+    [
+      request("sound-space-action", "action", %{
+        "selection" => context.selection,
+        "direction" => opts["direction"] || profile["goal"]
+      }),
+      request("sound-space-function", "scene_mechanics", %{
+        "selection" => context.selection,
+        "concern" =>
+          "How offscreen sound, absence, spatial relationship, withheld information or object placement can change the scene without forcing explanatory dialogue."
+      })
+    ]
+  end
+
+  defp pass_requests("cinematic_rhythm", opts, context, profile) do
+    [
+      request("cinematic-rhythm", "scene_mechanics", %{
+        "selection" => context.selection,
+        "concern" =>
+          "Playable timing, intentional stillness, entrances/exits, held beats and performance rhythm. Silence is not automatically a defect."
+      }),
+      request("cinematic-rhythm-action", "action", %{
+        "selection" => context.selection,
+        "direction" => opts["direction"] || profile["goal"]
+      })
+    ]
+  end
+
+  defp pass_requests("transition", _opts, context, _profile) do
+    [
+      request("transition-function", "scene_mechanics", %{
+        "selection" => context.selection,
+        "concern" =>
+          "Transition and juxtaposition opportunities at scene boundaries: what image, sound, absence or unresolved action carries into the next scene without rewriting it into explanation."
+      })
+    ]
+  end
+
+  defp pass_requests("brevity", _opts, context, _profile) do
+    [
+      request("rhythm", "dialogue", %{
+        "selection" => context.selection,
+        "lenses" => ~w(repetition rhythm)
+      }),
+      request("function", "scene_mechanics", %{"selection" => context.selection})
+    ]
+  end
+
+  defp pass_requests("dry_comedy", _opts, context, _profile) do
+    [
+      request("comedy-dialogue", "dialogue", %{
+        "selection" => context.selection,
+        "lenses" => ~w(subtext tactic responsiveness)
+      }),
+      request("comedy-action", "action", %{"selection" => context.selection})
+    ]
+  end
+
+  defp pass_requests("tension", _opts, context, _profile) do
+    [
+      request("tension-functions", "scene_mechanics", %{
+        "selection" => context.selection,
+        "concern" =>
+          "Sources of resistance, stakes, uncertainty, reversals and meaningful character choice. Silence and direct conflict are both possible."
+      })
+    ]
+  end
+
+  defp pass_requests("custom", opts, context, _profile) do
+    [
+      request("custom-mechanics", "scene_mechanics", %{
+        "selection" => context.selection,
+        "concern" => opts["direction"]
+      })
+    ]
+  end
+
   defp request(id, tool, params), do: %{"id" => id, "playbook" => tool, "params" => params}
 
   defp historical(context, model, %{"workflow" => "recover", "options" => opts}, services) do

@@ -16,7 +16,11 @@ defmodule FountWorkshop.PhaseThirteenComparisonTest do
           %{
             heading: "INT. KITCHEN - LATE AFTERNOON",
             elements: [
-              %{type: :action, text: "Mara places Dan's key beside a cooling cup. She waits, then leaves without speaking."},
+              %{
+                type: :action,
+                text:
+                  "Mara places Dan's key beside a cooling cup. She waits, then leaves without speaking."
+              },
               %{type: :character, text: "DAN (V.O.)"},
               %{type: :dialogue, text: repeated}
             ]
@@ -32,7 +36,8 @@ defmodule FountWorkshop.PhaseThirteenComparisonTest do
         %{
           "kind" => "replace_text",
           "target" => %{"kind" => "element", "id" => action.id},
-          "value" => "Mara sets Dan's key beside the cooling cup. She does not move. Steam thins. She waits until it is gone, then leaves without speaking."
+          "value" =>
+            "Mara sets Dan's key beside the cooling cup. She does not move. Steam thins. She waits until it is gone, then leaves without speaking."
         }
       ])
 
@@ -41,7 +46,8 @@ defmodule FountWorkshop.PhaseThirteenComparisonTest do
         %{
           "kind" => "replace_text",
           "target" => %{"kind" => "element", "id" => action.id},
-          "value" => "Mara sets Dan's key beside the cooling cup. Offscreen, the elevator bell sounds once. In the sudden quiet, she waits, then leaves without speaking."
+          "value" =>
+            "Mara sets Dan's key beside the cooling cup. Offscreen, the elevator bell sounds once. In the sudden quiet, she waits, then leaves without speaking."
         }
       ])
 
@@ -74,12 +80,25 @@ defmodule FountWorkshop.PhaseThirteenComparisonTest do
     assert sound_comparison["language_changes"] == []
     assert visual_comparison["dialogue_delta"] == %{"added" => 0, "removed" => 0, "modified" => 0}
     assert sound_comparison["dialogue_delta"] == %{"added" => 0, "removed" => 0, "modified" => 0}
-    assert Enum.any?(visual_comparison["action_changes"], &String.contains?(&1["after"], "Steam thins"))
-    assert Enum.any?(sound_comparison["action_changes"], &String.contains?(&1["after"], "Offscreen, the elevator bell"))
+
+    assert Enum.any?(
+             visual_comparison["action_changes"],
+             &String.contains?(&1["after"], "Steam thins")
+           )
+
+    assert Enum.any?(
+             sound_comparison["action_changes"],
+             &String.contains?(&1["after"], "Offscreen, the elevator bell")
+           )
+
     assert [protected] = visual_comparison["protected_text_checks"]
     assert protected["status"] == "pass"
     assert generic_comparison["generator_claim_is_evidence"] == false
-    assert Enum.any?(generic_comparison["language_changes"], &String.contains?(&1["after"], "I forgive you"))
+
+    assert Enum.any?(
+             generic_comparison["language_changes"],
+             &String.contains?(&1["after"], "I forgive you")
+           )
 
     {:ok, repo} = ContinuationStore.start_link(base)
     on_exit(fn -> if Process.alive?(repo), do: Agent.stop(repo) end)

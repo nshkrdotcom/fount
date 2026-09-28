@@ -6,7 +6,9 @@ defmodule FountWorkshop.Rehearsal do
   @kinds ~w(change_tactic reverse_status remove_participant shared_side private_conversation invented_backstory free)
 
   @doc "Records a rehearsal exercise in session progress only; it never changes screenplay canon."
-  def add(session_id, exercise, services, opts \\ []) when is_binary(session_id) and is_map(exercise) do
+  def add(session_id, exercise, services, opts \\ [])
+
+  def add(session_id, exercise, services, opts) when is_binary(session_id) and is_map(exercise) do
     with :ok <- validate_exercise(exercise),
          {:ok, session} <- Store.call(services[:store], :session, [session_id]) do
       record = %{
@@ -73,7 +75,8 @@ defmodule FountWorkshop.Rehearsal do
         "adoption" => record["adoption"],
         "source" => "explicitly_adopted_rehearsal",
         "canonical" => false,
-        "rule" => "Project material may inform exploration, but it is not a StoryWorld fact until separately established by canonical/source evidence."
+        "rule" =>
+          "Project material may inform exploration, but it is not a StoryWorld fact until separately established by canonical/source evidence."
       }
     end)
   end
@@ -97,20 +100,24 @@ defmodule FountWorkshop.Rehearsal do
 
       index ->
         current = Enum.at(records, index)
-
-        if current["status"] != "active" do
-          {:error, :rehearsal_already_decided}
-        else
-          decision = %{"actor" => actor, "note" => note, "status" => status}
-
-          record =
-            current
-            |> Map.put("status", status)
-            |> Map.put(if(status == "adopted", do: "adoption", else: "rejection"), decision)
-
-          {:ok, put_in(session, ["progress", "rehearsals"], List.replace_at(records, index, record)), record}
-        end
+        transition_record(session, records, index, current, status, actor, note)
     end
+  end
+
+  defp transition_record(_session, _records, _index, %{"status" => other}, _status, _actor, _note)
+       when other != "active",
+       do: {:error, :rehearsal_already_decided}
+
+  defp transition_record(session, records, index, current, status, actor, note) do
+    decision = %{"actor" => actor, "note" => note, "status" => status}
+
+    record =
+      current
+      |> Map.put("status", status)
+      |> Map.put(if(status == "adopted", do: "adoption", else: "rejection"), decision)
+
+    {:ok, put_in(session, ["progress", "rehearsals"], List.replace_at(records, index, record)),
+     record}
   end
 
   defp save_transition(session, record, services) do
@@ -124,15 +131,25 @@ defmodule FountWorkshop.Rehearsal do
     claims = Map.get(exercise, "invented_claims", [])
 
     cond do
-      Map.keys(exercise) -- ~w(kind prompt invented_claims) != [] -> {:error, :unknown_rehearsal_field}
-      exercise["kind"] not in @kinds -> {:error, :invalid_rehearsal_kind}
-      not is_binary(exercise["prompt"]) or String.trim(exercise["prompt"]) == "" -> {:error, :invalid_rehearsal_prompt}
-      not is_list(claims) or Enum.any?(claims, &(not is_binary(&1) or String.trim(&1) == "")) -> {:error, :invalid_rehearsal_claims}
-      true -> :ok
+      Map.keys(exercise) -- ~w(kind prompt invented_claims) != [] ->
+        {:error, :unknown_rehearsal_field}
+
+      exercise["kind"] not in @kinds ->
+        {:error, :invalid_rehearsal_kind}
+
+      not is_binary(exercise["prompt"]) or String.trim(exercise["prompt"]) == "" ->
+        {:error, :invalid_rehearsal_prompt}
+
+      not is_list(claims) or Enum.any?(claims, &(not is_binary(&1) or String.trim(&1) == "")) ->
+        {:error, :invalid_rehearsal_claims}
+
+      true ->
+        :ok
     end
   end
 
   defp actor(value), do: text(value, :missing_actor)
+
   defp text(value, error) when is_binary(value) do
     if String.trim(value) == "", do: {:error, error}, else: :ok
   end

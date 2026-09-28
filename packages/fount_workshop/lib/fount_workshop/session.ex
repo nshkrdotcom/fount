@@ -5,8 +5,8 @@ defmodule FountWorkshop.Session do
   alias Fount.Writing.CanonicalJSON
   alias FountWorkshop.Candidate
   alias FountWorkshop.Discovery
-  alias FountWorkshop.Request
   alias FountWorkshop.Rehearsal
+  alias FountWorkshop.Request
   alias FountWorkshop.Store
   alias FountWorkshop.Strategy
   alias FountWorkshop.Writing.Budget

@@ -9,7 +9,11 @@ defmodule FountWorkshop.Comparison do
   @doc "Loads a saved candidate and compares the actual candidate screenplay with its immutable base revision."
   def candidate(id, services) when is_binary(id) do
     with {:ok, candidate} <- Store.call(services[:store], :candidate, [id]),
-         {:ok, base} <- Store.call(services[:store], :load_revision, [candidate["screenplay_id"], candidate["base_revision_id"]]) do
+         {:ok, base} <-
+           Store.call(services[:store], :load_revision, [
+             candidate["screenplay_id"],
+             candidate["base_revision_id"]
+           ]) do
       {:ok, compare(base, candidate)}
     end
   end
@@ -37,7 +41,12 @@ defmodule FountWorkshop.Comparison do
       },
       "generator_claim_is_evidence" => false,
       "human_review" => %{
-        "required_for" => ["voice fit", "language authenticity", "dramatic preference", "whether the original is stronger"],
+        "required_for" => [
+          "voice fit",
+          "language authenticity",
+          "dramatic preference",
+          "whether the original is stronger"
+        ],
         "automatic_winner" => false
       }
     }

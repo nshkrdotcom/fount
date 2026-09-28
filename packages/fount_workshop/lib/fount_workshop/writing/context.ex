@@ -131,7 +131,8 @@ defmodule FountWorkshop.Writing.Context do
           "Only selected pages may change. Adjacent material informs joins, not permission to rewrite it. Actor utterances are not automatically facts."
       }
 
-      data = if voice_protection, do: Map.put(data, "voice_protection", voice_protection), else: data
+      data =
+        if voice_protection, do: Map.put(data, "voice_protection", voice_protection), else: data
 
       if byte_size(Jason.encode!(data)) > Keyword.get(opts, :max_context_bytes, 100_000),
         do: {:error, :context_limit_requires_smaller_selection},

@@ -63,6 +63,7 @@ defmodule FountWorkshop.MixProject do
         "guides/creative-workflows.md",
         "guides/discovery-and-scene-exploration.md",
         "guides/cinematic-revision-rehearsal-and-voice.md",
+        "guides/research-notes-and-consequences.md",
         "guides/intelligence-integration.md",
         "guides/scene-revision-loop.md",
         "guides/proposals-and-diffs.md",
@@ -73,12 +74,14 @@ defmodule FountWorkshop.MixProject do
          filename: "phase-twelve-example", title: "Phase 12 Example"},
         {"examples/phase_thirteen/README.md",
          filename: "phase-thirteen-example", title: "Phase 13 Example"},
+        {"examples/phase_fourteen/README.md",
+         filename: "phase-fourteen-example", title: "Phase 14 Example"},
         {"examples/README.md", filename: "examples", title: "Live Examples"}
       ],
       groups_for_extras: [
         Overview: ~r/(README|CHANGELOG|LICENSE)/,
         "Agent Workflows":
-          ~r/guides\/(architecture|creative-workflows|discovery-and-scene-exploration|cinematic-revision-rehearsal-and-voice|intelligence-integration|scene-revision-loop|proposals-and-diffs)/,
+          ~r/guides\/(architecture|creative-workflows|discovery-and-scene-exploration|cinematic-revision-rehearsal-and-voice|research-notes-and-consequences|intelligence-integration|scene-revision-loop|proposals-and-diffs)/,
         "Export & Inspection": ~r/guides\/(pdf-export-and-inspection|submission-checks)/,
         "Rehearsal & Audio": ~r/guides\/table-reads-and-audio/,
         "Live Examples": ~r/examples/

@@ -91,7 +91,9 @@ defmodule FountWorkshop.NoteTriage do
   def decide(_, _, _, _, _), do: {:error, :invalid_note_decision}
 
   @doc "Re-evaluates one note anchor against a later draft using exact identity/text evidence only."
-  def reanchor(session_id, note_id, %Screenplay{} = current, services, opts \\ []) do
+  def reanchor(session_id, note_id, current, services, opts \\ [])
+
+  def reanchor(session_id, note_id, %Screenplay{} = current, services, opts) do
     with {:ok, session} <- Store.call(services[:store], :session, [session_id]),
          true <- session["screenplay_id"] == current.id or {:error, :different_screenplay},
          {:ok, notes, index} <- find_note(session, note_id) do
@@ -209,8 +211,7 @@ defmodule FountWorkshop.NoteTriage do
               "status" => "ambiguous",
               "previous_target_id" => id,
               "excerpt" => excerpt,
-              "candidate_targets" =>
-                Enum.map(many, &%{"kind" => "element", "id" => &1.id}),
+              "candidate_targets" => Enum.map(many, &%{"kind" => "element", "id" => &1.id}),
               "reason" => "multiple_exact_text_matches"
             }
         end
@@ -225,18 +226,23 @@ defmodule FountWorkshop.NoteTriage do
     allowed =
       ~w(id raw source confidentiality reaction interpretation requested_treatment anchor)
 
-    anchor = note["anchor"] || %{}
-    target = anchor["target"] || %{}
-
     Map.keys(note) -- allowed == [] and optional_id?(note["id"]) and valid_text?(note["raw"]) and
-      is_map(note["source"]) and valid_text?(note["source"]["label"]) and
-      optional_text?(note["confidentiality"]) and optional_text?(note["reaction"]) and
-      optional_text?(note["interpretation"]) and optional_text?(note["requested_treatment"]) and
-      is_map(anchor) and target["kind"] == "element" and valid_text?(target["id"]) and
-      valid_text?(anchor["excerpt"])
+      valid_note_source?(note["source"]) and
+      Enum.all?(
+        ~w(confidentiality reaction interpretation requested_treatment),
+        &optional_text?(note[&1])
+      ) and valid_note_anchor?(note["anchor"])
   end
 
   defp valid_note?(_), do: false
+
+  defp valid_note_source?(source) when is_map(source), do: valid_text?(source["label"])
+  defp valid_note_source?(_), do: false
+
+  defp valid_note_anchor?(%{"target" => target, "excerpt" => excerpt}) when is_map(target),
+    do: target["kind"] == "element" and valid_text?(target["id"]) and valid_text?(excerpt)
+
+  defp valid_note_anchor?(_), do: false
 
   defp normalize_note(note, session, opts) do
     id = note["id"] || Fount.ID.v4()
@@ -266,13 +272,26 @@ defmodule FountWorkshop.NoteTriage do
     allowed = ~w(action concern treatment alternative_treatment reason)
 
     cond do
-      Map.keys(decision) -- allowed != [] -> {:error, :unknown_note_decision_field}
-      decision["action"] not in @actions -> {:error, :invalid_note_action}
-      Map.get(decision, "concern", "undecided") not in @decision_states -> {:error, :invalid_concern_decision}
-      Map.get(decision, "treatment", "undecided") not in @decision_states -> {:error, :invalid_treatment_decision}
-      not optional_text?(decision["alternative_treatment"]) -> {:error, :invalid_alternative_treatment}
-      not optional_text?(decision["reason"]) -> {:error, :invalid_note_decision_reason}
-      true -> :ok
+      Map.keys(decision) -- allowed != [] ->
+        {:error, :unknown_note_decision_field}
+
+      decision["action"] not in @actions ->
+        {:error, :invalid_note_action}
+
+      Map.get(decision, "concern", "undecided") not in @decision_states ->
+        {:error, :invalid_concern_decision}
+
+      Map.get(decision, "treatment", "undecided") not in @decision_states ->
+        {:error, :invalid_treatment_decision}
+
+      not optional_text?(decision["alternative_treatment"]) ->
+        {:error, :invalid_alternative_treatment}
+
+      not optional_text?(decision["reason"]) ->
+        {:error, :invalid_note_decision_reason}
+
+      true ->
+        :ok
     end
   end
 
@@ -305,11 +324,17 @@ defmodule FountWorkshop.NoteTriage do
     approved = Keyword.get(opts, :approved_scene_ids, [])
 
     cond do
-      scope not in @scopes -> {:error, :invalid_revision_scope}
+      scope not in @scopes ->
+        {:error, :invalid_revision_scope}
+
       not is_list(preserved) or Enum.any?(preserved, &(not valid_text?(&1))) ->
         {:error, :invalid_preserved_items}
-      not valid_ids?(approved) -> {:error, :invalid_approved_scene_ids}
-      true -> :ok
+
+      not valid_ids?(approved) ->
+        {:error, :invalid_approved_scene_ids}
+
+      true ->
+        :ok
     end
   end
 
@@ -321,7 +346,8 @@ defmodule FountWorkshop.NoteTriage do
     not_analyzed = Map.get(plan, "not_analyzed_scene_ids", [])
 
     cond do
-      Map.keys(plan) -- ~w(supported uncertain unresolved checked_scene_ids not_analyzed_scene_ids) != [] ->
+      Map.keys(plan) --
+        ~w(supported uncertain unresolved checked_scene_ids not_analyzed_scene_ids) != [] ->
         {:error, :unknown_consequence_plan_field}
 
       not valid_consequences?(supported, "supported_dependency") ->
@@ -336,7 +362,8 @@ defmodule FountWorkshop.NoteTriage do
       not valid_ids?(checked) or not valid_ids?(not_analyzed) ->
         {:error, :invalid_consequence_scene_ids}
 
-      true -> :ok
+      true ->
+        :ok
     end
   end
 

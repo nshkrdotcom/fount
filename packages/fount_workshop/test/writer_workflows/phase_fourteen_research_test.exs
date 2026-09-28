@@ -97,8 +97,11 @@ defmodule FountWorkshop.PhaseFourteenResearchTest do
       "instruction" => "Record research provenance without changing the screenplay.",
       "selection" => %{"whole_screenplay" => true},
       "constraints" => [],
-      "alternatives" => 0,
-      "options" => %{"concern" => "Which historical date can the draft rely on?", "write_fixes" => false}
+      "alternatives" => 1,
+      "options" => %{
+        "concern" => "Which historical date can the draft rely on?",
+        "write_fixes" => false
+      }
     }
   end
 end

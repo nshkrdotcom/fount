@@ -96,7 +96,7 @@ defmodule FountWorkshop.PhaseFourteenRebaseTest do
       "instruction" => "Test two explicit manual revisions.",
       "selection" => %{"whole_screenplay" => true},
       "constraints" => [],
-      "alternatives" => 0,
+      "alternatives" => 1,
       "options" => %{}
     }
   end

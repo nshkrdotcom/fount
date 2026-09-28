@@ -43,31 +43,33 @@ defmodule FountWorkshop.Review do
   end
 
   defp intelligence_fields(candidate) do
+    lineage = get_in(candidate, ["provenance", "intelligence_lineage"]) || %{}
+    provenance = candidate["provenance"]
+
     %{
-      "writer_packet" =>
-        get_in(candidate, ["provenance", "intelligence_lineage", "pre_analysis_packet"]) || %{},
-      "revision_packet" => candidate["provenance"]["revision_intelligence"] || %{},
-      "strategy_lineage" =>
-        get_in(candidate, ["provenance", "intelligence_lineage", "strategy_lineage"]) || %{},
-      "note_triage" =>
-        get_in(candidate, ["provenance", "intelligence_lineage", "note_triage"]) || [],
-      "resource_usage" => candidate["provenance"]["resource_usage"] || %{},
-      "consequence_proposals" =>
-        get_in(candidate, ["provenance", "intelligence_lineage", "consequence_proposals"]) ||
-          [],
+      "writer_packet" => fallback(lineage["pre_analysis_packet"], %{}),
+      "revision_packet" => fallback(provenance["revision_intelligence"], %{}),
+      "strategy_lineage" => fallback(lineage["strategy_lineage"], %{}),
+      "note_triage" => fallback(lineage["note_triage"], []),
+      "resource_usage" => fallback(provenance["resource_usage"], %{}),
+      "consequence_proposals" => fallback(lineage["consequence_proposals"], []),
       "causal_ripple" =>
-        get_in(candidate, [
-          "provenance",
-          "revision_intelligence",
-          "revision_comparison",
-          "causal_ripple"
-        ]) || %{},
-      "note_decisions" =>
-        get_in(candidate, ["provenance", "intelligence_lineage", "note_decisions"]) || [],
-      "phase14" =>
-        get_in(candidate, ["provenance", "intelligence_lineage", "phase14"]) || %{}
+        fallback(
+          get_in(candidate, [
+            "provenance",
+            "revision_intelligence",
+            "revision_comparison",
+            "causal_ripple"
+          ]),
+          %{}
+        ),
+      "note_decisions" => fallback(lineage["note_decisions"], []),
+      "phase14" => fallback(lineage["phase14"], %{})
     }
   end
+
+  defp fallback(nil, default), do: default
+  defp fallback(value, _default), do: value
 
   @doc "Accepts only after the writer supplies a review matching exact candidate content."
   def accept(repo, candidate_id, expected_revision, review) do

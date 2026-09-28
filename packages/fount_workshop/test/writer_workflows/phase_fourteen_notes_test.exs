@@ -36,7 +36,9 @@ defmodule FountWorkshop.PhaseFourteenNotesTest do
     assert length(captured["notes"]) == 2
     assert [conflict] = captured["conflicts"]
     assert conflict["status"] == "potential_conflict"
-    assert Enum.sort(conflict["instructions"]) == Enum.sort(["Explain why she leaves", "Keep the mystery"])
+
+    assert Enum.sort(conflict["instructions"]) ==
+             Enum.sort(["Explain why she leaves", "Keep the mystery"])
 
     [clarity, mystery] = captured["notes"]
     assert NoteTriage.anchor_status(clarity, base)["status"] == "exact"
@@ -63,7 +65,8 @@ defmodule FountWorkshop.PhaseFourteenNotesTest do
                  "concern" => "accepted",
                  "treatment" => "rejected",
                  "alternative_treatment" => "Use a physical cue instead of explanatory dialogue.",
-                 "reason" => "The clarity concern is useful; the proposed explanation is too explicit."
+                 "reason" =>
+                   "The clarity concern is useful; the proposed explanation is too explicit."
                },
                services,
                actor: "writer"
@@ -145,7 +148,7 @@ defmodule FountWorkshop.PhaseFourteenNotesTest do
       "instruction" => "Triage two reader notes without merging them.",
       "selection" => %{"whole_screenplay" => true},
       "constraints" => [],
-      "alternatives" => 0,
+      "alternatives" => 1,
       "options" => %{"note_ids" => [], "external_notes" => []}
     }
   end

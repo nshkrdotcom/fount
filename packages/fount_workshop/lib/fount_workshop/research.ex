@@ -94,12 +94,14 @@ defmodule FountWorkshop.Research do
   end
 
   defp valid_source?(source) when is_map(source) do
-    allowed = ~w(id label location retrieved_at content rights_basis confidentiality provider_export_allowed)
+    allowed =
+      ~w(id label location retrieved_at content rights_basis confidentiality provider_export_allowed)
 
     Map.keys(source) -- allowed == [] and valid_id?(source["id"]) and valid_text?(source["label"]) and
-      optional_text?(source["location"]) and optional_text?(source["retrieved_at"]) and
-      optional_text?(source["content"]) and optional_text?(source["rights_basis"]) and
-      optional_text?(source["confidentiality"]) and
+      Enum.all?(
+        ~w(location retrieved_at content rights_basis confidentiality),
+        &optional_text?(source[&1])
+      ) and
       (is_nil(source["provider_export_allowed"]) or is_boolean(source["provider_export_allowed"]))
   end
 
@@ -135,13 +137,15 @@ defmodule FountWorkshop.Research do
   end
 
   defp valid_question?(question) when is_map(question) do
-    allowed = ~w(id question status host_capability user_citations invented_references instruction)
+    allowed =
+      ~w(id question status host_capability user_citations invented_references instruction)
+
+    citations = question["user_citations"] || []
 
     Map.keys(question) -- allowed == [] and valid_id?(question["id"]) and
       valid_text?(question["question"]) and question["status"] == "access_unavailable" and
-      question["host_capability"] == "web" and is_list(question["user_citations"] || []) and
-      Enum.all?(question["user_citations"] || [], &valid_text?/1) and
-      question["invented_references"] == false
+      question["host_capability"] == "web" and is_list(citations) and
+      Enum.all?(citations, &valid_text?/1) and question["invented_references"] == false
   end
 
   defp valid_question?(_), do: false

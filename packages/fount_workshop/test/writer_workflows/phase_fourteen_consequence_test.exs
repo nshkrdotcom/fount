@@ -13,15 +13,21 @@ defmodule FountWorkshop.PhaseFourteenConsequenceTest do
         scenes: [
           %{
             heading: "INT. ENTRYWAY - MORNING",
-            elements: [%{type: :action, text: "Mara studies the locked door, unsure how Dan got in."}]
+            elements: [
+              %{type: :action, text: "Mara studies the locked door, unsure how Dan got in."}
+            ]
           },
           %{
             heading: "INT. GARAGE - NIGHT",
-            elements: [%{type: :action, text: "Dan finally shows Mara the spare key under the paint tin."}]
+            elements: [
+              %{type: :action, text: "Dan finally shows Mara the spare key under the paint tin."}
+            ]
           },
           %{
             heading: "EXT. BUS STOP - DAWN",
-            elements: [%{type: :action, text: "A bus exhales at the curb. Mara does not look up."}]
+            elements: [
+              %{type: :action, text: "A bus exhales at the curb. Mara does not look up."}
+            ]
           }
         ]
       )
@@ -44,7 +50,8 @@ defmodule FountWorkshop.PhaseFourteenConsequenceTest do
                    "source" => %{"label" => "Writer", "author" => "Writer"},
                    "confidentiality" => "private",
                    "reaction" => "The late reveal arrives after the lock question has gone cold.",
-                   "interpretation" => "Test whether earlier audience knowledge changes the later pressure.",
+                   "interpretation" =>
+                     "Test whether earlier audience knowledge changes the later pressure.",
                    "requested_treatment" => "Move the reveal to the entryway scene.",
                    "anchor" => %{
                      "target" => %{"kind" => "element", "id" => late_action.id},
@@ -91,10 +98,13 @@ defmodule FountWorkshop.PhaseFourteenConsequenceTest do
         %{
           "basis" => "hypothesis",
           "target" => "Dan's suspicion timing",
-          "why" => "The moved paint tin may make his suspicion arrive sooner, but that beat was not rewritten."
+          "why" =>
+            "The moved paint tin may make his suspicion arrive sooner, but that beat was not rewritten."
         }
       ],
-      "unresolved" => ["Re-read the next Dan/Mara exchange for whether the moved knowledge changes subtext."],
+      "unresolved" => [
+        "Re-read the next Dan/Mara exchange for whether the moved knowledge changes subtext."
+      ],
       "checked_scene_ids" => [early.id, late.id],
       "not_analyzed_scene_ids" => [unrelated.id]
     }
@@ -122,8 +132,10 @@ defmodule FountWorkshop.PhaseFourteenConsequenceTest do
     assert consequence["uncertain_consequences"] == plan["uncertain"]
     assert consequence["unresolved_downstream_work"] == plan["unresolved"]
     assert consequence["candidate_claims_are_evidence"] == false
+
     assert Fount.Query.node(candidate["screenplay"], Enum.at(unrelated.element_ids, 1)).text ==
              Fount.Query.node(base, Enum.at(unrelated.element_ids, 1)).text
+
     assert ContinuationStore.head(repo).revision.id == base.revision.id
   end
 
@@ -136,7 +148,7 @@ defmodule FountWorkshop.PhaseFourteenConsequenceTest do
       "instruction" => "Experiment with one note and review the downstream consequences.",
       "selection" => %{"whole_screenplay" => true},
       "constraints" => [],
-      "alternatives" => 0,
+      "alternatives" => 1,
       "options" => %{"note_ids" => [], "external_notes" => []}
     }
   end

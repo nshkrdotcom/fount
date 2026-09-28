@@ -66,11 +66,17 @@ defmodule FountWorkshop.ConsequenceReview do
     element_scenes =
       ids
       |> Enum.flat_map(fn id ->
-        [scene_id(base, before[id] && before[id].id), scene_id(result, after_map[id] && after_map[id].id)]
+        [
+          scene_id(base, before[id] && before[id].id),
+          scene_id(result, after_map[id] && after_map[id].id)
+        ]
       end)
       |> Enum.reject(&is_nil/1)
 
-    Enum.uniq(diff.scenes.moved ++ diff.scenes.added ++ diff.scenes.removed ++ diff.scenes.changed ++ element_scenes)
+    Enum.uniq(
+      diff.scenes.moved ++
+        diff.scenes.added ++ diff.scenes.removed ++ diff.scenes.changed ++ element_scenes
+    )
   end
 
   defp scene_id(_model, nil), do: nil

@@ -115,7 +115,8 @@ defmodule FountWorkshop.PhaseFourteenResearchNotesDurabilityTest do
                    %{
                      "basis" => "hypothesis",
                      "target" => "exit motivation",
-                     "why" => "The physical hesitation may clarify choice without explaining motive."
+                     "why" =>
+                       "The physical hesitation may clarify choice without explaining motive."
                    }
                  ],
                  "unresolved" => ["Ask whether the cue is legible in the next table read."],
@@ -153,7 +154,7 @@ defmodule FountWorkshop.PhaseFourteenResearchNotesDurabilityTest do
       "instruction" => "Keep research and note decisions traceable before rewriting.",
       "selection" => %{"whole_screenplay" => true},
       "constraints" => [],
-      "alternatives" => 0,
+      "alternatives" => 1,
       "options" => %{"note_ids" => [], "external_notes" => []}
     }
   end

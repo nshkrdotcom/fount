@@ -89,7 +89,7 @@ Run `mix test` for package tests and `MIX_ENV=test mix test integration` for the
 
 ## Final integration audit
 
-Phase 16 does not add another generation or canon path. It audits the existing four-package product and the W01–W12/A01–A12 demonstrations through `scripts/final_acceptance.py`, `scripts/final_acceptance.sh`, and [`guides/final-acceptance.md`](guides/final-acceptance.md). Source-only checks can run without credentials; runtime, database, package-build, live-provider, and human evidence remain explicitly separate.
+Phase 16 does not add another generation or canon path. It audits the original four-library product; the current repository also includes the Phase 02 `fount_run` storage foundation and the W01–W12/A01–A12 demonstrations through `scripts/final_acceptance.py`, `scripts/final_acceptance.sh`, and [`guides/final-acceptance.md`](guides/final-acceptance.md). Source-only checks can run without credentials; runtime, database, package-build, live-provider, and human evidence remain explicitly separate.
 
 ## License
 

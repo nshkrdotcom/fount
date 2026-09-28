@@ -4,7 +4,7 @@ This delivery did not run Elixir, Mix, PostgreSQL, hosted providers, PDF renderi
 
 From the repository root, configure the actual SDK source if needed, then use `mix setup`, `mix test`, and `mix fount.architecture`. Package-local checks are `mix format --check-formatted`, `mix compile --warnings-as-errors`, `mix test`, `mix credo --strict`, `mix dialyzer`, `mix docs --warnings-as-errors`, and `mix hex.build` where package assets are present. Runtime QC must inspect lockfile changes rather than copy invented dependency hashes.
 
-The architecture task checks source ASTs and compiled dependencies; its `--source-only` result is explicitly weaker. All four packages must have been compiled for a complete gate. The source gate rejects leftover removed-package files as well as package dependencies.
+The architecture task checks source ASTs and compiled dependencies; its `--source-only` result is explicitly weaker. All five libraries must have been compiled for a complete gate. The source gate rejects leftover removed-package files as well as package dependencies.
 
 The Phase 4 QC handoff supplies the current Temporal/Reader ladder, source-input caveat, provider-free demonstration, preservation audit, first-reader domain-pilot debt and exit criteria. Live checks require explicit authorization, actual credentials, small synthetic/authorized inputs, and recorded results. A fixture is not a live verification or human evaluation.
 ## Phase 3 runtime QC

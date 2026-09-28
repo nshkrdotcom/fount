@@ -1,6 +1,6 @@
 # Pure interpretation and explicit acquisition
 
-The package graph is `fount <- fount_observe <- fount_intelligence <- fount_workshop`, with direct canonical dependencies where needed. Only Observe depends on SystemOneSDK. Only Workshop depends on Inference and owns provider-specific completion integration. No previous analysis package or delegate remains.
+The existing analysis/generation graph remains `fount <- fount_observe <- fount_intelligence <- fount_workshop`. Phase 02 adds `fount_run -> fount` for durable run storage; later execution phases may add the planned Run-to-Workshop orchestration dependency without allowing lower packages to depend on Run. Only Observe depends on SystemOneSDK. Only Workshop depends on Inference and owns provider-specific completion integration. No previous analysis package or delegate remains.
 
 `StoryWorld.Records` validates proposed records against exact selected evidence. `Reader.Reveal` computes threshold crossings/retractions from explicit measured points. `Capabilities.DecisionPolicy` and `Capabilities.Interpretation` derive policy outcomes without acquiring evidence. These pure components receive values and return values; they do not call providers, databases, environment, filesystem, clocks or randomness.
 

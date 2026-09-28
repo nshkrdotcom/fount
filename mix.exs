@@ -66,7 +66,8 @@ defmodule Fount.Workspace.MixProject do
         "packages/fount",
         "packages/fount_observe",
         "packages/fount_intelligence",
-        "packages/fount_workshop"
+        "packages/fount_workshop",
+        "packages/fount_run"
       ],
       isolation: [deps_path: true, build_path: true, lockfile: true, hex_home: "_build/hex"],
       parallelism: [

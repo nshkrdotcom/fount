@@ -4,7 +4,7 @@ from pathlib import Path
 ROOT=Path(os.environ.get('FOUNT_SOURCE', str(Path(__file__).resolve().parents[2])))
 class PhaseSource(unittest.TestCase):
     def test_exact_package_set(self):
-        self.assertEqual({p.name for p in (ROOT/'packages').iterdir() if p.is_dir()}, {'fount','fount_observe','fount_intelligence','fount_workshop'})
+        self.assertEqual({p.name for p in (ROOT/'packages').iterdir() if p.is_dir()}, {'fount','fount_observe','fount_intelligence','fount_workshop','fount_run'})
     def test_observe_contracts_exist(self):
         for name in ['question','request','observation','measurement_result','distribution','target_ref','evidence_ref','context','error','executor','lens','registry','sandbox']:
             self.assertTrue((ROOT/f'packages/fount_observe/lib/fount/observe/{name}.ex').is_file(), name)
@@ -31,7 +31,7 @@ class PhaseSource(unittest.TestCase):
         self.assertTrue((ROOT/'packages/fount_intelligence/lib/mix/tasks/fount.architecture.ex').is_file())
 if __name__ == '__main__': unittest.main()
 class PhaseOneApprovalSafetySource(unittest.TestCase):
-    def test_core_approval_contract_and_no_run_package(self):
+    def test_core_approval_contract_remains_independent_of_run(self):
         for rel in [
             'packages/fount/lib/fount/writing/principal.ex',
             'packages/fount/lib/fount/writing/authority.ex',
@@ -41,7 +41,8 @@ class PhaseOneApprovalSafetySource(unittest.TestCase):
             'packages/fount/priv/repo/migrations/20260928000000_authorize_canonical_acceptance.exs',
         ]:
             self.assertTrue((ROOT/rel).is_file(), rel)
-        self.assertFalse((ROOT/'packages/fount_run').exists())
+        self.assertTrue((ROOT/'packages/fount_run').is_dir())
+        self.assertNotIn(':fount_run', (ROOT/'packages/fount/mix.exs').read_text())
 
     def test_only_genesis_and_authorized_acceptance_move_head(self):
         source=(ROOT/'packages/fount/lib/fount/persistence.ex').read_text()

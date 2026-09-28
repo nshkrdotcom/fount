@@ -13,7 +13,7 @@ import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-PACKAGES = ("fount", "fount_observe", "fount_intelligence", "fount_workshop")
+PACKAGES = ("fount", "fount_observe", "fount_intelligence", "fount_workshop", "fount_run")
 OLD_PACKAGES = (
     "fount_probe",
     "fount_analysis",
@@ -70,7 +70,7 @@ def audit() -> dict:
         checks.append({"check": name, "status": "pass" if ok else "fail", "detail": detail})
 
     actual_packages = sorted(p.name for p in (ROOT / "packages").iterdir() if p.is_dir())
-    check("exact_four_package_set", actual_packages == sorted(PACKAGES), actual_packages)
+    check("exact_five_library_set", actual_packages == sorted(PACKAGES), actual_packages)
 
     present_old = [name for name in OLD_PACKAGES if (ROOT / "packages" / name).exists()]
     check("no_superseded_package_directories", not present_old, present_old)
@@ -117,10 +117,11 @@ def audit() -> dict:
     )
 
     mix_expectations = {
-        "packages/fount/mix.exs": {":fount_observe": False, ":fount_intelligence": False, ":fount_workshop": False, ":system_one_sdk": False, ":inference": False},
+        "packages/fount/mix.exs": {":fount_observe": False, ":fount_intelligence": False, ":fount_workshop": False, ":fount_run": False, ":system_one_sdk": False, ":inference": False},
         "packages/fount_observe/mix.exs": {"system_one_dependency()": True, "workspace_dep(:fount": True, ":inference": False, ":fount_intelligence": False, ":fount_workshop": False},
         "packages/fount_intelligence/mix.exs": {"workspace_dep(:fount": True, "workspace_dep(:fount_observe": True, ":inference": False, ":fount_workshop": False},
-        "packages/fount_workshop/mix.exs": {"workspace_dep(:fount": True, "workspace_dep(:fount_intelligence": True, '{:inference, "~> 0.5.0"}': True, '{:agent_session_manager, "~> 0.17.1"}': True, ":system_one_sdk": False, ":fount_observe": False},
+        "packages/fount_workshop/mix.exs": {"workspace_dep(:fount": True, "workspace_dep(:fount_intelligence": True, '{:inference, "~> 0.5.0"}': True, '{:agent_session_manager, "~> 0.17.1"}': True, ":system_one_sdk": False, ":fount_observe": False, ":fount_run": False},
+        "packages/fount_run/mix.exs": {"workspace_dep(:fount": True, ":fount_workshop": False, ":system_one_sdk": False, ":inference": False, ":agent_session_manager": False},
     }
     mix_failures = []
     for path, expectations in mix_expectations.items():
@@ -176,6 +177,7 @@ def audit() -> dict:
         "packages/fount_observe/mix.exs": ["lib", "priv", "guides", "assets", "examples"],
         "packages/fount_intelligence/mix.exs": ["lib", "priv", "guides", "assets", "examples"],
         "packages/fount_workshop/mix.exs": ["lib", "priv", "guides", "assets", "examples"],
+        "packages/fount_run/mix.exs": ["lib", "priv", "guides"],
     }
     for path, tokens in required_allowlist_tokens.items():
         text = read(path)
@@ -211,9 +213,9 @@ def audit() -> dict:
     check("current_docs_no_superseded_package_names", not old_doc_hits, old_doc_hits)
 
     check(
-        "root_readme_declares_final_four_package_product",
-        "four-package" in root_readme.lower() and all(name in root_readme for name in PACKAGES),
-        "README four-package composition",
+        "root_readme_declares_five_library_product",
+        "five-library" in root_readme.lower() and all(name in root_readme for name in PACKAGES),
+        "README five-library composition",
     )
 
     missing_phase16 = [

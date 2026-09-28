@@ -278,9 +278,9 @@ The current delivery surface is primarily for developers, agents, integrations, 
 
 ---
 
-## Final Four-Package Product
+## Five-Library Product
 
-The implementation is intentionally one four-package product rather than a compatibility stack: `fount` owns the canonical screenplay and typed edits; `fount_observe` owns neutral measurements and the System One adapter boundary; `fount_intelligence` owns evidence-grounded interpretation, reader/story-world reasoning, diagnosis and playbooks; `fount_workshop` owns generation, revision experiments, review, acceptance, sharing and performance conveniences through Inference/ASM.
+The implementation is now a five-library product: `fount` owns canonical screenplay truth and typed edits; `fount_observe` owns neutral measurements and the System One adapter boundary; `fount_intelligence` owns evidence-grounded interpretation; `fount_workshop` owns generation/revision and its Inference/ASM boundary; `fount_run` owns durable run plans, policies, decisions, resource records and orchestration state. Phase 02 adds only the Run storage foundation—worker execution and screenplay orchestration remain later phases.
 
 Phase 16 adds a repository-owned final acceptance harness without creating another creative or canonical path. `bash scripts/final_acceptance.sh --static` checks source/package/traceability invariants; the runtime-QC environment uses `--runtime` for Mix CI and package builds, then records PostgreSQL, live-provider and optional human evidence separately. See [`packages/fount_workshop/guides/final-acceptance.md`](packages/fount_workshop/guides/final-acceptance.md).
 
@@ -294,6 +294,7 @@ Phase 16 adds a repository-owned final acceptance harness without creating anoth
 | [`fount_observe`](packages/fount_observe/README.md) | Atomic source-grounded measurements, native SDK boundary, deterministic Sandbox, explicit resource limits and L1 result reuse. |
 | [`fount_intelligence`](packages/fount_intelligence/README.md) | Read-only screenplay investigations plus pure StoryWorld/Temporal/Reader/Diagnosis reasoning, multi-pass writer playbooks, source-grounded evidence, uncertainty, dependencies, dialogue/voice analysis and comparison. |
 | [`fount_workshop`](packages/fount_workshop/README.md) | Actual generated/revised pages, candidates, review/acceptance, recovery, rehearsal and exports. |
+| [`fount_run`](packages/fount_run/README.md) | Durable run identity, immutable plan/policy snapshots, decisions, approval-attempt provenance, usage and delivery state. |
 
 ## How the Pieces Fit Together
 
@@ -321,13 +322,14 @@ That separation allows the system to reason about a screenplay without turning e
 
 ## Development and Tests
 
-The root Mix project uses Blitz to operate the four package projects:
+The root Mix project uses Blitz to operate the five library projects:
 
 ```text
 packages/fount
 packages/fount_observe
 packages/fount_intelligence
 packages/fount_workshop
+packages/fount_run
 ```
 
 Each package retains its own dependencies, build output, and lockfile.

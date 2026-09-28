@@ -1,6 +1,6 @@
 defmodule Fount.Intelligence.Runner.Architecture do
   @moduledoc """
-  Repository-owned source and BEAM dependency gate for the four-package workspace.
+  Repository-owned source and BEAM dependency gate for the five-library workspace.
 
   The explicit rules catch common architectural shortcuts; this is not a general
   proof of purity. Runtime QC also runs deterministic replay tests and reviews
@@ -35,7 +35,7 @@ defmodule Fount.Intelligence.Runner.Architecture do
   @erlang_effects ~w(system_time monotonic_time timestamp unique_integer self spawn
                      spawn_link spawn_monitor send send_after start_timer make_ref
                      get put erase process_flag register unregister apply)a
-  @apps ~w(fount fount_observe fount_intelligence fount_workshop)
+  @apps ~w(fount fount_observe fount_intelligence fount_workshop fount_run)
 
   @doc "Checks a source string, resolving ordinary aliases/imports and captures."
   def source_violations(source, path) when is_binary(source) do
@@ -251,15 +251,21 @@ defmodule Fount.Intelligence.Runner.Architecture do
   defp physical_forbidden?("fount", dep),
     do:
       Enum.any?(
-        ["Fount.Observe", "Fount.Intelligence", "FountWorkshop", "SystemOneSDK", "Inference"],
+        ["Fount.Observe", "Fount.Intelligence", "FountWorkshop", "FountRun", "SystemOneSDK", "Inference"],
         &prefix?(dep, &1)
       )
 
   defp physical_forbidden?("fount_observe", dep),
-    do: Enum.any?(["Fount.Intelligence", "FountWorkshop", "Inference"], &prefix?(dep, &1))
+    do: Enum.any?(["Fount.Intelligence", "FountWorkshop", "FountRun", "Inference"], &prefix?(dep, &1))
 
   defp physical_forbidden?("fount_intelligence", dep),
-    do: Enum.any?(["FountWorkshop", "Inference"], &prefix?(dep, &1))
+    do: Enum.any?(["FountWorkshop", "FountRun", "Inference"], &prefix?(dep, &1))
+
+  defp physical_forbidden?("fount_workshop", dep),
+    do: prefix?(dep, "FountRun")
+
+  defp physical_forbidden?("fount_run", dep),
+    do: Enum.any?(["Fount.Observe", "Fount.Intelligence", "SystemOneSDK", "Inference"], &prefix?(dep, &1))
 
   defp physical_forbidden?(_, _), do: false
 
@@ -361,10 +367,11 @@ defmodule Fount.Intelligence.Runner.Architecture do
       "fount" => [],
       "fount_observe" => ["fount", "system_one_sdk"],
       "fount_intelligence" => ["fount", "fount_observe"],
-      "fount_workshop" => ["fount", "fount_intelligence", "inference"]
+      "fount_workshop" => ["fount", "fount_intelligence", "inference"],
+      "fount_run" => ["fount", "fount_workshop"]
     }
 
-    internal = @apps ++ ["fount_" <> "probe", "system_one_sdk", "inference"]
+    internal = @apps ++ ["fount_" <> "probe", "system_one_sdk", "inference", "agent_session_manager"]
 
     dependency in internal and dependency != owner and
       dependency not in Map.get(allowed, owner, [])

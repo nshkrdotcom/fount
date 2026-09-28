@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased - Run foundation architecture registration
+
+- Update the repository architecture gate from the completed four-library analysis/writing layout to the current five-library workspace by registering `fount_run` and enforcing its dependency direction without changing Intelligence behavior.
+
 ## Unreleased - Phase 16 final integration source delivery
 
 - Add the final source/package acceptance harness and W01-W12/A01-A12 evidence inventory without introducing a second analysis, generation, session, or canon path.

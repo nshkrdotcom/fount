@@ -2,11 +2,11 @@
 
 Phase 16 closes the implementation program by verifying the product that already exists rather than adding a second writing system.
 
-The final physical product is four packages: canonical screenplay work in `fount`, neutral measurements in `fount_observe`, evidence-grounded interpretation in `fount_intelligence`, and writer-controlled generation/revision in `fount_workshop`. Canon still advances only through the existing explicit review/acceptance path.
+The repository now has five libraries: canonical screenplay work in `fount`, neutral measurements in `fount_observe`, evidence-grounded interpretation in `fount_intelligence`, writer-controlled generation/revision in `fount_workshop`, and durable orchestration state in `fount_run`. Canon still advances only through the existing explicit review/acceptance path.
 
 ## What the final audit covers
 
-The final acceptance ladder checks the four-package dependency graph, Core/Shell purity, the System One and Inference ownership boundaries, absence of Probe/old package residue, safe declarative assets, cache/provenance identity, non-linear temporal and forward-reader regressions, package/Hex allowlists, documentation, and the existing W01–W12/A01–A12 writer demonstrations.
+The final acceptance ladder checks the five-library dependency graph, Core/Shell purity, the System One and Inference ownership boundaries, absence of Probe/old package residue, safe declarative assets, cache/provenance identity, non-linear temporal and forward-reader regressions, package/Hex allowlists, documentation, and the existing W01–W12/A01–A12 writer demonstrations.
 
 Run the source-only checks without provider or database credentials:
 

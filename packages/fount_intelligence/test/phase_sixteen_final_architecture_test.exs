@@ -3,10 +3,10 @@ defmodule Fount.Intelligence.PhaseSixteenFinalArchitectureTest do
   alias Fount.Intelligence.Runner.Architecture
 
   @root Path.expand("../../..", __DIR__)
-  @packages ~w(fount fount_observe fount_intelligence fount_workshop)
+  @packages ~w(fount fount_observe fount_intelligence fount_workshop fount_run)
   @removed ~w(fount_probe fount_analysis fount_semantics fount_temporal fount_reader fount_diagnose fount_playbooks)
 
-  test "final source architecture has exactly four packages and no removed package residue" do
+  test "final source architecture has the five current libraries and no removed package residue" do
     actual =
       @root
       |> Path.join("packages/*/mix.exs")

@@ -1,5 +1,5 @@
 defmodule Mix.Tasks.Fount.Architecture do
-  @moduledoc "Check the four-package graph, pure Core/Shell separation, and source/compiled forbidden dependencies."
+  @moduledoc "Check the five-library graph, pure Core/Shell separation, and source/compiled forbidden dependencies."
   alias Fount.Intelligence.Runner.Architecture
   @shortdoc "Check source and compiled architecture boundaries"
   use Mix.Task

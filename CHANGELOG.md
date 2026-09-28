@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased - Fount Run Phase 02 run foundation (offline implementation)
+
+- Add `packages/fount_run` as the fifth workspace library with caller-supplied shared-Repo migrations and host-free startup.
+- Add trusted actor context, closed immutable plan/policy snapshots, idempotent run start/read/list, append-only events, pending-decision and approval-attempt storage, and storage primitives for future steps/leases/attempts, usage and delivery identities.
+- Add Phase 02 source and PostgreSQL integration coverage plus workspace/CI/architecture/package tooling updates. Elixir/PostgreSQL runtime certification remains pending; Phase 03 worker execution is not implemented.
+
 ## Unreleased - Fount Run Phase 01 core approval safety (offline implementation)
 
 - Require every post-genesis canonical advance to consume one typed, stable approval through candidate acceptance with trusted host authority; direct `save`/`save_edit` canon mutation is blocked.

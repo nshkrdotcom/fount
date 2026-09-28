@@ -26,7 +26,7 @@ fi
 mix ci || exit $?
 python3 -m unittest discover -s scripts/tests -p 'test_*.py' || exit $?
 
-for package in fount fount_observe fount_intelligence fount_workshop; do
+for package in fount fount_observe fount_intelligence fount_workshop fount_run; do
   (
     cd "packages/$package" || exit 2
     FOUNT_PACKAGE_BUILD=1 mix hex.build
@@ -36,6 +36,10 @@ done
 if [[ -n "${FOUNT_DATABASE_URL:-}" ]]; then
   (
     cd packages/fount_workshop || exit 2
+    MIX_ENV=test mix test integration
+  ) || exit $?
+  (
+    cd packages/fount_run || exit 2
     MIX_ENV=test mix test integration
   ) || exit $?
 else

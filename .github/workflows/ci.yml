@@ -105,3 +105,7 @@ jobs:
         working-directory: packages/fount
       - run: MIX_ENV=test mix test integration
         working-directory: packages/fount_workshop
+      - run: MIX_ENV=test mix test integration
+        working-directory: packages/fount_run
+      - run: FOUNT_PACKAGE_BUILD=1 mix hex.build
+        working-directory: packages/fount_run

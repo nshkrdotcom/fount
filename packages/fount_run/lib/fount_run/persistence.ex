@@ -19,7 +19,7 @@ defmodule FountRun.Persistence do
   }
 
   @run_fields ~w(id owner_type owner_id screenplay_id client_idempotency_key input_fingerprint current_plan_version current_policy_version status stage iteration selected_candidate_id active_step_id current_fencing_token parent_run_id superseding_run_id lock_version pause_requested_at stop_requested_at inserted_at updated_at)a
-  @uuid_columns ~w(id screenplay_id selected_candidate_id active_step_id parent_run_id superseding_run_id run_id base_revision_id step_id input_revision_id input_candidate_id session_id output_candidate_id output_revision_id decision_id candidate_id acceptance_id accepted_revision_id result_revision_id revision_id)
+  @uuid_columns ~w(id screenplay_id selected_candidate_id active_step_id parent_run_id superseding_run_id run_id base_revision_id step_id input_revision_id input_candidate_id session_id output_candidate_id output_revision_id decision_id candidate_id acceptance_id accepted_revision_id result_revision_id revision_id parent_attempt_id approval_id approval_attempt_id)
 
   @start_keys ~w(screenplay_id base_revision_id goal scope constraints protected_material input_brief input_notes operation_parameters policy client_idempotency_key)
   @list_keys ~w(status stage limit)
@@ -122,6 +122,7 @@ defmodule FountRun.Persistence do
       :ok = verify_base_or_rollback(repo, plan.screenplay_id, plan.base_revision_id)
       version = expected + 1
       command_key = Keyword.get(opts, :command_id)
+
       command_fingerprint =
         Keyword.get(opts, :command_fingerprint, command_fingerprint(command_key, attrs))
 
@@ -168,8 +169,10 @@ defmodule FountRun.Persistence do
       {:ok, policy} = or_rollback(repo, Policy.new(value, context))
       version = expected + 1
       command_key = Keyword.get(opts, :command_id)
+
       command_fingerprint =
         Keyword.get(opts, :command_fingerprint, command_fingerprint(command_key, value))
+
       insert_policy(repo, run_id, version, policy, command_key, command_fingerprint)
 
       q!(
@@ -1205,10 +1208,17 @@ defmodule FountRun.Persistence do
           ) || rollback(repo, :fallback_parent_not_found)
 
         cond do
-          parent["run_id"] != policy["run_id"] -> rollback(repo, :fallback_parent_run_mismatch)
-          parent["candidate_id"] != attempt.candidate_id -> rollback(repo, :fallback_parent_candidate_mismatch)
-          parent["outcome"] not in ~w(rejected invalid failed fenced) -> rollback(repo, :fallback_parent_not_terminal)
-          true -> :ok
+          parent["run_id"] != policy["run_id"] ->
+            rollback(repo, :fallback_parent_run_mismatch)
+
+          parent["candidate_id"] != attempt.candidate_id ->
+            rollback(repo, :fallback_parent_candidate_mismatch)
+
+          parent["outcome"] not in ~w(rejected invalid failed fenced) ->
+            rollback(repo, :fallback_parent_not_terminal)
+
+          true ->
+            :ok
         end
 
       is_nil(configured) ->
@@ -1278,19 +1288,19 @@ defmodule FountRun.Persistence do
 
   defp same_approval_attempt?(row, run, plan, policy, attempt, packet, packet_ref) do
     actual =
-      {row["run_id"], row["screenplay_id"], row["step_id"], row["decision_id"], row["parent_attempt_id"],
-       row["plan_version"], row["plan_fingerprint"], row["policy_version"],
-       row["policy_fingerprint"], row["candidate_id"], row["base_revision_id"],
-       row["content_hash"], row["check_set_fingerprint"], row["packet"],
+      {row["run_id"], row["screenplay_id"], row["step_id"], row["decision_id"],
+       row["parent_attempt_id"], row["plan_version"], row["plan_fingerprint"],
+       row["policy_version"], row["policy_fingerprint"], row["candidate_id"],
+       row["base_revision_id"], row["content_hash"], row["check_set_fingerprint"], row["packet"],
        row["packet_artifact_ref"], row["reviewer_type"], row["reviewer_id"], row["approver_type"],
        row["approver_id"], row["fencing_token"]}
 
     expected =
-      {run["id"], run["screenplay_id"], attempt.step_id, attempt.decision_id, attempt.parent_attempt_id,
-       run["current_plan_version"], plan["fingerprint"], run["current_policy_version"],
-       policy["fingerprint"], attempt.candidate_id, attempt.base_revision_id,
-       attempt.content_hash, attempt.check_set_fingerprint, packet, packet_ref,
-       Atom.to_string(attempt.reviewer.type), attempt.reviewer.id,
+      {run["id"], run["screenplay_id"], attempt.step_id, attempt.decision_id,
+       attempt.parent_attempt_id, run["current_plan_version"], plan["fingerprint"],
+       run["current_policy_version"], policy["fingerprint"], attempt.candidate_id,
+       attempt.base_revision_id, attempt.content_hash, attempt.check_set_fingerprint, packet,
+       packet_ref, Atom.to_string(attempt.reviewer.type), attempt.reviewer.id,
        Atom.to_string(attempt.approver.type), attempt.approver.id, attempt.fencing_token}
 
     actual == expected
@@ -1674,7 +1684,8 @@ defmodule FountRun.Persistence do
     Enum.map(result.rows, &row_map(result.columns, &1))
   end
 
-  defp row_map(columns, row) do
+  @doc false
+  def row_map(columns, row) do
     columns
     |> Enum.zip(row)
     |> Map.new(fn

@@ -54,7 +54,8 @@ defmodule FountRun do
     |> emit(:step)
   end
 
-  def step(repo, run_id, services, opts) when (is_map(services) or is_list(services)) and is_list(opts) do
+  def step(repo, run_id, services, opts)
+      when (is_map(services) or is_list(services)) and is_list(opts) do
     services = if is_list(services), do: Map.new(services), else: services
 
     case Map.get(services, :actor_context) || Map.get(services, "actor_context") do

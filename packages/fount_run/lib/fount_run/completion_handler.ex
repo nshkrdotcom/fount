@@ -33,7 +33,6 @@ defmodule FountRun.CompletionHandler do
         stale_checkpoint(repo, claim, run, packet, head_revision_id, context)
       end
     else
-      false -> {:error, :candidate_required}
       {:error, _} = error -> error
     end
   end
@@ -60,8 +59,11 @@ defmodule FountRun.CompletionHandler do
         with {:ok, approver} <- Principal.from_map(policy["approver"] || %{}),
              :ok <- completion_check_gate(opts[:run_check], packet, approver.type) do
           case approver.type do
-            :human -> human_checkpoint(repo, claim, run, packet, approver, context, nil)
-            type when type in [:agent, :service] -> automated(repo, claim, run, packet, approver, context, opts)
+            :human ->
+              human_checkpoint(repo, claim, run, packet, approver, context, nil)
+
+            type when type in [:agent, :service] ->
+              automated(repo, claim, run, packet, approver, context, opts)
           end
         end
 
@@ -73,7 +75,8 @@ defmodule FountRun.CompletionHandler do
   defp automated(repo, claim, run, packet, approver, context, opts) do
     with %ActorContext{} = approval_context <- Keyword.get(opts, :approval_context),
          callback when is_function(callback, 1) <- Keyword.get(opts, :approval_callback),
-         true <- same_principal?(approval_context.principal, approver) or {:error, :wrong_approver} do
+         true <-
+           same_principal?(approval_context.principal, approver) or {:error, :wrong_approver} do
       approval_opts =
         opts
         |> Keyword.put(:step_id, claim["step_id"])
@@ -101,10 +104,26 @@ defmodule FountRun.CompletionHandler do
            })}
 
         {:ok, %{"outcome" => "rejected"} = attempt} ->
-          fallback_or_partial(repo, claim, run, packet, context, attempt["id"], "reviewer_rejected")
+          fallback_or_partial(
+            repo,
+            claim,
+            run,
+            packet,
+            context,
+            attempt["id"],
+            "reviewer_rejected"
+          )
 
         {:partial, :approval_outcome_unknown, details} ->
-          fallback_or_partial(repo, claim, run, packet, context, details["approval_attempt_id"], "approval_outcome_unknown")
+          fallback_or_partial(
+            repo,
+            claim,
+            run,
+            packet,
+            context,
+            details["approval_attempt_id"],
+            "approval_outcome_unknown"
+          )
 
         {:partial, :approval_paused, details} ->
           {:partial, :approval_paused, Map.put(details, "candidate_id", packet["candidate_id"])}
@@ -130,14 +149,22 @@ defmodule FountRun.CompletionHandler do
       {true, %{}} ->
         with {:ok, principal} <- Principal.from_map(fallback) do
           if parent_attempt_id do
-            _ = Persistence.record_approval_outcome(repo, parent_attempt_id, "fenced", "fallback_started", context)
+            _ =
+              Persistence.record_approval_outcome(
+                repo,
+                parent_attempt_id,
+                "fenced",
+                "fallback_started",
+                context
+              )
           end
 
           human_checkpoint(repo, claim, run, packet, principal, context, parent_attempt_id)
         end
 
       _ ->
-        {:partial, :approval_not_completed, %{"reason" => inspect(reason), "candidate_id" => packet["candidate_id"]}}
+        {:partial, :approval_not_completed,
+         %{"reason" => inspect(reason), "candidate_id" => packet["candidate_id"]}}
     end
   end
 
@@ -163,15 +190,28 @@ defmodule FountRun.CompletionHandler do
       "kind" => "final_approval",
       "prompt" => "Approve or reject this exact checked candidate for canonical acceptance.",
       "options" => [
-        %{"id" => "approve", "label" => "Accept candidate", "parent_attempt_id" => parent_attempt_id},
-        %{"id" => "reject", "label" => "Keep candidate only", "parent_attempt_id" => parent_attempt_id},
-        %{"id" => "replace", "label" => "Replace with edited Fountain and re-check", "parent_attempt_id" => parent_attempt_id}
+        %{
+          "id" => "approve",
+          "label" => "Accept candidate",
+          "parent_attempt_id" => parent_attempt_id
+        },
+        %{
+          "id" => "reject",
+          "label" => "Keep candidate only",
+          "parent_attempt_id" => parent_attempt_id
+        },
+        %{
+          "id" => "replace",
+          "label" => "Replace with edited Fountain and re-check",
+          "parent_attempt_id" => parent_attempt_id
+        }
       ],
       "step_id" => claim["step_id"],
       "candidate_id" => packet["candidate_id"],
       "base_revision_id" => packet["base_revision_id"],
       "content_hash" => packet["content_hash"],
-      "check_set_fingerprint" => packet["run_check_set_fingerprint"] || packet["check_set_fingerprint"],
+      "check_set_fingerprint" =>
+        packet["run_check_set_fingerprint"] || packet["check_set_fingerprint"],
       "authorized_principal" => Principal.to_map(approver)
     }
 
@@ -206,7 +246,8 @@ defmodule FountRun.CompletionHandler do
       "candidate_id" => packet["candidate_id"],
       "base_revision_id" => packet["base_revision_id"],
       "content_hash" => packet["content_hash"],
-      "check_set_fingerprint" => packet["run_check_set_fingerprint"] || packet["check_set_fingerprint"],
+      "check_set_fingerprint" =>
+        packet["run_check_set_fingerprint"] || packet["check_set_fingerprint"],
       "authorized_principal" => Principal.to_map(context.owner)
     }
 
@@ -270,11 +311,20 @@ defmodule FountRun.CompletionHandler do
 
   defp exact_candidate(run, packet, candidate_id) do
     cond do
-      packet["candidate_id"] != candidate_id -> {:error, :candidate_binding_mismatch}
-      packet["screenplay_id"] != run["screenplay_id"] -> {:error, :candidate_screenplay_mismatch}
-      packet["base_revision_id"] != get_in(run, ["plan", "base_revision_id"]) -> {:error, :candidate_plan_base_mismatch}
-      not is_binary(packet["check_set_fingerprint"]) -> {:error, :candidate_check_snapshot_missing}
-      true -> :ok
+      packet["candidate_id"] != candidate_id ->
+        {:error, :candidate_binding_mismatch}
+
+      packet["screenplay_id"] != run["screenplay_id"] ->
+        {:error, :candidate_screenplay_mismatch}
+
+      packet["base_revision_id"] != get_in(run, ["plan", "base_revision_id"]) ->
+        {:error, :candidate_plan_base_mismatch}
+
+      not is_binary(packet["check_set_fingerprint"]) ->
+        {:error, :candidate_check_snapshot_missing}
+
+      true ->
+        :ok
     end
   end
 

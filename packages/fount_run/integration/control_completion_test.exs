@@ -33,14 +33,17 @@ defmodule FountRun.ControlCompletionIntegrationTest do
     %{repo: Repo, prefix: prefix}
   end
 
-  test "C05/C02 public plan and policy commands replay exactly and pause survives Repo restart", %{repo: repo, prefix: prefix} do
+  test "C05/C02 public plan and policy commands replay exactly and pause survives Repo restart",
+       %{repo: repo, prefix: prefix} do
     {key, root} = seed_screenplay(repo, "steering")
     {_owner, context} = owner_context(root.id, "steering-owner")
     {:ok, run} = FountRun.start_run(repo, start_attrs(root, "steering-run"), context)
 
     plan =
       run["plan"]
-      |> Map.take(~w(screenplay_id base_revision_id goal scope constraints protected_material input_brief input_notes operation_parameters))
+      |> Map.take(
+        ~w(screenplay_id base_revision_id goal scope constraints protected_material input_brief input_notes operation_parameters)
+      )
       |> Map.put("goal", "Sharpen the opening while preserving the accepted base")
 
     assert {:ok, first} =
@@ -62,13 +65,19 @@ defmodule FountRun.ControlCompletionIntegrationTest do
     assert replay["replay"] == true
 
     assert {:error, :command_id_conflict} =
-             FountRun.update_plan(repo, run["id"], Map.put(plan, "goal", "Different retry"), context,
+             FountRun.update_plan(
+               repo,
+               run["id"],
+               Map.put(plan, "goal", "Different retry"),
+               context,
                expected_version: 1,
                command_id: "plan-command-1"
              )
 
     current = elem(FountRun.get_run(repo, run["id"], context), 1)
-    policy = put_in(current, ["policy", "policy", "limits", "max_iterations"], 5)["policy"]["policy"]
+
+    policy =
+      put_in(current, ["policy", "policy", "limits", "max_iterations"], 5)["policy"]["policy"]
 
     assert {:ok, policy_update} =
              FountRun.update_policy(repo, run["id"], policy, context,
@@ -91,25 +100,47 @@ defmodule FountRun.ControlCompletionIntegrationTest do
     assert canonical.revision.id == root.revision.id
   end
 
-  test "C01/C03 exact human approval replays to one Core acceptance and rejects wrong bindings", %{repo: repo} do
+  test "C01/C03 exact human approval replays to one Core acceptance and rejects wrong bindings",
+       %{repo: repo} do
     {key, root} = seed_screenplay(repo, "human-approval")
     {owner, context} = owner_context(root.id, "human-owner")
     candidate = candidate_from_edit(repo, key, root, "Mara leaves before dawn.")
 
     {:ok, run} =
-      FountRun.start_run(repo, start_attrs(root, "human-run", completion: "accept", approver: owner), context)
+      FountRun.start_run(
+        repo,
+        start_attrs(root, "human-run", completion: "accept", approver: owner),
+        context
+      )
 
     decision = final_decision(repo, run, candidate, owner, context)
     request = approval_response(decision)
 
-    tasks = for _ <- 1..2, do: Task.async(fn -> FountRun.approve_run(repo, run["id"], request, context) end)
+    tasks =
+      for _ <- 1..2,
+          do: Task.async(fn -> FountRun.approve_run(repo, run["id"], request, context) end)
+
     results = Enum.map(tasks, &Task.await(&1, 15_000))
     assert Enum.all?(results, &match?({:ok, _}, &1))
 
     approval_ids = results |> Enum.map(fn {:ok, value} -> value["approval_id"] end) |> Enum.uniq()
     assert length(approval_ids) == 1
-    assert [[1]] = sql(repo, "SELECT count(*) FROM acceptances WHERE screenplay_id=$1::text::uuid", [root.id])
-    assert [[1]] = sql(repo, "SELECT count(*) FROM fount_run_approval_attempts WHERE run_id=$1::text::uuid AND outcome='accepted'", [run["id"]])
+
+    assert [[1]] =
+             sql(
+               repo,
+               "SELECT count(*) FROM acceptances WHERE screenplay_id=$1::text::uuid AND acceptance_kind='approved'",
+               [
+                 root.id
+               ]
+             )
+
+    assert [[1]] =
+             sql(
+               repo,
+               "SELECT count(*) FROM fount_run_approval_attempts WHERE run_id=$1::text::uuid AND outcome='accepted'",
+               [run["id"]]
+             )
 
     assert {:ok, head} = Persistence.load(repo, key)
     assert head.revision.id == candidate.screenplay.revision.id
@@ -118,14 +149,15 @@ defmodule FountRun.ControlCompletionIntegrationTest do
              FountRun.approve_run(repo, ID.v4(), request, context)
 
     bad = Map.put(request, "context_fingerprint", String.duplicate("0", 64))
-    assert {:error, :decision_conflict} = FountRun.approve_run(repo, run["id"], bad, context)
+    assert {:error, :stale_decision_context} = FountRun.approve_run(repo, run["id"], bad, context)
 
     {:ok, other} = Principal.new(:human, "other-reviewer")
     {:ok, other_context} = ActorContext.new(other, owner, root.id, [:read_run, :manage_run])
     assert {:error, :unauthorized} = FountRun.approve_run(repo, run["id"], request, other_context)
   end
 
-  test "C02 a stopped run fences an in-flight callback, retains safe evidence, and cannot accept later", %{repo: repo} do
+  test "C02 a stopped run fences an in-flight callback, retains safe evidence, and cannot accept later",
+       %{repo: repo} do
     {key, root} = seed_screenplay(repo, "stop-callback")
     candidate = candidate_from_edit(repo, key, root, "Mara locks the door.")
     {:ok, owner} = Principal.new(:human, "stop-owner")
@@ -138,7 +170,11 @@ defmodule FountRun.ControlCompletionIntegrationTest do
       ActorContext.new(service, owner, root.id, [:read_run, :manage_run], approvers: [service])
 
     {:ok, run} =
-      FountRun.start_run(repo, start_attrs(root, "stop-callback-run", completion: "accept", approver: service), owner_context)
+      FountRun.start_run(
+        repo,
+        start_attrs(root, "stop-callback-run", completion: "accept", approver: service),
+        owner_context
+      )
 
     parent = self()
 
@@ -152,15 +188,32 @@ defmodule FountRun.ControlCompletionIntegrationTest do
 
     task =
       Task.async(fn ->
-        ApprovalBridge.automated(repo, run, candidate.id, owner_context, service_context, callback)
+        ApprovalBridge.automated(
+          repo,
+          run,
+          candidate.id,
+          owner_context,
+          service_context,
+          callback
+        )
       end)
 
     assert_receive {:approval_callback_started, callback_pid}, 5_000
-    assert {:ok, %{"run" => %{"status" => "stopped"}}} = FountRun.stop_run(repo, run["id"], owner_context)
+
+    assert {:ok, %{"run" => %{"status" => "stopped"}}} =
+             FountRun.stop_run(repo, run["id"], owner_context)
+
     send(callback_pid, :release_callback)
     assert {:error, :already_resolved} = Task.await(task, 15_000)
 
-    assert [[0]] = sql(repo, "SELECT count(*) FROM acceptances WHERE screenplay_id=$1::text::uuid", [root.id])
+    assert [[0]] =
+             sql(
+               repo,
+               "SELECT count(*) FROM acceptances WHERE screenplay_id=$1::text::uuid AND acceptance_kind='approved'",
+               [
+                 root.id
+               ]
+             )
 
     [[outcome, callback_evidence]] =
       sql(
@@ -176,13 +229,22 @@ defmodule FountRun.ControlCompletionIntegrationTest do
     never_again = fn _packet -> flunk("stopped approval callback must not be redispatched") end
 
     assert {:error, :stopped} =
-             ApprovalBridge.automated(repo, run, candidate.id, owner_context, service_context, never_again)
+             ApprovalBridge.automated(
+               repo,
+               run,
+               candidate.id,
+               owner_context,
+               service_context,
+               never_again
+             )
 
     assert {:ok, head} = Persistence.load(repo, key)
     assert head.revision.id == root.revision.id
   end
 
-  test "C04 malformed automated review keeps redacted evidence and never reaches Core", %{repo: repo} do
+  test "C04 malformed automated review keeps redacted evidence and never reaches Core", %{
+    repo: repo
+  } do
     {key, root} = seed_screenplay(repo, "malformed-review")
     candidate = candidate_from_edit(repo, key, root, "Mara checks the latch.")
     {:ok, owner} = Principal.new(:human, "malformed-owner")
@@ -195,7 +257,11 @@ defmodule FountRun.ControlCompletionIntegrationTest do
       ActorContext.new(service, owner, root.id, [:read_run, :manage_run], approvers: [service])
 
     {:ok, run} =
-      FountRun.start_run(repo, start_attrs(root, "malformed-review-run", completion: "accept", approver: service), owner_context)
+      FountRun.start_run(
+        repo,
+        start_attrs(root, "malformed-review-run", completion: "accept", approver: service),
+        owner_context
+      )
 
     callback = fn _packet ->
       %{
@@ -207,7 +273,14 @@ defmodule FountRun.ControlCompletionIntegrationTest do
     end
 
     assert {:error, :malformed_approval_response} =
-             ApprovalBridge.automated(repo, run, candidate.id, owner_context, service_context, callback)
+             ApprovalBridge.automated(
+               repo,
+               run,
+               candidate.id,
+               owner_context,
+               service_context,
+               callback
+             )
 
     [[outcome, evidence]] =
       sql(
@@ -219,10 +292,19 @@ defmodule FountRun.ControlCompletionIntegrationTest do
     assert outcome == "invalid"
     assert evidence =~ "provider_private"
     refute evidence =~ "must-not-persist"
-    assert [[0]] = sql(repo, "SELECT count(*) FROM acceptances WHERE screenplay_id=$1::text::uuid", [root.id])
+
+    assert [[0]] =
+             sql(
+               repo,
+               "SELECT count(*) FROM acceptances WHERE screenplay_id=$1::text::uuid AND acceptance_kind='approved'",
+               [
+                 root.id
+               ]
+             )
   end
 
-  test "C04 rejected automation opens a fresh human fallback decision linked to the failed attempt", %{repo: repo} do
+  test "C04 rejected automation opens a fresh human fallback decision linked to the failed attempt",
+       %{repo: repo} do
     {key, root} = seed_screenplay(repo, "fallback")
     candidate = candidate_from_edit(repo, key, root, "Mara leaves the porch light on.")
     {:ok, owner} = Principal.new(:human, "fallback-owner")
@@ -237,12 +319,24 @@ defmodule FountRun.ControlCompletionIntegrationTest do
     {:ok, run} =
       FountRun.start_run(
         repo,
-        start_attrs(root, "fallback-run", completion: "accept", approver: service, fallback_approver: owner),
+        start_attrs(root, "fallback-run",
+          completion: "accept",
+          approver: service,
+          fallback_approver: owner
+        ),
         owner_context
       )
 
     {:ok, packet} = FountWorkshop.Review.packet(repo, candidate.id)
-    :ok = persist_succeeded_check(repo, run, candidate.id, packet["check_set_fingerprint"], owner_context)
+
+    :ok =
+      persist_succeeded_check(
+        repo,
+        run,
+        candidate.id,
+        packet["check_set_fingerprint"],
+        owner_context
+      )
 
     claim = %{
       "stage" => "decide",
@@ -251,7 +345,9 @@ defmodule FountRun.ControlCompletionIntegrationTest do
       "input_candidate_id" => candidate.id
     }
 
-    callback = fn _packet -> %{"recommendation" => "reject", "findings" => [], "overrides" => []} end
+    callback = fn _packet ->
+      %{"recommendation" => "reject", "findings" => [], "overrides" => []}
+    end
 
     assert {:ok, %{"status" => "waiting_for_final_approval", "decision_id" => decision_id}} =
              FountRun.CompletionHandler.execute(claim,
@@ -274,7 +370,9 @@ defmodule FountRun.ControlCompletionIntegrationTest do
     decision = Enum.find(progress["decisions"], &(&1["id"] == decision_id))
     assert decision
 
-    assert {:ok, accepted} = FountRun.approve_run(repo, run["id"], approval_response(decision), owner_context)
+    assert {:ok, accepted} =
+             FountRun.approve_run(repo, run["id"], approval_response(decision), owner_context)
+
     assert accepted["status"] == "accepted"
 
     [[child_parent]] =
@@ -285,16 +383,27 @@ defmodule FountRun.ControlCompletionIntegrationTest do
       )
 
     assert child_parent == parent_id
-    assert [[1]] = sql(repo, "SELECT count(*) FROM acceptances WHERE screenplay_id=$1::text::uuid", [root.id])
+
+    assert [[1]] =
+             sql(
+               repo,
+               "SELECT count(*) FROM acceptances WHERE screenplay_id=$1::text::uuid AND acceptance_kind='approved'",
+               [
+                 root.id
+               ]
+             )
   end
 
-  test "C03 candidate-only completion exports byte-verified artifacts without moving canon", %{repo: repo} do
+  test "C03 candidate-only completion exports byte-verified artifacts without moving canon", %{
+    repo: repo
+  } do
     {key, root} = seed_screenplay(repo, "candidate-export")
     {_owner, context} = owner_context(root.id, "candidate-owner")
     candidate = candidate_from_edit(repo, key, root, "Mara waits at the locked door.")
     {:ok, run} = FountRun.start_run(repo, start_attrs(root, "candidate-run"), context)
 
-    assert {:ok, _} = FountRun.Control.mark_completion(repo, run["id"], candidate.id, "partial", context)
+    assert {:ok, _} =
+             FountRun.Control.mark_completion(repo, run["id"], candidate.id, "partial", context)
 
     artifact_root = Path.join(System.tmp_dir!(), "fount-run-phase05-#{ID.v4()}")
     on_exit(fn -> File.rm_rf(artifact_root) end)
@@ -318,9 +427,95 @@ defmodule FountRun.ControlCompletionIntegrationTest do
     assert head.revision.id == root.revision.id
 
     File.rm!(fountain)
-    assert {:ok, _retry} = FountRun.deliver(repo, run["id"], "bundle", context, artifact_root: artifact_root)
+
+    assert {:ok, _retry} =
+             FountRun.deliver(repo, run["id"], "bundle", context, artifact_root: artifact_root)
+
     assert File.regular?(fountain)
-    assert [[2]] = sql(repo, "SELECT count(*) FROM fount_run_deliveries WHERE run_id=$1::text::uuid AND format='fountain'", [run["id"]])
+
+    assert [[2]] =
+             sql(
+               repo,
+               "SELECT count(*) FROM fount_run_deliveries WHERE run_id=$1::text::uuid AND format='fountain'",
+               [run["id"]]
+             )
+  end
+
+  test "C06 configured PDF failure retries only PDF and verifies every delivered byte", %{
+    repo: repo
+  } do
+    {key, root} = seed_screenplay(repo, "pdf-retry")
+    {_owner, context} = owner_context(root.id, "pdf-owner")
+    candidate = candidate_from_edit(repo, key, root, "Mara folds the receipt.")
+    {:ok, run} = FountRun.start_run(repo, start_attrs(root, "pdf-retry-run"), context)
+
+    assert {:ok, _} =
+             FountRun.Control.mark_completion(repo, run["id"], candidate.id, "partial", context)
+
+    artifact_root = Path.join(System.tmp_dir!(), "fount-run-pdf-#{ID.v4()}")
+    on_exit(fn -> File.rm_rf(artifact_root) end)
+
+    assert {:partial, :delivery_partial, first} =
+             FountRun.deliver(repo, run["id"], "bundle", context,
+               artifact_root: artifact_root,
+               pdf: true,
+               pdf_options: [renderer: "/no/such/afterwriting"]
+             )
+
+    assert Enum.find(first["manifest"]["artifacts"], &(&1["format"] == "pdf"))["state"] ==
+             "failed"
+
+    assert [[1]] =
+             sql(
+               repo,
+               "SELECT count(*) FROM fount_run_deliveries WHERE run_id=$1::text::uuid AND format='pdf' AND state='failed'",
+               [run["id"]]
+             )
+
+    assert {:ok, second} =
+             FountRun.deliver(repo, run["id"], "bundle", context,
+               artifact_root: artifact_root,
+               pdf: true
+             )
+
+    artifacts = second["manifest"]["artifacts"]
+    assert Enum.all?(artifacts, &(&1["state"] == "ready"))
+    assert Enum.count(artifacts, &(&1["format"] == "pdf")) == 1
+    assert Enum.all?(Enum.reject(artifacts, &(&1["format"] == "pdf")), & &1["reused"])
+
+    Enum.each(artifacts, fn artifact ->
+      bytes = File.read!(Path.join(artifact_root, artifact["output_location"]))
+      assert sha256(bytes) == artifact["output_checksum"]
+    end)
+
+    assert [[2]] =
+             sql(
+               repo,
+               "SELECT count(*) FROM fount_run_deliveries WHERE run_id=$1::text::uuid AND format='pdf'",
+               [run["id"]]
+             )
+
+    assert [[1]] =
+             sql(
+               repo,
+               "SELECT count(*) FROM fount_run_deliveries WHERE run_id=$1::text::uuid AND format='fountain'",
+               [run["id"]]
+             )
+
+    pdf = Path.join([artifact_root, "bundle", "screenplay.pdf"])
+    {info, 0} = System.cmd("pdfinfo", [pdf])
+    assert info =~ "Pages:"
+
+    IO.puts(
+      "PDF_QC " <>
+        (info
+         |> String.split("\n")
+         |> Enum.filter(&String.starts_with?(&1, ["Pages:", "Page size:"]))
+         |> Enum.join(" | "))
+    )
+
+    assert {:ok, head} = Persistence.load(repo, key)
+    assert head.revision.id == root.revision.id
   end
 
   test "C05 a plan change fences a saved automated review before Core acceptance", %{repo: repo} do
@@ -336,9 +531,15 @@ defmodule FountRun.ControlCompletionIntegrationTest do
       ActorContext.new(service, owner, root.id, [:read_run, :manage_run], approvers: [service])
 
     {:ok, run} =
-      FountRun.start_run(repo, start_attrs(root, "plan-fence-run", completion: "accept", approver: service), owner_context)
+      FountRun.start_run(
+        repo,
+        start_attrs(root, "plan-fence-run", completion: "accept", approver: service),
+        owner_context
+      )
 
-    callback = fn _packet -> %{"recommendation" => "approve", "findings" => [], "overrides" => []} end
+    callback = fn _packet ->
+      %{"recommendation" => "approve", "findings" => [], "overrides" => []}
+    end
 
     fault = fn
       :after_review_persistence -> {:error, :hold_after_review}
@@ -346,7 +547,13 @@ defmodule FountRun.ControlCompletionIntegrationTest do
     end
 
     assert {:error, {:fault, :after_review_persistence, :hold_after_review}} =
-             ApprovalBridge.automated(repo, run, candidate.id, owner_context, service_context, callback,
+             ApprovalBridge.automated(
+               repo,
+               run,
+               candidate.id,
+               owner_context,
+               service_context,
+               callback,
                fault_injector: fault
              )
 
@@ -354,8 +561,12 @@ defmodule FountRun.ControlCompletionIntegrationTest do
 
     plan =
       current["plan"]
-      |> Map.take(~w(screenplay_id base_revision_id goal scope constraints protected_material input_brief input_notes operation_parameters))
-      |> Map.put("input_notes", "Changed after review")
+      |> Map.take(
+        ~w(screenplay_id base_revision_id goal scope constraints protected_material input_brief input_notes operation_parameters)
+      )
+      |> Map.put("input_notes", [
+        %{"reference" => "test://review", "sha256" => sha256("Changed after review")}
+      ])
 
     assert {:ok, updated} =
              FountRun.update_plan(repo, run["id"], plan, owner_context,
@@ -366,13 +577,34 @@ defmodule FountRun.ControlCompletionIntegrationTest do
     assert updated["plan"]["version"] == 2
 
     assert {:error, {:approval_attempt_terminal, "fenced", _reason}} =
-             ApprovalBridge.automated(repo, run, candidate.id, owner_context, service_context, callback)
+             ApprovalBridge.automated(
+               repo,
+               run,
+               candidate.id,
+               owner_context,
+               service_context,
+               callback
+             )
 
-    assert [[0]] = sql(repo, "SELECT count(*) FROM acceptances WHERE screenplay_id=$1::text::uuid", [root.id])
-    assert [["fenced"]] = sql(repo, "SELECT outcome FROM fount_run_approval_attempts WHERE run_id=$1::text::uuid", [run["id"]])
+    assert [[0]] =
+             sql(
+               repo,
+               "SELECT count(*) FROM acceptances WHERE screenplay_id=$1::text::uuid AND acceptance_kind='approved'",
+               [
+                 root.id
+               ]
+             )
+
+    assert [["fenced"]] =
+             sql(
+               repo,
+               "SELECT outcome FROM fount_run_approval_attempts WHERE run_id=$1::text::uuid",
+               [run["id"]]
+             )
   end
 
-  test "C06 ambiguous callback response pauses for reconciliation and never blindly redispatches", %{repo: repo} do
+  test "C06 ambiguous callback response pauses for reconciliation and never blindly redispatches",
+       %{repo: repo} do
     {key, root} = seed_screenplay(repo, "unknown-recovery")
     candidate = candidate_from_edit(repo, key, root, "Mara closes the ledger.")
     {:ok, owner} = Principal.new(:human, "unknown-owner")
@@ -385,7 +617,11 @@ defmodule FountRun.ControlCompletionIntegrationTest do
       ActorContext.new(service, owner, root.id, [:read_run, :manage_run], approvers: [service])
 
     {:ok, run} =
-      FountRun.start_run(repo, start_attrs(root, "unknown-run", completion: "accept", approver: service), owner_context)
+      FountRun.start_run(
+        repo,
+        start_attrs(root, "unknown-run", completion: "accept", approver: service),
+        owner_context
+      )
 
     {:ok, calls} = Agent.start_link(fn -> 0 end)
 
@@ -400,7 +636,13 @@ defmodule FountRun.ControlCompletionIntegrationTest do
     end
 
     assert {:partial, :approval_outcome_unknown, %{"approval_attempt_id" => attempt_id}} =
-             ApprovalBridge.automated(repo, run, candidate.id, owner_context, service_context, callback,
+             ApprovalBridge.automated(
+               repo,
+               run,
+               candidate.id,
+               owner_context,
+               service_context,
+               callback,
                fault_injector: fault
              )
 
@@ -409,7 +651,14 @@ defmodule FountRun.ControlCompletionIntegrationTest do
     never_again = fn _packet -> flunk("unknown callback must be reconciled, not redispatched") end
 
     assert {:partial, :approval_outcome_unknown, %{"approval_attempt_id" => ^attempt_id}} =
-             ApprovalBridge.automated(repo, run, candidate.id, owner_context, service_context, never_again)
+             ApprovalBridge.automated(
+               repo,
+               run,
+               candidate.id,
+               owner_context,
+               service_context,
+               never_again
+             )
 
     reconciler = fn operation_id, _packet ->
       assert is_binary(operation_id)
@@ -417,16 +666,31 @@ defmodule FountRun.ControlCompletionIntegrationTest do
     end
 
     assert {:ok, accepted} =
-             ApprovalBridge.automated(repo, run, candidate.id, owner_context, service_context, never_again,
+             ApprovalBridge.automated(
+               repo,
+               run,
+               candidate.id,
+               owner_context,
+               service_context,
+               never_again,
                approval_reconciler: reconciler
              )
 
     assert accepted["status"] == "accepted"
     assert Agent.get(calls, & &1) == 1
-    assert [[1]] = sql(repo, "SELECT count(*) FROM acceptances WHERE screenplay_id=$1::text::uuid", [root.id])
+
+    assert [[1]] =
+             sql(
+               repo,
+               "SELECT count(*) FROM acceptances WHERE screenplay_id=$1::text::uuid AND acceptance_kind='approved'",
+               [
+                 root.id
+               ]
+             )
   end
 
-  test "C06 saved approval payload resumes with the same approval identity and no callback replay", %{repo: repo} do
+  test "C06 saved approval payload resumes with the same approval identity and no callback replay",
+       %{repo: repo} do
     {key, root} = seed_screenplay(repo, "payload-recovery")
     candidate = candidate_from_edit(repo, key, root, "Mara pockets the receipt.")
     {:ok, owner} = Principal.new(:human, "payload-owner")
@@ -439,7 +703,11 @@ defmodule FountRun.ControlCompletionIntegrationTest do
       ActorContext.new(service, owner, root.id, [:read_run, :manage_run], approvers: [service])
 
     {:ok, run} =
-      FountRun.start_run(repo, start_attrs(root, "payload-run", completion: "accept", approver: service), owner_context)
+      FountRun.start_run(
+        repo,
+        start_attrs(root, "payload-run", completion: "accept", approver: service),
+        owner_context
+      )
 
     {:ok, calls} = Agent.start_link(fn -> 0 end)
 
@@ -454,7 +722,13 @@ defmodule FountRun.ControlCompletionIntegrationTest do
     end
 
     assert {:error, {:fault, :after_approval_payload_persistence, :payload_saved}} =
-             ApprovalBridge.automated(repo, run, candidate.id, owner_context, service_context, callback,
+             ApprovalBridge.automated(
+               repo,
+               run,
+               candidate.id,
+               owner_context,
+               service_context,
+               callback,
                fault_injector: fault
              )
 
@@ -469,14 +743,31 @@ defmodule FountRun.ControlCompletionIntegrationTest do
     assert Agent.get(calls, & &1) == 1
 
     assert {:ok, accepted} =
-             ApprovalBridge.automated(repo, run, candidate.id, owner_context, service_context, callback)
+             ApprovalBridge.automated(
+               repo,
+               run,
+               candidate.id,
+               owner_context,
+               service_context,
+               callback
+             )
 
     assert accepted["approval_id"] == approval_id
     assert Agent.get(calls, & &1) == 1
-    assert [[1]] = sql(repo, "SELECT count(*) FROM acceptances WHERE screenplay_id=$1::text::uuid", [root.id])
+
+    assert [[1]] =
+             sql(
+               repo,
+               "SELECT count(*) FROM acceptances WHERE screenplay_id=$1::text::uuid AND acceptance_kind='approved'",
+               [
+                 root.id
+               ]
+             )
   end
 
-  test "C07 CLI execution delegates to the same public start, control, show, and export paths", %{repo: repo} do
+  test "C07 CLI execution delegates to the same public start, control, show, and export paths", %{
+    repo: repo
+  } do
     {key, root} = seed_screenplay(repo, "cli-journey")
     {_owner, context} = owner_context(root.id, "cli-owner")
     candidate = candidate_from_edit(repo, key, root, "Mara folds the note twice.")
@@ -494,22 +785,31 @@ defmodule FountRun.ControlCompletionIntegrationTest do
 
     assert {0, %{"result" => shown}} = FountRun.CLI.run(["show", run["id"]], runtime: runtime)
     assert shown["id"] == run["id"]
+
     assert {0, %{"result" => %{"run" => %{"status" => "paused"}}}} =
              FountRun.CLI.run(["pause", run["id"]], runtime: runtime)
+
     assert {0, %{"result" => %{"run" => resumed}}} =
              FountRun.CLI.run(["resume", run["id"]], runtime: runtime)
+
     refute resumed["status"] == "paused"
 
-    assert {:ok, _} = FountRun.Control.mark_completion(repo, run["id"], candidate.id, "partial", context)
+    assert {:ok, _} =
+             FountRun.Control.mark_completion(repo, run["id"], candidate.id, "partial", context)
 
     assert {0, %{"result" => delivered}} =
-             FountRun.CLI.run(["export", run["id"], "--destination", "cli-bundle"], runtime: runtime)
+             FountRun.CLI.run(["export", run["id"], "--destination", "cli-bundle"],
+               runtime: runtime
+             )
 
     assert delivered["manifest"]["candidate_id"] == candidate.id
-    assert File.read!(Path.join([artifact_root, "cli-bundle", "screenplay.fountain"])) =~ "Mara folds the note twice."
+
+    assert File.read!(Path.join([artifact_root, "cli-bundle", "screenplay.fountain"])) =~
+             "Mara folds the note twice."
   end
 
-  test "C06 saved automated review resumes without a second callback and reuses one approval identity", %{repo: repo} do
+  test "C06 saved automated review resumes without a second callback and reuses one approval identity",
+       %{repo: repo} do
     {key, root} = seed_screenplay(repo, "review-recovery")
     candidate = candidate_from_edit(repo, key, root, "Mara shuts the window.")
     {:ok, owner} = Principal.new(:human, "recovery-owner")
@@ -522,9 +822,14 @@ defmodule FountRun.ControlCompletionIntegrationTest do
       ActorContext.new(service, owner, root.id, [:read_run, :manage_run], approvers: [service])
 
     {:ok, run} =
-      FountRun.start_run(repo, start_attrs(root, "review-recovery-run", completion: "accept", approver: service), owner_context)
+      FountRun.start_run(
+        repo,
+        start_attrs(root, "review-recovery-run", completion: "accept", approver: service),
+        owner_context
+      )
 
     {:ok, calls} = Agent.start_link(fn -> 0 end)
+
     callback = fn _packet ->
       Agent.update(calls, &(&1 + 1))
       %{"recommendation" => "approve", "findings" => [], "overrides" => []}
@@ -536,22 +841,50 @@ defmodule FountRun.ControlCompletionIntegrationTest do
     end
 
     assert {:error, {:fault, :after_review_persistence, :simulated_crash}} =
-             ApprovalBridge.automated(repo, run, candidate.id, owner_context, service_context, callback,
+             ApprovalBridge.automated(
+               repo,
+               run,
+               candidate.id,
+               owner_context,
+               service_context,
+               callback,
                fault_injector: fault
              )
 
     assert Agent.get(calls, & &1) == 1
 
     assert {:ok, accepted} =
-             ApprovalBridge.automated(repo, run, candidate.id, owner_context, service_context, callback)
+             ApprovalBridge.automated(
+               repo,
+               run,
+               candidate.id,
+               owner_context,
+               service_context,
+               callback
+             )
 
     assert Agent.get(calls, & &1) == 1
     assert accepted["status"] == "accepted"
-    assert [[1]] = sql(repo, "SELECT count(*) FROM acceptances WHERE screenplay_id=$1::text::uuid", [root.id])
-    assert [[1]] = sql(repo, "SELECT count(*) FROM fount_run_approval_attempts WHERE run_id=$1::text::uuid", [run["id"]])
+
+    assert [[1]] =
+             sql(
+               repo,
+               "SELECT count(*) FROM acceptances WHERE screenplay_id=$1::text::uuid AND acceptance_kind='approved'",
+               [
+                 root.id
+               ]
+             )
+
+    assert [[1]] =
+             sql(
+               repo,
+               "SELECT count(*) FROM fount_run_approval_attempts WHERE run_id=$1::text::uuid",
+               [run["id"]]
+             )
   end
 
-  test "C06 lost acknowledgement after acceptance commit replays the accepted attempt without callback", %{repo: repo} do
+  test "C06 lost acknowledgement after acceptance commit replays the accepted attempt without callback",
+       %{repo: repo} do
     {key, root} = seed_screenplay(repo, "ack-recovery")
     candidate = candidate_from_edit(repo, key, root, "Mara turns out the hall light.")
     {:ok, owner} = Principal.new(:human, "ack-owner")
@@ -564,9 +897,14 @@ defmodule FountRun.ControlCompletionIntegrationTest do
       ActorContext.new(agent, owner, root.id, [:read_run, :manage_run], approvers: [agent])
 
     {:ok, run} =
-      FountRun.start_run(repo, start_attrs(root, "ack-run", completion: "accept", approver: agent), owner_context)
+      FountRun.start_run(
+        repo,
+        start_attrs(root, "ack-run", completion: "accept", approver: agent),
+        owner_context
+      )
 
     {:ok, calls} = Agent.start_link(fn -> 0 end)
+
     callback = fn _packet ->
       Agent.update(calls, &(&1 + 1))
       %{"recommendation" => "approve", "findings" => [], "overrides" => []}
@@ -578,19 +916,48 @@ defmodule FountRun.ControlCompletionIntegrationTest do
     end
 
     assert {:error, {:fault, :after_acceptance_commit, :lost_ack}} =
-             ApprovalBridge.automated(repo, run, candidate.id, owner_context, agent_context, callback,
+             ApprovalBridge.automated(
+               repo,
+               run,
+               candidate.id,
+               owner_context,
+               agent_context,
+               callback,
                fault_injector: fault
              )
 
-    assert [[1]] = sql(repo, "SELECT count(*) FROM acceptances WHERE screenplay_id=$1::text::uuid", [root.id])
+    assert [[1]] =
+             sql(
+               repo,
+               "SELECT count(*) FROM acceptances WHERE screenplay_id=$1::text::uuid AND acceptance_kind='approved'",
+               [
+                 root.id
+               ]
+             )
+
     assert Agent.get(calls, & &1) == 1
 
     assert {:ok, replay} =
-             ApprovalBridge.automated(repo, run, candidate.id, owner_context, agent_context, callback)
+             ApprovalBridge.automated(
+               repo,
+               run,
+               candidate.id,
+               owner_context,
+               agent_context,
+               callback
+             )
 
     assert replay["replay"] == true
     assert Agent.get(calls, & &1) == 1
-    assert [[1]] = sql(repo, "SELECT count(*) FROM acceptances WHERE screenplay_id=$1::text::uuid", [root.id])
+
+    assert [[1]] =
+             sql(
+               repo,
+               "SELECT count(*) FROM acceptances WHERE screenplay_id=$1::text::uuid AND acceptance_kind='approved'",
+               [
+                 root.id
+               ]
+             )
   end
 
   defp seed_screenplay(repo, suffix) do
@@ -662,7 +1029,8 @@ defmodule FountRun.ControlCompletionIntegrationTest do
         },
         "completion" => completion,
         "approver" => if(approver, do: Principal.to_map(approver), else: nil),
-        "fallback_approver" => if(fallback_approver, do: Principal.to_map(fallback_approver), else: nil),
+        "fallback_approver" =>
+          if(fallback_approver, do: Principal.to_map(fallback_approver), else: nil),
         "route_choice" => %{"rule" => "pause_on_material_tradeoff"},
         "limits" => %{}
       }
@@ -671,7 +1039,9 @@ defmodule FountRun.ControlCompletionIntegrationTest do
 
   defp final_decision(repo, run, candidate, owner, context) do
     {:ok, packet} = FountWorkshop.Review.packet(repo, candidate.id)
-    :ok = persist_succeeded_check(repo, run, candidate.id, packet["check_set_fingerprint"], context)
+
+    :ok =
+      persist_succeeded_check(repo, run, candidate.id, packet["check_set_fingerprint"], context)
 
     attrs = %{
       "checkpoint_key" => "final-approval-test:#{candidate.id}",
@@ -693,7 +1063,6 @@ defmodule FountRun.ControlCompletionIntegrationTest do
     {:ok, decision} = FountRun.Persistence.put_pending_decision(repo, run["id"], attrs, context)
     decision
   end
-
 
   defp persist_succeeded_check(repo, run, candidate_id, fingerprint, context) do
     key = "phase05-test-check:#{candidate_id}:#{fingerprint}"
@@ -753,7 +1122,7 @@ defmodule FountRun.ControlCompletionIntegrationTest do
     )
   end
 
-  defp sql(repo, statement, params \\ []),
+  defp sql(repo, statement, params),
     do: SQL.query!(repo, statement, params, log: false).rows
 
   defp sha256(bytes), do: :crypto.hash(:sha256, bytes) |> Base.encode16(case: :lower)

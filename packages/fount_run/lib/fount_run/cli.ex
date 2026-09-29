@@ -18,11 +18,18 @@ defmodule FountRun.CLI do
   @commands ~w(start show step decisions decide plan pause resume stop policy approve export)
 
   @spec run([String.t()], keyword()) :: {non_neg_integer(), map()}
-  def run(argv, config \\ []) when is_list(argv) and is_list(config) do
+  def run(argv, config \\ [])
+
+  def run(argv, config) when is_list(argv) and is_list(config) do
     case parse(argv) do
-      {:ok, %{help: true} = parsed} -> {0, %{"status" => "help", "usage" => usage(parsed[:command])}}
-      {:ok, parsed} -> execute(parsed, config)
-      {:error, reason} -> {@exit_usage, Map.put(error_payload(reason), "exit_code", @exit_usage)}
+      {:ok, %{help: true} = parsed} ->
+        {0, %{"status" => "help", "usage" => usage(parsed[:command])}}
+
+      {:ok, parsed} ->
+        execute(parsed, config)
+
+      {:error, reason} ->
+        {@exit_usage, Map.put(error_payload(reason), "exit_code", @exit_usage)}
     end
   end
 
@@ -32,6 +39,7 @@ defmodule FountRun.CLI do
   def parse([]), do: {:ok, %{help: true, command: nil}}
 
   def parse(["--help"]), do: {:ok, %{help: true, command: nil}}
+
   def parse([command | rest]) when command in @commands do
     {opts, args, invalid} =
       OptionParser.parse(rest,
@@ -68,7 +76,9 @@ defmodule FountRun.CLI do
          {:ok, value} <- execute_command(command, parsed, runtime) do
       {0, %{"status" => "ok", "result" => Model.plain(value)}}
     else
-      {:error, reason} -> {exit_code(reason), error_payload(reason)}
+      {:error, reason} ->
+        {exit_code(reason), error_payload(reason)}
+
       {:partial, reason, details} ->
         {@exit_runtime,
          %{
@@ -83,8 +93,12 @@ defmodule FountRun.CLI do
   defp parse_command("start", [], opts), do: require_input("start", opts)
   defp parse_command("show", [run_id], _opts), do: {:ok, %{command: "show", run_id: run_id}}
   defp parse_command("step", [run_id], _opts), do: {:ok, %{command: "step", run_id: run_id}}
-  defp parse_command("decisions", [run_id], _opts), do: {:ok, %{command: "decisions", run_id: run_id}}
-  defp parse_command("decide", [decision_id], opts), do: require_input("decide", opts, decision_id: decision_id)
+
+  defp parse_command("decisions", [run_id], _opts),
+    do: {:ok, %{command: "decisions", run_id: run_id}}
+
+  defp parse_command("decide", [decision_id], opts),
+    do: require_input("decide", opts, decision_id: decision_id)
 
   defp parse_command("plan", [run_id], opts) do
     with {:ok, parsed} <- require_input("plan", opts, run_id: run_id),
@@ -96,7 +110,6 @@ defmodule FountRun.CLI do
          command_id: opts[:command_id]
        })}
     else
-      false -> {:error, :invalid_control_options}
       {:error, _} = error -> error
     end
   end
@@ -111,7 +124,6 @@ defmodule FountRun.CLI do
          command_id: opts[:command_id]
        })}
     else
-      false -> {:error, :invalid_control_options}
       {:error, _} = error -> error
     end
   end
@@ -119,7 +131,8 @@ defmodule FountRun.CLI do
   defp parse_command(command, [run_id], _opts) when command in ~w(pause resume stop),
     do: {:ok, %{command: command, run_id: run_id}}
 
-  defp parse_command("approve", [run_id], opts), do: require_input("approve", opts, run_id: run_id)
+  defp parse_command("approve", [run_id], opts),
+    do: require_input("approve", opts, run_id: run_id)
 
   defp parse_command("export", [run_id], opts) do
     if nonempty?(opts[:destination]) do
@@ -159,11 +172,11 @@ defmodule FountRun.CLI do
       {attrs, first_step} = start_payload(payload)
 
       with {:ok, run} <- FountRun.start_run(runtime.repo, attrs, runtime.context),
-           {:ok, result} <- maybe_enqueue_first_step(runtime.repo, run, first_step, runtime.context) do
+           {:ok, result} <-
+             maybe_enqueue_first_step(runtime.repo, run, first_step, runtime.context) do
         {:ok, result}
       end
     else
-      false -> {:error, :input_must_be_object}
       {:error, _} = error -> error
     end
   end
@@ -250,11 +263,21 @@ defmodule FountRun.CLI do
     pdf_options = Keyword.get(configured, :pdf_options, [])
 
     cond do
-      is_nil(repo) or not is_atom(repo) -> {:error, :cli_repo_not_configured}
-      not match?(%ActorContext{}, context) -> {:error, :cli_actor_context_not_configured}
-      not (is_map(services) or is_list(services)) -> {:error, :cli_services_invalid}
-      not is_list(step_options) -> {:error, :cli_step_options_invalid}
-      not is_list(pdf_options) -> {:error, :cli_pdf_options_invalid}
+      is_nil(repo) or not is_atom(repo) ->
+        {:error, :cli_repo_not_configured}
+
+      not match?(%ActorContext{}, context) ->
+        {:error, :cli_actor_context_not_configured}
+
+      not (is_map(services) or is_list(services)) ->
+        {:error, :cli_services_invalid}
+
+      not is_list(step_options) ->
+        {:error, :cli_step_options_invalid}
+
+      not is_list(pdf_options) ->
+        {:error, :cli_pdf_options_invalid}
+
       true ->
         {:ok,
          %{
@@ -326,10 +349,17 @@ defmodule FountRun.CLI do
     tag = reason_tag(reason)
 
     cond do
-      tag in ~w(invalid_cli_arguments unknown_command invalid_options duplicate_options invalid_command_arguments input_required destination_required command_id_required expected_version_required invalid_json input_unreadable input_must_be_object invalid_first_step invalid_decision_response invalid_plan_update invalid_policy_update)a -> @exit_usage
-      tag in ~w(cli_repo_not_configured cli_actor_context_not_configured cli_services_invalid cli_step_options_invalid cli_pdf_options_invalid artifact_root_not_configured unauthorized owner_required wrong_approver unregistered_approver)a -> @exit_config
-      tag in ~w(already_resolved decision_conflict cross_run_decision stale_plan_version stale_policy_version stale_revision stale_plan stale_policy plan_invalidated policy_invalidated idempotency_conflict immutable_review_conflict immutable_approval_conflict stopped pause_requested stop_requested)a -> @exit_conflict
-      true -> @exit_runtime
+      tag in ~w(invalid_cli_arguments unknown_command invalid_options duplicate_options invalid_command_arguments input_required destination_required command_id_required expected_version_required invalid_json input_unreadable input_must_be_object invalid_first_step invalid_decision_response invalid_plan_update invalid_policy_update)a ->
+        @exit_usage
+
+      tag in ~w(cli_repo_not_configured cli_actor_context_not_configured cli_services_invalid cli_step_options_invalid cli_pdf_options_invalid artifact_root_not_configured unauthorized owner_required wrong_approver unregistered_approver)a ->
+        @exit_config
+
+      tag in ~w(already_resolved decision_conflict cross_run_decision stale_plan_version stale_policy_version stale_revision stale_plan stale_policy plan_invalidated policy_invalidated idempotency_conflict immutable_review_conflict immutable_approval_conflict stopped pause_requested stop_requested)a ->
+        @exit_conflict
+
+      true ->
+        @exit_runtime
     end
   end
 
@@ -352,19 +382,44 @@ defmodule FountRun.CLI do
 
   def usage(command) do
     case command do
-      "start" -> "mix fount.run start --input run.json"
-      "show" -> "mix fount.run show RUN_ID"
-      "step" -> "mix fount.run step RUN_ID"
-      "decisions" -> "mix fount.run decisions RUN_ID"
-      "decide" -> "mix fount.run decide DECISION_ID --input response.json"
-      "plan" -> "mix fount.run plan RUN_ID --input plan.json --expected-version N --command-id KEY"
-      "policy" -> "mix fount.run policy RUN_ID --input policy.json --expected-version N --command-id KEY"
-      "pause" -> "mix fount.run pause RUN_ID"
-      "resume" -> "mix fount.run resume RUN_ID"
-      "stop" -> "mix fount.run stop RUN_ID"
-      "approve" -> "mix fount.run approve RUN_ID --input exact-approval.json"
-      "export" -> "mix fount.run export RUN_ID --destination RELATIVE_DIR [--pdf] [--table-read]"
-      _ -> usage(nil)
+      "start" ->
+        "mix fount.run start --input run.json"
+
+      "show" ->
+        "mix fount.run show RUN_ID"
+
+      "step" ->
+        "mix fount.run step RUN_ID"
+
+      "decisions" ->
+        "mix fount.run decisions RUN_ID"
+
+      "decide" ->
+        "mix fount.run decide DECISION_ID --input response.json"
+
+      "plan" ->
+        "mix fount.run plan RUN_ID --input plan.json --expected-version N --command-id KEY"
+
+      "policy" ->
+        "mix fount.run policy RUN_ID --input policy.json --expected-version N --command-id KEY"
+
+      "pause" ->
+        "mix fount.run pause RUN_ID"
+
+      "resume" ->
+        "mix fount.run resume RUN_ID"
+
+      "stop" ->
+        "mix fount.run stop RUN_ID"
+
+      "approve" ->
+        "mix fount.run approve RUN_ID --input exact-approval.json"
+
+      "export" ->
+        "mix fount.run export RUN_ID --destination RELATIVE_DIR [--pdf] [--table-read]"
+
+      _ ->
+        usage(nil)
     end
   end
 end

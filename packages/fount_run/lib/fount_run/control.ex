@@ -8,11 +8,13 @@ defmodule FountRun.Control do
   @open_approval ~w(pending reviewed ready unknown)
   @terminal_run ~w(completed_candidate completed_accepted stopped failed)
 
-  def update_plan(repo, run_id, attrs, %ActorContext{} = context, opts) when is_map(attrs) and is_list(opts) do
+  def update_plan(repo, run_id, attrs, %ActorContext{} = context, opts)
+      when is_map(attrs) and is_list(opts) do
     with {:ok, command_id} <- command_id(opts),
          {:ok, expected_version} <- positive_version(opts, :expected_version) do
       tx(repo, fn ->
         run = locked_run!(repo, run_id, context)
+
         command_fp =
           CanonicalJSON.hash(%{
             "command_id" => command_id,
@@ -57,11 +59,13 @@ defmodule FountRun.Control do
 
   def update_plan(_repo, _run_id, _attrs, _context, _opts), do: {:error, :invalid_plan_update}
 
-  def update_policy(repo, run_id, value, %ActorContext{} = context, opts) when is_map(value) and is_list(opts) do
+  def update_policy(repo, run_id, value, %ActorContext{} = context, opts)
+      when is_map(value) and is_list(opts) do
     with {:ok, command_id} <- command_id(opts),
          {:ok, expected_version} <- positive_version(opts, :expected_version) do
       tx(repo, fn ->
         run = locked_run!(repo, run_id, context)
+
         command_fp =
           CanonicalJSON.hash(%{
             "command_id" => command_id,
@@ -115,7 +119,12 @@ defmodule FountRun.Control do
         true ->
           # A pause intentionally does not change the fencing token. A worker that already
           # owns the lease may checkpoint once; no new claim/dispatch is allowed afterwards.
-          q!(repo, "UPDATE fount_runs SET pause_requested_at=now(),status='paused',lock_version=lock_version+1,updated_at=now() WHERE id=$1::text::uuid", [run_id])
+          q!(
+            repo,
+            "UPDATE fount_runs SET pause_requested_at=now(),status='paused',lock_version=lock_version+1,updated_at=now() WHERE id=$1::text::uuid",
+            [run_id]
+          )
+
           event!(repo, run_id, context, "run_paused", %{})
           %{"run" => hydrate_run(repo, run_row(repo, run_id)), "replay" => false}
       end
@@ -136,7 +145,12 @@ defmodule FountRun.Control do
         true ->
           status = resume_status(repo, run_id)
 
-          q!(repo, "UPDATE fount_runs SET pause_requested_at=NULL,status=$2,lock_version=lock_version+1,updated_at=now() WHERE id=$1::text::uuid", [run_id, status])
+          q!(
+            repo,
+            "UPDATE fount_runs SET pause_requested_at=NULL,status=$2,lock_version=lock_version+1,updated_at=now() WHERE id=$1::text::uuid",
+            [run_id, status]
+          )
+
           event!(repo, run_id, context, "run_resumed", %{"status" => status})
           %{"run" => hydrate_run(repo, run_row(repo, run_id)), "replay" => false}
       end
@@ -157,13 +171,33 @@ defmodule FountRun.Control do
           %{"run" => hydrate_run(repo, run), "replay" => true, "terminal_winner" => run["status"]}
 
         true ->
-          q!(repo, "UPDATE fount_run_steps SET status='cancelled',lease_owner=NULL,lease_token=NULL,lease_expires_at=NULL,heartbeat_at=NULL,updated_at=now() WHERE run_id=$1::text::uuid AND status IN ('queued','waiting','claimed')", [run_id])
-          q!(repo, "UPDATE fount_run_steps SET status='fenced',lease_owner=NULL,lease_token=NULL,lease_expires_at=NULL,heartbeat_at=NULL,updated_at=now() WHERE run_id=$1::text::uuid AND status='running'", [run_id])
-          q!(repo, "UPDATE fount_run_attempts SET outcome='fenced',redacted_error=$2::jsonb,ended_at=now() WHERE run_id=$1::text::uuid AND outcome='running'", [run_id, %{"reason" => "run_stopped"}])
+          q!(
+            repo,
+            "UPDATE fount_run_steps SET status='cancelled',lease_owner=NULL,lease_token=NULL,lease_expires_at=NULL,heartbeat_at=NULL,updated_at=now() WHERE run_id=$1::text::uuid AND status IN ('queued','waiting','claimed')",
+            [run_id]
+          )
+
+          q!(
+            repo,
+            "UPDATE fount_run_steps SET status='fenced',lease_owner=NULL,lease_token=NULL,lease_expires_at=NULL,heartbeat_at=NULL,updated_at=now() WHERE run_id=$1::text::uuid AND status='running'",
+            [run_id]
+          )
+
+          q!(
+            repo,
+            "UPDATE fount_run_attempts SET outcome='fenced',redacted_error=$2::jsonb,ended_at=now() WHERE run_id=$1::text::uuid AND outcome='running'",
+            [run_id, %{"reason" => "run_stopped"}]
+          )
+
           fence_approval_attempts(repo, run_id, "run_stopped")
           supersede_pending_decisions(repo, run_id)
 
-          q!(repo, "UPDATE fount_runs SET stop_requested_at=now(),pause_requested_at=NULL,status='stopped',active_step_id=NULL,current_fencing_token=current_fencing_token+1,lock_version=lock_version+1,updated_at=now() WHERE id=$1::text::uuid", [run_id])
+          q!(
+            repo,
+            "UPDATE fount_runs SET stop_requested_at=now(),pause_requested_at=NULL,status='stopped',active_step_id=NULL,current_fencing_token=current_fencing_token+1,lock_version=lock_version+1,updated_at=now() WHERE id=$1::text::uuid",
+            [run_id]
+          )
+
           event!(repo, run_id, context, "run_stopped", %{})
           %{"run" => hydrate_run(repo, run_row(repo, run_id)), "replay" => false}
       end
@@ -171,18 +205,32 @@ defmodule FountRun.Control do
   end
 
   def mark_completion(repo, run_id, candidate_id, status, %ActorContext{} = context)
-      when status in ["completed_candidate", "completed_accepted", "partial", "waiting_for_approval"] do
+      when status in [
+             "completed_candidate",
+             "completed_accepted",
+             "partial",
+             "waiting_for_approval"
+           ] do
     tx(repo, fn ->
       run = locked_run!(repo, run_id, context)
       if run["stop_requested_at"], do: rollback(repo, :stopped)
 
-      q!(repo, "UPDATE fount_runs SET selected_candidate_id=COALESCE($2::text::uuid,selected_candidate_id),status=$3,stage='deliver',active_step_id=NULL,lock_version=lock_version+1,updated_at=now() WHERE id=$1::text::uuid", [run_id, candidate_id, status])
+      q!(
+        repo,
+        "UPDATE fount_runs SET selected_candidate_id=COALESCE($2::text::uuid,selected_candidate_id),status=$3,stage='deliver',active_step_id=NULL,lock_version=lock_version+1,updated_at=now() WHERE id=$1::text::uuid",
+        [run_id, candidate_id, status]
+      )
+
       hydrate_run(repo, run_row(repo, run_id))
     end)
   end
 
   def current_head(repo, screenplay_id) do
-    case one(repo, "SELECT head_revision_id::text AS id FROM screenplays WHERE id=$1::text::uuid", [screenplay_id]) do
+    case one(
+           repo,
+           "SELECT head_revision_id::text AS id FROM screenplays WHERE id=$1::text::uuid",
+           [screenplay_id]
+         ) do
       nil -> {:error, :screenplay_not_found}
       row -> {:ok, row["id"]}
     end
@@ -230,8 +278,17 @@ defmodule FountRun.Control do
         }
 
       true ->
-        q!(repo, "UPDATE fount_runs SET superseding_run_id=$2::text::uuid,current_fencing_token=current_fencing_token+1,lock_version=lock_version+1,updated_at=now() WHERE id=$1::text::uuid", [run["id"], successor["id"]])
-        q!(repo, "UPDATE fount_runs SET parent_run_id=$2::text::uuid,iteration=$3,updated_at=now() WHERE id=$1::text::uuid", [successor["id"], run["id"], run["iteration"] || 0])
+        q!(
+          repo,
+          "UPDATE fount_runs SET superseding_run_id=$2::text::uuid,current_fencing_token=current_fencing_token+1,lock_version=lock_version+1,updated_at=now() WHERE id=$1::text::uuid",
+          [run["id"], successor["id"]]
+        )
+
+        q!(
+          repo,
+          "UPDATE fount_runs SET parent_run_id=$2::text::uuid,iteration=$3,updated_at=now() WHERE id=$1::text::uuid",
+          [successor["id"], run["id"], run["iteration"] || 0]
+        )
 
         fence_approval_attempts(repo, run["id"], "successor_created")
         supersede_pending_decisions(repo, run["id"])
@@ -241,11 +298,24 @@ defmodule FountRun.Control do
 
         first_step =
           if request do
-            create_step!(repo, successor["id"], "intake", request, nil, run["iteration"] || 0, "successor:" <> command_id, context)
+            create_step!(
+              repo,
+              successor["id"],
+              "intake",
+              request,
+              nil,
+              run["iteration"] || 0,
+              "successor:" <> command_id,
+              context
+            )
           end
 
         if first_step do
-          q!(repo, "UPDATE fount_runs SET status='queued',stage='intake',updated_at=now() WHERE id=$1::text::uuid", [successor["id"]])
+          q!(
+            repo,
+            "UPDATE fount_runs SET status='queued',stage='intake',updated_at=now() WHERE id=$1::text::uuid",
+            [successor["id"]]
+          )
         end
 
         %{
@@ -258,10 +328,19 @@ defmodule FountRun.Control do
   end
 
   defp existing_step(repo, run_id, key),
-    do: one(repo, "SELECT * FROM fount_run_steps WHERE run_id=$1::text::uuid AND idempotency_key=$2", [run_id, key])
+    do:
+      one(
+        repo,
+        "SELECT * FROM fount_run_steps WHERE run_id=$1::text::uuid AND idempotency_key=$2",
+        [run_id, key]
+      )
 
   defp successor_request(repo, run_id, plan) do
-    case one(repo, "SELECT request FROM fount_run_steps WHERE run_id=$1::text::uuid AND stage='intake' ORDER BY inserted_at,id LIMIT 1", [run_id]) do
+    case one(
+           repo,
+           "SELECT request FROM fount_run_steps WHERE run_id=$1::text::uuid AND stage='intake' ORDER BY inserted_at,id LIMIT 1",
+           [run_id]
+         ) do
       nil -> nil
       %{"request" => request} -> put_successor_plan(request, plan)
     end
@@ -277,7 +356,9 @@ defmodule FountRun.Control do
 
     request
     |> Map.put("workshop_request", wr)
-    |> Map.drop(~w(investigation_request investigation_session_id strategy_session_id selected_strategy_ids decision_id candidate_ids source_candidate_id finding report_ids uncertainty lineage check_set_fingerprint))
+    |> Map.drop(
+      ~w(investigation_request investigation_session_id strategy_session_id selected_strategy_ids decision_id candidate_ids source_candidate_id finding report_ids uncertainty lineage check_set_fingerprint)
+    )
   end
 
   defp put_successor_plan(request, _plan), do: request
@@ -286,42 +367,103 @@ defmodule FountRun.Control do
     supersede_pending_decisions(repo, run_id)
     fence_approval_attempts(repo, run_id, kind <> "_changed")
 
-    q!(repo, "UPDATE fount_run_steps s SET status='fenced',lease_owner=NULL,lease_token=NULL,lease_expires_at=NULL,heartbeat_at=NULL,updated_at=now() FROM fount_runs r WHERE s.run_id=r.id AND r.id=$1::text::uuid AND s.status IN ('queued','waiting','claimed','running') AND (s.plan_version<>r.current_plan_version OR s.policy_version<>r.current_policy_version)", [run_id])
+    q!(
+      repo,
+      "UPDATE fount_run_steps s SET status='fenced',lease_owner=NULL,lease_token=NULL,lease_expires_at=NULL,heartbeat_at=NULL,updated_at=now() FROM fount_runs r WHERE s.run_id=r.id AND r.id=$1::text::uuid AND s.status IN ('queued','waiting','claimed','running') AND (s.plan_version<>r.current_plan_version OR s.policy_version<>r.current_policy_version)",
+      [run_id]
+    )
 
-    q!(repo, "UPDATE fount_run_attempts a SET outcome='fenced',redacted_error=$2::jsonb,ended_at=now() FROM fount_run_steps s,fount_runs r WHERE a.step_id=s.id AND a.run_id=s.run_id AND s.run_id=r.id AND r.id=$1::text::uuid AND a.outcome='running' AND (s.plan_version<>r.current_plan_version OR s.policy_version<>r.current_policy_version)", [run_id, %{"reason" => kind <> "_changed"}])
+    q!(
+      repo,
+      "UPDATE fount_run_attempts a SET outcome='fenced',redacted_error=$2::jsonb,ended_at=now() FROM fount_run_steps s,fount_runs r WHERE a.step_id=s.id AND a.run_id=s.run_id AND s.run_id=r.id AND r.id=$1::text::uuid AND a.outcome='running' AND (s.plan_version<>r.current_plan_version OR s.policy_version<>r.current_policy_version)",
+      [run_id, %{"reason" => kind <> "_changed"}]
+    )
 
     run = run_row(repo, run_id)
-    latest_request = one(repo, "SELECT request FROM fount_run_steps WHERE run_id=$1::text::uuid ORDER BY inserted_at DESC,id DESC LIMIT 1", [run_id])
-    intake_request = one(repo, "SELECT request FROM fount_run_steps WHERE run_id=$1::text::uuid AND stage='intake' ORDER BY inserted_at,id LIMIT 1", [run_id])
+
+    latest_request =
+      one(
+        repo,
+        "SELECT request FROM fount_run_steps WHERE run_id=$1::text::uuid ORDER BY inserted_at DESC,id DESC LIMIT 1",
+        [run_id]
+      )
+
+    intake_request =
+      one(
+        repo,
+        "SELECT request FROM fount_run_steps WHERE run_id=$1::text::uuid AND stage='intake' ORDER BY inserted_at,id LIMIT 1",
+        [run_id]
+      )
 
     step =
       cond do
         kind == "plan" and intake_request ->
           plan = plan_row(repo, run_id, run["current_plan_version"])
           request = refresh_plan_request(intake_request["request"], plan)
-          create_step!(repo, run_id, "intake", request, nil, run["iteration"], "control-refresh:" <> kind <> ":" <> to_string(version), context)
 
-        kind == "policy" and run["selected_candidate_id"] && latest_request ->
-          create_step!(repo, run_id, "check", latest_request["request"], run["selected_candidate_id"], run["iteration"], "control-refresh:" <> kind <> ":" <> to_string(version), context)
+          create_step!(
+            repo,
+            run_id,
+            "intake",
+            request,
+            nil,
+            run["iteration"],
+            "control-refresh:" <> kind <> ":" <> to_string(version),
+            context
+          )
+
+        (kind == "policy" and run["selected_candidate_id"]) && latest_request ->
+          create_step!(
+            repo,
+            run_id,
+            "check",
+            latest_request["request"],
+            run["selected_candidate_id"],
+            run["iteration"],
+            "control-refresh:" <> kind <> ":" <> to_string(version),
+            context
+          )
 
         latest_request ->
-          create_step!(repo, run_id, "intake", latest_request["request"], nil, run["iteration"], "control-refresh:" <> kind <> ":" <> to_string(version), context)
+          create_step!(
+            repo,
+            run_id,
+            "intake",
+            latest_request["request"],
+            nil,
+            run["iteration"],
+            "control-refresh:" <> kind <> ":" <> to_string(version),
+            context
+          )
 
         true ->
           nil
       end
 
     if step do
-      q!(repo, "UPDATE fount_runs SET status='queued',stage=$2,active_step_id=NULL,updated_at=now() WHERE id=$1::text::uuid", [run_id, step["stage"]])
+      q!(
+        repo,
+        "UPDATE fount_runs SET status='queued',stage=$2,active_step_id=NULL,updated_at=now() WHERE id=$1::text::uuid",
+        [run_id, step["stage"]]
+      )
     else
-      q!(repo, "UPDATE fount_runs SET status='partial',active_step_id=NULL,updated_at=now() WHERE id=$1::text::uuid", [run_id])
+      q!(
+        repo,
+        "UPDATE fount_runs SET status='partial',active_step_id=NULL,updated_at=now() WHERE id=$1::text::uuid",
+        [run_id]
+      )
     end
 
-    event!(repo, run_id, context, kind <> "_changed", %{"version" => version, "refresh_step_id" => step && step["id"]})
+    event!(repo, run_id, context, kind <> "_changed", %{
+      "version" => version,
+      "refresh_step_id" => step && step["id"]
+    })
+
     step
   end
 
-  defp refresh_plan_request(%{"workshop_request" => request} = envelope, plan) when is_map(request) do
+  defp refresh_plan_request(%{"workshop_request" => request} = envelope, plan)
+       when is_map(request) do
     request =
       request
       |> Map.put("base_revision_id", plan["base_revision_id"])
@@ -330,7 +472,9 @@ defmodule FountRun.Control do
 
     envelope
     |> Map.put("workshop_request", request)
-    |> Map.drop(~w(investigation_request investigation_session_id strategy_session_id selected_strategy_ids decision_id candidate_ids source_candidate_id finding report_ids uncertainty lineage check_set_fingerprint))
+    |> Map.drop(
+      ~w(investigation_request investigation_session_id strategy_session_id selected_strategy_ids decision_id candidate_ids source_candidate_id finding report_ids uncertainty lineage check_set_fingerprint)
+    )
   end
 
   defp refresh_plan_request(envelope, _plan), do: envelope
@@ -353,19 +497,46 @@ defmodule FountRun.Control do
   end
 
   defp supersede_pending_decisions(repo, run_id) do
-    q!(repo, "UPDATE fount_run_decisions SET status='superseded',updated_at=now() WHERE run_id=$1::text::uuid AND status='pending'", [run_id])
+    q!(
+      repo,
+      "UPDATE fount_run_decisions SET status='superseded',updated_at=now() WHERE run_id=$1::text::uuid AND status='pending'",
+      [run_id]
+    )
   end
 
   defp fence_approval_attempts(repo, run_id, reason) do
-    q!(repo, "UPDATE fount_run_approval_attempts SET outcome='fenced',outcome_reason=$2,finished_at=now(),updated_at=now() WHERE run_id=$1::text::uuid AND outcome = ANY($3::text[])", [run_id, reason, @open_approval])
+    q!(
+      repo,
+      "UPDATE fount_run_approval_attempts SET outcome='fenced',outcome_reason=$2,finished_at=now(),updated_at=now() WHERE run_id=$1::text::uuid AND outcome = ANY($3::text[])",
+      [run_id, reason, @open_approval]
+    )
   end
 
   defp resume_status(repo, run_id) do
     cond do
-      count(repo, "SELECT count(*) AS n FROM fount_run_decisions WHERE run_id=$1::text::uuid AND status='pending'", [run_id]) > 0 -> "waiting_for_decision"
-      count(repo, "SELECT count(*) AS n FROM fount_run_approval_attempts WHERE run_id=$1::text::uuid AND outcome = ANY($2::text[])", [run_id, @open_approval]) > 0 -> "waiting_for_approval"
-      count(repo, "SELECT count(*) AS n FROM fount_run_steps WHERE run_id=$1::text::uuid AND status IN ('queued','waiting','running','claimed')", [run_id]) > 0 -> "queued"
-      true -> "partial"
+      count(
+        repo,
+        "SELECT count(*) AS n FROM fount_run_decisions WHERE run_id=$1::text::uuid AND status='pending'",
+        [run_id]
+      ) > 0 ->
+        "waiting_for_decision"
+
+      count(
+        repo,
+        "SELECT count(*) AS n FROM fount_run_approval_attempts WHERE run_id=$1::text::uuid AND outcome = ANY($2::text[])",
+        [run_id, @open_approval]
+      ) > 0 ->
+        "waiting_for_approval"
+
+      count(
+        repo,
+        "SELECT count(*) AS n FROM fount_run_steps WHERE run_id=$1::text::uuid AND status IN ('queued','waiting','running','claimed')",
+        [run_id]
+      ) > 0 ->
+        "queued"
+
+      true ->
+        "partial"
     end
   end
 
@@ -381,8 +552,11 @@ defmodule FountRun.Control do
 
   defp command_id(opts) do
     case Keyword.get(opts, :command_id) do
-      value when is_binary(value) -> if String.trim(value) == "", do: {:error, :command_id_required}, else: {:ok, value}
-      _ -> {:error, :command_id_required}
+      value when is_binary(value) ->
+        if String.trim(value) == "", do: {:error, :command_id_required}, else: {:ok, value}
+
+      _ ->
+        {:error, :command_id_required}
     end
   end
 
@@ -401,7 +575,10 @@ defmodule FountRun.Control do
   end
 
   defp locked_run!(repo, run_id, context) do
-    run = one(repo, "SELECT * FROM fount_runs WHERE id=$1::text::uuid FOR UPDATE", [run_id]) || rollback(repo, :not_found)
+    run =
+      one(repo, "SELECT * FROM fount_runs WHERE id=$1::text::uuid FOR UPDATE", [run_id]) ||
+        rollback(repo, :not_found)
+
     :ok = authorize!(repo, run, context)
     run
   end
@@ -412,8 +589,9 @@ defmodule FountRun.Control do
       {:error, reason} -> rollback(repo, reason)
     end
 
-    if {run["owner_type"], run["owner_id"]} != {Atom.to_string(context.owner.type), context.owner.id},
-      do: rollback(repo, :unauthorized)
+    if {run["owner_type"], run["owner_id"]} !=
+         {Atom.to_string(context.owner.type), context.owner.id},
+       do: rollback(repo, :unauthorized)
 
     :ok
   end
@@ -424,9 +602,22 @@ defmodule FountRun.Control do
     |> Map.put("policy", policy_row(repo, run["id"], run["current_policy_version"]))
   end
 
-  defp run_row(repo, run_id), do: one(repo, "SELECT * FROM fount_runs WHERE id=$1::text::uuid", [run_id])
-  defp plan_row(repo, run_id, version), do: one(repo, "SELECT * FROM fount_run_plans WHERE run_id=$1::text::uuid AND version=$2", [run_id, version])
-  defp policy_row(repo, run_id, version), do: one(repo, "SELECT * FROM fount_run_policies WHERE run_id=$1::text::uuid AND version=$2", [run_id, version])
+  defp run_row(repo, run_id),
+    do: one(repo, "SELECT * FROM fount_runs WHERE id=$1::text::uuid", [run_id])
+
+  defp plan_row(repo, run_id, version),
+    do:
+      one(repo, "SELECT * FROM fount_run_plans WHERE run_id=$1::text::uuid AND version=$2", [
+        run_id,
+        version
+      ])
+
+  defp policy_row(repo, run_id, version),
+    do:
+      one(repo, "SELECT * FROM fount_run_policies WHERE run_id=$1::text::uuid AND version=$2", [
+        run_id,
+        version
+      ])
 
   defp count(repo, sql, params), do: one(repo, sql, params)["n"]
 
@@ -434,7 +625,7 @@ defmodule FountRun.Control do
     result = q!(repo, sql, params)
 
     case result.rows do
-      [row | _] -> Map.new(Enum.zip(result.columns, row))
+      [row | _] -> Persistence.row_map(result.columns, row)
       [] -> nil
     end
   end
@@ -451,7 +642,10 @@ defmodule FountRun.Control do
   end
 
   defp rollback(repo, reason), do: repo.rollback(reason)
-  defp value(map, "base_revision_id"), do: Map.get(map, "base_revision_id", Map.get(map, :base_revision_id))
+
+  defp value(map, "base_revision_id"),
+    do: Map.get(map, "base_revision_id", Map.get(map, :base_revision_id))
+
   defp value(map, "scope"), do: Map.get(map, "scope", Map.get(map, :scope))
   defp stringify_keys(map), do: Map.new(map, fn {key, value} -> {to_string(key), value} end)
 end

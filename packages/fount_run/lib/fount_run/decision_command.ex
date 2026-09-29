@@ -14,7 +14,9 @@ defmodule FountRun.DecisionCommand do
 
   def submit(repo, decision_id, response, %ActorContext{} = context) do
     with true <- FountRun.ClosedMap.uuid_string(decision_id) or {:error, :invalid_decision_id},
-         %{} = row <- one(repo, "SELECT kind FROM fount_run_decisions WHERE id=$1::text::uuid", [decision_id]) || {:error, :not_found} do
+         %{} = row <-
+           one(repo, "SELECT kind FROM fount_run_decisions WHERE id=$1::text::uuid", [decision_id]) ||
+             {:error, :not_found} do
       case row["kind"] do
         "strategy" -> Persistence.submit_strategy_decision(repo, decision_id, response, context)
         "final_approval" -> submit_final(repo, decision_id, response, context)
@@ -24,14 +26,14 @@ defmodule FountRun.DecisionCommand do
         _ -> Persistence.resolve_decision(repo, decision_id, response, context)
       end
     else
-      false -> {:error, :invalid_decision_id}
       {:error, _} = error -> error
     end
   rescue
     _ in Postgrex.Error -> {:error, :storage_error}
   end
 
-  def approve_run(repo, run_id, attrs, %ActorContext{} = context) when is_binary(run_id) and is_map(attrs) do
+  def approve_run(repo, run_id, attrs, %ActorContext{} = context)
+      when is_binary(run_id) and is_map(attrs) do
     attrs = stringify_keys(attrs)
 
     with decision_id when is_binary(decision_id) <- attrs["decision_id"],
@@ -47,7 +49,9 @@ defmodule FountRun.DecisionCommand do
         "overrides" => attrs["overrides"] || []
       }
 
-      case one(repo, "SELECT run_id::text FROM fount_run_decisions WHERE id=$1::text::uuid", [decision_id]) do
+      case one(repo, "SELECT run_id::text FROM fount_run_decisions WHERE id=$1::text::uuid", [
+             decision_id
+           ]) do
         %{"run_id" => ^run_id} -> submit(repo, decision_id, response, context)
         %{"run_id" => _} -> {:error, :cross_run_decision}
         nil -> {:error, :not_found}
@@ -59,16 +63,23 @@ defmodule FountRun.DecisionCommand do
     _ in Postgrex.Error -> {:error, :storage_error}
   end
 
-  def approve_run(_repo, _run_id, _attrs, _context), do: {:error, :exact_decision_binding_required}
+  def approve_run(_repo, _run_id, _attrs, _context),
+    do: {:error, :exact_decision_binding_required}
 
   defp submit_final(repo, decision_id, response, context) do
     with {:ok, response} <- normalize(response, @final_keys),
-         true <- response["choice"] in ["approve", "reject", "replace"] or {:error, :invalid_decision_choice},
+         true <-
+           response["choice"] in ["approve", "reject", "replace"] or
+             {:error, :invalid_decision_choice},
          :ok <- decision_response_shape(response),
          {:ok, prepared} <- prepare_final(repo, decision_id, response, context) do
       case prepared do
-        %{"outcome" => "rejected"} = result -> {:ok, result}
-        %{"outcome" => "replacement"} = result -> {:ok, result}
+        %{"outcome" => "rejected"} = result ->
+          {:ok, result}
+
+        %{"outcome" => "replacement"} = result ->
+          {:ok, result}
+
         %{"approval_attempt_id" => attempt_id, "replay" => replay} ->
           case ApprovalBridge.accept_ready(repo, attempt_id, context) do
             {:ok, accepted} -> {:ok, Map.put(accepted, "decision_replay", replay)}
@@ -76,7 +87,6 @@ defmodule FountRun.DecisionCommand do
           end
       end
     else
-      false -> {:error, :invalid_decision_choice}
       {:error, _} = error -> error
     end
   end
@@ -102,7 +112,9 @@ defmodule FountRun.DecisionCommand do
         parent_attempt_id = decision_parent_attempt(decision)
         recommendation = if response["choice"] == "approve", do: "approve", else: "reject"
         approver = context.principal
-        attempt = ensure_human_attempt!(repo, decision, run, packet, parent_attempt_id, approver, context)
+
+        attempt =
+          ensure_human_attempt!(repo, decision, run, packet, parent_attempt_id, approver, context)
 
         review =
           case Review.new(
@@ -121,20 +133,40 @@ defmodule FountRun.DecisionCommand do
           end
 
         saved =
-          case Persistence.record_approval_review(repo, attempt["id"], review, recommendation, context) do
+          case Persistence.record_approval_review(
+                 repo,
+                 attempt["id"],
+                 review,
+                 recommendation,
+                 context
+               ) do
             {:ok, value} -> value
             {:error, reason} -> rollback(repo, reason)
           end
 
         if recommendation == "reject" do
           rejected =
-            case Persistence.record_approval_outcome(repo, attempt["id"], "rejected", "human_rejected", context) do
+            case Persistence.record_approval_outcome(
+                   repo,
+                   attempt["id"],
+                   "rejected",
+                   "human_rejected",
+                   context
+                 ) do
               {:ok, value} -> value
               {:error, reason} -> rollback(repo, reason)
             end
 
-          q!(repo, "UPDATE fount_runs SET status='partial',stage='decide',lock_version=lock_version+1,updated_at=now() WHERE id=$1::text::uuid", [run["id"]])
-          event!(repo, run["id"], context, "final_candidate_rejected", %{"decision_id" => decision_id, "approval_attempt_id" => rejected["id"]})
+          q!(
+            repo,
+            "UPDATE fount_runs SET status='partial',stage='decide',lock_version=lock_version+1,updated_at=now() WHERE id=$1::text::uuid",
+            [run["id"]]
+          )
+
+          event!(repo, run["id"], context, "final_candidate_rejected", %{
+            "decision_id" => decision_id,
+            "approval_attempt_id" => rejected["id"]
+          })
 
           %{
             "decision_id" => decision_id,
@@ -164,13 +196,28 @@ defmodule FountRun.DecisionCommand do
             end
 
           ready =
-            case Persistence.record_approval_payload(repo, saved["id"], approval_id, approval, context) do
+            case Persistence.record_approval_payload(
+                   repo,
+                   saved["id"],
+                   approval_id,
+                   approval,
+                   context
+                 ) do
               {:ok, value} -> value
               {:error, reason} -> rollback(repo, reason)
             end
 
-          q!(repo, "UPDATE fount_runs SET status='waiting_for_approval',stage='decide',lock_version=lock_version+1,updated_at=now() WHERE id=$1::text::uuid", [run["id"]])
-          event!(repo, run["id"], context, "final_approval_ready", %{"decision_id" => decision_id, "approval_attempt_id" => ready["id"], "approval_id" => approval_id})
+          q!(
+            repo,
+            "UPDATE fount_runs SET status='waiting_for_approval',stage='decide',lock_version=lock_version+1,updated_at=now() WHERE id=$1::text::uuid",
+            [run["id"]]
+          )
+
+          event!(repo, run["id"], context, "final_approval_ready", %{
+            "decision_id" => decision_id,
+            "approval_attempt_id" => ready["id"],
+            "approval_id" => approval_id
+          })
 
           %{
             "decision_id" => decision_id,
@@ -187,17 +234,28 @@ defmodule FountRun.DecisionCommand do
 
   defp replace_candidate!(repo, decision, run, response, response_fp, context, replay) do
     source = response["replacement_fountain"]
-    if not (is_binary(source) and String.trim(source) != ""), do: rollback(repo, :replacement_text_required)
+
+    if not (is_binary(source) and String.trim(source) != ""),
+      do: rollback(repo, :replacement_text_required)
 
     candidate_id = ID.v5(decision["id"], ["replacement:", response_fp])
 
     case CorePersistence.candidate(repo, candidate_id) do
       {:ok, existing} ->
-        replacement_result(decision, existing, replay, existing_step(repo, run["id"], "replacement:" <> decision["id"] <> ":check"))
+        replacement_result(
+          decision,
+          existing,
+          replay,
+          existing_step(repo, run["id"], "replacement:" <> decision["id"] <> ":check")
+        )
 
       {:error, :not_found} ->
         current =
-          case CorePersistence.load_revision(repo, run["screenplay_id"], decision["base_revision_id"]) do
+          case CorePersistence.load_revision(
+                 repo,
+                 run["screenplay_id"],
+                 decision["base_revision_id"]
+               ) do
             {:ok, value} -> value
             {:error, reason} -> rollback(repo, reason)
           end
@@ -220,7 +278,10 @@ defmodule FountRun.DecisionCommand do
           |> Map.put(:import, nil)
           |> Model.refresh()
 
-        key = one(repo, "SELECT key FROM screenplays WHERE id=$1::text::uuid", [run["screenplay_id"]])["key"]
+        key =
+          one(repo, "SELECT key FROM screenplays WHERE id=$1::text::uuid", [run["screenplay_id"]])[
+            "key"
+          ]
 
         replacement =
           case CorePersistence.save_edit_candidate(repo, key, draft,
@@ -234,7 +295,9 @@ defmodule FountRun.DecisionCommand do
             {:error, reason} -> rollback(repo, reason)
           end
 
-        request = step_request(repo, decision["step_id"]) || rollback(repo, :decision_step_request_missing)
+        request =
+          step_request(repo, decision["step_id"]) ||
+            rollback(repo, :decision_step_request_missing)
 
         step =
           create_step!(
@@ -247,8 +310,18 @@ defmodule FountRun.DecisionCommand do
             context
           )
 
-        q!(repo, "UPDATE fount_runs SET selected_candidate_id=$2::text::uuid,status='queued',stage='check',updated_at=now() WHERE id=$1::text::uuid", [run["id"], replacement["id"]])
-        event!(repo, run["id"], context, "human_replacement_candidate_saved", %{"decision_id" => decision["id"], "candidate_id" => replacement["id"], "check_step_id" => step["id"]})
+        q!(
+          repo,
+          "UPDATE fount_runs SET selected_candidate_id=$2::text::uuid,status='queued',stage='check',updated_at=now() WHERE id=$1::text::uuid",
+          [run["id"], replacement["id"]]
+        )
+
+        event!(repo, run["id"], context, "human_replacement_candidate_saved", %{
+          "decision_id" => decision["id"],
+          "candidate_id" => replacement["id"],
+          "check_step_id" => step["id"]
+        })
+
         replacement_result(decision, replacement, replay, step)
     end
   end
@@ -292,7 +365,6 @@ defmodule FountRun.DecisionCommand do
         end
       end)
     else
-      false -> {:error, :invalid_decision_choice}
       {:error, _} = error -> error
     end
   end
@@ -340,16 +412,39 @@ defmodule FountRun.DecisionCommand do
         {:error, reason} -> rollback(repo, reason)
       end
 
-    q!(repo, "UPDATE fount_runs SET superseding_run_id=$2::text::uuid,current_fencing_token=current_fencing_token+1,status='partial',updated_at=now() WHERE id=$1::text::uuid", [run["id"], successor["id"]])
-    q!(repo, "UPDATE fount_runs SET parent_run_id=$2::text::uuid,selected_candidate_id=$3::text::uuid,iteration=$4,status='queued',stage='check',updated_at=now() WHERE id=$1::text::uuid", [successor["id"], run["id"], rebased["id"], run["iteration"] || 0])
+    q!(
+      repo,
+      "UPDATE fount_runs SET superseding_run_id=$2::text::uuid,current_fencing_token=current_fencing_token+1,status='partial',updated_at=now() WHERE id=$1::text::uuid",
+      [run["id"], successor["id"]]
+    )
 
-    request = step_request(repo, decision["step_id"]) || rollback(repo, :decision_step_request_missing)
+    q!(
+      repo,
+      "UPDATE fount_runs SET parent_run_id=$2::text::uuid,selected_candidate_id=$3::text::uuid,iteration=$4,status='queued',stage='check',updated_at=now() WHERE id=$1::text::uuid",
+      [successor["id"], run["id"], rebased["id"], run["iteration"] || 0]
+    )
+
+    request =
+      step_request(repo, decision["step_id"]) || rollback(repo, :decision_step_request_missing)
+
     request = put_workshop_base(request, current.revision.id)
 
     step =
-      create_step!(repo, successor, "check", request, rebased["id"], "rebase:" <> decision["id"] <> ":check", context)
+      create_step!(
+        repo,
+        successor,
+        "check",
+        request,
+        rebased["id"],
+        "rebase:" <> decision["id"] <> ":check",
+        context
+      )
 
-    event!(repo, run["id"], context, "run_rebased_to_successor", %{"decision_id" => decision["id"], "successor_run_id" => successor["id"], "candidate_id" => rebased["id"]})
+    event!(repo, run["id"], context, "run_rebased_to_successor", %{
+      "decision_id" => decision["id"],
+      "successor_run_id" => successor["id"],
+      "candidate_id" => rebased["id"]
+    })
 
     %{
       "decision_id" => decision["id"],
@@ -386,9 +481,21 @@ defmodule FountRun.DecisionCommand do
 
         step =
           step ||
-            create_step!(repo, run, "decide", step_request(repo, decision["step_id"]), decision["candidate_id"], key, context)
+            create_step!(
+              repo,
+              run,
+              "decide",
+              step_request(repo, decision["step_id"]),
+              decision["candidate_id"],
+              key,
+              context
+            )
 
-        q!(repo, "UPDATE fount_runs SET selected_candidate_id=$2::text::uuid,status='queued',stage='decide',updated_at=now() WHERE id=$1::text::uuid", [run["id"], decision["candidate_id"]])
+        q!(
+          repo,
+          "UPDATE fount_runs SET selected_candidate_id=$2::text::uuid,status='queued',stage='decide',updated_at=now() WHERE id=$1::text::uuid",
+          [run["id"], decision["candidate_id"]]
+        )
 
         %{
           "decision_id" => decision_id,
@@ -399,7 +506,6 @@ defmodule FountRun.DecisionCommand do
         }
       end)
     else
-      false -> {:error, :invalid_decision_choice}
       {:error, _} = error -> error
     end
   end
@@ -409,7 +515,8 @@ defmodule FountRun.DecisionCommand do
       {decision, run} = locked_decision_and_run!(repo, decision_id, context)
       response = stringify_keys(response)
 
-      if response["choice"] not in ["review", "continue"], do: rollback(repo, :invalid_decision_choice)
+      if response["choice"] not in ["review", "continue"],
+        do: rollback(repo, :invalid_decision_choice)
 
       response =
         response
@@ -433,10 +540,28 @@ defmodule FountRun.DecisionCommand do
 
       step =
         step ||
-          create_step!(repo, run, "decide", step_request(repo, decision["step_id"]), decision["candidate_id"], key, context)
+          create_step!(
+            repo,
+            run,
+            "decide",
+            step_request(repo, decision["step_id"]),
+            decision["candidate_id"],
+            key,
+            context
+          )
 
-      q!(repo, "UPDATE fount_runs SET status='queued',stage='decide',updated_at=now() WHERE id=$1::text::uuid", [run["id"]])
-      %{"decision_id" => decision_id, "next_step_id" => step["id"], "replay" => replay, "status" => "queued"}
+      q!(
+        repo,
+        "UPDATE fount_runs SET status='queued',stage='decide',updated_at=now() WHERE id=$1::text::uuid",
+        [run["id"]]
+      )
+
+      %{
+        "decision_id" => decision_id,
+        "next_step_id" => step["id"],
+        "replay" => replay,
+        "status" => "queued"
+      }
     end)
   end
 
@@ -449,7 +574,10 @@ defmodule FountRun.DecisionCommand do
       "base_revision_id" => packet["base_revision_id"],
       "content_hash" => packet["content_hash"],
       "check_set_fingerprint" => packet["check_set_fingerprint"],
-      "packet" => scrub_packet(Map.put(packet, "run_check_set_fingerprint", decision["check_set_fingerprint"])),
+      "packet" =>
+        scrub_packet(
+          Map.put(packet, "run_check_set_fingerprint", decision["check_set_fingerprint"])
+        ),
       "packet_artifact_ref" => nil,
       "reviewer" => Principal.to_map(approver),
       "approver" => Principal.to_map(approver),
@@ -471,9 +599,15 @@ defmodule FountRun.DecisionCommand do
       end
 
     cond do
-      packet["candidate_id"] != decision["candidate_id"] -> rollback(repo, :stale_decision_candidate)
-      packet["base_revision_id"] != decision["base_revision_id"] -> rollback(repo, :stale_decision_base)
-      packet["content_hash"] != decision["content_hash"] -> rollback(repo, :stale_decision_content)
+      packet["candidate_id"] != decision["candidate_id"] ->
+        rollback(repo, :stale_decision_candidate)
+
+      packet["base_revision_id"] != decision["base_revision_id"] ->
+        rollback(repo, :stale_decision_base)
+
+      packet["content_hash"] != decision["content_hash"] ->
+        rollback(repo, :stale_decision_content)
+
       true ->
         ensure_run_check!(repo, decision)
         packet
@@ -485,7 +619,13 @@ defmodule FountRun.DecisionCommand do
       one(
         repo,
         "SELECT id::text FROM fount_run_steps WHERE run_id=$1::text::uuid AND stage='check' AND status='succeeded' AND plan_version=$2 AND policy_version=$3 AND result->>'candidate_id'=$4 AND result->>'check_set_fingerprint'=$5 ORDER BY completed_at DESC,id DESC LIMIT 1",
-        [decision["run_id"], decision["plan_version"], decision["policy_version"], decision["candidate_id"], decision["check_set_fingerprint"]]
+        [
+          decision["run_id"],
+          decision["plan_version"],
+          decision["policy_version"],
+          decision["candidate_id"],
+          decision["check_set_fingerprint"]
+        ]
       )
 
     if is_nil(row), do: rollback(repo, :fresh_check_required), else: :ok
@@ -496,43 +636,77 @@ defmodule FountRun.DecisionCommand do
     actual_principal = {Atom.to_string(context.principal.type), context.principal.id}
 
     cond do
-      decision["kind"] != expected_kind -> rollback(repo, :unsupported_decision_kind)
-      expected_principal != actual_principal -> rollback(repo, :unauthorized)
-      response["context_fingerprint"] != decision["context_fingerprint"] -> rollback(repo, :stale_decision_context)
-      response["plan_version"] != decision["plan_version"] -> rollback(repo, :stale_decision_binding)
-      response["policy_version"] != decision["policy_version"] -> rollback(repo, :stale_decision_binding)
-      run["current_plan_version"] != decision["plan_version"] -> rollback(repo, :stale_decision)
-      run["current_policy_version"] != decision["policy_version"] -> rollback(repo, :stale_decision)
-      run["stop_requested_at"] -> rollback(repo, :stopped)
-      run["pause_requested_at"] -> rollback(repo, :paused)
-      true -> :ok
+      decision["kind"] != expected_kind ->
+        rollback(repo, :unsupported_decision_kind)
+
+      expected_principal != actual_principal ->
+        rollback(repo, :unauthorized)
+
+      response["context_fingerprint"] != decision["context_fingerprint"] ->
+        rollback(repo, :stale_decision_context)
+
+      response["plan_version"] != decision["plan_version"] ->
+        rollback(repo, :stale_decision_binding)
+
+      response["policy_version"] != decision["policy_version"] ->
+        rollback(repo, :stale_decision_binding)
+
+      run["current_plan_version"] != decision["plan_version"] ->
+        rollback(repo, :stale_decision)
+
+      run["current_policy_version"] != decision["policy_version"] ->
+        rollback(repo, :stale_decision)
+
+      run["stop_requested_at"] ->
+        rollback(repo, :stopped)
+
+      run["pause_requested_at"] ->
+        rollback(repo, :paused)
+
+      true ->
+        :ok
     end
   end
 
   defp resolved_replay?(repo, decision, response_fp, context) do
     cond do
-      decision["status"] == "pending" -> false
-      decision["status"] == "resolved" and decision["response_fingerprint"] == response_fp and decision["respondent_type"] == Atom.to_string(context.principal.type) and decision["respondent_id"] == context.principal.id -> true
-      decision["status"] == "resolved" -> rollback(repo, :decision_conflict)
-      true -> rollback(repo, :stale_decision)
+      decision["status"] == "pending" ->
+        false
+
+      decision["status"] == "resolved" and decision["response_fingerprint"] == response_fp and
+        decision["respondent_type"] == Atom.to_string(context.principal.type) and
+          decision["respondent_id"] == context.principal.id ->
+        true
+
+      decision["status"] == "resolved" ->
+        rollback(repo, :decision_conflict)
+
+      true ->
+        rollback(repo, :stale_decision)
     end
   end
 
   defp locked_decision_and_run!(repo, decision_id, context) do
     identity =
-      one(repo, "SELECT run_id::text FROM fount_run_decisions WHERE id=$1::text::uuid", [decision_id]) ||
+      one(repo, "SELECT run_id::text FROM fount_run_decisions WHERE id=$1::text::uuid", [
+        decision_id
+      ]) ||
         rollback(repo, :not_found)
 
     # Global Phase-05 lock order is Run -> screenplay -> candidate. Decision rows are
     # subordinate to the Run and are therefore locked only after the Run row.
     run =
-      one(repo, "SELECT * FROM fount_runs WHERE id=$1::text::uuid FOR UPDATE", [identity["run_id"]]) ||
+      one(repo, "SELECT * FROM fount_runs WHERE id=$1::text::uuid FOR UPDATE", [
+        identity["run_id"]
+      ]) ||
         rollback(repo, :not_found)
 
     authorize_run!(repo, run, context)
 
     decision =
-      one(repo, "SELECT d.* FROM fount_run_decisions d WHERE d.id=$1::text::uuid FOR UPDATE", [decision_id]) ||
+      one(repo, "SELECT d.* FROM fount_run_decisions d WHERE d.id=$1::text::uuid FOR UPDATE", [
+        decision_id
+      ]) ||
         rollback(repo, :not_found)
 
     if decision["run_id"] != run["id"], do: rollback(repo, :cross_run_decision)
@@ -545,15 +719,24 @@ defmodule FountRun.DecisionCommand do
       {:error, reason} -> rollback(repo, reason)
     end
 
-    if {run["owner_type"], run["owner_id"]} != {Atom.to_string(context.owner.type), context.owner.id}, do: rollback(repo, :unauthorized)
+    if {run["owner_type"], run["owner_id"]} !=
+         {Atom.to_string(context.owner.type), context.owner.id},
+       do: rollback(repo, :unauthorized)
   end
 
   defp decision_response_shape(response) do
     cond do
-      not is_binary(response["context_fingerprint"]) -> {:error, :exact_decision_binding_required}
-      not is_integer(response["plan_version"]) or response["plan_version"] < 1 -> {:error, :exact_decision_binding_required}
-      not is_integer(response["policy_version"]) or response["policy_version"] < 1 -> {:error, :exact_decision_binding_required}
-      true -> :ok
+      not is_binary(response["context_fingerprint"]) ->
+        {:error, :exact_decision_binding_required}
+
+      not is_integer(response["plan_version"]) or response["plan_version"] < 1 ->
+        {:error, :exact_decision_binding_required}
+
+      not is_integer(response["policy_version"]) or response["policy_version"] < 1 ->
+        {:error, :exact_decision_binding_required}
+
+      true ->
+        :ok
     end
   end
 
@@ -581,19 +764,38 @@ defmodule FountRun.DecisionCommand do
   end
 
   defp step_request(_repo, nil), do: nil
-  defp step_request(repo, id), do: one(repo, "SELECT request FROM fount_run_steps WHERE id=$1::text::uuid", [id]) |> then(&(&1 && &1["request"]))
-  defp existing_step(repo, run_id, key), do: one(repo, "SELECT * FROM fount_run_steps WHERE run_id=$1::text::uuid AND idempotency_key=$2", [run_id, key])
 
-  defp put_workshop_base(%{"workshop_request" => request} = envelope, base) when is_map(request), do: Map.put(envelope, "workshop_request", Map.put(request, "base_revision_id", base))
+  defp step_request(repo, id),
+    do:
+      one(repo, "SELECT request FROM fount_run_steps WHERE id=$1::text::uuid", [id])
+      |> then(&(&1 && &1["request"]))
+
+  defp existing_step(repo, run_id, key),
+    do:
+      one(
+        repo,
+        "SELECT * FROM fount_run_steps WHERE run_id=$1::text::uuid AND idempotency_key=$2",
+        [run_id, key]
+      )
+
+  defp put_workshop_base(%{"workshop_request" => request} = envelope, base) when is_map(request),
+    do: Map.put(envelope, "workshop_request", Map.put(request, "base_revision_id", base))
+
   defp put_workshop_base(envelope, _base), do: envelope
 
   defp normalize(value, allowed) when is_map(value) do
     value = stringify_keys(value)
-    if Map.keys(value) -- allowed == [], do: {:ok, value}, else: {:error, :unknown_decision_response_field}
+
+    if Map.keys(value) -- allowed == [],
+      do: {:ok, value},
+      else: {:error, :unknown_decision_response_field}
   end
+
   defp normalize(_, _), do: {:error, :invalid_decision_response}
 
-  defp scrub_packet(packet), do: Map.drop(packet, ["original_fountain", "proposed_fountain"])
+  defp scrub_packet(packet),
+    do: packet |> Map.drop(["original_fountain", "proposed_fountain"]) |> Model.plain()
+
   defp normalize_conflict(:already_resolved), do: :decision_conflict
   defp normalize_conflict(reason), do: reason
   defp decision_id_short(id, fp), do: String.slice(id, 0, 8) <> ":" <> String.slice(fp, 0, 12)
@@ -606,15 +808,26 @@ defmodule FountRun.DecisionCommand do
   end
 
   defp hydrate_run(repo, run) do
-    plan = one(repo, "SELECT * FROM fount_run_plans WHERE run_id=$1::text::uuid AND version=$2", [run["id"], run["current_plan_version"]])
-    policy = one(repo, "SELECT * FROM fount_run_policies WHERE run_id=$1::text::uuid AND version=$2", [run["id"], run["current_policy_version"]])
+    plan =
+      one(repo, "SELECT * FROM fount_run_plans WHERE run_id=$1::text::uuid AND version=$2", [
+        run["id"],
+        run["current_plan_version"]
+      ])
+
+    policy =
+      one(repo, "SELECT * FROM fount_run_policies WHERE run_id=$1::text::uuid AND version=$2", [
+        run["id"],
+        run["current_policy_version"]
+      ])
+
     run |> Map.put("plan", plan) |> Map.put("policy", policy)
   end
 
   defp one(repo, sql, params) do
     result = SQL.query!(repo, sql, params)
+
     case result.rows do
-      [row | _] -> Map.new(Enum.zip(result.columns, row))
+      [row | _] -> Persistence.row_map(result.columns, row)
       [] -> nil
     end
   end

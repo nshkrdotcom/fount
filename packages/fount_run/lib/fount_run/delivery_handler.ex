@@ -15,9 +15,16 @@ defmodule FountRun.DeliveryHandler do
       |> Keyword.take([:artifact_root, :pdf, :pdf_options, :table_read])
       |> Keyword.put(:defer_run_completion, true)
 
-    case FountRun.DeliveryBundle.deliver(repo, claim["run_id"], destination, context, delivery_opts) do
+    case FountRun.DeliveryBundle.deliver(
+           repo,
+           claim["run_id"],
+           destination,
+           context,
+           delivery_opts
+         ) do
       {:ok, payload} ->
-        status = get_in(payload, ["run", "delivery_completion_status"]) || completion_status(payload)
+        status =
+          get_in(payload, ["run", "delivery_completion_status"]) || completion_status(payload)
 
         {:ok,
          %{

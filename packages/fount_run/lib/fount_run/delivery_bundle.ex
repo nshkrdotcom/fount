@@ -12,10 +12,13 @@ defmodule FountRun.DeliveryBundle do
   alias Fount.Persistence, as: CorePersistence
   alias Fount.Screenplay.Model
   alias FountRun.{ActorContext, Control, Persistence}
+  alias FountWorkshop.Export.PDF
 
   @standard_formats ~w(fountain fdx review_json review_markdown source_diff structural_diff resources_checks provenance)
 
-  def deliver(repo, run_id, destination, %ActorContext{} = context, opts \\ [])
+  def deliver(repo, run_id, destination, context, opts \\ [])
+
+  def deliver(repo, run_id, destination, %ActorContext{} = context, opts)
       when is_binary(destination) and is_list(opts) do
     with {:ok, run} <- FountRun.get_run(repo, run_id, context),
          :ok <- deliverable_run(run),
@@ -59,9 +62,14 @@ defmodule FountRun.DeliveryBundle do
 
         completion =
           cond do
-            run["status"] == "stopped" -> {:ok, run}
-            Keyword.get(opts, :defer_run_completion, false) -> {:ok, Map.put(run, "delivery_completion_status", status)}
-            true -> Control.mark_completion(repo, run_id, candidate_id, status, context)
+            run["status"] == "stopped" ->
+              {:ok, run}
+
+            Keyword.get(opts, :defer_run_completion, false) ->
+              {:ok, Map.put(run, "delivery_completion_status", status)}
+
+            true ->
+              Control.mark_completion(repo, run_id, candidate_id, status, context)
           end
 
         case completion do
@@ -85,13 +93,19 @@ defmodule FountRun.DeliveryBundle do
     _error in Postgrex.Error -> {:error, :storage_error}
   end
 
-  def deliver(_repo, _run_id, _destination, _context, _opts), do: {:error, :invalid_delivery_request}
+  def deliver(_repo, _run_id, _destination, _context, _opts),
+    do: {:error, :invalid_delivery_request}
 
   defp deliverable_run(run) do
     cond do
-      run["stop_requested_at"] && is_nil(run["selected_candidate_id"]) -> {:error, :no_exportable_candidate}
-      run["status"] in ~w(completed_candidate completed_accepted partial stopped) -> :ok
-      true -> {:error, {:run_not_deliverable, run["status"]}}
+      run["stop_requested_at"] && is_nil(run["selected_candidate_id"]) ->
+        {:error, :no_exportable_candidate}
+
+      run["status"] in ~w(completed_candidate completed_accepted partial stopped) ->
+        :ok
+
+      true ->
+        {:error, {:run_not_deliverable, run["status"]}}
     end
   end
 
@@ -144,12 +158,21 @@ defmodule FountRun.DeliveryBundle do
 
   defp exact_identity(run, candidate, packet, identity) do
     cond do
-      candidate["screenplay_id"] != run["screenplay_id"] -> {:error, :delivery_screenplay_mismatch}
-      packet["candidate_id"] != candidate["id"] -> {:error, :delivery_candidate_mismatch}
-      packet["result_revision_id"] != candidate["result_revision_id"] -> {:error, :delivery_revision_mismatch}
-      identity.kind == "accepted" and identity.accepted_revision_id != candidate["result_revision_id"] ->
+      candidate["screenplay_id"] != run["screenplay_id"] ->
+        {:error, :delivery_screenplay_mismatch}
+
+      packet["candidate_id"] != candidate["id"] ->
+        {:error, :delivery_candidate_mismatch}
+
+      packet["result_revision_id"] != candidate["result_revision_id"] ->
+        {:error, :delivery_revision_mismatch}
+
+      identity.kind == "accepted" and
+          identity.accepted_revision_id != candidate["result_revision_id"] ->
         {:error, :accepted_revision_mismatch}
-      true -> :ok
+
+      true ->
+        :ok
     end
   end
 
@@ -165,7 +188,12 @@ defmodule FountRun.DeliveryBundle do
 
       true ->
         root = Path.expand(root)
-        directory = if Path.type(destination) == :absolute, do: Path.expand(destination), else: Path.expand(destination, root)
+
+        directory =
+          if Path.type(destination) == :absolute,
+            do: Path.expand(destination),
+            else: Path.expand(destination, root)
+
         prefix = root <> "/"
 
         if directory == root or String.starts_with?(directory <> "/", prefix) do
@@ -179,10 +207,26 @@ defmodule FountRun.DeliveryBundle do
   defp requested_formats(opts) do
     @standard_formats ++
       if(Keyword.get(opts, :pdf, false), do: ["pdf"], else: []) ++
-      if(Keyword.get(opts, :table_read, false), do: ["table_read_json", "table_read_html"], else: [])
+      if(Keyword.get(opts, :table_read, false),
+        do: ["table_read_json", "table_read_html"],
+        else: []
+      )
   end
 
-  defp deliver_format(repo, run, candidate, packet, progress, identity, root, directory, relative_directory, format, context, opts) do
+  defp deliver_format(
+         repo,
+         run,
+         candidate,
+         packet,
+         progress,
+         identity,
+         root,
+         directory,
+         relative_directory,
+         format,
+         context,
+         opts
+       ) do
     path = Path.join(directory, file_name(format))
     relative = relative_path(root, path)
     base_options = format_options(format, relative_directory, opts)
@@ -192,16 +236,58 @@ defmodule FountRun.DeliveryBundle do
         result_row(format, delivery, true)
 
       {:retry, retry_index, prior_id} ->
-        options = base_options |> Map.put("retry_index", retry_index) |> Map.put("retry_of", prior_id)
-        perform_delivery(repo, run, candidate, packet, progress, identity, format, path, relative, options, context, opts)
+        options =
+          base_options |> Map.put("retry_index", retry_index) |> Map.put("retry_of", prior_id)
+
+        perform_delivery(
+          repo,
+          run,
+          candidate,
+          packet,
+          progress,
+          identity,
+          format,
+          path,
+          relative,
+          options,
+          context,
+          opts
+        )
 
       :new ->
         options = Map.put(base_options, "retry_index", 0)
-        perform_delivery(repo, run, candidate, packet, progress, identity, format, path, relative, options, context, opts)
+
+        perform_delivery(
+          repo,
+          run,
+          candidate,
+          packet,
+          progress,
+          identity,
+          format,
+          path,
+          relative,
+          options,
+          context,
+          opts
+        )
     end
   end
 
-  defp perform_delivery(repo, run, candidate, packet, progress, identity, format, path, relative, options, context, opts) do
+  defp perform_delivery(
+         repo,
+         run,
+         candidate,
+         packet,
+         progress,
+         identity,
+         format,
+         path,
+         relative,
+         options,
+         context,
+         opts
+       ) do
     attrs =
       %{
         "candidate_id" => if(identity.kind == "candidate", do: identity.candidate_id, else: nil),
@@ -210,32 +296,33 @@ defmodule FountRun.DeliveryBundle do
         "options" => options
       }
 
-    with {:ok, delivery} <- Persistence.create_delivery(repo, run["id"], attrs, context) do
-      case render(format, candidate, packet, progress, run, identity, path, opts) do
-        {:ok, metadata} ->
-          with {:ok, bytes} <- File.read(path),
-               checksum = sha256(bytes),
-               {:ok, saved} <-
-                 Persistence.record_delivery_result(
-                   repo,
-                   delivery["id"],
-                   %{
-                     "state" => "ready",
-                     "output_checksum" => checksum,
-                     "output_location" => relative,
-                     "error" => nil
-                   },
-                   context
-                 ) do
-            result_row(format, saved, false) |> Map.put("metadata", Model.plain(metadata))
-          else
-            {:error, reason} -> fail_delivery(repo, delivery, format, path, reason, context)
-          end
+    case Persistence.create_delivery(repo, run["id"], attrs, context) do
+      {:ok, delivery} ->
+        case render(format, candidate, packet, progress, run, identity, path, opts) do
+          {:ok, metadata} ->
+            with {:ok, bytes} <- File.read(path),
+                 checksum = sha256(bytes),
+                 {:ok, saved} <-
+                   Persistence.record_delivery_result(
+                     repo,
+                     delivery["id"],
+                     %{
+                       "state" => "ready",
+                       "output_checksum" => checksum,
+                       "output_location" => relative,
+                       "error" => nil
+                     },
+                     context
+                   ) do
+              result_row(format, saved, false) |> Map.put("metadata", Model.plain(metadata))
+            else
+              {:error, reason} -> fail_delivery(repo, delivery, format, path, reason, context)
+            end
 
-        {:error, reason} ->
-          fail_delivery(repo, delivery, format, path, reason, context)
-      end
-    else
+          {:error, reason} ->
+            fail_delivery(repo, delivery, format, path, reason, context)
+        end
+
       {:error, reason} ->
         %{"format" => format, "state" => "failed", "error" => error_code(reason)}
     end
@@ -248,7 +335,12 @@ defmodule FountRun.DeliveryBundle do
     case Persistence.record_delivery_result(
            repo,
            delivery["id"],
-           %{"state" => "failed", "output_checksum" => nil, "output_location" => nil, "error" => error},
+           %{
+             "state" => "failed",
+             "output_checksum" => nil,
+             "output_location" => nil,
+             "error" => error
+           },
            context
          ) do
       {:ok, saved} -> result_row(format, saved, false)
@@ -334,7 +426,11 @@ defmodule FountRun.DeliveryBundle do
   end
 
   defp render("pdf", candidate, _packet, _progress, _run, _identity, path, opts) do
-    FountWorkshop.Export.PDF.export(candidate["screenplay"], path, Keyword.get(opts, :pdf_options, []))
+    PDF.export(
+      candidate["screenplay"],
+      path,
+      Keyword.get(opts, :pdf_options, [])
+    )
   end
 
   defp render("table_read_json", candidate, _packet, _progress, _run, _identity, path, _opts),
@@ -353,8 +449,10 @@ defmodule FountRun.DeliveryBundle do
         "SELECT * FROM fount_run_deliveries WHERE run_id=$1::text::uuid AND format=$2 ORDER BY inserted_at,id",
         [run_id, format]
       )
-      |> Enum.filter(&same_identity?(&1, identity))
-      |> Enum.filter(fn row -> comparable_options(row["options"] || %{}) == comparable_options(base_options) end)
+      |> Enum.filter(fn row ->
+        same_identity?(row, identity) and
+          comparable_options(row["options"] || %{}) == comparable_options(base_options)
+      end)
 
     ready = Enum.reverse(rows) |> Enum.find(&(&1["state"] == "ready" and ready_file?(&1, root)))
 
@@ -367,7 +465,12 @@ defmodule FountRun.DeliveryBundle do
 
       true ->
         prior = List.last(rows)
-        max_retry = rows |> Enum.map(&(get_in(&1, ["options", "retry_index"]) || 0)) |> Enum.max(fn -> 0 end)
+
+        max_retry =
+          rows
+          |> Enum.map(&(get_in(&1, ["options", "retry_index"]) || 0))
+          |> Enum.max(fn -> 0 end)
+
         {:retry, max_retry + 1, prior["id"]}
     end
   end
@@ -401,17 +504,23 @@ defmodule FountRun.DeliveryBundle do
     base = %{"bundle_version" => 1, "destination" => relative_directory}
 
     case format do
-      "pdf" -> Map.put(base, "pdf_settings", stringify_keyword(Keyword.get(opts, :pdf_options, [])))
-      "table_read_json" -> Map.put(base, "table_read", true)
-      "table_read_html" -> Map.put(base, "table_read", true)
-      _ -> base
+      "pdf" ->
+        settings = opts |> Keyword.get(:pdf_options, []) |> Keyword.drop([:renderer])
+        Map.put(base, "pdf_settings", stringify_keyword(settings))
+
+      "table_read_json" ->
+        Map.put(base, "table_read", true)
+
+      "table_read_html" ->
+        Map.put(base, "table_read", true)
+
+      _ ->
+        base
     end
   end
 
   defp stringify_keyword(values) when is_list(values),
     do: Map.new(values, fn {key, value} -> {to_string(key), value} end)
-
-  defp stringify_keyword(_), do: %{}
 
   defp file_name("fountain"), do: "screenplay.fountain"
   defp file_name("fdx"), do: "screenplay.fdx"
@@ -474,7 +583,10 @@ defmodule FountRun.DeliveryBundle do
   defp build_manifest(common, relative_directory, results) do
     common
     |> Map.put("destination", relative_directory)
-    |> Map.put("state", if(Enum.all?(results, &(&1["state"] == "ready")), do: "ready", else: "partial"))
+    |> Map.put(
+      "state",
+      if(Enum.all?(results, &(&1["state"] == "ready")), do: "ready", else: "partial")
+    )
     |> Map.put("artifacts", results)
   end
 
@@ -501,9 +613,9 @@ defmodule FountRun.DeliveryBundle do
          :ok <- File.rename(tmp, path) do
       :ok
     else
-      {:error, reason} = error ->
+      {:error, _reason} = error ->
         File.rm(tmp)
-        if is_atom(reason), do: error, else: {:error, :artifact_write_failed}
+        error
     end
   end
 
@@ -525,17 +637,16 @@ defmodule FountRun.DeliveryBundle do
     end
   end
 
-
   defp one(repo, sql, params) do
     case q!(repo, sql, params) do
-      %{columns: columns, rows: [row | _]} -> Map.new(Enum.zip(columns, row))
+      %{columns: columns, rows: [row | _]} -> Persistence.row_map(columns, row)
       _ -> nil
     end
   end
 
   defp rows(repo, sql, params) do
     result = q!(repo, sql, params)
-    Enum.map(result.rows, &Map.new(Enum.zip(result.columns, &1)))
+    Enum.map(result.rows, &Persistence.row_map(result.columns, &1))
   end
 
   defp q!(repo, sql, params), do: SQL.query!(repo, sql, params)

@@ -19,7 +19,6 @@ defmodule FountRun.StorageContractTest do
     assert function_exported?(FountRun, :progress, 3)
   end
 
-
   test "application child specification is host-free" do
     assert {:ok, {_flags, []}} = Supervisor.init([], strategy: :one_for_one)
   end

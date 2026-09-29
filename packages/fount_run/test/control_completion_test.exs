@@ -8,17 +8,43 @@ defmodule FountRun.ControlCompletionTest do
   test "C07 CLI parser exposes the complete headless command set with stable usage failures" do
     id = ID.v4()
 
-    assert {:ok, %{command: "start", input: "run.json"}} = strip_help(CLI.parse(["start", "--input", "run.json"]))
+    assert {:ok, %{command: "start", input: "run.json"}} =
+             strip_help(CLI.parse(["start", "--input", "run.json"]))
+
     assert {:ok, %{command: "show", run_id: ^id}} = strip_help(CLI.parse(["show", id]))
     assert {:ok, %{command: "step", run_id: ^id}} = strip_help(CLI.parse(["step", id]))
     assert {:ok, %{command: "decisions", run_id: ^id}} = strip_help(CLI.parse(["decisions", id]))
-    assert {:ok, %{command: "decide", decision_id: ^id, input: "decision.json"}} = strip_help(CLI.parse(["decide", id, "--input", "decision.json"]))
+
+    assert {:ok, %{command: "decide", decision_id: ^id, input: "decision.json"}} =
+             strip_help(CLI.parse(["decide", id, "--input", "decision.json"]))
 
     assert {:ok, %{command: "plan", run_id: ^id, expected_version: 2, command_id: "cmd-plan"}} =
-             strip_help(CLI.parse(["plan", id, "--input", "plan.json", "--expected-version", "2", "--command-id", "cmd-plan"]))
+             strip_help(
+               CLI.parse([
+                 "plan",
+                 id,
+                 "--input",
+                 "plan.json",
+                 "--expected-version",
+                 "2",
+                 "--command-id",
+                 "cmd-plan"
+               ])
+             )
 
     assert {:ok, %{command: "policy", run_id: ^id, expected_version: 3, command_id: "cmd-policy"}} =
-             strip_help(CLI.parse(["policy", id, "--input", "policy.json", "--expected-version", "3", "--command-id", "cmd-policy"]))
+             strip_help(
+               CLI.parse([
+                 "policy",
+                 id,
+                 "--input",
+                 "policy.json",
+                 "--expected-version",
+                 "3",
+                 "--command-id",
+                 "cmd-policy"
+               ])
+             )
 
     for command <- ~w(pause resume stop) do
       assert {:ok, %{command: ^command, run_id: ^id}} = strip_help(CLI.parse([command, id]))
@@ -27,11 +53,24 @@ defmodule FountRun.ControlCompletionTest do
     assert {:ok, %{command: "approve", run_id: ^id, input: "approval.json"}} =
              strip_help(CLI.parse(["approve", id, "--input", "approval.json"]))
 
-    assert {:ok, %{command: "export", run_id: ^id, destination: "delivery", pdf: true, table_read: true}} =
-             strip_help(CLI.parse(["export", id, "--destination", "delivery", "--pdf", "--table-read"]))
+    assert {:ok,
+            %{
+              command: "export",
+              run_id: ^id,
+              destination: "delivery",
+              pdf: true,
+              table_read: true
+            }} =
+             strip_help(
+               CLI.parse(["export", id, "--destination", "delivery", "--pdf", "--table-read"])
+             )
 
-    assert {:error, :expected_version_required} = CLI.parse(["plan", id, "--input", "plan.json", "--command-id", "x"])
-    assert {:error, :command_id_required} = CLI.parse(["policy", id, "--input", "policy.json", "--expected-version", "1"])
+    assert {:error, :expected_version_required} =
+             CLI.parse(["plan", id, "--input", "plan.json", "--command-id", "x"])
+
+    assert {:error, :command_id_required} =
+             CLI.parse(["policy", id, "--input", "policy.json", "--expected-version", "1"])
+
     assert {:error, :duplicate_options} = CLI.parse(["show", id, "--help", "--help"])
     assert {2, %{"exit_code" => 2}} = CLI.run(["unknown"])
   end
@@ -67,7 +106,9 @@ defmodule FountRun.ControlCompletionTest do
     assert {:ok, attempt} = ApprovalAttempt.validate(attrs)
     assert attempt.parent_attempt_id == parent
     assert attempt.fencing_token == 7
-    assert {:error, :invalid_approval_attempt} = ApprovalAttempt.validate(Map.put(attrs, "parent_attempt_id", "wrong"))
+
+    assert {:error, :invalid_approval_attempt} =
+             ApprovalAttempt.validate(Map.put(attrs, "parent_attempt_id", "wrong"))
   end
 
   test "C03/C07 decide and deliver use registered headless handlers without a web dependency" do
@@ -81,11 +122,16 @@ defmodule FountRun.ControlCompletionTest do
     screenplay = ID.v4()
     {:ok, owner} = Principal.new(:human, "owner")
     {:ok, service} = Principal.new(:service, "review-service")
-    {:ok, context} = ActorContext.new(owner, owner, screenplay, [:read_run, :manage_run], approvers: [service])
+
+    {:ok, context} =
+      ActorContext.new(owner, owner, screenplay, [:read_run, :manage_run], approvers: [service])
+
     assert ActorContext.allowed_approver?(context, service)
 
     assert {:error, :invalid_approver_registry} =
-             ActorContext.new(owner, owner, screenplay, [:read_run, :manage_run], approvers: [owner])
+             ActorContext.new(owner, owner, screenplay, [:read_run, :manage_run],
+               approvers: [owner]
+             )
   end
 
   defp strip_help({:ok, map}), do: {:ok, Map.delete(map, :help)}

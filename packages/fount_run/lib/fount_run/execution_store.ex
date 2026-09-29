@@ -854,7 +854,14 @@ defmodule FountRun.ExecutionStore do
     status = result["run_status"]
     stage = result["next_stage"]
 
-    if status not in [nil, "waiting_for_decision", "waiting_for_approval", "partial", "completed_candidate", "completed_accepted"] or
+    if status not in [
+         nil,
+         "waiting_for_decision",
+         "waiting_for_approval",
+         "partial",
+         "completed_candidate",
+         "completed_accepted"
+       ] or
          stage not in [nil, "write", "iterate", "decide", "deliver"] do
       rollback(repo, :invalid_checkpoint_transition)
     end

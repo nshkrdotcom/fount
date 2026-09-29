@@ -681,7 +681,7 @@ defmodule FountRun.DurableExecutionIntegrationTest do
     end
   end
 
-  test "W07 unavailable stage handlers and services fail explicitly", %{repo: repo} do
+  test "W07 invalid delivery requests and unavailable services fail explicitly", %{repo: repo} do
     %{run: run, context: context, root: root, request: request} = fixture_run(repo, "w07-handler")
 
     {:ok, _} =
@@ -697,7 +697,7 @@ defmodule FountRun.DurableExecutionIntegrationTest do
         context
       )
 
-    assert {:error, {:stage_handler_unavailable, "deliver"}} =
+    assert {:error, :invalid_delivery_request} =
              FountRun.step(repo, run["id"], context, lease_ms: 5_000)
 
     assert [["failed"]] =

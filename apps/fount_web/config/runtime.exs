@@ -24,7 +24,9 @@ if config_env() == :prod do
   config :fount_run, :artifact_root, artifact_root
 else
   owner = Application.fetch_env!(:fount_web, :owner)
-  artifact_root = System.get_env("FOUNT_ARTIFACT_ROOT", Application.fetch_env!(:fount_web, :artifact_root))
+
+  artifact_root =
+    System.get_env("FOUNT_ARTIFACT_ROOT", Application.fetch_env!(:fount_web, :artifact_root))
 
   config :fount_web, :owner,
     id: System.get_env("FOUNT_OWNER_ID", Keyword.fetch!(owner, :id)),

@@ -1,6 +1,7 @@
 defmodule FountWeb.WorkerBootstrap do
   @moduledoc "Restarts durable workers after host/process loss from host mappings plus PostgreSQL Run state."
   use GenServer
+  require Logger
 
   def start_link(_), do: GenServer.start_link(__MODULE__, %{}, name: __MODULE__)
 
@@ -12,8 +13,14 @@ defmodule FountWeb.WorkerBootstrap do
 
   @impl true
   def handle_info(:restore, state) do
-    FountWeb.Store.launched_runs(Fount.Repo)
-    |> Enum.each(&FountWeb.WorkerSupervisor.start_run/1)
+    case FountWeb.Store.launched_runs(Fount.Repo) do
+      runs when is_list(runs) ->
+        Enum.each(runs, &FountWeb.WorkerSupervisor.start_run/1)
+
+      {:error, reason} ->
+        Logger.error("Run worker restore unavailable: #{inspect(reason)}")
+        Process.send_after(self(), :restore, 1_000)
+    end
 
     {:noreply, state}
   end

@@ -356,34 +356,53 @@ defmodule Fount.Intelligence.Runner.Architecture do
     errors =
       cond do
         File.exists?(packaged_host) ->
-          [violation("host_is_not_library", "packages/fount_web", 0, "host must live under apps/")]
+          [
+            violation(
+              "host_is_not_library",
+              "packages/fount_web",
+              0,
+              "host must live under apps/"
+            )
+          ]
 
         not File.regular?(host) ->
-          [violation("host_application_missing", "apps/fount_web/mix.exs", 0, "Phase 06 host missing")]
+          [
+            violation(
+              "host_application_missing",
+              "apps/fount_web/mix.exs",
+              0,
+              "Phase 06 host missing"
+            )
+          ]
 
         true ->
           host_source = File.read!(host)
-          required = [":fount_run", ":phoenix", ":phoenix_live_view"]
-
-          Enum.flat_map(required, fn dependency ->
-            if String.contains?(host_source, dependency),
-              do: [],
-              else: [violation("host_dependency_missing", "apps/fount_web/mix.exs", 0, dependency)]
-          end)
+          host_dependency_violations(host_source)
       end
 
     phoenix = ["{:phoenix,", "{:phoenix_live_view,", "{:phoenix_ecto,"]
 
     Enum.reduce(projects, errors, fn project, acc ->
-      source = File.read!(project)
-      rel = Path.relative_to(project, root)
+      acc ++ library_phoenix_violations(project, root, phoenix)
+    end)
+  end
 
-      acc ++
-        Enum.flat_map(phoenix, fn token ->
-          if String.contains?(source, token),
-            do: [violation("library_phoenix_dependency", rel, 0, token)],
-            else: []
-        end)
+  defp host_dependency_violations(source) do
+    Enum.flat_map([":fount_run", ":phoenix", ":phoenix_live_view"], fn dependency ->
+      if String.contains?(source, dependency),
+        do: [],
+        else: [violation("host_dependency_missing", "apps/fount_web/mix.exs", 0, dependency)]
+    end)
+  end
+
+  defp library_phoenix_violations(project, root, tokens) do
+    source = File.read!(project)
+    rel = Path.relative_to(project, root)
+
+    Enum.flat_map(tokens, fn token ->
+      if String.contains?(source, token),
+        do: [violation("library_phoenix_dependency", rel, 0, token)],
+        else: []
     end)
   end
 

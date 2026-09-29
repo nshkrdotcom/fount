@@ -7,6 +7,8 @@
 **/node_modules/
 /packages/fount/doc/
 /packages/fount/*.tar
+/packages/*/*.tar
+/apps/fount_web/priv/static/
 /.elixir_ls/
 *.ez
 *.beam
@@ -20,6 +22,7 @@ __pycache__/
 *.sqlite3-wal
 /tmp/
 /.blitz/
+/_artifacts/
 
 # Overlay installation journals and recoverable originals
 .fount-overlay-backups/

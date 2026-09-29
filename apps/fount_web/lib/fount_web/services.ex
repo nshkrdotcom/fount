@@ -28,5 +28,6 @@ defmodule FountWeb.Services do
     end
   end
 
-  def automated_review(_packet), do: %{"recommendation" => "approve", "findings" => [], "overrides" => []}
+  def automated_review(_packet),
+    do: %{"recommendation" => "approve", "findings" => [], "overrides" => []}
 end

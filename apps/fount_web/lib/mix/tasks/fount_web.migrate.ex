@@ -1,4 +1,5 @@
 defmodule Mix.Tasks.FountWeb.Migrate do
+  @moduledoc "Applies Core, Run, and host migrations in dependency order."
   use Mix.Task
   @shortdoc "Runs Core, Run, then FountWeb host migrations"
 

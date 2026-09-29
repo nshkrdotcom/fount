@@ -23,11 +23,13 @@ config :fount_web, :artifact_root, Path.expand("../../_artifacts/fount_web", __D
 config :esbuild,
   version: "0.25.10",
   fount_web: [
-    args: ~w(js/app.js --bundle --target=es2022 --outdir=../priv/static/assets --external:/fonts/* --external:/images/*),
+    args:
+      ~w(js/app.js --bundle --target=es2022 --outdir=../priv/static/assets --external:/fonts/* --external:/images/*),
     cd: Path.expand("../assets", __DIR__),
-    env: %{"NODE_PATH" => Path.expand("../../../deps", __DIR__)}
+    env: %{"NODE_PATH" => Path.expand("../deps", __DIR__)}
   ]
 
 config :phoenix, :json_library, Jason
+config :mime, :types, %{"text/plain" => ["fountain"], "application/xml" => ["fdx"]}
 
 import_config "#{config_env()}.exs"

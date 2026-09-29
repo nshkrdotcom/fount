@@ -15,17 +15,24 @@ defmodule FountWeb.OwnerAuth do
       else: assign(conn, :current_owner, nil)
   end
 
-  def require_owner(%Plug.Conn{assigns: %{current_owner: owner}} = conn, _opts) when is_binary(owner), do: conn
+  def require_owner(%Plug.Conn{assigns: %{current_owner: owner}} = conn, _opts)
+      when is_binary(owner), do: conn
 
   def require_owner(conn, _opts) do
-    conn |> Phoenix.Controller.put_flash(:error, "Sign in to the local Fount owner session.") |> Phoenix.Controller.redirect(to: "/login") |> halt()
+    conn
+    |> Phoenix.Controller.put_flash(:error, "Sign in to the local Fount owner session.")
+    |> Phoenix.Controller.redirect(to: "/login")
+    |> halt()
   end
 
   def log_in(conn, token) when is_binary(token) do
     owner = owner_config()
 
     if secure_equal?(token, owner.token) do
-      conn |> configure_session(renew: true) |> put_session(:owner_id, owner.id) |> {:ok, owner.id}
+      authenticated_conn =
+        conn |> configure_session(renew: true) |> put_session(:owner_id, owner.id)
+
+      {:ok, authenticated_conn, owner.id}
     else
       {:error, :invalid_credentials}
     end
@@ -52,6 +59,8 @@ defmodule FountWeb.OwnerAuth do
     %{id: Keyword.fetch!(config, :id), token: Keyword.fetch!(config, :token)}
   end
 
-  defp secure_equal?(left, right) when byte_size(left) == byte_size(right), do: Plug.Crypto.secure_compare(left, right)
+  defp secure_equal?(left, right) when byte_size(left) == byte_size(right),
+    do: Plug.Crypto.secure_compare(left, right)
+
   defp secure_equal?(_, _), do: false
 end

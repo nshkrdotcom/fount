@@ -15,14 +15,38 @@ defmodule FountWeb.Launch do
     with :ok <- validate_input(key, title, journey, source),
          {:ok, root} <- parse(source, filename),
          {:ok, _created} <- Persistence.create(Fount.Repo, key, root),
-         {:ok, project} <- FountWeb.Store.create_project(Fount.Repo, %{owner_id: owner_id, screenplay_id: root.id, key: key, title: title}),
+         {:ok, project} <-
+           FountWeb.Store.create_project(Fount.Repo, %{
+             owner_id: owner_id,
+             screenplay_id: root.id,
+             key: key,
+             title: title
+           }),
          {:ok, context} <- FountWeb.Actors.owner_context(owner_id, root.id),
          config <- FountWeb.Journeys.configuration(root, journey, owner_id),
-         {:ok, run} <- FountRun.start_run(Fount.Repo, run_attrs(project, root, config, journey, "web:" <> project["id"]), context),
-         {:ok, access} <- FountWeb.Store.register_run(Fount.Repo, %{run_id: run["id"], project_id: project["id"], owner_id: owner_id, preset: preset(config.policy), journey: journey}),
+         {:ok, run} <-
+           FountRun.start_run(
+             Fount.Repo,
+             run_attrs(root, config, journey, "web:" <> project["id"]),
+             context
+           ),
+         {:ok, access} <-
+           FountWeb.Store.register_run(Fount.Repo, %{
+             run_id: run["id"],
+             project_id: project["id"],
+             owner_id: owner_id,
+             preset: preset(config.policy),
+             journey: journey
+           }),
          {:ok, envelope} <- PipelineRequest.new(config.request),
-         {:ok, _step} <- FountRun.enqueue_step(Fount.Repo, run["id"], intake(root, envelope), context) do
-      {:ok, %{project: project, run: run, access: Map.merge(access, %{"screenplay_id" => root.id, "key" => key, "title" => title})}}
+         {:ok, _step} <-
+           FountRun.enqueue_step(Fount.Repo, run["id"], intake(root, envelope), context) do
+      {:ok,
+       %{
+         project: project,
+         run: run,
+         access: Map.merge(access, %{"screenplay_id" => root.id, "key" => key, "title" => title})
+       }}
     end
   end
 
@@ -35,13 +59,13 @@ defmodule FountWeb.Launch do
     with :ok <- validate_existing(journey, command_id),
          {:ok, project} <- FountWeb.Store.project(Fount.Repo, owner_id, project_id),
          {:ok, root} <- Persistence.load(Fount.Repo, project["key"]),
-         true <- root.id == project["screenplay_id"] || {:error, :project_screenplay_mismatch},
+         true <- root.id == project["screenplay_id"],
          {:ok, context} <- FountWeb.Actors.owner_context(owner_id, root.id),
          config <- FountWeb.Journeys.configuration(root, journey, owner_id),
          {:ok, run} <-
            FountRun.start_run(
              Fount.Repo,
-             run_attrs(project, root, config, journey, "web-existing:" <> command_id),
+             run_attrs(root, config, journey, "web-existing:" <> command_id),
              context
            ),
          {:ok, access} <-
@@ -98,11 +122,12 @@ defmodule FountWeb.Launch do
         {:error, reason} -> {:error, {:invalid_fdx, reason}}
       end
     else
-      with {:ok, doc} <- Fount.parse(source), do: {:ok, Screenplay.from_document(doc, cast_resolution: :literal_cues)}
+      with {:ok, doc} <- Fount.parse(source),
+           do: {:ok, Screenplay.from_document(doc, cast_resolution: :literal_cues)}
     end
   end
 
-  defp run_attrs(project, root, config, journey, idempotency_key) do
+  defp run_attrs(root, config, journey, idempotency_key) do
     %{
       "screenplay_id" => root.id,
       "base_revision_id" => root.revision.id,
@@ -111,18 +136,30 @@ defmodule FountWeb.Launch do
       "constraints" => [],
       "protected_material" => config.protected_material,
       "client_idempotency_key" => idempotency_key,
-      "operation_parameters" => %{"workflow" => config.workflow, "journey" => journey},
+      "operation_parameters" => %{"workflow" => config.workflow},
       "policy" => config.policy
     }
   end
 
   defp intake(root, envelope) do
-    %{"stage" => "intake", "iteration" => 0, "branch_id" => "main", "input_revision_id" => root.revision.id, "idempotency_key" => "pipeline-intake", "request" => envelope}
+    %{
+      "stage" => "intake",
+      "iteration" => 0,
+      "branch_id" => "main",
+      "input_revision_id" => root.revision.id,
+      "idempotency_key" => "pipeline-intake",
+      "request" => envelope
+    }
   end
 
   defp goal("opening"), do: "Produce a checked opening candidate without advancing canon"
-  defp goal("reveal"), do: "Move the reveal while preserving the protected train beat and approve exact checked pages"
-  defp goal("dialogue"), do: "Revise selected-scene dialogue only and exercise configured automated approval"
+
+  defp goal("reveal"),
+    do:
+      "Move the reveal while preserving the protected train beat and approve exact checked pages"
+
+  defp goal("dialogue"),
+    do: "Revise selected-scene dialogue only and exercise configured automated approval"
 
   defp preset(%{"completion" => "candidate"}), do: "candidate"
   defp preset(%{"approver" => %{"type" => type}}), do: "accept:" <> type

@@ -7,14 +7,18 @@ defmodule FountWeb.Actors do
     with {:ok, owner} <- Principal.new(:human, owner_id),
          {:ok, agent} <- Principal.new(:agent, demo_id(:agent)),
          {:ok, service} <- Principal.new(:service, demo_id(:service)) do
-      ActorContext.new(owner, owner, screenplay_id, [:read_run, :manage_run], approvers: [agent, service])
+      ActorContext.new(owner, owner, screenplay_id, [:read_run, :manage_run],
+        approvers: [agent, service]
+      )
     end
   end
 
   def automated_context(kind, owner_id, screenplay_id) when kind in [:agent, :service] do
     with {:ok, owner} <- Principal.new(:human, owner_id),
          {:ok, principal} <- Principal.new(kind, demo_id(kind)) do
-      ActorContext.new(principal, owner, screenplay_id, [:read_run, :manage_run], approvers: [principal])
+      ActorContext.new(principal, owner, screenplay_id, [:read_run, :manage_run],
+        approvers: [principal]
+      )
     end
   end
 

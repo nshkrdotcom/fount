@@ -27,6 +27,12 @@ defmodule FountRun.DurableExecutionIntegrationTest do
     def execute(_claim, _opts), do: :invalid_result
   end
 
+  defmodule PartialHandler do
+    @behaviour FountRun.StageHandler
+    @impl true
+    def execute(_claim, _opts), do: {:partial, :scripted_pause, %{}}
+  end
+
   setup do
     url = System.fetch_env!("FOUNT_DATABASE_URL")
     prefix = "phase03_#{String.replace(ID.v4(), "-", "")}"
@@ -89,6 +95,35 @@ defmodule FountRun.DurableExecutionIntegrationTest do
 
     assert {:ok, head} = Persistence.load(repo, "phase03-w01")
     assert head.revision.id == root.revision.id
+  end
+
+  test "partial step remains paused until explicit resume", %{repo: repo} do
+    %{run: run, context: context, root: root, request: request} =
+      fixture_run(repo, "partial-pause")
+
+    {:ok, _step} = enqueue_write(repo, run, context, root, request)
+    registry = %{"write" => PartialHandler}
+
+    assert {:ok, %{"status" => "waiting"}} =
+             FountRun.step(repo, run["id"], context, registry: registry, lease_ms: 5_000)
+
+    assert [["partial", true]] =
+             sql(
+               repo,
+               "SELECT status,pause_requested_at IS NOT NULL FROM fount_runs WHERE id=$1::text::uuid",
+               [run["id"]]
+             )
+
+    assert {:error, :pause_requested} =
+             FountRun.step(repo, run["id"], context, registry: registry, lease_ms: 5_000)
+
+    assert [[1]] =
+             sql(repo, "SELECT count(*) FROM fount_run_attempts WHERE run_id=$1::text::uuid", [
+               run["id"]
+             ])
+
+    assert {:ok, %{"replay" => false, "run" => %{"status" => "queued"}}} =
+             FountRun.resume_run(repo, run["id"], context)
   end
 
   test "W02 known provider success replays after crash while ambiguous paid response blocks replay",

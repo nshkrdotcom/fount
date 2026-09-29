@@ -9,7 +9,10 @@ defmodule FountWeb.ArtifactController do
          {:ok, path} <- safe_artifact(delivery["output_location"]),
          {:ok, bytes} <- File.read(path),
          true <- checksum(bytes) == delivery["output_checksum"] or {:error, :checksum_mismatch} do
-      send_download(conn, {:binary, bytes}, filename: Path.basename(path), disposition: :attachment)
+      send_download(conn, {:binary, bytes},
+        filename: Path.basename(path),
+        disposition: :attachment
+      )
     else
       _ -> send_resp(conn, :not_found, "artifact not found")
     end
@@ -19,7 +22,9 @@ defmodule FountWeb.ArtifactController do
     root = Application.fetch_env!(:fount_web, :artifact_root) |> Path.expand()
     path = Path.expand(location, root)
 
-    if path == root or String.starts_with?(path, root <> "/"), do: {:ok, path}, else: {:error, :outside_root}
+    if path == root or String.starts_with?(path, root <> "/"),
+      do: {:ok, path},
+      else: {:error, :outside_root}
   end
 
   defp safe_artifact(_), do: {:error, :invalid_location}

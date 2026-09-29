@@ -8,6 +8,7 @@ defmodule FountWeb.MixProject do
       elixir: "~> 1.18",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
+      dialyzer: [plt_add_apps: [:mix]],
       aliases: aliases(),
       deps: deps()
     ]
@@ -31,6 +32,7 @@ defmodule FountWeb.MixProject do
       {:inference, "~> 0.5.0"},
       {:phoenix, "~> 1.8.1"},
       {:phoenix_live_view, "~> 1.2"},
+      {:lazy_html, ">= 0.1.0", only: :test},
       {:phoenix_ecto, "~> 4.6"},
       {:phoenix_html, "~> 4.3"},
       {:phoenix_live_reload, "~> 1.6", only: :dev},

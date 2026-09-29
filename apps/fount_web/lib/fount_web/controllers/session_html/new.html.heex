@@ -1,10 +1,13 @@
 <main>
   <h1>Fount owner sign in</h1>
-  <p>This local one-owner host authenticates with the configured <code>FOUNT_OWNER_TOKEN</code>. The deterministic demo token is non-secret and must not be used for remote deployment.</p>
-  <p :if={@error} role="alert"><%= @error %></p>
+  <p>
+    This local one-owner host authenticates with the configured <code>FOUNT_OWNER_TOKEN</code>. The deterministic demo token is non-secret and must not be used for remote deployment.
+  </p>
+  <p :if={@error} role="alert">{@error}</p>
   <form action={~p"/login"} method="post" class="stack">
     <input type="hidden" name="_csrf_token" value={get_csrf_token()} />
-    <label>Owner token <input name="session[token]" type="password" autocomplete="current-password" required /></label>
+    <label>Owner token
+    <input name="session[token]" type="password" autocomplete="current-password" required /></label>
     <button type="submit">Sign in</button>
   </form>
 </main>

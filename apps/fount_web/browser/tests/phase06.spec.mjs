@@ -1,4 +1,5 @@
 import {test, expect} from '@playwright/test';
+import {readFileSync} from 'node:fs';
 
 const token = process.env.FOUNT_OWNER_TOKEN || 'browser-owner-token';
 const fixture = `Title: Phase 06 Browser Fixture\nAuthor: Fount\n\nINT. KITCHEN - MORNING\n\nMARA sets an unopened envelope beside the coffee maker.\n\nMARA\nI said I would wait.\n\nEXT. TRAIN PLATFORM - NIGHT\n\nNORA waits under the departure board, one hand around a brass key.\n\nNORA\nThe train is late.\n\nOWEN\nThat's what you wanted.\n\nINT. INTERVIEW ROOM - LATER\n\nNora keeps her hands flat on the table.\n\nNORA\nI didn't miss anything.\n`;
@@ -41,12 +42,15 @@ test('U01 brief to checked opening candidate, export, canon base unchanged', asy
   await chooseRoute(page, runId);
   await waitForCandidate(page, runId, 'INT. LOCKED ROOM - NIGHT');
   await expect(page.locator('pre.script').first()).not.toContainText('INT. LOCKED ROOM - NIGHT');
+  await expect(page.locator('p.status')).toContainText('stage: deliver', {timeout: 60_000});
 
   await page.goto(`/runs/${runId}/exports`);
+  await page.getByRole('button', {name: 'Publish / retry bundle'}).click();
   const fountain = page.getByRole('link', {name: 'Download'}).first();
   await expect(fountain).toBeVisible({timeout: 60_000});
   const [download] = await Promise.all([page.waitForEvent('download'), fountain.click()]);
   expect(await download.suggestedFilename()).toBeTruthy();
+  expect(readFileSync(await download.path(), 'utf8')).toContain('INT. LOCKED ROOM - NIGHT');
 });
 
 test('U02 protected reveal repairs then exact human approval survives refresh', async ({page}) => {
@@ -62,7 +66,10 @@ test('U02 protected reveal repairs then exact human approval survives refresh', 
   await approve.click();
   await page.reload();
   await page.goto(`/runs/${runId}/timeline`);
-  await expect(page.getByText(/completed_accepted|partial/).first()).toBeVisible({timeout: 60_000});
+  await expect(page.locator('pre').filter({hasText: '"outcome": "accepted"'})).toBeVisible({timeout: 60_000});
+  await page.goto(`/runs/${runId}/exports`);
+  await page.getByRole('button', {name: 'Publish / retry bundle'}).click();
+  await expect(page.locator('p.status')).toContainText('completed_accepted', {timeout: 60_000});
 });
 
 test('U03 selected-scene dialogue records configured service approval identity', async ({page}) => {
@@ -72,6 +79,10 @@ test('U03 selected-scene dialogue records configured service approval identity',
   await waitForCandidate(page, runId, 'If you missed it, you were meant to.');
   await page.goto(`/runs/${runId}/timeline`);
   await expect(page.getByText(/demo-service/).first()).toBeVisible({timeout: 60_000});
+  await expect(page.locator('pre').filter({hasText: '"outcome": "accepted"'})).toBeVisible({timeout: 60_000});
+  await page.goto(`/runs/${runId}/exports`);
+  await page.getByRole('button', {name: 'Publish / retry bundle'}).click();
+  await expect(page.locator('p.status')).toContainText('completed_accepted', {timeout: 60_000});
 });
 
 test('U04 duplicate tabs replay exact decision and unauthenticated client is denied', async ({browser}) => {
@@ -101,8 +112,9 @@ test('U05 control, unknown-cost and failure semantics are visible and keyboard r
   await page.goto(`/runs/${runId}/timeline`);
   await expect(page.getByRole('button', {name: 'Pause'})).toBeVisible();
   await expect(page.getByText(/Missing provider cost remains unknown/)).toBeVisible();
+  await expect(page.locator('p.status[aria-live="polite"]')).toBeVisible();
   await page.keyboard.press('Tab');
   await expect(page.locator(':focus')).toBeVisible();
   await page.getByRole('button', {name: 'Stop'}).click();
-  await expect(page.getByText(/Stop recorded/)).toBeVisible();
+  await expect(page.getByRole('status')).toContainText('Stop recorded');
 });

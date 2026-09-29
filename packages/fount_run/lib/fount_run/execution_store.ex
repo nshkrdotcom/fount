@@ -296,7 +296,7 @@ defmodule FountRun.ExecutionStore do
 
       q!(
         repo,
-        "UPDATE fount_runs SET active_step_id=NULL,status='partial',lock_version=lock_version+1,updated_at=now() WHERE id=$1::text::uuid",
+        "UPDATE fount_runs SET active_step_id=NULL,pause_requested_at=COALESCE(pause_requested_at,now()),status='partial',lock_version=lock_version+1,updated_at=now() WHERE id=$1::text::uuid",
         [claim["run_id"]]
       )
 

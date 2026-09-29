@@ -1,6 +1,6 @@
 defmodule FountWeb.Journeys do
   @moduledoc "Deterministic Phase 06 screenplay journeys. Runtime acceptance still exercises real Core/Run/Workshop persistence."
-  alias Fount.{Query, Screenplay}
+  alias Fount.Query
   alias Fount.Writing.Principal
 
   @journeys ~w(opening reveal dialogue)
@@ -44,26 +44,50 @@ defmodule FountWeb.Journeys do
     {workflow, selection, instruction, protected, completion, approver} =
       case journey do
         "opening" ->
-          {"develop", %{"whole_screenplay" => true}, "JOURNEY:opening Open on a visible choice that creates an immediate consequence.", [], "candidate", nil}
+          {"develop", %{"whole_screenplay" => true},
+           "JOURNEY:opening Open on a visible choice that creates an immediate consequence.", [],
+           "candidate", nil}
 
         "reveal" ->
           protected_element =
             root.ir.elements
-            |> Enum.find(fn element -> element.type == :action and String.contains?(element.text, "departure board") end)
-            |> then(&(&1 || Enum.find(root.ir.elements, fn element -> element.type == :action end)))
+            |> Enum.find(fn element ->
+              element.type == :action and String.contains?(element.text, "departure board")
+            end)
+            |> then(
+              &(&1 || Enum.find(root.ir.elements, fn element -> element.type == :action end))
+            )
 
           scene = Query.scene_for(root, protected_element.id)
-          marker = "JOURNEY:reveal TARGET_PROTECTED:#{protected_element.id} AFTER_SCENE:#{scene.id}"
+
+          late_action =
+            Enum.find(root.ir.elements, fn element ->
+              element.type == :action and String.contains?(element.text, "hands flat")
+            end)
+
+          marker =
+            "JOURNEY:reveal TARGET_PROTECTED:#{protected_element.id} TARGET_LATE_ACTION:#{late_action.id} AFTER_SCENE:#{scene.id}"
+
           protected = [%{"element_id" => protected_element.id, "text" => protected_element.text}]
 
-          {"propagate", %{"whole_screenplay" => true}, marker <> " Move the theft revelation late while preserving the train-platform beat and repair its consequence.", protected, "accept", Principal.to_map(owner)}
+          {"propagate", %{"whole_screenplay" => true},
+           marker <>
+             " Move the theft revelation late while preserving the train-platform beat and repair its consequence.",
+           protected, "accept", Principal.to_map(owner)}
 
         "dialogue" ->
-          dialogue = Enum.find(root.ir.elements, fn element -> element.type == :dialogue and String.contains?(element.text, "didn't miss") end)
+          dialogue =
+            Enum.find(root.ir.elements, fn element ->
+              element.type == :dialogue and String.contains?(element.text, "didn't miss")
+            end)
+
           scene = Query.scene_for(root, dialogue.id)
           marker = "JOURNEY:dialogue TARGET_DIALOGUE:#{dialogue.id}"
 
-          {"pass", %{"targets" => [%{"kind" => "scene", "id" => scene.id}]}, marker <> " Sharpen only the selected scene's dialogue; preserve out-of-scope action and protected lines.", [], "accept", Principal.to_map(service)}
+          {"pass", %{"targets" => [%{"kind" => "scene", "id" => scene.id}]},
+           marker <>
+             " Sharpen only the selected scene's dialogue; preserve out-of-scope action and protected lines.",
+           [], "accept", Principal.to_map(service)}
       end
 
     policy = %{
@@ -104,7 +128,13 @@ defmodule FountWeb.Journeys do
 
   defp options("develop"), do: %{"placement" => %{"kind" => "start"}}
   defp options("pass"), do: %{"profile" => "dialogue_subtext"}
-  defp options("propagate"), do: %{"intended_effect" => "Delay knowledge and repair downstream behavior"}
+
+  defp options("propagate"),
+    do: %{
+      "change" => "Delay the theft revelation until the final scene",
+      "intended_effect" => "Delay knowledge and repair downstream behavior"
+    }
+
   defp options(_), do: %{}
 
   defp principal(type, id) do

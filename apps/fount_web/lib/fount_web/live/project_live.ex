@@ -26,7 +26,10 @@ defmodule FountWeb.ProjectLive do
 
     case FountWeb.Launch.create(socket.assigns.current_owner, attrs) do
       {:ok, %{run: run}} ->
-        {:noreply, socket |> put_flash(:info, "Project and durable Run created. Review setup before launch.") |> push_navigate(to: ~p"/runs/#{run["id"]}/setup")}
+        {:noreply,
+         socket
+         |> put_flash(:info, "Project and durable Run created. Review setup before launch.")
+         |> push_navigate(to: ~p"/runs/#{run["id"]}/setup")}
 
       {:error, reason} ->
         {:noreply, assign(socket, :error, human_error(reason))}
@@ -40,7 +43,10 @@ defmodule FountWeb.ProjectLive do
       {:ok, %{run: run}} ->
         {:noreply,
          socket
-         |> put_flash(:info, "Run created from the project's current accepted base. Review setup before launch.")
+         |> put_flash(
+           :info,
+           "Run created from the project's current accepted base. Review setup before launch."
+         )
          |> push_navigate(to: ~p"/runs/#{run["id"]}/setup")}
 
       {:error, reason} ->
@@ -58,7 +64,10 @@ defmodule FountWeb.ProjectLive do
   end
 
   defp load_projects(socket) do
-    assign(socket, :projects, FountWeb.Store.list_projects(Fount.Repo, socket.assigns.current_owner))
+    case FountWeb.Store.list_projects(Fount.Repo, socket.assigns.current_owner) do
+      projects when is_list(projects) -> assign(socket, :projects, projects)
+      {:error, reason} -> assign(socket, :error, "Projects unavailable: #{inspect(reason)}")
+    end
   end
 
   defp human_error({tag, reason}), do: "#{tag}: #{inspect(reason)}"
@@ -80,18 +89,23 @@ defmodule FountWeb.ProjectLive do
 
       <section :if={@live_action == :index}>
         <h1>Fount projects</h1>
-        <p>Authenticated owner: <strong><%= @current_owner %></strong>. Canon changes remain explicit Run decisions.</p>
+        <p>
+          Authenticated owner: <strong><%= @current_owner %></strong>. Canon changes remain explicit Run decisions.
+        </p>
         <p :if={@projects == []}>No projects yet.</p>
         <div class="grid">
           <article :for={project <- @projects} class="card">
-            <h2><%= project["title"] %></h2>
-            <p><code><%= project["key"] %></code></p>
-            <p>Screenplay <code><%= project["screenplay_id"] %></code></p>
-            <p>Starting here reloads the current accepted head; it does not create or accept generated pages.</p>
+            <h2>{project["title"]}</h2>
+            <p><code>{project["key"]}</code></p>
+            <p>Screenplay <code>{project["screenplay_id"]}</code></p>
+            <p>
+              Starting here reloads the current accepted head; it does not create or accept generated pages.
+            </p>
             <form phx-submit="create_existing" class="stack">
               <input type="hidden" name="run[project_id]" value={project["id"]} />
               <input type="hidden" name="run[command_id]" value={Fount.ID.v4()} />
-              <label>New Run journey
+              <label>
+                New Run journey
                 <select name="run[journey]">
                   <option value="opening">Opening candidate</option>
                   <option value="reveal">Reveal change</option>
@@ -106,25 +120,40 @@ defmodule FountWeb.ProjectLive do
 
       <section :if={@live_action == :new}>
         <h1>New screenplay Run</h1>
-        <p>The supplied screenplay becomes the explicit genesis revision. Generated pages are candidates until the configured exact approval path accepts them.</p>
-        <p class="warning">Deterministic demo mode uses no secret credential. It exercises persistence, Run decisions, Workshop edits, checks and delivery; it does not certify screenplay quality.</p>
-        <p :if={@error} role="alert"><%= @error %></p>
+        <p>
+          The supplied screenplay becomes the explicit genesis revision. Generated pages are candidates until the configured exact approval path accepts them.
+        </p>
+        <p class="warning">
+          Deterministic demo mode uses no secret credential. It exercises persistence, Run decisions, Workshop edits, checks and delivery; it does not certify screenplay quality.
+        </p>
+        <p :if={@error} role="alert">{@error}</p>
 
         <form phx-submit="create" class="stack">
           <label>Project title <input name="project[title]" value="Phase 06 Demo" required /></label>
-          <label>Project key <input name="project[key]" value={"phase06-" <> Integer.to_string(System.unique_integer([:positive]))} pattern="[a-z0-9][a-z0-9_-]{1,63}" required /></label>
-          <label>Journey
+          <label>Project key
+          <input
+            name="project[key]"
+            value={"phase06-" <> Integer.to_string(System.unique_integer([:positive]))}
+            pattern="[a-z0-9][a-z0-9_-]{1,63}"
+            required
+          /></label>
+          <label>
+            Journey
             <select name="project[journey]">
-              <option value="opening">Brief → checked opening candidate → export (canon unchanged)</option>
-              <option value="reveal">Reveal move → protected beat repair → human exact approval</option>
+              <option value="opening">
+                Brief → checked opening candidate → export (canon unchanged)
+              </option>
+              <option value="reveal">
+                Reveal move → protected beat repair → human exact approval
+              </option>
               <option value="dialogue">Selected-scene dialogue → configured service approval</option>
             </select>
           </label>
-          <label>Upload Fountain/FDX (max 1 MiB)
-            <.live_file_input upload={@uploads.screenplay} />
+          <label>
+            Upload Fountain/FDX (max 1 MiB) <.live_file_input upload={@uploads.screenplay} />
           </label>
-          <label>Or Fountain source
-            <textarea name="project[source]"><%= @fixture_source %></textarea>
+          <label>
+            Or Fountain source <textarea name="project[source]"><%= @fixture_source %></textarea>
           </label>
           <button type="submit">Create Run</button>
         </form>

@@ -16,7 +16,7 @@ mix phx.server
 # http://127.0.0.1:4000/login
 ```
 
-The source-authoring environment that produced Phase 06 had no Elixir runtime, so it did not resolve this app's Hex lock or execute the commands above. Runtime QC must run `mix deps.get` and commit the resulting `apps/fount_web/mix.lock` if it changes from the source seed.
+The Hex and browser dependency locks were resolved during Phase 06 runtime QC and are committed. On a fresh checkout, use `FOUNT_SYSTEM_ONE_SDK_PATH` when resolving dependencies if the local System One SDK is supplied as a path rather than through Hex.
 
 ## Authenticated writer surfaces
 
@@ -37,7 +37,7 @@ The LiveView subscribes to Run worker telemetry only as a wakeup. A periodic `Fo
 `FountWeb.Journeys.fixture_fountain/0` is a rights-cleared three-scene fixture with dialogue and a protected train-platform beat. The demo adapter is a real `Inference.Adapter` implementation with no credential and `cost: nil` (unknown, never converted to zero).
 
 1. `opening`: human route choice -> checked opening candidate -> candidate-labeled delivery; canonical base remains unchanged.
-2. `reveal`: human route choice -> intentionally violating first candidate -> protected-material repair -> exact human final approval -> accepted delivery.
+2. `reveal`: human route choice -> intentionally violating first candidate -> protected-material repair -> exact human final approval -> delivery on request.
 3. `dialogue`: selected scene only -> dialogue change -> configured service approval; the approval attempt records `demo-service` and any failure/fallback remains durable and visible.
 
 The deterministic adapter is an acceptance fixture and does not certify screenplay quality or generated writing quality.

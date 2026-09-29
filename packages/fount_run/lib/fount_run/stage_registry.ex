@@ -1,12 +1,23 @@
 defmodule FountRun.StageRegistry do
-  @moduledoc "Closed stage-handler registry. Phase 03 exposes only handlers that actually exist."
+  @moduledoc "Closed stage-handler registry for the durable headless screenplay pipeline."
 
   @stages ~w(intake investigate plan write check iterate decide deliver)
 
   def new(overrides \\ %{})
 
   def new(overrides) when is_map(overrides) do
-    registry = Map.merge(%{"write" => FountRun.WorkshopHandler}, stringify_keys(overrides))
+    registry =
+      Map.merge(
+        %{
+          "intake" => FountRun.PipelineHandler,
+          "investigate" => FountRun.PipelineHandler,
+          "plan" => FountRun.PipelineHandler,
+          "write" => FountRun.WorkshopHandler,
+          "check" => FountRun.PipelineHandler,
+          "iterate" => FountRun.PipelineHandler
+        },
+        stringify_keys(overrides)
+      )
 
     with true <- Enum.all?(Map.keys(registry), &(&1 in @stages)),
          true <- Enum.all?(registry, fn {_stage, handler} -> handler?(handler) end) do

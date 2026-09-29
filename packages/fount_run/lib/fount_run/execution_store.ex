@@ -383,8 +383,21 @@ defmodule FountRun.ExecutionStore do
             [run_id]
           )
 
+        decisions =
+          rows(
+            repo,
+            "SELECT id,step_id,plan_version,policy_version,checkpoint_key,kind,prompt,options,status,candidate_id,base_revision_id,content_hash,check_set_fingerprint,context_fingerprint,authorized_type,authorized_id,response_fingerprint,respondent_type,respondent_id,resolved_at,inserted_at,updated_at FROM fount_run_decisions WHERE run_id=$1::text::uuid ORDER BY inserted_at,id",
+            [run_id]
+          )
+
         {:ok,
-         %{"run" => run, "steps" => steps, "usage" => usage, "provider_requests" => providers}}
+         %{
+           "run" => run,
+           "steps" => steps,
+           "decisions" => decisions,
+           "usage" => usage,
+           "provider_requests" => providers
+         }}
       end
     end
   rescue
@@ -805,10 +818,12 @@ defmodule FountRun.ExecutionStore do
       [claim["step_id"], claim["attempt_number"]]
     )
 
+    {run_status, next_stage} = checkpoint_transition!(repo, result)
+
     q!(
       repo,
-      "UPDATE fount_runs SET active_step_id=NULL,status=CASE WHEN EXISTS(SELECT 1 FROM fount_run_steps WHERE run_id=$1::text::uuid AND status IN ('queued','waiting')) THEN 'queued' ELSE 'running' END,selected_candidate_id=COALESCE($2::text::uuid,selected_candidate_id),lock_version=lock_version+1,updated_at=now() WHERE id=$1::text::uuid",
-      [claim["run_id"], candidate_id]
+      "UPDATE fount_runs SET active_step_id=NULL,status=CASE WHEN $3::text IS NOT NULL THEN $3 WHEN EXISTS(SELECT 1 FROM fount_run_steps WHERE run_id=$1::text::uuid AND status IN ('queued','waiting')) THEN 'queued' ELSE 'running' END,stage=COALESCE($4::text,stage),selected_candidate_id=COALESCE($2::text::uuid,selected_candidate_id),lock_version=lock_version+1,updated_at=now() WHERE id=$1::text::uuid",
+      [claim["run_id"], candidate_id, run_status, next_stage]
     )
 
     append_event(repo, run, step, claim, "step_succeeded", %{
@@ -817,6 +832,18 @@ defmodule FountRun.ExecutionStore do
     })
 
     step_row(repo, claim["step_id"])
+  end
+
+  defp checkpoint_transition!(repo, result) do
+    status = result["run_status"]
+    stage = result["next_stage"]
+
+    if status not in [nil, "waiting_for_decision", "partial"] or
+         stage not in [nil, "write", "iterate", "decide"] do
+      rollback(repo, :invalid_checkpoint_transition)
+    end
+
+    {status, stage}
   end
 
   # -- validation/helpers -------------------------------------------------------
@@ -973,6 +1000,8 @@ defmodule FountRun.ExecutionStore do
       "screenplay_id" => run["screenplay_id"],
       "step_id" => step["id"],
       "stage" => step["stage"],
+      "iteration" => step["iteration"],
+      "branch_id" => step["branch_id"],
       "request" => step["request"],
       "input_revision_id" => step["input_revision_id"],
       "input_candidate_id" => step["input_candidate_id"],

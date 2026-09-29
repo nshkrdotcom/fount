@@ -246,12 +246,18 @@ defmodule FountRun.Persistence do
   @doc "Persists an exact pending decision checkpoint; repeated identical checkpoints replay."
   def put_pending_decision(repo, run_id, attrs, %ActorContext{} = context) do
     with {:ok, decision} <- Decision.new(attrs, context.owner),
-         true <- ActorContext.allowed_approver?(context, decision.authorized_principal) do
+         true <- allowed_decision_principal?(context, decision) do
       transaction(repo, fn -> do_put_pending_decision(repo, run_id, decision, context) end)
     else
       false -> {:error, :unauthorized}
       {:error, _} = error -> error
     end
+  end
+
+  defp allowed_decision_principal?(context, decision) do
+    ActorContext.allowed_approver?(context, decision.authorized_principal) or
+      (decision.kind == "strategy" and decision.authorized_principal.type == :human and
+         ActorContext.allowed_route_reviewer?(context, decision.authorized_principal.id))
   end
 
   @doc "Atomically resolves one pending decision; exact response replay is idempotent."
@@ -260,6 +266,26 @@ defmodule FountRun.Persistence do
       transaction(repo, fn -> do_resolve_decision(repo, decision_id, response, context) end)
     else
       {:error, :invalid_decision_response}
+    end
+  end
+
+  @doc "Resolves a Phase-04 strategy checkpoint and schedules its write step in the same transaction."
+  def submit_strategy_decision(repo, decision_id, response, %ActorContext{} = context) do
+    with true <- FountRun.ClosedMap.uuid_string(decision_id),
+         {:ok, response} <-
+           FountRun.ClosedMap.normalize(
+             response,
+             ~w(choice context_fingerprint plan_version policy_version)
+           ),
+         true <- FountRun.ClosedMap.nonempty_string(response["choice"]),
+         true <- valid_hash?(response["context_fingerprint"]),
+         true <- is_integer(response["plan_version"]) and response["plan_version"] > 0,
+         true <- is_integer(response["policy_version"]) and response["policy_version"] > 0 do
+      transaction(repo, fn -> do_submit_strategy_decision(repo, decision_id, response, context) end)
+    else
+      false -> {:error, :invalid_decision_response}
+      {:error, _} = error -> error
+      _ -> {:error, :invalid_decision_response}
     end
   end
 
@@ -626,6 +652,154 @@ defmodule FountRun.Persistence do
       true ->
         rollback(repo, :already_resolved)
     end
+  end
+
+  defp do_submit_strategy_decision(repo, decision_id, response, context) do
+    row =
+      one(
+        repo,
+        "SELECT d.*,r.owner_type,r.owner_id,r.current_plan_version AS run_current_plan_version,r.current_policy_version AS run_current_policy_version FROM fount_run_decisions d JOIN fount_runs r ON r.id=d.run_id WHERE d.id=$1::text::uuid FOR UPDATE OF d,r",
+        [decision_id]
+      ) || rollback(repo, :not_found)
+
+    authorize_owned_row!(repo, row, context)
+
+    if row["kind"] != "strategy", do: rollback(repo, :unsupported_decision_kind)
+
+    if {row["authorized_type"], row["authorized_id"]} !=
+         {Atom.to_string(context.principal.type), context.principal.id},
+       do: rollback(repo, :unauthorized)
+
+    if response["context_fingerprint"] != row["context_fingerprint"],
+      do: rollback(repo, :stale_decision_context)
+
+    if response["plan_version"] != row["plan_version"] or
+         response["policy_version"] != row["policy_version"],
+       do: rollback(repo, :stale_decision_binding)
+
+    if row["run_current_plan_version"] != row["plan_version"] or
+         row["run_current_policy_version"] != row["policy_version"],
+       do: rollback(repo, :stale_decision)
+
+    plan = plan_row(repo, row["run_id"], row["plan_version"] || 0)
+
+    if is_nil(plan) or row["base_revision_id"] != plan["base_revision_id"],
+      do: rollback(repo, :stale_decision_base)
+
+    selected =
+      Enum.find(row["options"] || [], fn
+        %{"id" => id} -> id == response["choice"]
+        _ -> false
+      end) || rollback(repo, :unknown_decision_choice)
+
+    fingerprint = CanonicalJSON.hash(response)
+    key = "strategy-decision:" <> decision_id <> ":write"
+
+    cond do
+      row["status"] == "resolved" and row["response_fingerprint"] == fingerprint and
+          row["respondent_type"] == Atom.to_string(context.principal.type) and
+          row["respondent_id"] == context.principal.id ->
+        next =
+          one(
+            repo,
+            "SELECT * FROM fount_run_steps WHERE run_id=$1::text::uuid AND idempotency_key=$2",
+            [row["run_id"], key]
+          ) || rollback(repo, :decision_replay_missing_step)
+
+        strategy_decision_result(row, selected, next, true)
+
+      row["status"] != "pending" ->
+        rollback(repo, :decision_conflict)
+
+      true ->
+        plan_step =
+          one(
+            repo,
+            "SELECT * FROM fount_run_steps WHERE id=$1::text::uuid AND run_id=$2::text::uuid FOR UPDATE",
+            [row["step_id"], row["run_id"]]
+          ) || rollback(repo, :decision_step_not_found)
+
+        if plan_step["status"] != "succeeded", do: rollback(repo, :decision_not_ready)
+
+        {:ok, envelope} =
+          or_rollback(repo, FountRun.PipelineRequest.validate(plan_step["request"]))
+
+        if is_nil(envelope["strategy_session_id"]),
+          do: rollback(repo, :strategy_session_missing)
+
+        {:ok, write_request} =
+          or_rollback(
+            repo,
+            FountRun.PipelineRequest.advance(envelope, %{
+              selected_strategy_ids: [response["choice"]],
+              decision_id: decision_id
+            })
+          )
+
+        q!(
+          repo,
+          "UPDATE fount_run_decisions SET status='resolved',response=$2::jsonb,response_fingerprint=$3,respondent_type=$4,respondent_id=$5,resolved_at=now(),updated_at=now() WHERE id=$1::text::uuid AND status='pending'",
+          [
+            decision_id,
+            response,
+            fingerprint,
+            Atom.to_string(context.principal.type),
+            context.principal.id
+          ]
+        )
+
+        {:ok, step} =
+          or_rollback(
+            repo,
+            Step.validate(%{
+              "stage" => "write",
+              "iteration" => plan_step["iteration"],
+              "branch_id" => plan_step["branch_id"],
+              "input_revision_id" => plan["base_revision_id"],
+              "input_candidate_id" => nil,
+              "idempotency_key" => key,
+              "request" => write_request
+            })
+          )
+
+        next = do_create_step(repo, row["run_id"], step, context)
+
+        q!(
+          repo,
+          "UPDATE fount_runs SET status='queued',stage='write',lock_version=lock_version+1,updated_at=now() WHERE id=$1::text::uuid",
+          [row["run_id"]]
+        )
+
+        run = run_row(repo, row["run_id"])
+
+        append_event_locked(
+          repo,
+          run,
+          row["plan_version"],
+          row["policy_version"],
+          context.principal,
+          "strategy_decision_resolved",
+          %{
+            "decision_id" => decision_id,
+            "choice" => response["choice"],
+            "next_step_id" => next["id"]
+          },
+          %{step_id: row["step_id"]}
+        )
+
+        strategy_decision_result(row, selected, next, false)
+    end
+  end
+
+  defp strategy_decision_result(row, selected, next, replay) do
+    %{
+      "decision_id" => row["id"],
+      "choice" => selected["id"],
+      "selected_strategy" => selected,
+      "next_step_id" => next["id"],
+      "status" => "queued",
+      "replay" => replay
+    }
   end
 
   defp do_create_approval_attempt(repo, run_id, attempt, context) do
@@ -1313,6 +1487,9 @@ defmodule FountRun.Persistence do
 
   defp delivery_row(repo, id),
     do: one(repo, "SELECT * FROM fount_run_deliveries WHERE id=$1::text::uuid", [id])
+
+  defp valid_hash?(value),
+    do: is_binary(value) and Regex.match?(~r/^[0-9a-f]{64}$/, value)
 
   defp validate_start_opts([]), do: :ok
   defp validate_start_opts(_), do: {:error, :invalid_start_options}

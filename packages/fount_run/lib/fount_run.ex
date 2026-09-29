@@ -2,11 +2,10 @@ defmodule FountRun do
   @moduledoc """
   Durable Run foundation for Fount.
 
-  Phase 03 retains the Phase 02 immutable storage/approval contracts and adds a
-  fenced engine for one bounded operation at a time: enqueue, claim, heartbeat,
-  execute, checkpoint, reconcile and inspect. It does not schedule the Phase 04
-  screenplay pipeline, choose strategies, dispatch approvers, accept canon or
-  deliver artifacts.
+  Phase 04 layers the headless screenplay journey on the Phase 03 fenced engine:
+  intake/preflight, investigation, saved route planning, an exact human strategy
+  checkpoint, writing, checks and bounded iteration. It still does not accept
+  canon or deliver artifacts.
   """
 
   alias FountRun.Persistence
@@ -44,6 +43,13 @@ defmodule FountRun do
     repo
     |> FountRun.Engine.step(run_id, actor_context, opts)
     |> emit(:step)
+  end
+
+  @doc "Resolves an exact saved Phase-04 strategy checkpoint and atomically schedules page generation."
+  def submit_decision(repo, decision_id, response, actor_context) do
+    repo
+    |> Persistence.submit_strategy_decision(decision_id, response, actor_context)
+    |> emit(:submit_decision)
   end
 
   @doc "Returns persisted run/step/provider usage without prompts or provider response bodies."

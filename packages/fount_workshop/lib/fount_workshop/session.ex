@@ -78,6 +78,108 @@ defmodule FountWorkshop.Session do
     end
   end
 
+  @doc "Persists preparation/reports without generating strategies or screenplay pages."
+  def prepare_only(model, request, services, opts \\ []) do
+    with {:ok, request} <- Request.validate(model, request),
+         :ok <- services(services),
+         {:ok, session} <- open(model, request, services, opts) do
+      budget =
+        Keyword.get(opts, :budget) ||
+          Budget.new(Keyword.put(opts, :spent, session["progress"]["spent"] || %{}))
+
+      stage_opts =
+        opts
+        |> Keyword.put(:budget, budget)
+        |> Keyword.put(:history_reader, Store.reader(services))
+        |> Keyword.put(:analysis_session_id, session["id"])
+
+      case prepare(model, session, services, stage_opts) do
+        {:ok, _context, prepared} ->
+          checkpoint(Map.put(prepared, "status", "open"), services, budget)
+
+        {:error, reason, partial} ->
+          fail(partial, reason, [], services, budget)
+
+        {:error, reason} ->
+          fail(session, reason, [], services, budget)
+      end
+    end
+  end
+
+  @doc "Persists preparation and closed strategy choices without materializing screenplay pages."
+  def plan_only(model, request, services, opts \\ []) do
+    with {:ok, request} <- Request.validate(model, request),
+         :ok <- services(services),
+         {:ok, session} <- open(model, request, services, opts) do
+      budget =
+        Keyword.get(opts, :budget) ||
+          Budget.new(Keyword.put(opts, :spent, session["progress"]["spent"] || %{}))
+
+      stage_opts =
+        opts
+        |> Keyword.put(:budget, budget)
+        |> Keyword.put(:history_reader, Store.reader(services))
+        |> Keyword.put(:analysis_session_id, session["id"])
+
+      preparation_budget = %{
+        budget
+        | limits: Map.update!(budget.limits, :inference, &max(&1 - 1, 0))
+      }
+
+      case prepare(model, session, services, Keyword.put(stage_opts, :budget, preparation_budget)) do
+        {:ok, context, prepared} ->
+          {context, prepared} =
+            seed_investigation(context, prepared, Keyword.get(opts, :investigation_seed))
+
+          case strategies(model, prepared, context, services, stage_opts) do
+            {:ok, planned} -> finish({:ok, planned}, services, budget)
+            {:error, reason, traces} -> fail(prepared, reason, traces, services, budget)
+            {:error, reason} -> fail(prepared, reason, [], services, budget)
+          end
+
+        {:error, reason, partial} ->
+          fail(partial, reason, [], services, budget)
+
+        {:error, reason} ->
+          fail(session, reason, [], services, budget)
+      end
+    end
+  end
+
+  defp seed_investigation(context, session, nil), do: {context, session}
+
+  defp seed_investigation(context, session, seed) when is_map(seed) do
+    strategies = Map.get(seed, "strategies", [])
+    report_ids = Map.get(seed, "report_ids", [])
+    evidence = Map.get(seed, "evidence", [])
+    uncertainty = Map.get(seed, "uncertainty", [])
+    data = Map.get(seed, "data", %{})
+
+    context =
+      context
+      |> Map.put(:investigation_strategies, strategies)
+      |> Map.update!(:evidence, &Enum.uniq_by(&1 ++ evidence, fn item -> item["evidence_id"] end))
+      |> Map.update!(:data, fn current ->
+        current
+        |> Map.put("prior_investigation", data)
+        |> Map.put("investigation_uncertainty", uncertainty)
+      end)
+
+    prepared =
+      session
+      |> put_in(
+        ["progress", "report_ids"],
+        Enum.uniq((get_in(session, ["progress", "report_ids"]) || []) ++ report_ids)
+      )
+      |> put_in(["progress", "preparation", "context", "data"], context.data)
+      |> put_in(["progress", "preparation", "context", "evidence"], context.evidence)
+      |> put_in(["progress", "preparation", "context", "investigation_strategies"], strategies)
+
+    {context, prepared}
+  end
+
+  defp seed_investigation(context, session, _invalid), do: {context, session}
+
   def resume(id, services, opts \\ []) do
     with {:ok, session} <- Store.call(services[:store], :session, [id]),
          {:ok, model} <-

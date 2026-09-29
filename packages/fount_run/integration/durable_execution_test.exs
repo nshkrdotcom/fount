@@ -689,15 +689,15 @@ defmodule FountRun.DurableExecutionIntegrationTest do
         repo,
         run["id"],
         %{
-          "stage" => "intake",
-          "idempotency_key" => "intake",
+          "stage" => "deliver",
+          "idempotency_key" => "deliver",
           "input_revision_id" => root.revision.id,
           "request" => %{}
         },
         context
       )
 
-    assert {:error, {:stage_handler_unavailable, "intake"}} =
+    assert {:error, {:stage_handler_unavailable, "deliver"}} =
              FountRun.step(repo, run["id"], context, lease_ms: 5_000)
 
     assert [["failed"]] =

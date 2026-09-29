@@ -8,7 +8,7 @@ The host supplies one shared Repo and trusted `FountRun.ActorContext`. Request J
 
 PostgreSQL `now()` is the lease clock. Active-step assignment/reclaim is serialized under the run/step row locks. Every successful claim increments `current_fencing_token`; heartbeat, provider dispatch and completion require the current live owner/token. Core session/candidate writes receive a generic transaction-local guard that rechecks that same Run lease/fence without adding a Core → Run dependency.
 
-The default stage registry is intentionally closed: only `write` has a real Phase 03 handler. Later stages return `{:stage_handler_unavailable, stage}` rather than being recorded as successful placeholders.
+The default stage registry remains closed. Phase 04 registers `intake`, `investigate`, `plan`, `write`, `check` and `iterate`; `decide` and `deliver` remain unavailable. The pipeline handlers schedule only persisted successor steps through the same Phase 03 engine. Planning uses Workshop preparation/strategy seams and explicitly proves no candidate pages exist before the strategy gate. The write handler accepts only a saved selected route (or the retained Phase 03 legacy write contract), and check/iteration never advance Core canon.
 
 ## Provider recovery
 
@@ -16,4 +16,4 @@ A logical provider call has durable operation identity derived from the immutabl
 
 On restart, `succeeded` is reused. `intended` may proceed. `dispatched`/`unknown` is ambiguous and blocks replay. A late result may still reconcile the provider record and usage even after the worker has been fenced, so paid usage is not lost.
 
-Phase 04 owns multi-stage screenplay scheduling and creative iteration. Phase 05 owns public pause/stop steering and approval/completion commands.
+Phase 04 owns the headless multi-stage screenplay journey and exact strategy-decision submission. Phase 05 owns the remaining decision kinds, public pause/stop steering, acceptance/completion and delivery commands.

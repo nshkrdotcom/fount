@@ -4,7 +4,7 @@ defmodule FountRun.ExecutionStore do
   alias Ecto.Adapters.SQL
   alias Fount.ID
   alias Fount.Writing.CanonicalJSON
-  alias FountRun.{ActorContext, ClosedMap, Persistence, Transition}
+  alias FountRun.{ActorContext, AnalysisLineage, ClosedMap, Persistence, Transition}
 
   @terminal ~w(succeeded failed cancelled fenced)
 
@@ -403,10 +403,14 @@ defmodule FountRun.ExecutionStore do
             [run_id]
           )
 
+        resources = resource_summary(repo, run)
+
         {:ok,
          %{
            "run" => run,
            "steps" => steps,
+           "analysis" => AnalysisLineage.progress(steps),
+           "resources" => resources,
            "decisions" => decisions,
            "approval_attempts" => approval_attempts,
            "deliveries" => deliveries,
@@ -1042,6 +1046,43 @@ defmodule FountRun.ExecutionStore do
   defp resource_limit(limits, "inference"), do: limits["max_inference_calls"]
   defp resource_limit(limits, "measurement_states"), do: limits["max_measurement_states"]
   defp resource_limit(_limits, _resource), do: 0
+
+  defp resource_summary(repo, run) do
+    policy =
+      one(
+        repo,
+        "SELECT policy FROM fount_run_policies WHERE run_id=$1::text::uuid AND version=$2",
+        [run["id"], run["current_policy_version"]]
+      )
+
+    limits = get_in(policy || %{}, ["policy", "limits"]) || %{}
+
+    %{
+      "inference" =>
+        resource_status(
+          limits["max_inference_calls"],
+          consumed_quantity(repo, run["id"], "inference")
+        ),
+      "measurement_states" =>
+        resource_status(
+          limits["max_measurement_states"],
+          consumed_quantity(repo, run["id"], "measurement_states")
+        )
+    }
+  end
+
+  defp resource_status(limit, consumed) when is_integer(limit) and is_integer(consumed) do
+    %{
+      "limit" => limit,
+      "consumed" => consumed,
+      "remaining" => max(limit - consumed, 0),
+      "exhausted" => consumed >= limit
+    }
+  end
+
+  defp resource_status(_limit, consumed) do
+    %{"limit" => nil, "consumed" => consumed, "remaining" => nil, "exhausted" => false}
+  end
 
   defp consumed_quantity(repo, run_id, resource) do
     row =

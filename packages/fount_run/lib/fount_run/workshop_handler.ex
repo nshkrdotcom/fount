@@ -3,7 +3,14 @@ defmodule FountRun.WorkshopHandler do
   @behaviour FountRun.StageHandler
 
   alias Ecto.Adapters.SQL
-  alias FountRun.{DispatchHook, ExecutionStore, Persistence, PipelineRequest, WorkshopIntegration}
+  alias FountRun.{
+    AnalysisLineage,
+    DispatchHook,
+    ExecutionStore,
+    Persistence,
+    PipelineRequest,
+    WorkshopIntegration
+  }
   alias FountWorkshop.{Session, Store}
   alias FountWorkshop.Strategy
 
@@ -289,6 +296,11 @@ defmodule FountRun.WorkshopHandler do
       "revision_id" => if(first, do: first["result_revision_id"]),
       "report_ids" => report_ids(session, branches),
       "checks" => Enum.flat_map(candidates, &(get_in(&1, ["provenance", "checks"]) || [])),
+      "analysis" =>
+        AnalysisLineage.merge(
+          AnalysisLineage.from_session(session),
+          AnalysisLineage.from_candidates(candidates)
+        ),
       "usage" => get_in(session, ["progress", "spent"]) || %{},
       "changes_canon" => false
     }

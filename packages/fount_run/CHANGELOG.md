@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Make the reintegrated analysis path durable at the Run boundary: `measurement_states` remain charged through the existing Run reservation ledger, `progress/3` now exposes safe writer/revision packet and durable analysis-run IDs plus current inference/measurement resource status, and no semantic payload is copied into new Run tables.
+- Add recovery coverage at the pre-analysis and candidate-persistence boundaries, including lease reclaim, policy fencing, preserved measurement usage, stable Sandbox durable-cache reuse, changed-concern cache misses, layered non-generative checks, and child-revision re-analysis during limited iteration.
+- Keep cache guarantees fingerprint-honest: deterministic immutable Sandbox identities may reuse durable measurement results, while System One's current session-bearing provider identity is not documented as reusable across a newly constructed provider and remote dispatch remains at-least-once/unknown across a crash before persistence.
+
 - Reconnect durable Run screenplay stages to the existing Workshop -> Intelligence -> Observe analysis chain without adding a direct System One SDK dependency. Trusted `:observe` services now survive investigate/plan/write/iterate, Run-created Workshop sessions enable durable analysis under a screenplay-derived privacy namespace, and investigate packets are preserved into strategy lineage.
 - Preserve no-Observe compatibility as explicit `not_run` analysis and keep Run `check` non-generative by consuming candidate Revision Intelligence checks already persisted during write/iterate.
 - Add Phase 01 behavioral/source coverage for closed service-map acceptance, ActorContext forwarding, pre-write lineage, selected-route and iteration Revision Intelligence, compatibility, and the package dependency boundary.

@@ -21,6 +21,10 @@ FountRun.step(MyRepo, run_id, services)
 
 Only the closed service-key set is accepted. `:observe` is host-owned and optional; Run passes it to Workshop without importing or constructing System One SDK types. Observe-backed Run sessions enable the existing durable Intelligence path under a deterministic screenplay privacy namespace. Provider objects and credentials are never copied into Run claims, plans, step results, or candidate metadata. With no Observe service, analysis remains explicit `not_run` rather than being treated as semantic success. The reconciler is used for a previously dispatched reviewer call whose durable outcome is unknown; it receives the existing callback operation id and packet and must not trigger a second original review operation.
 
+Run progress projects only analysis identity/status required by a host: writer/revision packet IDs, durable analysis-run IDs, source revision, playbook/status, limited acquisition counters, and Run-level inference/measurement limits/consumption. Full semantic packets remain in Workshop/Intelligence provenance and durable analysis storage. `check` remains store-only and reuses the candidate's persisted Revision Intelligence; it never invokes Observe merely because a check step starts. Required deterministic scope/protected-material checks continue to control iteration separately from advisory semantic checks.
+
+Measurement admission is global to the Run lineage and survives lease reclaim. Durable Observe cache hits may avoid a new measurement reservation only when the existing fingerprint contract proves the result reusable. Immutable Sandbox fixtures are used for deterministic cache tests. A newly constructed System One provider is not assumed to hit a prior durable cache while its current identity remains session-bearing, and the runtime does not claim exactly-once remote dispatch across a crash before a response is durably recorded.
+
 ## Exact writer approval
 
 Get progress/decisions, render the exact decision to the writer, then submit its bindings unchanged:

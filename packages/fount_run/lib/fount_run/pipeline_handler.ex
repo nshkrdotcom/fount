@@ -5,7 +5,14 @@ defmodule FountRun.PipelineHandler do
   alias Ecto.Adapters.SQL
   alias Fount.Persistence, as: CorePersistence
   alias Fount.Writing.{CanonicalJSON, Principal}
-  alias FountRun.{DispatchHook, ExecutionStore, Persistence, PipelineRequest, WorkshopIntegration}
+  alias FountRun.{
+    AnalysisLineage,
+    DispatchHook,
+    ExecutionStore,
+    Persistence,
+    PipelineRequest,
+    WorkshopIntegration
+  }
   alias FountWorkshop.Candidate
   alias FountWorkshop.{Session, Store}
 
@@ -67,6 +74,7 @@ defmodule FountRun.PipelineHandler do
          {:ok, stage_opts} <- workshop_opts(repo, claim, %{}, opts),
          {:ok, session} <-
            Session.prepare_only(model, investigation_request, services, stage_opts),
+         :ok <- fault(opts, :after_pre_analysis_persisted),
          {:ok, _} <- ExecutionStore.link_session(repo, claim, session["id"]),
          data = get_in(session, ["progress", "preparation", "context", "data"]) || %{},
          report_ids = get_in(session, ["progress", "report_ids"]) || [],
@@ -88,6 +96,7 @@ defmodule FountRun.PipelineHandler do
          "omitted_scope" => omitted_scope(model, investigation_request["selection"]),
          "uncertainty" => uncertainty,
          "report_ids" => report_ids,
+         "analysis" => AnalysisLineage.from_session(session),
          "scheduled_step_id" => next["id"],
          "changes_canon" => false
        }}
@@ -121,7 +130,16 @@ defmodule FountRun.PipelineHandler do
              strategy_session_id: session["id"],
              report_ids: report_ids
            }) do
-      route_or_checkpoint(repo, claim, run, advanced, strategies, report_ids, context)
+      route_or_checkpoint(
+        repo,
+        claim,
+        run,
+        advanced,
+        strategies,
+        report_ids,
+        AnalysisLineage.from_session(session),
+        context
+      )
     else
       [] -> {:error, :no_strategy_routes}
       {:error, _} = error -> error
@@ -143,7 +161,16 @@ defmodule FountRun.PipelineHandler do
     }
   end
 
-  defp route_or_checkpoint(repo, claim, run, envelope, strategies, report_ids, context) do
+  defp route_or_checkpoint(
+         repo,
+         claim,
+         run,
+         envelope,
+         strategies,
+         report_ids,
+         analysis,
+         context
+       ) do
     if strategy_decision_required?(run, strategies) do
       with {:ok, authorized} <- route_principal(run, context),
            attrs = %{
@@ -165,6 +192,7 @@ defmodule FountRun.PipelineHandler do
            "decision_id" => decision["id"],
            "decision_context_fingerprint" => decision["context_fingerprint"],
            "report_ids" => report_ids,
+           "analysis" => analysis,
            "uncertainty" => envelope["uncertainty"] || [],
            "run_status" => "waiting_for_decision",
            "next_stage" => "write",
@@ -184,6 +212,7 @@ defmodule FountRun.PipelineHandler do
            "strategies" => strategies,
            "selected_strategy_ids" => [selected],
            "report_ids" => report_ids,
+           "analysis" => analysis,
            "scheduled_step_id" => next["id"],
            "changes_canon" => false
          }}
@@ -423,6 +452,7 @@ defmodule FountRun.PipelineHandler do
          "revision_id" => candidate["result_revision_id"],
          "report_ids" => report_ids,
          "checks" => Enum.flat_map(candidates, &(get_in(&1, ["provenance", "checks"]) || [])),
+         "analysis" => AnalysisLineage.from_candidates(candidates),
          "lineage" => advanced["lineage"],
          "scheduled_step_id" => next["id"],
          "changes_canon" => false
@@ -527,6 +557,7 @@ defmodule FountRun.PipelineHandler do
       "checks" => checks,
       "check_set_fingerprint" => fingerprint,
       "report_ids" => reports,
+      "analysis" => AnalysisLineage.from_candidate(candidate),
       "uncertainty" => envelope["uncertainty"] || [],
       "lineage" => Enum.uniq((envelope["lineage"] || []) ++ (candidate["lineage"] || [])),
       "changes_canon" => false
@@ -759,6 +790,13 @@ defmodule FountRun.PipelineHandler do
 
   defp check_iteration_limit(iteration, maximum) when iteration <= maximum, do: :ok
   defp check_iteration_limit(_, _), do: {:error, :iteration_limit_reached}
+
+  defp fault(opts, stage) do
+    case Keyword.get(opts, :fault_injector) do
+      nil -> :ok
+      fun when is_function(fun, 1) -> fun.(stage)
+    end
+  end
 
   defp sha256(value), do: :crypto.hash(:sha256, value) |> Base.encode16(case: :lower)
 end

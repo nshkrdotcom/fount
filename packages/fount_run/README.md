@@ -38,7 +38,7 @@ FountRun.deliver(repo, run_id, destination, actor_context, opts \\ [])
 
 `approve_run/4` is only a convenience wrapper over the exact persisted final-approval decision. It requires the decision id, context fingerprint, plan version, and policy version and then delegates to the same `submit_decision` implementation. It never chooses “the pending approval” implicitly.
 
-`step/4` accepts a trusted services map containing `:actor_context` and closed service keys. The older explicit `%ActorContext{}` call form remains valid for Phase 03/04 workers. An actor string is not a writable compatibility path.
+`step/4` accepts a trusted services map containing `:actor_context` and closed service keys. `:observe` is an optional trusted provider service alongside `:inference`; Run never constructs System One SDK clients or native SDK questions. When Observe is supplied, Run preserves it through Workshop, enables Workshop/Intelligence durable analysis with a screenplay-derived privacy namespace, and keeps analysis advisory. Without Observe, generation remains compatible and analysis stays explicitly `not_run`. The older explicit `%ActorContext{}` call form remains valid for workers and forwards the same trusted keyword services. An actor string is not a writable compatibility path.
 
 ## Completion and acceptance
 
@@ -64,7 +64,7 @@ The host configures trusted runtime objects, for example:
 config :fount_run, :cli,
   repo: MyApp.Repo,
   actor_context: trusted_actor_context,
-  services: %{inference: inference_client},
+  services: %{inference: inference_client, observe: observe_provider},
   artifact_root: "/srv/fount/artifacts",
   step_options: [lease_ms: 30_000],
   pdf_options: []

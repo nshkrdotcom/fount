@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Reconnect durable Run screenplay stages to the existing Workshop -> Intelligence -> Observe analysis chain without adding a direct System One SDK dependency. Trusted `:observe` services now survive investigate/plan/write/iterate, Run-created Workshop sessions enable durable analysis under a screenplay-derived privacy namespace, and investigate packets are preserved into strategy lineage.
+- Preserve no-Observe compatibility as explicit `not_run` analysis and keep Run `check` non-generative by consuming candidate Revision Intelligence checks already persisted during write/iterate.
+- Add Phase 01 behavioral/source coverage for closed service-map acceptance, ActorContext forwarding, pre-write lineage, selected-route and iteration Revision Intelligence, compatibility, and the package dependency boundary.
+
 - Complete the Phase 05 headless product: exact final decisions, plan/policy steering, pause/resume/stop, explicit rebase/replacement, durable human/agent/service approval through Core, candidate-only completion, and checksum-verified delivery bundles.
 - Add durable callback/review/approval recovery, fallback-attempt lineage, acceptance replay after lost acknowledgement, independent PDF retry, and safe progress projection for approval/delivery state.
 - Add the full `FountRun` public control API and `mix fount.run` CLI with trusted runtime configuration and stable exit classes; Phase 06 web UI remains intentionally absent.

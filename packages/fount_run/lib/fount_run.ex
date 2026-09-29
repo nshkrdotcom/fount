@@ -42,9 +42,9 @@ defmodule FountRun do
   Claims and executes at most one durable operation.
 
   The documented form accepts a trusted services map containing
-  `:actor_context` plus stage services such as `:inference`,
-  `:approval_context` and `:approval_callback`. The explicit ActorContext form
-  remains supported for Phase-03/04 workers.
+  `:actor_context` plus stage services such as `:inference`, optional trusted
+  `:observe`, `:approval_context` and `:approval_callback`. The explicit
+  ActorContext form remains supported for Phase-03/04 workers.
   """
   def step(repo, run_id, services_or_context, opts \\ [])
 
@@ -137,7 +137,7 @@ defmodule FountRun do
     |> emit(:progress)
   end
 
-  @service_keys ~w(inference approval_context approval_callback approval_reconciler registry worker_id lease_ms heartbeat_ms fault_injector)a
+  @service_keys ~w(inference observe approval_context approval_callback approval_reconciler registry worker_id lease_ms heartbeat_ms fault_injector)a
 
   defp normalize_services(services) do
     Enum.reduce_while(services, {:ok, []}, fn

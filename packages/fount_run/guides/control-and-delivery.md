@@ -10,6 +10,7 @@ For `FountRun.step/4`, pass trusted services such as:
 services = %{
   actor_context: owner_context,
   inference: inference_client,
+  observe: observe_provider,
   approval_context: configured_approver_context,
   approval_callback: &MyReviewer.review/1,
   approval_reconciler: &MyReviewer.reconcile/2
@@ -18,7 +19,7 @@ services = %{
 FountRun.step(MyRepo, run_id, services)
 ```
 
-Only the closed service-key set is accepted. The reconciler is used for a previously dispatched reviewer call whose durable outcome is unknown; it receives the existing callback operation id and packet and must not trigger a second original review operation.
+Only the closed service-key set is accepted. `:observe` is host-owned and optional; Run passes it to Workshop without importing or constructing System One SDK types. Observe-backed Run sessions enable the existing durable Intelligence path under a deterministic screenplay privacy namespace. Provider objects and credentials are never copied into Run claims, plans, step results, or candidate metadata. With no Observe service, analysis remains explicit `not_run` rather than being treated as semantic success. The reconciler is used for a previously dispatched reviewer call whose durable outcome is unknown; it receives the existing callback operation id and packet and must not trigger a second original review operation.
 
 ## Exact writer approval
 

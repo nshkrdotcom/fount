@@ -5,7 +5,7 @@ defmodule FountRun.PipelineHandler do
   alias Ecto.Adapters.SQL
   alias Fount.Persistence, as: CorePersistence
   alias Fount.Writing.{CanonicalJSON, Principal}
-  alias FountRun.{DispatchHook, ExecutionStore, Persistence, PipelineRequest}
+  alias FountRun.{DispatchHook, ExecutionStore, Persistence, PipelineRequest, WorkshopIntegration}
   alias FountWorkshop.Candidate
   alias FountWorkshop.{Session, Store}
 
@@ -60,7 +60,7 @@ defmodule FountRun.PipelineHandler do
     with {:ok, run} <- FountRun.get_run(repo, claim["run_id"], context),
          {:ok, model} <- load_base(repo, run),
          {:ok, inference} <- inference(opts),
-         services = guarded_services(repo, claim, inference),
+         services = WorkshopIntegration.guarded_services(repo, claim, inference, opts),
          investigation_request =
            envelope["investigation_request"] ||
              investigation_request(envelope["workshop_request"], run["plan"]),
@@ -101,7 +101,7 @@ defmodule FountRun.PipelineHandler do
     with {:ok, run} <- FountRun.get_run(repo, claim["run_id"], context),
          {:ok, model} <- load_base(repo, run),
          {:ok, inference} <- inference(opts),
-         services = guarded_services(repo, claim, inference),
+         services = WorkshopIntegration.guarded_services(repo, claim, inference, opts),
          {:ok, investigation_session} <-
            Store.call(services.store, :session, [envelope["investigation_session_id"]]),
          {:ok, stage_opts} <- workshop_opts(repo, claim, %{}, opts),
@@ -137,7 +137,9 @@ defmodule FountRun.PipelineHandler do
       "report_ids" => get_in(session, ["progress", "report_ids"]) || [],
       "evidence" => cached["evidence"] || [],
       "uncertainty" => uncertainty(data),
-      "data" => Map.get(data, "investigation", data)
+      "data" => Map.get(data, "investigation", data),
+      "writer_intelligence" => data["writer_intelligence"],
+      "intelligence_preflight" => data["intelligence_preflight"]
     }
   end
 
@@ -370,7 +372,7 @@ defmodule FountRun.PipelineHandler do
          :ok <- canonical_candidate(run, source),
          {:ok, model} <- load_base(repo, run),
          {:ok, inference} <- inference(opts),
-         services = guarded_services(repo, claim, inference),
+         services = WorkshopIntegration.guarded_services(repo, claim, inference, opts),
          repair_request = repair_request(envelope["workshop_request"], envelope["finding"]),
          {:ok, stage_opts} <- workshop_opts(repo, claim, %{}, opts),
          source_packet = %{
@@ -705,11 +707,6 @@ defmodule FountRun.PipelineHandler do
     end
   end
 
-  defp guarded_services(repo, claim, inference) do
-    guard = fn kind, identity -> ExecutionStore.domain_guard(repo, claim, kind, identity) end
-    %{store: Store.new(repo, guard: guard), inference: inference}
-  end
-
   defp workshop_opts(repo, claim, spent, opts) do
     with {:ok, limits} <- ExecutionStore.remaining_limits(repo, claim) do
       counter = :atomics.new(1, signed: false)
@@ -729,20 +726,23 @@ defmodule FountRun.PipelineHandler do
           {:ok, n}
       end
 
-      {:ok,
-       [
-         operation_key: claim["operation_key"],
-         max_inference_calls: Map.get(spent, "inference", 0) + limits.max_inference_calls,
-         max_measurement_states:
-           Map.get(spent, "measurement_states", 0) + limits.max_measurement_states,
-         max_repair_rounds: 0,
-         decode_repairs: limits.decode_repairs,
-         transient_retries: limits.transient_retries,
-         reserved_cost_microunits: Keyword.get(opts, :reserved_cost_microunits),
-         currency: Keyword.get(opts, :currency),
-         reservation_hook: reservation_hook,
-         dispatch_hook: DispatchHook.new(repo, claim, opts)
-       ]}
+      stage_opts =
+        [
+          operation_key: claim["operation_key"],
+          max_inference_calls: Map.get(spent, "inference", 0) + limits.max_inference_calls,
+          max_measurement_states:
+            Map.get(spent, "measurement_states", 0) + limits.max_measurement_states,
+          max_repair_rounds: 0,
+          decode_repairs: limits.decode_repairs,
+          transient_retries: limits.transient_retries,
+          reserved_cost_microunits: Keyword.get(opts, :reserved_cost_microunits),
+          currency: Keyword.get(opts, :currency),
+          reservation_hook: reservation_hook,
+          dispatch_hook: DispatchHook.new(repo, claim, opts)
+        ]
+        |> WorkshopIntegration.durable_analysis_options(claim, opts)
+
+      {:ok, stage_opts}
     end
   end
 

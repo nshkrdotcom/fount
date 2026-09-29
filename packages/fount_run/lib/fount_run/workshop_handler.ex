@@ -3,7 +3,7 @@ defmodule FountRun.WorkshopHandler do
   @behaviour FountRun.StageHandler
 
   alias Ecto.Adapters.SQL
-  alias FountRun.{DispatchHook, ExecutionStore, Persistence, PipelineRequest}
+  alias FountRun.{DispatchHook, ExecutionStore, Persistence, PipelineRequest, WorkshopIntegration}
   alias FountWorkshop.{Session, Store}
   alias FountWorkshop.Strategy
 
@@ -22,12 +22,14 @@ defmodule FountRun.WorkshopHandler do
     with {:ok, inference} <- inference(opts),
          {:ok, model} <-
            Fount.Persistence.load_revision(repo, claim["screenplay_id"], base_revision_id),
-         services = guarded_services(repo, claim, inference),
-         {:ok, session} <-
-           Session.open(model, claim["request"], services,
-             operation_key: claim["operation_key"],
-             max_repair_rounds: 0
+         services = guarded_services(repo, claim, inference, opts),
+         open_opts =
+           WorkshopIntegration.durable_analysis_options(
+             [operation_key: claim["operation_key"], max_repair_rounds: 0],
+             claim,
+             opts
            ),
+         {:ok, session} <- Session.open(model, claim["request"], services, open_opts),
          :ok <- fault(opts, :after_session_open),
          {:ok, _} <- ExecutionStore.link_session(repo, claim, session["id"]),
          :ok <- fault(opts, :after_session_link),
@@ -47,7 +49,7 @@ defmodule FountRun.WorkshopHandler do
          true <- selected != [] or {:error, :strategy_selection_required},
          :ok <- verify_strategy_authorization(repo, claim, envelope),
          {:ok, inference} <- inference(opts),
-         services = guarded_services(repo, claim, inference),
+         services = guarded_services(repo, claim, inference, opts),
          {:ok, session} <- Store.call(services.store, :session, [session_id]),
          :ok <- selected_strategies?(selected, session),
          {:ok, _} <- ExecutionStore.link_session(repo, claim, session_id),
@@ -95,7 +97,10 @@ defmodule FountRun.WorkshopHandler do
 
       {:error, reason, partial} when is_map(partial) ->
         {:partial, reason,
-         result(partial, guarded_services(repo, claim, Keyword.fetch!(opts, :inference)))}
+         result(
+           partial,
+           guarded_services(repo, claim, Keyword.fetch!(opts, :inference), opts)
+         )}
 
       {:error, _} = error ->
         error
@@ -260,9 +265,14 @@ defmodule FountRun.WorkshopHandler do
     end
   end
 
-  defp guarded_services(repo, claim, inference) do
+  defp guarded_services(repo, claim, inference, opts) do
     guard = fn kind, identity -> ExecutionStore.domain_guard(repo, claim, kind, identity) end
-    %{store: Store.new(repo, guard: guard), inference: inference}
+    services = %{store: Store.new(repo, guard: guard), inference: inference}
+
+    case Keyword.get(opts, :observe) do
+      nil -> services
+      observe -> Map.put(services, :observe, observe)
+    end
   end
 
   defp result(session, services) do

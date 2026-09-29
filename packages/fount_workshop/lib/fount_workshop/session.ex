@@ -159,6 +159,12 @@ defmodule FountWorkshop.Session do
     uncertainty = Map.get(seed, "uncertainty", [])
     data = Map.get(seed, "data", %{})
 
+    analysis_data =
+      seed
+      |> Map.take(["writer_intelligence", "intelligence_preflight"])
+      |> Enum.reject(fn {_key, value} -> is_nil(value) end)
+      |> Map.new()
+
     context =
       context
       |> Map.put(:investigation_strategies, strategies)
@@ -167,6 +173,7 @@ defmodule FountWorkshop.Session do
         current
         |> Map.put("prior_investigation", data)
         |> Map.put("investigation_uncertainty", uncertainty)
+        |> Map.merge(analysis_data)
       end)
 
     prepared =

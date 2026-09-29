@@ -5,6 +5,8 @@ defmodule FountRun.ScreenplayPipelineIntegrationTest do
 
   alias Ecto.Adapters.SQL
   alias Fount.{ID, Persistence, Query, Screenplay}
+  alias Fount.Intelligence.Acquisition.CapabilityMeasurements
+  alias Fount.Observe.Sandbox
   alias Fount.Writing.Principal
   alias FountRun.{ActorContext, PipelineRequest}
   alias FountWorkshop.Store
@@ -506,6 +508,264 @@ defmodule FountRun.ScreenplayPipelineIntegrationTest do
     assert [[0]] = sql(repo, "SELECT count(*) FROM fount_run_deliveries")
   end
 
+  test "R01-R05 trusted Observe survives Run, prewrite lineage reaches plan, and selected write reuses it",
+       %{repo: repo} do
+    root = dialogue_root()
+    dialogue = Enum.find(root.ir.elements, &(&1.type == :dialogue))
+    request = request_for(root, "develop", %{"placement" => %{"kind" => "start"}})
+    fixture = fixture_run(repo, "r01-r05", root: root, request: request)
+    observe = observe_provider(root)
+
+    {client, script} =
+      scripted_client([
+        investigation_plan(),
+        investigation_explanation(),
+        dialogue_proposal(root, dialogue.id)
+      ])
+
+    assert {:ok, _} = enqueue_intake(repo, fixture)
+
+    assert {:ok, %{"status" => "succeeded"}} =
+             FountRun.step(repo, fixture.run["id"], %{
+               actor_context: fixture.context,
+               observe: observe,
+               lease_ms: 5_000
+             })
+
+    assert {:ok, %{"status" => "succeeded"}} = run_step(repo, fixture, client, observe)
+
+    assert {:ok, after_investigate} =
+             FountRun.progress(repo, fixture.run["id"], fixture.context)
+
+    investigate_step = Enum.find(after_investigate["steps"], &(&1["stage"] == "investigate"))
+    investigate_session_id = investigate_step["result"]["session_id"]
+    store = Store.new(repo)
+    assert {:ok, investigate_session} = Store.call(store, :session, [investigate_session_id])
+
+    writer_packet =
+      get_in(investigate_session, ["progress", "preparation", "context", "data", "writer_intelligence"])
+
+    assert writer_packet["status"] in ["complete", "partial"]
+    refute writer_packet["reason"] == "observe_provider_not_configured"
+    assert is_binary(writer_packet["id"])
+
+    investigate_limits = investigate_session["provenance"]["limits"]
+    assert investigate_limits["durable_analysis"] == true
+    assert is_binary(investigate_limits["analysis_privacy_namespace"])
+    assert String.starts_with?(investigate_limits["analysis_privacy_namespace"], "fount-run:screenplay:")
+
+    assert {:ok, %{"status" => "succeeded"}} = run_step(repo, fixture, client, observe)
+    assert {:ok, at_gate} = FountRun.progress(repo, fixture.run["id"], fixture.context)
+    plan_step = Enum.find(at_gate["steps"], &(&1["stage"] == "plan"))
+    assert {:ok, plan_session} = Store.call(store, :session, [plan_step["result"]["session_id"]])
+
+    plan_packet =
+      get_in(plan_session, ["progress", "preparation", "context", "data", "writer_intelligence"])
+
+    assert plan_packet["id"] == writer_packet["id"]
+    assert plan_session["provenance"]["limits"]["durable_analysis"] == true
+
+    assert plan_session["provenance"]["limits"]["analysis_privacy_namespace"] ==
+             investigate_limits["analysis_privacy_namespace"]
+
+    assert Enum.all?(plan_step["result"]["strategies"], fn strategy ->
+             get_in(strategy, ["intelligence_lineage", "packet_id"]) == writer_packet["id"]
+           end)
+
+    strategy = decision!(at_gate, "strategy")
+
+    assert {:ok, _} =
+             FountRun.submit_decision(
+               repo,
+               strategy["id"],
+               decision_response(strategy, "route-a"),
+               fixture.context
+             )
+
+    # The selected-route write starts from the plan session. Its saved durable-analysis
+    # options are restored by Session.resume/3 while Observe is supplied as a trusted service.
+    assert {:ok, %{"status" => "succeeded"}} = run_step(repo, fixture, client, observe)
+    assert {:ok, after_write} = FountRun.progress(repo, fixture.run["id"], fixture.context)
+    write_step = Enum.find(after_write["steps"], &(&1["stage"] == "write"))
+    candidate_id = write_step["result"]["candidate_id"]
+    assert {:ok, candidate} = Store.call(store, :candidate, [candidate_id])
+
+    revision_packet = get_in(candidate, ["provenance", "revision_intelligence"])
+    assert revision_packet["status"] in ["complete", "partial"]
+
+    assert get_in(candidate, ["provenance", "intelligence", "pre_analysis_packet", "id"]) ==
+             writer_packet["id"]
+
+    revision_checks =
+      candidate["provenance"]["checks"]
+      |> Enum.filter(&(&1["kind"] == "revision_intelligence"))
+
+    assert revision_checks != []
+    assert Enum.all?(revision_checks, &(&1["severity"] == "advisory"))
+
+    # Run check is intentionally non-generative: it consumes the candidate's inherited
+    # advisory checks even when Observe is not supplied for the check step.
+    assert {:ok, %{"status" => "succeeded"}} = run_step(repo, fixture, nil)
+    assert {:ok, after_check} = FountRun.progress(repo, fixture.run["id"], fixture.context)
+    check_step = Enum.find(after_check["steps"], &(&1["stage"] == "check"))
+
+    assert Enum.filter(check_step["result"]["checks"], &(&1["kind"] == "revision_intelligence")) ==
+             revision_checks
+
+    assert [] = Agent.get(script, & &1)
+
+    other = fixture_run(repo, "r01-unknown")
+    assert {:ok, _} = enqueue_intake(repo, other)
+
+    assert {:error, :invalid_service_key} =
+             FountRun.step(repo, other.run["id"], %{
+               actor_context: other.context,
+               observe: observe,
+               unsupported_service: :reject_me
+             })
+  end
+
+  test "R05 iterate child receives Observe and revision intelligence without changing canon",
+       %{repo: repo} do
+    root = train_root()
+    action = Enum.find(root.ir.elements, &(&1.type == :action))
+    dialogue = Enum.find(root.ir.elements, &(&1.type == :dialogue))
+
+    fixture =
+      fixture_run(repo, "r05-iterate",
+        root: root,
+        protected_material: [%{"element_id" => action.id, "text" => action.text}],
+        max_iterations: 1
+      )
+
+    observe = observe_provider(root)
+
+    {client, script} =
+      scripted_client([
+        investigation_plan(),
+        investigation_explanation(),
+        violating_text_proposal(root, action.id),
+        repair_extraction_response(),
+        repair_strategy_response(),
+        repaired_dialogue_proposal(root, dialogue.id)
+      ])
+
+    assert {:ok, _} = enqueue_intake(repo, fixture)
+    assert {:ok, %{"status" => "succeeded"}} = run_step(repo, fixture, nil)
+    assert {:ok, %{"status" => "succeeded"}} = run_step(repo, fixture, client, observe)
+    assert {:ok, %{"status" => "succeeded"}} = run_step(repo, fixture, client, observe)
+    assert {:ok, at_gate} = FountRun.progress(repo, fixture.run["id"], fixture.context)
+    strategy = decision!(at_gate, "strategy")
+
+    assert {:ok, _} =
+             FountRun.submit_decision(
+               repo,
+               strategy["id"],
+               decision_response(strategy, "route-a"),
+               fixture.context
+             )
+
+    assert {:ok, %{"status" => "succeeded"}} = run_step(repo, fixture, client, observe)
+    assert {:ok, %{"status" => "succeeded"}} = run_step(repo, fixture, nil)
+
+    assert {:ok, after_first_check} =
+             FountRun.progress(repo, fixture.run["id"], fixture.context)
+
+    first_check =
+      Enum.find(after_first_check["steps"], &(&1["stage"] == "check" and &1["iteration"] == 0))
+
+    assert first_check["result"]["status"] == "repair_scheduled"
+
+    assert {:ok, %{"status" => "succeeded"}} = run_step(repo, fixture, client, observe)
+    assert {:ok, after_iterate} = FountRun.progress(repo, fixture.run["id"], fixture.context)
+    iterate_step = Enum.find(after_iterate["steps"], &(&1["stage"] == "iterate"))
+    child_id = iterate_step["result"]["candidate_id"]
+
+    assert {:ok, child} = Store.call(Store.new(repo), :candidate, [child_id])
+    assert child["parent_candidate_id"] == first_check["result"]["candidate_id"]
+    assert Query.node(child["screenplay"], action.id).text == action.text
+
+    revision_packet = get_in(child, ["provenance", "revision_intelligence"])
+    assert revision_packet["status"] in ["complete", "partial"]
+
+    assert Enum.any?(
+             child["provenance"]["checks"],
+             &(&1["kind"] == "revision_intelligence" and &1["severity"] == "advisory")
+           )
+
+    assert get_in(child, ["provenance", "intelligence", "pre_analysis_packet", "status"]) in [
+             "complete",
+             "partial"
+           ]
+
+    assert {:ok, %{"status" => "succeeded"}} = run_step(repo, fixture, nil)
+    assert [] = Agent.get(script, & &1)
+    assert {:ok, canonical} = Persistence.load(repo, fixture.key)
+    assert canonical.revision.id == root.revision.id
+  end
+
+  test "R06 no-Observe compatibility keeps analysis explicitly not_run", %{repo: repo} do
+    root = dialogue_root()
+    dialogue = Enum.find(root.ir.elements, &(&1.type == :dialogue))
+    fixture = fixture_run(repo, "r06", root: root)
+
+    {client, script} =
+      scripted_client([
+        investigation_plan(),
+        investigation_explanation(),
+        dialogue_proposal(root, dialogue.id)
+      ])
+
+    assert {:ok, _} = enqueue_intake(repo, fixture)
+    assert {:ok, %{"status" => "succeeded"}} = run_step(repo, fixture, nil)
+    assert {:ok, %{"status" => "succeeded"}} = run_step(repo, fixture, client)
+
+    assert {:ok, after_investigate} =
+             FountRun.progress(repo, fixture.run["id"], fixture.context)
+
+    investigate_step = Enum.find(after_investigate["steps"], &(&1["stage"] == "investigate"))
+
+    assert {:ok, investigate_session} =
+             Store.call(Store.new(repo), :session, [investigate_step["result"]["session_id"]])
+
+    writer_packet =
+      get_in(investigate_session, ["progress", "preparation", "context", "data", "writer_intelligence"])
+
+    assert writer_packet["status"] == "not_run"
+    assert writer_packet["reason"] == "observe_provider_not_configured"
+    assert investigate_session["provenance"]["limits"]["durable_analysis"] == false
+
+    assert {:ok, %{"status" => "succeeded"}} = run_step(repo, fixture, client)
+    assert {:ok, at_gate} = FountRun.progress(repo, fixture.run["id"], fixture.context)
+    strategy = decision!(at_gate, "strategy")
+
+    assert {:ok, _} =
+             FountRun.submit_decision(
+               repo,
+               strategy["id"],
+               decision_response(strategy, "route-a"),
+               fixture.context
+             )
+
+    assert {:ok, %{"status" => "succeeded"}} = run_step(repo, fixture, client)
+    assert {:ok, after_write} = FountRun.progress(repo, fixture.run["id"], fixture.context)
+    write_step = Enum.find(after_write["steps"], &(&1["stage"] == "write"))
+
+    assert {:ok, candidate} =
+             Store.call(Store.new(repo), :candidate, [write_step["result"]["candidate_id"]])
+
+    assert get_in(candidate, ["provenance", "revision_intelligence", "status"]) == "not_run"
+
+    assert get_in(candidate, ["provenance", "revision_intelligence", "reason"]) ==
+             "observe_provider_not_configured"
+
+    refute Enum.any?(candidate["provenance"]["checks"], fn check ->
+             check["kind"] == "revision_intelligence" and check["status"] == "pass"
+           end)
+
+    assert [] = Agent.get(script, & &1)
+  end
+
   defp reach_strategy_gate(repo, fixture, client) do
     assert {:ok, _} = enqueue_intake(repo, fixture)
     assert {:ok, %{"status" => "succeeded"}} = run_step(repo, fixture, nil)
@@ -602,6 +862,14 @@ defmodule FountRun.ScreenplayPipelineIntegrationTest do
     do:
       FountRun.step(repo, fixture.run["id"], fixture.context, inference: client, lease_ms: 5_000)
 
+  defp run_step(repo, fixture, client, observe),
+    do:
+      FountRun.step(repo, fixture.run["id"], fixture.context,
+        inference: client,
+        observe: observe,
+        lease_ms: 5_000
+      )
+
   defp decision!(progress, kind),
     do:
       Enum.find(progress["decisions"], &(&1["kind"] == kind)) || flunk("missing #{kind} decision")
@@ -623,6 +891,53 @@ defmodule FountRun.ScreenplayPipelineIntegrationTest do
 
     client = Inference.Client.new!(adapter: ScriptedCompletion, adapter_opts: [script: script])
     {client, script}
+  end
+
+  defp observe_provider(root) do
+    scene_spec = CapabilityMeasurements.scene_engine()
+    revision_spec = CapabilityMeasurements.revision_intelligence()
+
+    fixtures =
+      Enum.reduce(root.ir.scenes, %{}, fn scene, acc ->
+        acc
+        |> Map.put(
+          "capability:scene_engine:scene:#{scene.id}",
+          measurement_answers(scene_spec["questions"])
+        )
+        |> Map.put(
+          "capability:revision_intelligence:scene:#{scene.id}",
+          measurement_answers(revision_spec["questions"])
+        )
+      end)
+
+    Sandbox.new!(fixtures)
+  end
+
+  defp measurement_answers(questions) do
+    Map.new(questions, fn {key, question} ->
+      value =
+        case question.kind do
+          :noul ->
+            0.9
+
+          :score ->
+            0
+
+          :choice ->
+            labels = Enum.map(question.criteria, &elem(&1, 0))
+            selected = hd(labels)
+            remainder = if length(labels) > 1, do: 0.1 / (length(labels) - 1), else: 0.0
+
+            %{
+              "probabilities" =>
+                Map.new(labels, &{&1, if(&1 == selected, do: 0.9, else: remainder)}),
+              "choice" => selected,
+              "confidence" => 0.9
+            }
+        end
+
+      {to_string(key), value}
+    end)
   end
 
   defp investigation_plan do
@@ -746,6 +1061,26 @@ defmodule FountRun.ScreenplayPipelineIntegrationTest do
         "value" => "Nora abandons the platform and the protected beat disappears."
       },
       insert_consequence(scene_id)
+    ])
+  end
+
+  defp violating_text_proposal(root, action_id) do
+    proposal(root, "route-a", [
+      %{
+        "kind" => "replace_text",
+        "target" => %{"kind" => "element", "id" => action_id},
+        "value" => "Nora abandons the platform and the protected beat disappears."
+      }
+    ])
+  end
+
+  defp repaired_dialogue_proposal(root, dialogue_id) do
+    proposal(root, "repair", [
+      %{
+        "kind" => "replace_text",
+        "target" => %{"kind" => "element", "id" => dialogue_id},
+        "value" => "Late enough to make the lock matter."
+      }
     ])
   end
 

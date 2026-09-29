@@ -2,6 +2,8 @@
 
 # Fount Intelligence
 
+> **Current workspace status (Run Phase 06):** Intelligence remains the evidence-grounded interpretation library. It does not become a web/runtime host and has no Phoenix dependency; `apps/fount_web` delegates durable work through FountRun. Phase 06 source is offline-implemented and runtime QC is pending.
+
 **Investigate a screenplay problem before deciding how to rewrite it.**
 
 Inspect when information becomes available, what a character can know, whether a reaction relies on unavailable knowledge, which later events depend on an earlier setup, and what a proposed edit changes. Compare dialogue and voice without treating every repeated phrase as a defect. Keep exact evidence, uncertain interpretation and missing measurements separate.

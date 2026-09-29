@@ -1,5 +1,7 @@
 # FountRun
 
+> **Current workspace status (Phase 06):** FountRun remains the headless durable orchestration boundary. The new Phoenix host is `apps/fount_web`; it supplies authenticated identity, Repo/services and supervision without moving Run state or approval semantics into LiveView. Phase 06 source is offline-implemented and runtime QC is pending.
+
 FountRun is the durable orchestration layer for controlled Fount work. Phase 05 completes the **headless** screenplay product: the Phase 04 intake/investigate/plan/write/check pipeline is followed by exact steering and approval decisions, plan/policy updates, pause/resume/stop, stale-base rebase, canonical acceptance through Core, candidate-only completion, and durable exports.
 
 Phase 06 owns the web application. Nothing in FountRun starts Phoenix/LiveView or trusts browser/request JSON with Repo modules, identities, provider clients, credentials, or artifact roots.
@@ -73,3 +75,7 @@ Command JSON contains only work data. `plan` and `policy` require `--expected-ve
 CLI exit classes are stable: `2` usage/input, `3` trusted runtime/auth configuration, `4` conflict/stale/fenced control state, and `5` execution/runtime failure. Success is `0`.
 
 See `guides/architecture.md`, `guides/storage.md`, and `guides/control-and-delivery.md`.
+
+## Phase 06 host integration
+
+The repository now includes the one-owner Phoenix LiveView host at `apps/fount_web`. FountRun remains headless and has no Phoenix dependency. The host starts the shared `Fount.Repo`, runs migrations in Core -> Run -> host order, derives trusted `ActorContext` values from its signed owner session, supervises `FountRun.Worker` processes, and renders durable `FountRun.progress/3` state. Browser forms submit exact decision bindings but never principal or Repo/provider objects. Delivery destinations and artifact roots remain server configuration.

@@ -11,6 +11,8 @@
 
 # Fount Workshop
 
+> **Current workspace status (Run Phase 06):** Workshop keeps all existing generation, revision, rebase, review, PDF and table-read capabilities. Phase 06 does not replace these APIs; the external `apps/fount_web` host invokes them through FountRun and Workshop remains Phoenix-free. Phase 06 source is offline-implemented and runtime QC is pending.
+
 **Write alternate pages, compare them to your draft, and decide what becomes canon.**
 
 Workshop develops a draft from a brief, continues or bridges scenes, creates competing approaches, combines selected material, rebuilds sequences, rewrites a character, coordinates notes, runs creative passes and recovers earlier writing. The resulting pages remain reviewable candidates until an explicit writer decision advances the accepted revision.
@@ -85,11 +87,11 @@ For a project starting from a brief, use `Develop.run/5` or the public `FountWor
 
 Run `npm ci` in this package for the existing renderer; PDF inspection requires Poppler. Database workflows require `FOUNT_DATABASE_URL` and Fount's migrations. For the newly inspected SDK source, set `FOUNT_SYSTEM_ONE_SDK_PATH` before resolving dependencies; details are in Observe's guide.
 
-Run `mix test` for package tests and `MIX_ENV=test mix test integration` for the explicit integration directory after preparing the database/PDF prerequisites. The supplied snapshot records Phases 1–15 as runtime-complete on applicable non-human engineering gates. Phase 16 adds the final source/acceptance audit and documentation cleanup; its Mix/PostgreSQL/Hex/provider/PDF/TTS gates remain for Codex runtime QC, and optional human studies remain separate evidence.
+Run `mix test` for package tests and `MIX_ENV=test mix test integration` for the explicit integration directory after preparing the database/PDF prerequisites. Historical Phase 1–16 workflow evidence remains available in this package. The current Run Phase 06 acceptance ladder is rooted at repository `scripts/final_acceptance.sh`; it additionally verifies the external web host while keeping Workshop unchanged and Phoenix-free.
 
 ## Final integration audit
 
-Phase 16 does not add another generation or canon path. It audits the original four-library product; the current repository also includes the Phase 02 `fount_run` storage foundation and the W01–W12/A01–A12 demonstrations through `scripts/final_acceptance.py`, `scripts/final_acceptance.sh`, and [`guides/final-acceptance.md`](guides/final-acceptance.md). Source-only checks can run without credentials; runtime, database, package-build, live-provider, and human evidence remain explicitly separate.
+The library-level W01–W12/A01–A12 evidence remains in `scripts/final_acceptance.py`, `scripts/final_acceptance.sh`, and [`guides/final-acceptance.md`](guides/final-acceptance.md). Run Phase 06 adds browser-host acceptance on top of those retained workflows; it does not introduce another generation or canon path. Source-only checks can run without credentials; runtime, database, browser, PDF, package-build, live-provider, and human evidence remain explicitly separate.
 
 ## License
 

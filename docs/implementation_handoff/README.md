@@ -1,3 +1,11 @@
+# Current repository integration note — Run Phase 06
+
+The current repository is **five library packages plus one application host**: `packages/fount`, `packages/fount_observe`, `packages/fount_intelligence`, `packages/fount_workshop`, `packages/fount_run`, and `apps/fount_web`. The host is not a sixth library and is the only project allowed to depend on Phoenix/LiveView. Historical material below predates parts of this topology and remains preserved as provenance rather than current package inventory.
+
+Phase 06 source is `OFFLINE_IMPLEMENTED`; runtime compilation, database migrations, LiveView/browser execution, PDF verification and resolved host/browser lockfiles remain for local runtime QC. Existing Workshop workflows and convenience APIs are preserved.
+
+---
+
 # Fount source continuation handoff - 2026-09-24
 
 **Current scope (2026-09-24):** feature development is frozen. Use [STABILITY_CERTIFICATION.md](STABILITY_CERTIFICATION.md) for the current gate and [FUTURE_DEVELOPMENT.md](FUTURE_DEVELOPMENT.md) for every known deferred feature. This later decision supersedes the source-only continuation instructions below that call for building all gaps. The original specification and delivery record remain preserved.

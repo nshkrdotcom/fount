@@ -1,3 +1,13 @@
+# Current Phase 06 host/API map
+
+The current repository is five libraries plus one external host: `fount`, `fount_observe`, `fount_intelligence`, `fount_workshop`, `fount_run`, and `apps/fount_web`. The host authenticates one configured owner, starts the shared `Fount.Repo`, constructs trusted `FountRun.ActorContext` values, supervises `FountRun.Worker`, renders `FountRun.progress/3`, submits exact `FountRun.submit_decision/4` bindings, delegates pause/resume/stop and `FountRun.deliver/5`, and reauthorizes/checksums every artifact download. It does not implement canonical acceptance or generation itself.
+
+Current provider ownership remains unchanged: Observe alone owns the native System One boundary; Workshop owns Inference/ASM creative completion; Run depends on Fount and Workshop but not Phoenix; all five libraries remain Phoenix-free. `FountWeb.DemoAdapter` is a host-only deterministic, credential-free Inference adapter for Phase 06 engineering fixtures.
+
+The web host migration runner applies `Fount.Persistence.migrations_path/0`, then `FountRun.migrations_path/0`, then `FountWeb.Migrations.path/0`. The LiveView socket is disposable: every refresh re-reads durable Run state, while PubSub is only a wake-up optimization.
+
+> The older API notes below are retained as dated implementation history. References to retired `FountProbe` topology are not current architecture.
+
 # Source map and continuation decisions
 
 ## Canonical flow

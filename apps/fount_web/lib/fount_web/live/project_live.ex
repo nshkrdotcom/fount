@@ -1,0 +1,135 @@
+defmodule FountWeb.ProjectLive do
+  use FountWeb, :live_view
+
+  @max_upload 1_048_576
+
+  @impl true
+  def mount(_params, _session, socket) do
+    socket =
+      socket
+      |> assign(:projects, [])
+      |> assign(:error, nil)
+      |> assign(:fixture_source, FountWeb.Journeys.fixture_fountain())
+      |> allow_upload(:screenplay,
+        accept: ~w(.fountain .fdx),
+        max_entries: 1,
+        max_file_size: @max_upload
+      )
+
+    {:ok, load_projects(socket)}
+  end
+
+  @impl true
+  def handle_event("create", %{"project" => params}, socket) do
+    {source, filename} = uploaded_source(socket, params)
+    attrs = Map.merge(params, %{"source" => source, "filename" => filename})
+
+    case FountWeb.Launch.create(socket.assigns.current_owner, attrs) do
+      {:ok, %{run: run}} ->
+        {:noreply, socket |> put_flash(:info, "Project and durable Run created. Review setup before launch.") |> push_navigate(to: ~p"/runs/#{run["id"]}/setup")}
+
+      {:error, reason} ->
+        {:noreply, assign(socket, :error, human_error(reason))}
+    end
+  end
+
+  def handle_event("create_existing", %{"run" => params}, socket) do
+    project_id = Map.get(params, "project_id", "")
+
+    case FountWeb.Launch.create_from_project(socket.assigns.current_owner, project_id, params) do
+      {:ok, %{run: run}} ->
+        {:noreply,
+         socket
+         |> put_flash(:info, "Run created from the project's current accepted base. Review setup before launch.")
+         |> push_navigate(to: ~p"/runs/#{run["id"]}/setup")}
+
+      {:error, reason} ->
+        {:noreply, assign(socket, :error, human_error(reason))}
+    end
+  end
+
+  defp uploaded_source(socket, params) do
+    case consume_uploaded_entries(socket, :screenplay, fn %{path: path}, entry ->
+           {:ok, {File.read!(path), entry.client_name}}
+         end) do
+      [{source, filename}] -> {source, filename}
+      [] -> {Map.get(params, "source", ""), "project.fountain"}
+    end
+  end
+
+  defp load_projects(socket) do
+    assign(socket, :projects, FountWeb.Store.list_projects(Fount.Repo, socket.assigns.current_owner))
+  end
+
+  defp human_error({tag, reason}), do: "#{tag}: #{inspect(reason)}"
+  defp human_error(reason), do: inspect(reason)
+
+  @impl true
+  def render(assigns) do
+    ~H"""
+    <main>
+      <nav aria-label="Primary">
+        <a href={~p"/"}>Projects</a>
+        <a href={~p"/projects/new"}>New project</a>
+        <form action={~p"/logout"} method="post">
+          <input type="hidden" name="_method" value="delete" />
+          <input type="hidden" name="_csrf_token" value={Plug.CSRFProtection.get_csrf_token()} />
+          <button type="submit">Sign out</button>
+        </form>
+      </nav>
+
+      <section :if={@live_action == :index}>
+        <h1>Fount projects</h1>
+        <p>Authenticated owner: <strong><%= @current_owner %></strong>. Canon changes remain explicit Run decisions.</p>
+        <p :if={@projects == []}>No projects yet.</p>
+        <div class="grid">
+          <article :for={project <- @projects} class="card">
+            <h2><%= project["title"] %></h2>
+            <p><code><%= project["key"] %></code></p>
+            <p>Screenplay <code><%= project["screenplay_id"] %></code></p>
+            <p>Starting here reloads the current accepted head; it does not create or accept generated pages.</p>
+            <form phx-submit="create_existing" class="stack">
+              <input type="hidden" name="run[project_id]" value={project["id"]} />
+              <input type="hidden" name="run[command_id]" value={Fount.ID.v4()} />
+              <label>New Run journey
+                <select name="run[journey]">
+                  <option value="opening">Opening candidate</option>
+                  <option value="reveal">Reveal change</option>
+                  <option value="dialogue">Dialogue pass</option>
+                </select>
+              </label>
+              <button type="submit">Use current accepted base</button>
+            </form>
+          </article>
+        </div>
+      </section>
+
+      <section :if={@live_action == :new}>
+        <h1>New screenplay Run</h1>
+        <p>The supplied screenplay becomes the explicit genesis revision. Generated pages are candidates until the configured exact approval path accepts them.</p>
+        <p class="warning">Deterministic demo mode uses no secret credential. It exercises persistence, Run decisions, Workshop edits, checks and delivery; it does not certify screenplay quality.</p>
+        <p :if={@error} role="alert"><%= @error %></p>
+
+        <form phx-submit="create" class="stack">
+          <label>Project title <input name="project[title]" value="Phase 06 Demo" required /></label>
+          <label>Project key <input name="project[key]" value={"phase06-" <> Integer.to_string(System.unique_integer([:positive]))} pattern="[a-z0-9][a-z0-9_-]{1,63}" required /></label>
+          <label>Journey
+            <select name="project[journey]">
+              <option value="opening">Brief → checked opening candidate → export (canon unchanged)</option>
+              <option value="reveal">Reveal move → protected beat repair → human exact approval</option>
+              <option value="dialogue">Selected-scene dialogue → configured service approval</option>
+            </select>
+          </label>
+          <label>Upload Fountain/FDX (max 1 MiB)
+            <.live_file_input upload={@uploads.screenplay} />
+          </label>
+          <label>Or Fountain source
+            <textarea name="project[source]"><%= @fixture_source %></textarea>
+          </label>
+          <button type="submit">Create Run</button>
+        </form>
+      </section>
+    </main>
+    """
+  end
+end

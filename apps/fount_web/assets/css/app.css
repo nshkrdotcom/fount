@@ -1,0 +1,18 @@
+:root { color-scheme: light dark; font-family: ui-sans-serif, system-ui, sans-serif; }
+body { margin: 0; background: Canvas; color: CanvasText; }
+a { color: LinkText; }
+main { max-width: 1180px; margin: 0 auto; padding: 1.5rem; }
+nav { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; margin-bottom: 1.25rem; }
+.card { border: 1px solid color-mix(in srgb, CanvasText 25%, transparent); border-radius: .65rem; padding: 1rem; margin: .75rem 0; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(18rem,1fr)); gap: 1rem; }
+.stack { display: grid; gap: .75rem; }
+label { display: grid; gap: .25rem; font-weight: 600; }
+input, textarea, select, button { font: inherit; padding: .55rem .65rem; }
+textarea { min-height: 9rem; }
+button { cursor: pointer; }
+.status { font-weight: 700; }
+.warning { border-left: .3rem solid currentColor; padding-left: .75rem; }
+pre.script { white-space: pre-wrap; overflow-wrap: anywhere; border: 1px solid color-mix(in srgb, CanvasText 20%, transparent); padding: 1rem; }
+table { width: 100%; border-collapse: collapse; }
+th,td { text-align:left; vertical-align:top; border-bottom:1px solid color-mix(in srgb, CanvasText 18%, transparent); padding:.5rem; }
+.sr-only { position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0; }

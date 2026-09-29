@@ -1,0 +1,10 @@
+/_build/
+/cover/
+/deps/
+/doc/
+/priv/static/assets/app.js
+/priv/static/assets/app.css
+/priv/static/cache_manifest.json
+/browser/node_modules/
+/browser/test-results/
+/browser/playwright-report/

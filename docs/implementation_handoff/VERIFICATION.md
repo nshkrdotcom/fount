@@ -1,3 +1,11 @@
+# Phase 06 verification addendum
+
+For the current five-library + one-host repository, run repository `scripts/final_acceptance.sh --runtime` with `FOUNT_DATABASE_URL` configured. The runtime ladder must compile/test all workspace projects, run Core/Workshop/Run integration, apply Core→Run→host migrations, run `apps/fount_web` integration tests, execute Playwright U01–U05 and retain explicit PDF/live/human statuses. `scripts/final_acceptance.sh --static`, `scripts/phase06_acceptance.py`, and Python unit tests are source evidence only.
+
+The Phase 06 web-source role did not execute Mix, PostgreSQL, the server, PDF or a browser. Resolve and commit the host `mix.lock` and browser `package-lock.json` during local runtime QC; do not invent checksums in an offline handoff.
+
+---
+
 # Verification provenance
 
 For the later local QA execution, see [LOCAL_QA_2026-09-24.md](LOCAL_QA_2026-09-24.md). For subsequent feature implementation and its checks, see [STAGE2_STATUS_2026-09-24.md](STAGE2_STATUS_2026-09-24.md). The historical source-only and earlier-run records below remain separate.

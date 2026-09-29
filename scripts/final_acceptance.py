@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
-"""Source-level Phase 16 acceptance audit.
+"""Source-level final acceptance audit.
 
-This script is intentionally runtime-neutral. It checks the final repository shape,
-closed dependency ownership, scenario/workflow evidence inventory, package allowlists,
-and current documentation claims. It does not claim compilation, database, provider,
-PDF, speech, Hex, or human-validation success.
+This retains the Phase-16 library/product audit and adds the Phase-06 five-library +
+one-host integration boundary. It is intentionally runtime-neutral: no compilation,
+database, browser, provider, PDF, speech, Hex, or human-validation result is claimed.
 """
 from __future__ import annotations
 
@@ -213,10 +212,39 @@ def audit() -> dict:
     check("current_docs_no_superseded_package_names", not old_doc_hits, old_doc_hits)
 
     check(
-        "root_readme_declares_five_library_product",
-        "five-library" in root_readme.lower() and all(name in root_readme for name in PACKAGES),
-        "README five-library composition",
+        "root_readme_declares_five_libraries_plus_host",
+        all(name in root_readme for name in PACKAGES) and "apps/fount_web" in root_readme,
+        "README five libraries plus host composition",
     )
+
+    host_mix = ROOT / "apps" / "fount_web" / "mix.exs"
+    host_required = [
+        ROOT / "apps" / "fount_web" / "lib" / "fount_web" / "router.ex",
+        ROOT / "apps" / "fount_web" / "lib" / "fount_web" / "live" / "project_live.ex",
+        ROOT / "apps" / "fount_web" / "lib" / "fount_web" / "live" / "run_live.ex",
+        ROOT / "apps" / "fount_web" / "priv" / "repo" / "migrations" / "20260929020000_create_fount_web_host_tables.exs",
+        ROOT / "apps" / "fount_web" / "browser" / "tests" / "phase06.spec.mjs",
+    ]
+    check("phase06_host_surface_present", host_mix.is_file() and all(path.is_file() for path in host_required), [str(path.relative_to(ROOT)) for path in host_required if not path.is_file()])
+    check("phase06_host_is_not_sixth_library", not (ROOT / "packages" / "fount_web").exists(), "apps/fount_web only")
+
+    phoenix_library_hits = []
+    for package in PACKAGES:
+        mix_source = read(f"packages/{package}/mix.exs")
+        for token in ("{:phoenix,", "{:phoenix_live_view,", "{:phoenix_ecto,"):
+            if token in mix_source:
+                phoenix_library_hits.append({"package": package, "token": token})
+    check("library_packages_remain_phoenix_free", not phoenix_library_hits, phoenix_library_hits)
+
+    root_mix = read("mix.exs")
+    repomix = read("repomix.config.json")
+    check("phase06_workspace_and_snapshot_registration", '"apps/fount_web"' in root_mix and '"apps/**"' in repomix, None)
+
+    browser = read("apps/fount_web/browser/tests/phase06.spec.mjs") if (ROOT / "apps/fount_web/browser/tests/phase06.spec.mjs").is_file() else ""
+    check("phase06_browser_u01_u05_inventory", all(f"U0{i}" in browser for i in range(1, 6)), None)
+
+    stale_current = [token for token in ("Phase 11 is offline-implemented in this delivery", "Phase 12 is not included") if token in root_readme]
+    check("current_status_is_phase06", not stale_current and "Phase 06" in root_readme and "OFFLINE_IMPLEMENTED" in root_readme, stale_current)
 
     missing_phase16 = [
         path
@@ -234,10 +262,11 @@ def audit() -> dict:
         "status": "pass" if not failures else "fail",
         "mode": "source_only",
         "phase": 16,
+        "integration_phase": 6,
         "checks": checks,
         "limitations": [
             "No Elixir/Mix/BEAM compilation or runtime behavior is executed by this script.",
-            "No PostgreSQL, PDF, speech, provider, live-model, Hex build, or human study result is established.",
+            "No PostgreSQL, browser, PDF, speech, provider, live-model, Hex build, or human study result is established.",
             "Scenario evidence paths are inventory/ownership checks; runtime QC must execute the actual ExUnit/integration demonstrations.",
         ],
     }

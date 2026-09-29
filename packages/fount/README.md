@@ -11,6 +11,8 @@
 
 # Fount
 
+> **Current workspace status (Run Phase 06):** Fount remains the canonical screenplay/acceptance library in the five-library workspace. `apps/fount_web` is an external host; Fount has no Phoenix dependency and its typed acceptance APIs remain the only canon-changing implementation. Phase 06 source is offline-implemented and runtime QC is pending.
+
 **The headless screenplay engine and relational authoring platform for Elixir.**
 
 Screenplays are not flat text files, and they are not word-processor documents. A screenplay is a rigorous, multi-layered dramatic blueprint containing scene hierarchies, dialogue cadence, character presence, temporal continuity, and physical action.

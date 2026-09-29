@@ -1,0 +1,7 @@
+{
+  "name": "fount-phase06-browser",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {"test": "playwright test"},
+  "devDependencies": {"@playwright/test": "1.63.0"}
+}

@@ -341,9 +341,49 @@ defmodule Fount.Intelligence.Runner.Architecture do
         ],
         else: errors
 
+    errors = errors ++ host_violations(root, projects)
+
     Enum.reduce(projects, errors, fn project, acc ->
       owner = Path.dirname(project) |> Path.basename()
       acc ++ project_violations(project, root, owner)
+    end)
+  end
+
+  defp host_violations(root, projects) do
+    host = Path.join(root, "apps/fount_web/mix.exs")
+    packaged_host = Path.join(root, "packages/fount_web")
+
+    errors =
+      cond do
+        File.exists?(packaged_host) ->
+          [violation("host_is_not_library", "packages/fount_web", 0, "host must live under apps/")]
+
+        not File.regular?(host) ->
+          [violation("host_application_missing", "apps/fount_web/mix.exs", 0, "Phase 06 host missing")]
+
+        true ->
+          host_source = File.read!(host)
+          required = [":fount_run", ":phoenix", ":phoenix_live_view"]
+
+          Enum.flat_map(required, fn dependency ->
+            if String.contains?(host_source, dependency),
+              do: [],
+              else: [violation("host_dependency_missing", "apps/fount_web/mix.exs", 0, dependency)]
+          end)
+      end
+
+    phoenix = ["{:phoenix,", "{:phoenix_live_view,", "{:phoenix_ecto,"]
+
+    Enum.reduce(projects, errors, fn project, acc ->
+      source = File.read!(project)
+      rel = Path.relative_to(project, root)
+
+      acc ++
+        Enum.flat_map(phoenix, fn token ->
+          if String.contains?(source, token),
+            do: [violation("library_phoenix_dependency", rel, 0, token)],
+            else: []
+        end)
     end)
   end
 

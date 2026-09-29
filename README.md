@@ -437,9 +437,11 @@ Existing live Workshop workflows remain in `packages/fount_workshop/examples/liv
 
 ## Current Development Status
 
-**Phases 1–10 are complete on recorded engineering QC. Phase 11 is offline-implemented in this delivery and awaits runtime QC.** Phase 10 is the durable-analysis baseline. Phase 11 adds rights-aware evaluation corpora, disagreement-preserving semantic annotations, calibration/abstention metrics, descriptive drift, frozen current-output-contract reasoning fixtures, all-twelve-family benchmark coverage, non-linear regression assets, longitudinal resource calibration, and explicit Observe/Workshop live-QC entry points.
+The repository now contains **five headless libraries plus one Phoenix host application**: `fount`, `fount_observe`, `fount_intelligence`, `fount_workshop`, `fount_run`, and `apps/fount_web`. The libraries retain their existing dependency boundaries; Phoenix/LiveView is host-only.
 
-The authoritative runtime evidence through Phase 10 is in the current docset. Phase-11 Elixir/DB/package/live checks are intentionally unclaimed here and are delegated to its Codex QC handoff. System One remains behind Observe, creative completion remains Workshop/Inference/ASM-owned, human studies remain optional under D046, and Phase 12 is not included.
+The six-phase Fount Run plan has completed runtime QC through Phase 05. **Phase 06 — Web app and integration — is `OFFLINE_IMPLEMENTED` in this source delivery and still awaits local runtime QC.** The source-authored host adds one-owner authentication, project/run mapping, durable Run supervision, LiveView setup/timeline/decision/review/export surfaces, deterministic browser fixtures, and owner-authorized artifact downloads without changing the Core/Workshop/Run ownership model.
+
+Elixir compilation, PostgreSQL migrations, application execution, PDF rendering, and Playwright browser journeys are not certified by the offline source pass. The operational docset and Phase 06 runtime-QC handoff are authoritative for the remaining verification work.
 
 ---
 

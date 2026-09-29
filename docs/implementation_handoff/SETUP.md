@@ -1,3 +1,11 @@
+# Run Phase 06 setup addendum
+
+For the current workspace, operate all five libraries plus `apps/fount_web`. From the root, `mix setup` resolves workspace dependencies, installs Workshop npm dependencies and host esbuild. Then configure `FOUNT_DATABASE_URL`, run `cd apps/fount_web && mix fount_web.migrate && mix assets.build && mix phx.server`. `mix fount_web.migrate` deliberately applies Core, then Run, then host migrations.
+
+For final runtime evidence use `scripts/final_acceptance.sh --runtime`; browser-only execution is `scripts/run_phase06_browser.sh`. The offline Phase 06 handoff does not claim these commands were run.
+
+---
+
 # Local application and environment
 
 ## Repositories

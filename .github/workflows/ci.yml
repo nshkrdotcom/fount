@@ -107,5 +107,19 @@ jobs:
         working-directory: packages/fount_workshop
       - run: MIX_ENV=test mix test integration
         working-directory: packages/fount_run
+      - run: MIX_ENV=test mix fount_web.migrate
+        working-directory: apps/fount_web
+      - run: MIX_ENV=test mix test integration
+        working-directory: apps/fount_web
+      - run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+        working-directory: apps/fount_web/browser
+      - run: npm ci
+        working-directory: apps/fount_web/browser
+      - run: npx playwright install --with-deps chromium
+        working-directory: apps/fount_web/browser
+      - run: scripts/run_phase06_browser.sh
+        env:
+          FOUNT_OWNER_ID: browser-owner
+          FOUNT_OWNER_TOKEN: browser-owner-token
       - run: FOUNT_PACKAGE_BUILD=1 mix hex.build
         working-directory: packages/fount_run

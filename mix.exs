@@ -36,7 +36,8 @@ defmodule Fount.Workspace.MixProject do
       setup: [
         "deps.get",
         "blitz.workspace deps_get",
-        "cmd --cd packages/fount_workshop npm ci"
+        "cmd --cd packages/fount_workshop npm ci",
+        "cmd --cd apps/fount_web mix assets.setup"
       ],
       test: ["blitz.workspace test"],
       "fount.architecture": [
@@ -67,7 +68,8 @@ defmodule Fount.Workspace.MixProject do
         "packages/fount_observe",
         "packages/fount_intelligence",
         "packages/fount_workshop",
-        "packages/fount_run"
+        "packages/fount_run",
+        "apps/fount_web"
       ],
       isolation: [deps_path: true, build_path: true, lockfile: true, hex_home: "_build/hex"],
       parallelism: [

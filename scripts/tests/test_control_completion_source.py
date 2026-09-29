@@ -70,7 +70,7 @@ class ControlCompletionSource(unittest.TestCase):
         for token in ["after_callback_response_before_persistence", "after_review_persistence", "after_approval_payload_persistence", "after_acceptance_commit"]:
             self.assertIn(token, tests)
 
-    def test_c07_public_api_cli_and_mix_task_are_complete_without_web_host(self):
+    def test_c07_public_api_cli_and_mix_task_remain_headless_with_web_host_external(self):
         public = self.read("packages/fount_run/lib/fount_run.ex")
         cli = self.read("packages/fount_run/lib/fount_run/cli.ex")
         task = self.read("packages/fount_run/lib/mix/tasks/fount.run.ex")
@@ -79,7 +79,9 @@ class ControlCompletionSource(unittest.TestCase):
         for command in ["start", "show", "step", "decisions", "decide", "plan", "pause", "resume", "stop", "policy", "approve", "export"]:
             self.assertIn(f'"{command}"', cli)
         self.assertIn("FountRun.CLI", task)
-        self.assertFalse((ROOT / "apps" / "fount_web").exists())
+        package_source = "".join(path.read_text(encoding="utf-8") for path in (ROOT / "packages" / "fount_run" / "lib").rglob("*.ex"))
+        self.assertNotIn("use Phoenix", package_source)
+        self.assertFalse((ROOT / "packages" / "fount_web").exists())
 
 
 if __name__ == "__main__":

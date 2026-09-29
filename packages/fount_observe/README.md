@@ -2,6 +2,8 @@
 
 # Fount Observe
 
+> **Current workspace status (Run Phase 06):** Observe remains the neutral measurement/System One boundary in the five-library workspace. The Phoenix host lives only at `apps/fount_web`; Observe has no Phoenix dependency. Phase 06 source is offline-implemented and runtime QC is pending.
+
 **Measure what is on the page without letting an answer rewrite the screenplay.**
 
 Observe supplies atomic, source-grounded measurements for Fount's writing and inspection tools. It separates a proposition's probability from a choice's confidence, preserves ordered rubrics and raw distributions, and keeps missing/failed measurements distinct from evidence that a proposition is false.

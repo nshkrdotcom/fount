@@ -20,7 +20,8 @@
     "repomix.config.json",
     "scripts/**",
     "handoff/apply_overlay.py",
-    "packages/**"
+    "packages/**",
+    "apps/**"
   ],
   "ignore": {
     "useGitignore": true,

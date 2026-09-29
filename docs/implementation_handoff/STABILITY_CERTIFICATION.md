@@ -1,3 +1,11 @@
+# Current integration status — 2026-09-29
+
+Run Phases 01–05 have recorded runtime-complete evidence in the authoritative Run docset. Phase 06 adds `apps/fount_web` as the sole Phoenix host and is **offline source-implemented only** in this delivery. Source audits pass, but Elixir compilation, dependency/lock resolution, PostgreSQL Core→Run→host migration execution, LiveView integration, Playwright U01–U05, PDF behavior and final package/runtime regression are **NOT_RUN** here and must be executed by the Phase 06 runtime-QC agent. No release certification or screenplay-quality judgment is inferred from source inspection or deterministic fixtures.
+
+The current topology is five libraries plus one host; no library has a Phoenix dependency. The dated stability record below remains historical evidence for earlier implementation surfaces and must not be read as Phase 06 certification.
+
+---
+
 # Stability certification gate — 2026-09-24
 
 ## Decision and claim boundary

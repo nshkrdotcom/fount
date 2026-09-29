@@ -514,7 +514,8 @@ defmodule FountRun.ScreenplayPipelineIntegrationTest do
     dialogue = Enum.find(root.ir.elements, &(&1.type == :dialogue))
     request = request_for(root, "develop", %{"placement" => %{"kind" => "start"}})
     fixture = fixture_run(repo, "r01-r05", root: root, request: request)
-    observe = observe_provider(root)
+    credential_canary = "phase01-provider-secret-#{Fount.ID.v4()}"
+    observe = observe_provider(root, credential_canary)
 
     {client, script} =
       scripted_client([
@@ -532,7 +533,17 @@ defmodule FountRun.ScreenplayPipelineIntegrationTest do
                lease_ms: 5_000
              })
 
-    assert {:ok, %{"status" => "succeeded"}} = run_step(repo, fixture, client, observe)
+    assert {:ok, worker} =
+             FountRun.Worker.init(
+               repo: repo,
+               run_id: fixture.run["id"],
+               context: fixture.context,
+               interval_ms: 60_000,
+               step_opts: [inference: client, observe: observe, lease_ms: 5_000]
+             )
+
+    assert {:noreply, ^worker} = FountRun.Worker.handle_info(:poll, worker)
+    assert_receive :poll
 
     assert {:ok, after_investigate} =
              FountRun.progress(repo, fixture.run["id"], fixture.context)
@@ -543,7 +554,13 @@ defmodule FountRun.ScreenplayPipelineIntegrationTest do
     assert {:ok, investigate_session} = Store.call(store, :session, [investigate_session_id])
 
     writer_packet =
-      get_in(investigate_session, ["progress", "preparation", "context", "data", "writer_intelligence"])
+      get_in(investigate_session, [
+        "progress",
+        "preparation",
+        "context",
+        "data",
+        "writer_intelligence"
+      ])
 
     assert writer_packet["status"] in ["complete", "partial"]
     refute writer_packet["reason"] == "observe_provider_not_configured"
@@ -552,7 +569,11 @@ defmodule FountRun.ScreenplayPipelineIntegrationTest do
     investigate_limits = investigate_session["provenance"]["limits"]
     assert investigate_limits["durable_analysis"] == true
     assert is_binary(investigate_limits["analysis_privacy_namespace"])
-    assert String.starts_with?(investigate_limits["analysis_privacy_namespace"], "fount-run:screenplay:")
+
+    assert String.starts_with?(
+             investigate_limits["analysis_privacy_namespace"],
+             "fount-run:screenplay:"
+           )
 
     assert {:ok, %{"status" => "succeeded"}} = run_step(repo, fixture, client, observe)
     assert {:ok, at_gate} = FountRun.progress(repo, fixture.run["id"], fixture.context)
@@ -563,6 +584,29 @@ defmodule FountRun.ScreenplayPipelineIntegrationTest do
       get_in(plan_session, ["progress", "preparation", "context", "data", "writer_intelligence"])
 
     assert plan_packet["id"] == writer_packet["id"]
+
+    assert get_in(plan_session, [
+             "progress",
+             "preparation",
+             "context",
+             "data",
+             "intelligence_preflight"
+           ]) ==
+             get_in(investigate_session, [
+               "progress",
+               "preparation",
+               "context",
+               "data",
+               "intelligence_preflight"
+             ])
+
+    assert (investigate_session["progress"]["report_ids"] || []) != []
+
+    assert Enum.all?(
+             investigate_session["progress"]["report_ids"],
+             &(&1 in plan_session["progress"]["report_ids"])
+           )
+
     assert plan_session["provenance"]["limits"]["durable_analysis"] == true
 
     assert plan_session["provenance"]["limits"]["analysis_privacy_namespace"] ==
@@ -591,9 +635,16 @@ defmodule FountRun.ScreenplayPipelineIntegrationTest do
     assert {:ok, candidate} = Store.call(store, :candidate, [candidate_id])
 
     revision_packet = get_in(candidate, ["provenance", "revision_intelligence"])
-    assert revision_packet["status"] in ["complete", "partial"]
+    assert revision_packet["status"] in ["complete", "partial"], inspect(revision_packet)
 
-    assert get_in(candidate, ["provenance", "intelligence", "pre_analysis_packet", "id"]) ==
+    assert [[1]] =
+             sql(
+               repo,
+               "SELECT count(*) FROM analysis_runs WHERE candidate_id=$1::text::uuid AND playbook='revision_regression' AND status IN ('complete','partial')",
+               [candidate_id]
+             )
+
+    assert get_in(candidate, ["provenance", "intelligence_lineage", "pre_analysis_packet", "id"]) ==
              writer_packet["id"]
 
     revision_checks =
@@ -603,6 +654,48 @@ defmodule FountRun.ScreenplayPipelineIntegrationTest do
     assert revision_checks != []
     assert Enum.all?(revision_checks, &(&1["severity"] == "advisory"))
 
+    assert get_in(candidate, ["provenance", "resource_usage", "pre_analysis"]) ==
+             writer_packet["resource_usage"]
+
+    assert [[0]] =
+             sql(
+               repo,
+               """
+               SELECT count(*) FROM fount_run_steps
+               WHERE run_id=$1::text::uuid
+                 AND (request::text LIKE $2 OR result::text LIKE $2)
+               """,
+               [fixture.run["id"], "%#{credential_canary}%"]
+             )
+
+    assert [[0]] =
+             sql(
+               repo,
+               "SELECT count(*) FROM fount_run_plans WHERE run_id=$1::text::uuid AND row_to_json(fount_run_plans)::text LIKE $2",
+               [fixture.run["id"], "%#{credential_canary}%"]
+             )
+
+    assert [[0]] =
+             sql(
+               repo,
+               """
+               SELECT count(*) FROM writing_sessions
+               WHERE screenplay_id=$1::text::uuid
+                 AND (request::text LIKE $2 OR strategies::text LIKE $2 OR progress::text LIKE $2 OR provenance::text LIKE $2)
+               """,
+               [root.id, "%#{credential_canary}%"]
+             )
+
+    assert [[0]] =
+             sql(
+               repo,
+               """
+               SELECT count(*) FROM writing_candidates
+               WHERE screenplay_id=$1::text::uuid AND provenance::text LIKE $2
+               """,
+               [root.id, "%#{credential_canary}%"]
+             )
+
     # Run check is intentionally non-generative: it consumes the candidate's inherited
     # advisory checks even when Observe is not supplied for the check step.
     assert {:ok, %{"status" => "succeeded"}} = run_step(repo, fixture, nil)
@@ -611,6 +704,13 @@ defmodule FountRun.ScreenplayPipelineIntegrationTest do
 
     assert Enum.filter(check_step["result"]["checks"], &(&1["kind"] == "revision_intelligence")) ==
              revision_checks
+
+    assert [[1]] =
+             sql(
+               repo,
+               "SELECT count(*) FROM analysis_runs WHERE candidate_id=$1::text::uuid AND playbook='revision_regression'",
+               [candidate_id]
+             )
 
     assert [] = Agent.get(script, & &1)
 
@@ -686,14 +786,14 @@ defmodule FountRun.ScreenplayPipelineIntegrationTest do
     assert Query.node(child["screenplay"], action.id).text == action.text
 
     revision_packet = get_in(child, ["provenance", "revision_intelligence"])
-    assert revision_packet["status"] in ["complete", "partial"]
+    assert revision_packet["status"] in ["complete", "partial"], inspect(revision_packet)
 
     assert Enum.any?(
              child["provenance"]["checks"],
              &(&1["kind"] == "revision_intelligence" and &1["severity"] == "advisory")
            )
 
-    assert get_in(child, ["provenance", "intelligence", "pre_analysis_packet", "status"]) in [
+    assert get_in(child, ["provenance", "intelligence_lineage", "pre_analysis_packet", "status"]) in [
              "complete",
              "partial"
            ]
@@ -729,7 +829,13 @@ defmodule FountRun.ScreenplayPipelineIntegrationTest do
              Store.call(Store.new(repo), :session, [investigate_step["result"]["session_id"]])
 
     writer_packet =
-      get_in(investigate_session, ["progress", "preparation", "context", "data", "writer_intelligence"])
+      get_in(investigate_session, [
+        "progress",
+        "preparation",
+        "context",
+        "data",
+        "writer_intelligence"
+      ])
 
     assert writer_packet["status"] == "not_run"
     assert writer_packet["reason"] == "observe_provider_not_configured"
@@ -893,7 +999,7 @@ defmodule FountRun.ScreenplayPipelineIntegrationTest do
     {client, script}
   end
 
-  defp observe_provider(root) do
+  defp observe_provider(root, credential_canary \\ nil) do
     scene_spec = CapabilityMeasurements.scene_engine()
     revision_spec = CapabilityMeasurements.revision_intelligence()
 
@@ -909,6 +1015,11 @@ defmodule FountRun.ScreenplayPipelineIntegrationTest do
           measurement_answers(revision_spec["questions"])
         )
       end)
+
+    fixtures =
+      if credential_canary,
+        do: Map.put(fixtures, "provider-only-credential", %{"secret" => credential_canary}),
+        else: fixtures
 
     Sandbox.new!(fixtures)
   end

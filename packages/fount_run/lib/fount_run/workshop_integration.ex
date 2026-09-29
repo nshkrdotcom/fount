@@ -19,7 +19,8 @@ defmodule FountRun.WorkshopIntegration do
   @doc false
   def durable_analysis_options(options, claim, opts) when is_list(options) do
     case Keyword.get(opts, :observe) do
-      nil -> options
+      nil ->
+        options
 
       _observe ->
         options

@@ -212,8 +212,16 @@ defmodule Fount.Intelligence.Playbooks.CapabilityRunner do
          {:ok, after_prepared} <-
            prepare(after_model, "revision_intelligence", after_request, opts),
          {:ok, cap} <- provider_cap(opts),
+         # The durable run is bound to the candidate revision. Base observations cannot
+         # be saved under that run; their measurements may still use the shared cache.
          {:ok, before_report, before_entries} <-
-           measure_prepared(provider, before_model, before_prepared, cap, opts),
+           measure_prepared(
+             provider,
+             before_model,
+             before_prepared,
+             cap,
+             Keyword.drop(opts, [:analysis_run, :run_id])
+           ),
          {:ok, after_report, after_entries} <-
            measure_prepared(provider, after_model, after_prepared, cap, opts),
          {:ok, strategy} <- strategy_contrast(after_model, request, provider, opts),

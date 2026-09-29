@@ -16,27 +16,40 @@ defmodule FountRun.Engine do
   defp execute_claim(repo, claim, registry, opts) do
     case StageRegistry.fetch(registry, claim["stage"]) do
       {:ok, handler} ->
-        with_heartbeat(repo, claim, opts, fn ->
-          case handler.execute(claim, Keyword.put(opts, :repo, repo)) do
-            {:ok, result} when is_map(result) ->
-              ExecutionStore.complete(repo, claim, result)
-
-            {:partial, reason, details} when is_map(details) ->
-              ExecutionStore.partial(repo, claim, reason, details)
-
-            {:error, reason} ->
-              ExecutionStore.fail(repo, claim, reason)
-              {:error, reason}
-
-            other ->
-              ExecutionStore.fail(repo, claim, :invalid_stage_handler_result)
-              {:error, {:invalid_stage_handler_result, other}}
-          end
-        end)
+        with_heartbeat(repo, claim, opts, fn -> run_handler(repo, claim, handler, opts) end)
 
       {:error, reason} ->
         _ = ExecutionStore.fail(repo, claim, reason)
         {:error, reason}
+    end
+  end
+
+  defp run_handler(repo, claim, handler, opts) do
+    case handler.execute(claim, Keyword.put(opts, :repo, repo)) do
+      {:ok, result} when is_map(result) ->
+        complete_and_fault(repo, claim, result, opts)
+
+      {:partial, reason, details} when is_map(details) ->
+        ExecutionStore.partial(repo, claim, reason, details)
+
+      {:error, reason} ->
+        ExecutionStore.fail(repo, claim, reason)
+        {:error, reason}
+
+      other ->
+        ExecutionStore.fail(repo, claim, :invalid_stage_handler_result)
+        {:error, {:invalid_stage_handler_result, other}}
+    end
+  end
+
+  defp complete_and_fault(repo, claim, result, opts) do
+    case ExecutionStore.complete(repo, claim, result) do
+      {:ok, _} = completed ->
+        :ok = fault(opts, :after_step_completed)
+        completed
+
+      other ->
+        other
     end
   end
 
@@ -63,7 +76,11 @@ defmodule FountRun.Engine do
     after
       interval ->
         if Process.alive?(parent) do
-          _ = ExecutionStore.heartbeat(repo, claim, lease_ms: Keyword.get(opts, :lease_ms, claim["lease_ms"]))
+          _ =
+            ExecutionStore.heartbeat(repo, claim,
+              lease_ms: Keyword.get(opts, :lease_ms, claim["lease_ms"])
+            )
+
           heartbeat_loop(repo, claim, interval, opts, parent)
         end
     end
@@ -85,6 +102,7 @@ defmodule FountRun.Engine do
   end
 
   defp default_worker_id do
-    "direct:" <> Atom.to_string(node()) <> ":" <> Integer.to_string(System.unique_integer([:positive]))
+    "direct:" <>
+      Atom.to_string(node()) <> ":" <> Integer.to_string(System.unique_integer([:positive]))
   end
 end

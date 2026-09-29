@@ -102,7 +102,8 @@ defmodule Fount.Persistence do
           status: "review_ready",
           provenance: %{"origin" => "direct_manual_edit"}
         },
-        session_id
+        session_id,
+        nil
       )
 
     persist_candidate(
@@ -127,7 +128,8 @@ defmodule Fount.Persistence do
           "origin" => "writer_edit"
         }
       },
-      candidate
+      candidate,
+      nil
     )
   end
 
@@ -250,22 +252,17 @@ defmodule Fount.Persistence do
   defp update_session(repo, session, previous, operation_key) do
     id = previous["id"]
 
-    if previous["screenplay_id"] != field(session, :screenplay_id) or
-         previous["base_revision_id"] != field(session, :base_revision_id) or
-         previous["request"] != field(session, :request) or
-         previous["operation_key"] != operation_key,
-       do: rollback(repo, :immutable_session_fields)
+    if not session_identity_matches?(previous, session, operation_key),
+      do: rollback(repo, :immutable_session_fields)
 
-    supplied_lock = field(session, :lock_version)
-
-    cond do
-      is_nil(supplied_lock) and is_binary(operation_key) ->
+    case session_lock_action(previous, session, operation_key) do
+      :replay ->
         previous
 
-      is_nil(supplied_lock) or previous["lock_version"] != supplied_lock ->
+      :stale ->
         rollback(repo, :stale_session)
 
-      true ->
+      :update ->
         next = previous["lock_version"] + 1
 
         q(
@@ -289,12 +286,28 @@ defmodule Fount.Persistence do
     end
   end
 
+  defp session_lock_action(previous, session, operation_key) do
+    supplied_lock = field(session, :lock_version)
+
+    cond do
+      is_nil(supplied_lock) and is_binary(operation_key) -> :replay
+      is_nil(supplied_lock) or previous["lock_version"] != supplied_lock -> :stale
+      true -> :update
+    end
+  end
+
+  defp session_identity_matches?(previous, session, operation_key) do
+    previous["screenplay_id"] == field(session, :screenplay_id) and
+      previous["base_revision_id"] == field(session, :base_revision_id) and
+      previous["request"] == field(session, :request) and
+      previous["operation_key"] == operation_key
+  end
+
   defp insert_session(repo, session, id, operation_key) do
     screenplay_id = field(session, :screenplay_id)
     base_id = field(session, :base_revision_id)
 
-    if !one(repo, "SELECT id FROM revisions WHERE screenplay_id=$1::uuid AND id=$2::uuid", [screenplay_id, base_id]),
-      do: rollback(repo, :unknown_base)
+    ensure_session_base!(repo, screenplay_id, base_id)
 
     result =
       q(
@@ -327,6 +340,11 @@ defmodule Fount.Persistence do
       |> Map.put(:id, id)
       |> Map.put(:lock_version, 1)
     end
+  end
+
+  defp ensure_session_base!(repo, screenplay_id, base_id) do
+    unless one(repo, "SELECT id FROM revisions WHERE screenplay_id=$1::uuid AND id=$2::uuid", [screenplay_id, base_id]),
+      do: rollback(repo, :unknown_base)
   end
 
   @doc "Looks up the idempotent session opened for an external operation key."
@@ -484,7 +502,6 @@ defmodule Fount.Persistence do
         end
     end
   end
-
 
   @doc "Looks up the immutable candidate saved for an external operation key."
   def candidate_by_operation(repo, operation_key) when is_binary(operation_key) do
@@ -1223,7 +1240,6 @@ defmodule Fount.Persistence do
       end)
     end)
   end
-
 
   defp guarded_write(repo, opts, kind, identity) do
     case Keyword.get(opts, :guard) do

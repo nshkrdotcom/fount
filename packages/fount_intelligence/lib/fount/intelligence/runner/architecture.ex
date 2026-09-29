@@ -281,7 +281,6 @@ defmodule Fount.Intelligence.Runner.Architecture do
         [
           "Fount.Observe",
           "Fount.Intelligence",
-          "FountWorkshop",
           "AgentSessionManager",
           "SystemOneSDK",
           "Inference"
@@ -390,7 +389,7 @@ defmodule Fount.Intelligence.Runner.Architecture do
       "fount_observe" => ["fount", "system_one_sdk"],
       "fount_intelligence" => ["fount", "fount_observe"],
       "fount_workshop" => ["fount", "fount_intelligence", "inference", "agent_session_manager"],
-      "fount_run" => ["fount"]
+      "fount_run" => ["fount", "fount_workshop"]
     }
 
     internal =

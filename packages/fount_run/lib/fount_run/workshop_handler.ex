@@ -2,6 +2,7 @@ defmodule FountRun.WorkshopHandler do
   @moduledoc "Phase-03 real Workshop operation adapter: durable open/link/resume and candidate persistence."
   @behaviour FountRun.StageHandler
 
+  alias Ecto.Adapters.SQL
   alias FountRun.{DispatchHook, ExecutionStore}
   alias FountWorkshop.{Session, Store}
 
@@ -11,7 +12,8 @@ defmodule FountRun.WorkshopHandler do
     base_revision_id = claim["input_revision_id"] || base_revision(repo, claim)
 
     with {:ok, inference} <- inference(opts),
-         {:ok, model} <- Fount.Persistence.load_revision(repo, claim["screenplay_id"], base_revision_id),
+         {:ok, model} <-
+           Fount.Persistence.load_revision(repo, claim["screenplay_id"], base_revision_id),
          services = guarded_services(repo, claim, inference),
          {:ok, session} <-
            Session.open(model, claim["request"], services,
@@ -36,7 +38,10 @@ defmodule FountRun.WorkshopHandler do
     reservation_hook = fn
       :measurement_states, n ->
         start = :atomics.add_get(measurement_counter, 1, n) - n
-        operation_id = claim["operation_key"] <> ":measurement:" <> Integer.to_string(start) <> ":" <> Integer.to_string(n)
+
+        operation_id =
+          claim["operation_key"] <>
+            ":measurement:" <> Integer.to_string(start) <> ":" <> Integer.to_string(n)
 
         case ExecutionStore.reserve_measurement(repo, claim, operation_id, n) do
           {:ok, granted} -> {:ok, granted}
@@ -57,12 +62,15 @@ defmodule FountRun.WorkshopHandler do
       max_repair_rounds: 0,
       decode_repairs: limits.decode_repairs,
       transient_retries: limits.transient_retries,
+      reserved_cost_microunits: Keyword.get(opts, :reserved_cost_microunits),
+      currency: Keyword.get(opts, :currency),
       reservation_hook: reservation_hook,
       dispatch_hook: dispatch_hook
     ]
 
     case Session.resume(session["id"], services, session_opts) do
       {:ok, saved_session} ->
+        :ok = fault(opts, :after_candidate_persisted)
         {:ok, result(saved_session, services)}
 
       {:error, reason, partial_session} when is_map(partial_session) ->
@@ -87,21 +95,8 @@ defmodule FountRun.WorkshopHandler do
 
   defp result(session, services) do
     branches = Map.values(get_in(session, ["progress", "branches"]) || %{})
-
-    candidate_ids =
-      branches
-      |> Enum.map(& &1["candidate_id"])
-      |> Enum.reject(&is_nil/1)
-      |> Enum.uniq()
-
-    candidates =
-      Enum.flat_map(candidate_ids, fn id ->
-        case Store.call(services[:store], :candidate, [id]) do
-          {:ok, candidate} -> [candidate]
-          _ -> []
-        end
-      end)
-
+    candidate_ids = candidate_ids(branches)
+    candidates = load_candidates(services, candidate_ids)
     first = List.first(candidates)
 
     %{
@@ -110,19 +105,38 @@ defmodule FountRun.WorkshopHandler do
       "candidate_id" => if(first, do: first["id"]),
       "candidate_ids" => candidate_ids,
       "revision_id" => if(first, do: first["result_revision_id"]),
-      "report_ids" =>
-        Enum.uniq(
-          (get_in(session, ["progress", "report_ids"]) || []) ++
-            Enum.flat_map(branches, &(&1["report_ids"] || []))
-        ),
+      "report_ids" => report_ids(session, branches),
       "checks" => Enum.flat_map(candidates, &(get_in(&1, ["provenance", "checks"]) || [])),
       "usage" => get_in(session, ["progress", "spent"]) || %{},
       "changes_canon" => false
     }
   end
 
+  defp candidate_ids(branches) do
+    branches
+    |> Enum.map(& &1["candidate_id"])
+    |> Enum.reject(&is_nil/1)
+    |> Enum.uniq()
+  end
+
+  defp load_candidates(services, ids) do
+    Enum.flat_map(ids, fn id ->
+      case Store.call(services[:store], :candidate, [id]) do
+        {:ok, candidate} -> [candidate]
+        _ -> []
+      end
+    end)
+  end
+
+  defp report_ids(session, branches) do
+    Enum.uniq(
+      (get_in(session, ["progress", "report_ids"]) || []) ++
+        Enum.flat_map(branches, &(&1["report_ids"] || []))
+    )
+  end
+
   defp base_revision(repo, claim) do
-    Ecto.Adapters.SQL.query!(
+    SQL.query!(
       repo,
       "SELECT base_revision_id::text FROM fount_run_plans WHERE run_id=$1::text::uuid AND version=$2",
       [claim["run_id"], claim["plan_version"]],

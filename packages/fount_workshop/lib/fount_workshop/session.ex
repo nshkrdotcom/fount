@@ -486,7 +486,8 @@ defmodule FountWorkshop.Session do
                candidate
                |> Map.put("provenance", provenance)
                |> put_operation_key(operation_key),
-             {:ok, saved} <- Store.call(services[:store], :save_candidate, [session["id"], candidate]) do
+             {:ok, saved} <-
+               Store.call(services[:store], :save_candidate, [session["id"], candidate]) do
           {:ok, saved, report_ids}
         end
 
@@ -672,7 +673,6 @@ defmodule FountWorkshop.Session do
     end
   end
 
-
   defp session_operation_key(opts) do
     case Keyword.get(opts, :operation_key) do
       value when is_binary(value) and value != "" -> value <> ":session"
@@ -698,7 +698,9 @@ defmodule FountWorkshop.Session do
   end
 
   defp put_operation_key(candidate, nil), do: candidate
-  defp put_operation_key(candidate, operation_key), do: Map.put(candidate, "operation_key", operation_key)
+
+  defp put_operation_key(candidate, operation_key),
+    do: Map.put(candidate, "operation_key", operation_key)
 
   defp services(%{store: %Store{}, inference: %Inference.Client{}}), do: :ok
   defp services(_), do: {:error, :explicit_store_and_inference_services_required}

@@ -3,7 +3,9 @@ defmodule FountRun.StageRegistry do
 
   @stages ~w(intake investigate plan write check iterate decide deliver)
 
-  def new(overrides \\ %{}) when is_map(overrides) do
+  def new(overrides \\ %{})
+
+  def new(overrides) when is_map(overrides) do
     registry = Map.merge(%{"write" => FountRun.WorkshopHandler}, stringify_keys(overrides))
 
     with true <- Enum.all?(Map.keys(registry), &(&1 in @stages)),
@@ -27,6 +29,7 @@ defmodule FountRun.StageRegistry do
 
   defp handler?(handler) when is_atom(handler),
     do: Code.ensure_loaded?(handler) and function_exported?(handler, :execute, 2)
+
   defp handler?(_), do: false
 
   defp stringify_keys(map), do: Map.new(map, fn {key, value} -> {to_string(key), value} end)

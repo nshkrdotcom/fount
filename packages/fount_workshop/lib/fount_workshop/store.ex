@@ -27,12 +27,15 @@ defmodule FountWorkshop.Store do
 
   def call(%__MODULE__{repo: repo, module: module, guard: guard}, :save_session, [session])
       when not is_nil(guard) do
-    normalize_result(apply(module, :save_session, [repo, session, [guard: guard]]))
+    normalize_result(module.save_session(repo, session, guard: guard))
   end
 
-  def call(%__MODULE__{repo: repo, module: module, guard: guard}, :save_candidate, [session, candidate])
+  def call(%__MODULE__{repo: repo, module: module, guard: guard}, :save_candidate, [
+        session,
+        candidate
+      ])
       when not is_nil(guard) do
-    normalize_result(apply(module, :save_candidate, [repo, session, candidate, [guard: guard]]))
+    normalize_result(module.save_candidate(repo, session, candidate, guard: guard))
   end
 
   def call(%__MODULE__{repo: repo, module: module}, action, args) when action in @actions do

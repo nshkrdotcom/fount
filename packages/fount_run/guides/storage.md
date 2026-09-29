@@ -1,6 +1,6 @@
 # Run storage
 
-Run migrations are separate from Core migrations and run second on the same Repo/database. `FountRun.migrations_path/0` exposes the directory.
+Run migrations are separate from Core migrations and run second on the same Repo/database. `FountRun.migrations_path/0` exposes the directory. Core's Phase 03 operation-key migration uses version `20260928011000`; the existing Run foundation retains `20260928010000` and Run durable execution uses `20260928020000`.
 
 Phase 02 tables remain authoritative: runs, plans, policies, steps, attempts, events, decisions, approval attempts, usage and deliveries. Phase 03 adds `fount_run_provider_requests` plus step result/retry/dispatch/measurement counters. Core separately adds nullable unique `operation_key` columns to `writing_sessions` and `writing_candidates`; those keys make Workshop open/candidate materialization idempotent without changing standalone APIs.
 
@@ -13,6 +13,6 @@ Phase 02 tables remain authoritative: runs, plans, policies, steps, attempts, ev
 - Malformed-output repair and transport-retry counters are distinct and durable.
 - Successful step results are hashed and stored with output candidate/revision/report IDs.
 
-An unknown paid response is not released and is not automatically replayed. A later recovered response can settle that same usage record. A configured hard money ceiling requires a known same-currency estimate before dispatch; Phase 03 does not invent model pricing.
+An unknown paid response is not released and is not automatically replayed. A later recovered response can settle that same usage record. A configured hard money ceiling requires a known same-currency estimate before dispatch; Phase 03 does not invent model pricing. A dispatched failed call still consumes an inference allowance. Settled actual cost can exceed the estimate; Run records the overrun and pauses. Unknown actual cost under a hard ceiling also pauses while retaining the estimate as a charge.
 
-`FountRun.progress/3` intentionally omits provider request/response bodies. Runtime PostgreSQL recovery/concurrency tests remain required before Phase 03 can be marked complete.
+`FountRun.progress/3` intentionally omits provider request/response bodies.

@@ -71,7 +71,7 @@ class RunFoundationSource(unittest.TestCase):
         self.assertNotIn(":fount_run", self.read("packages/fount/mix.exs"))
         architecture = self.read("packages/fount_intelligence/lib/fount/intelligence/runner/architecture.ex")
         self.assertIn("fount_run", architecture)
-        self.assertIn('"fount_run" => ["fount"]', architecture)
+        self.assertIn('"fount_run" => ["fount", "fount_workshop"]', architecture)
         self.assertIn("FountRun", architecture)
         final = self.read("scripts/final_acceptance.py")
         self.assertIn('"fount_run"', final)

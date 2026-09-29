@@ -8,7 +8,7 @@ defmodule FountRun.UpgradeIntegrationTest do
     use Ecto.Repo, otp_app: :fount_run, adapter: Ecto.Adapters.Postgres
   end
 
-  test "Run migration upgrades a populated Core schema without changing Core rows" do
+  test "populated Phase 02 Core and Run schema upgrades through Phase 03" do
     url = System.fetch_env!("FOUNT_DATABASE_URL")
     prefix = "phase02_upgrade_#{String.replace(ID.v4(), "-", "")}"
     {:ok, admin} = Postgrex.start_link(Ecto.Repo.Supervisor.parse_url(url))
@@ -26,7 +26,7 @@ defmodule FountRun.UpgradeIntegrationTest do
        url: url, pool_size: 2, parameters: [search_path: prefix], migration_default_prefix: prefix}
     )
 
-    Ecto.Migrator.run(UpgradeRepo, Persistence.migrations_path(), :up, all: true)
+    Ecto.Migrator.run(UpgradeRepo, Persistence.migrations_path(), :up, to: 20_260_928_000_000)
 
     screenplay_id = ID.v4()
     revision_id = ID.v4()
@@ -63,12 +63,39 @@ defmodule FountRun.UpgradeIntegrationTest do
                log: false
              ).rows
 
+    Ecto.Migrator.run(UpgradeRepo, FountRun.migrations_path(), :up, to: 20_260_928_010_000)
+
+    assert [[0]] =
+             SQL.query!(
+               UpgradeRepo,
+               "SELECT count(*) FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='writing_sessions' AND column_name='operation_key'",
+               [],
+               log: false
+             ).rows
+
+    Ecto.Migrator.run(UpgradeRepo, Persistence.migrations_path(), :up, all: true)
     Ecto.Migrator.run(UpgradeRepo, FountRun.migrations_path(), :up, all: true)
 
     assert [[1]] =
              SQL.query!(
                UpgradeRepo,
                "SELECT count(*) FROM information_schema.tables WHERE table_schema=current_schema() AND table_name='fount_runs'",
+               [],
+               log: false
+             ).rows
+
+    assert [[1]] =
+             SQL.query!(
+               UpgradeRepo,
+               "SELECT count(*) FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='writing_sessions' AND column_name='operation_key'",
+               [],
+               log: false
+             ).rows
+
+    assert [[1]] =
+             SQL.query!(
+               UpgradeRepo,
+               "SELECT count(*) FROM information_schema.tables WHERE table_schema=current_schema() AND table_name='fount_run_provider_requests'",
                [],
                log: false
              ).rows

@@ -62,7 +62,7 @@ class DurableExecutionSource(unittest.TestCase):
 
     def test_w06_operation_identity_seams_and_core_independence(self):
         persistence = self.read("packages/fount/lib/fount/persistence.ex")
-        migration = self.read("packages/fount/priv/repo/migrations/20260928010000_add_workshop_operation_identity.exs")
+        migration = self.read("packages/fount/priv/repo/migrations/20260928011000_add_workshop_operation_identity.exs")
         core_mix = self.read("packages/fount/mix.exs")
         for token in ["session_by_operation", "candidate_by_operation", "operation_key", "guarded_write"]:
             self.assertIn(token, persistence)
@@ -86,7 +86,7 @@ class DurableExecutionSource(unittest.TestCase):
 
     def test_migrations_are_additive_and_phase02_foundation_remains(self):
         run_migration = self.read("packages/fount_run/priv/repo/migrations/20260928020000_durable_execution.exs")
-        core_migration = self.read("packages/fount/priv/repo/migrations/20260928010000_add_workshop_operation_identity.exs")
+        core_migration = self.read("packages/fount/priv/repo/migrations/20260928011000_add_workshop_operation_identity.exs")
         self.assertIn("ALTER TABLE fount_run_steps ADD COLUMN", run_migration)
         self.assertIn("CREATE TABLE fount_run_provider_requests", run_migration)
         self.assertNotIn("DROP TABLE fount_run_steps", run_migration)

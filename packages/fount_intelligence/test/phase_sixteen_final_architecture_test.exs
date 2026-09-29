@@ -34,7 +34,7 @@ defmodule Fount.Intelligence.PhaseSixteenFinalArchitectureTest do
   end
 
   test "Run source cannot import host or provider packages" do
-    for module <- ~w(FountWorkshop AgentSessionManager SystemOneSDK Inference) do
+    for module <- ~w(AgentSessionManager SystemOneSDK Inference) do
       source = "defmodule FountRun.DependencyProbe do\n  def run, do: #{module}.call()\nend"
 
       assert Enum.any?(

@@ -32,18 +32,31 @@ defmodule FountRun.Worker do
   end
 
   defp emit({:ok, _}, run_id),
-    do: :telemetry.execute([:fount_run, :worker, :step], %{count: 1}, %{status: :ok, run_id: run_id})
+    do:
+      :telemetry.execute([:fount_run, :worker, :step], %{count: 1}, %{status: :ok, run_id: run_id})
 
-  defp emit({:error, reason}, run_id) when reason in [:no_work, :busy, :pause_requested, :stop_requested],
-    do: :telemetry.execute([:fount_run, :worker, :idle], %{count: 1}, %{status: reason, run_id: run_id})
+  defp emit({:error, reason}, run_id)
+       when reason in [:no_work, :busy, :pause_requested, :stop_requested],
+       do:
+         :telemetry.execute([:fount_run, :worker, :idle], %{count: 1}, %{
+           status: reason,
+           run_id: run_id
+         })
 
   defp emit({:error, reason}, run_id),
-    do: :telemetry.execute([:fount_run, :worker, :step], %{count: 1}, %{status: :error, reason: reason_tag(reason), run_id: run_id})
+    do:
+      :telemetry.execute([:fount_run, :worker, :step], %{count: 1}, %{
+        status: :error,
+        reason: reason_tag(reason),
+        run_id: run_id
+      })
 
   defp reason_tag(reason) when is_atom(reason), do: reason
   defp reason_tag({reason, _}) when is_atom(reason), do: reason
   defp reason_tag(_), do: :error
 
   defp worker_id,
-    do: "worker:" <> Atom.to_string(node()) <> ":" <> Integer.to_string(System.unique_integer([:positive]))
+    do:
+      "worker:" <>
+        Atom.to_string(node()) <> ":" <> Integer.to_string(System.unique_integer([:positive]))
 end

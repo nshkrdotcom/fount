@@ -28,6 +28,7 @@ defmodule FountRun.MixProject do
   defp deps do
     [
       workspace_dep(:fount, "~> 0.1.0", "../fount"),
+      workspace_dep(:fount_workshop, "~> 0.1.0", "../fount_workshop"),
       {:jason, "~> 1.4.5"},
       {:ecto_sql, "~> 3.13"},
       {:postgrex, "~> 0.20"},

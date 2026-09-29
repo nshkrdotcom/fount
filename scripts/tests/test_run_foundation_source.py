@@ -27,23 +27,22 @@ class RunFoundationSource(unittest.TestCase):
             self.assertIn(token, migration, token)
         self.assertNotIn("ON DELETE CASCADE", migration)
 
-    def test_provider_free_host_free_boundary(self):
+    def test_execution_boundary_depends_on_workshop_without_direct_provider_or_host_deps(self):
         production = "\n".join(p.read_text(encoding="utf-8") for p in (RUN / "lib").rglob("*.ex"))
         mix = self.read("packages/fount_run/mix.exs")
-        for token in ["Inference.", "alias Inference", "SystemOneSDK", "ASM.", "agent_session_manager"]:
-            self.assertNotIn(token, production)
+        self.assertIn("workspace_dep(:fount_workshop", mix)
+        for token in [":system_one_sdk", "{:inference", ":agent_session_manager"]:
             self.assertNotIn(token, mix)
-        self.assertNotIn(":fount_workshop", mix)
-        self.assertIn("Supervisor.start_link([], strategy: :one_for_one", production)
         self.assertNotIn("use Ecto.Repo", production)
+        self.assertIn("alias FountWorkshop.{Session, Store}", production)
+        self.assertIn("Inference.complete", self.read("packages/fount_workshop/lib/fount_workshop/writing/completion.ex"))
 
-    def test_public_surface_implements_only_phase_two_commands(self):
+    def test_public_surface_adds_only_phase_three_execution_commands(self):
         public = self.read("packages/fount_run/lib/fount_run.ex")
-        self.assertIn("def start_run", public)
-        self.assertIn("def get_run", public)
-        self.assertIn("def list_runs", public)
+        for command in ["def start_run", "def get_run", "def list_runs", "def enqueue_step", "def step(", "def progress("]:
+            self.assertIn(command, public)
         self.assertIn(":telemetry.execute([:fount_run, operation]", public)
-        for later in ["def step(", "def update_plan(", "def pause_run(", "def resume_run(", "def approve_run(", "def deliver("]:
+        for later in ["def update_plan(", "def pause_run(", "def resume_run(", "def approve_run(", "def deliver("]:
             self.assertNotIn(later, public)
         persistence = self.read("packages/fount_run/lib/fount_run/persistence.ex")
         for primitive in ["append_plan_snapshot", "append_policy_snapshot", "append_event", "put_pending_decision", "resolve_decision", "create_approval_attempt", "record_approval_review", "record_approval_payload", "reserve_usage", "settle_usage", "create_delivery", "store_active_lease"]:

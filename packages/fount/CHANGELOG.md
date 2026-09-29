@@ -2,6 +2,8 @@
 
 ## Unreleased - Fount Run Phase 01 core approval safety (source delivery)
 
+- Fount Run Phase 03: add optional unique Workshop operation identity for sessions/candidates and a generic transaction-local write guard so stale Run workers cannot persist domain output; Core still has no Run dependency.
+
 - Add typed review, approval, principal and trusted-authority contracts for post-genesis canonical acceptance.
 - Close direct `save`/`save_edit` head mutation, add a manual-edit candidate path, snapshot required-check identity, and persist stable approval audit identity through a forward migration.
 - Add direct human/agent/service, forged-authority, replay, missing-check and PostgreSQL concurrency/migration regression coverage. Runtime Elixir/PostgreSQL verification remains pending.

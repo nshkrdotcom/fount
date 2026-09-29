@@ -220,86 +220,155 @@ defmodule Fount.Persistence do
   end
 
   @doc "Creates or optimistically updates a durable writing session."
-  def save_session(repo, session) when is_map(session) do
+  def save_session(repo, session) when is_map(session), do: save_session(repo, session, [])
+
+  @doc "Creates/updates a session with an optional transaction-local write guard."
+  def save_session(repo, session, opts) when is_map(session) and is_list(opts) do
     id = field(session, :id) || ID.v4()
-    transaction(repo, fn -> persist_session(repo, session, id) end)
+    operation_key = field(session, :operation_key) || Keyword.get(opts, :operation_key)
+
+    transaction(repo, fn ->
+      :ok = guarded_write(repo, opts, :session, %{id: id, operation_key: operation_key})
+      persist_session(repo, session, id, operation_key)
+    end)
   end
 
-  defp persist_session(repo, session, id) do
-    case one(repo, "SELECT * FROM writing_sessions WHERE id=$1::uuid FOR UPDATE", [id]) do
-      nil -> insert_session(repo, session, id)
-      previous -> update_session(repo, session, id, previous)
+  defp persist_session(repo, session, id, operation_key) do
+    previous =
+      if is_binary(operation_key) do
+        one(repo, "SELECT * FROM writing_sessions WHERE operation_key=$1 FOR UPDATE", [operation_key])
+      else
+        one(repo, "SELECT * FROM writing_sessions WHERE id=$1::uuid FOR UPDATE", [id])
+      end
+
+    case previous do
+      nil -> insert_session(repo, session, id, operation_key)
+      previous -> update_session(repo, session, previous, operation_key)
     end
   end
 
-  defp update_session(repo, session, id, previous) do
+  defp update_session(repo, session, previous, operation_key) do
+    id = previous["id"]
+
     if previous["screenplay_id"] != field(session, :screenplay_id) or
          previous["base_revision_id"] != field(session, :base_revision_id) or
-         previous["request"] != field(session, :request),
+         previous["request"] != field(session, :request) or
+         previous["operation_key"] != operation_key,
        do: rollback(repo, :immutable_session_fields)
 
-    if previous["lock_version"] != field(session, :lock_version), do: rollback(repo, :stale_session)
-    next = previous["lock_version"] + 1
+    supplied_lock = field(session, :lock_version)
 
-    q(
-      repo,
-      "UPDATE writing_sessions SET status=$2,strategies=$3::jsonb,progress=$4::jsonb,provenance=$5::jsonb,lock_version=$6,updated_at=now() WHERE id=$1::uuid",
-      [
-        id,
-        field(session, :status) || previous["status"],
-        json(field(session, :strategies) || previous["strategies"]),
-        json(field(session, :progress) || previous["progress"]),
-        json(field(session, :provenance) || previous["provenance"]),
-        next
-      ]
-    )
+    cond do
+      is_nil(supplied_lock) and is_binary(operation_key) ->
+        previous
 
-    session |> Map.drop(["id", "lock_version"]) |> Map.put(:lock_version, next) |> Map.put(:id, id)
+      is_nil(supplied_lock) or previous["lock_version"] != supplied_lock ->
+        rollback(repo, :stale_session)
+
+      true ->
+        next = previous["lock_version"] + 1
+
+        q(
+          repo,
+          "UPDATE writing_sessions SET status=$2,strategies=$3::jsonb,progress=$4::jsonb,provenance=$5::jsonb,lock_version=$6,updated_at=now() WHERE id=$1::uuid",
+          [
+            id,
+            field(session, :status) || previous["status"],
+            json(field(session, :strategies) || previous["strategies"]),
+            json(field(session, :progress) || previous["progress"]),
+            json(field(session, :provenance) || previous["provenance"]),
+            next
+          ]
+        )
+
+        session
+        |> Map.drop(["id", "lock_version"])
+        |> Map.put(:operation_key, operation_key)
+        |> Map.put(:lock_version, next)
+        |> Map.put(:id, id)
+    end
   end
 
-  defp insert_session(repo, session, id) do
+  defp insert_session(repo, session, id, operation_key) do
     screenplay_id = field(session, :screenplay_id)
     base_id = field(session, :base_revision_id)
 
     if !one(repo, "SELECT id FROM revisions WHERE screenplay_id=$1::uuid AND id=$2::uuid", [screenplay_id, base_id]),
       do: rollback(repo, :unknown_base)
 
-    q(
-      repo,
-      "INSERT INTO writing_sessions(id,screenplay_id,base_revision_id,workflow,status,request,strategies,progress,provenance) VALUES($1::uuid,$2::uuid,$3::uuid,$4,$5,$6::jsonb,$7::jsonb,$8::jsonb,$9::jsonb)",
-      [
-        id,
-        screenplay_id,
-        base_id,
-        field(session, :workflow),
-        field(session, :status) || "open",
-        json(field(session, :request) || %{}),
-        json(field(session, :strategies) || []),
-        json(field(session, :progress) || %{}),
-        json(field(session, :provenance) || %{})
-      ]
-    )
+    result =
+      q(
+        repo,
+        "INSERT INTO writing_sessions(id,screenplay_id,base_revision_id,workflow,status,request,strategies,progress,provenance,operation_key) VALUES($1::uuid,$2::uuid,$3::uuid,$4,$5,$6::jsonb,$7::jsonb,$8::jsonb,$9::jsonb,$10) ON CONFLICT(operation_key) WHERE operation_key IS NOT NULL DO NOTHING",
+        [
+          id,
+          screenplay_id,
+          base_id,
+          field(session, :workflow),
+          field(session, :status) || "open",
+          json(field(session, :request) || %{}),
+          json(field(session, :strategies) || []),
+          json(field(session, :progress) || %{}),
+          json(field(session, :provenance) || %{}),
+          operation_key
+        ]
+      )
 
-    session |> Map.drop(["id", "lock_version"]) |> Map.put(:id, id) |> Map.put(:lock_version, 1)
-  end
+    if result.num_rows == 0 and is_binary(operation_key) do
+      previous =
+        one(repo, "SELECT * FROM writing_sessions WHERE operation_key=$1 FOR UPDATE", [operation_key]) ||
+          rollback(repo, :session_operation_conflict)
 
-  @doc "Saves an immutable candidate revision without changing the accepted head."
-  def save_candidate(repo, session_id, candidate) when is_map(candidate) do
-    model = field(candidate, :screenplay) |> Model.refresh()
-
-    with :ok <- validate(model) do
-      transaction(repo, fn -> persist_candidate(repo, session_id, candidate, model) end)
+      update_session(repo, session, previous, operation_key)
+    else
+      session
+      |> Map.drop(["id", "lock_version"])
+      |> Map.put(:operation_key, operation_key)
+      |> Map.put(:id, id)
+      |> Map.put(:lock_version, 1)
     end
   end
 
-  defp persist_candidate(repo, session_id, candidate, model) do
+  @doc "Looks up the idempotent session opened for an external operation key."
+  def session_by_operation(repo, operation_key) when is_binary(operation_key) do
+    case one(repo, "SELECT * FROM writing_sessions WHERE operation_key=$1", [operation_key]) do
+      nil -> {:error, :not_found}
+      row -> {:ok, row}
+    end
+  end
+
+  @doc "Saves an immutable candidate revision without changing the accepted head."
+  def save_candidate(repo, session_id, candidate) when is_map(candidate),
+    do: save_candidate(repo, session_id, candidate, [])
+
+  @doc "Saves a candidate with optional operation identity and transaction-local write guard."
+  def save_candidate(repo, session_id, candidate, opts) when is_map(candidate) and is_list(opts) do
+    model = field(candidate, :screenplay) |> Model.refresh()
+    operation_key = field(candidate, :operation_key) || Keyword.get(opts, :operation_key)
+
+    with :ok <- validate(model) do
+      transaction(repo, fn ->
+        :ok = guarded_write(repo, opts, :candidate, %{session_id: session_id, operation_key: operation_key})
+        persist_candidate(repo, session_id, candidate, model, operation_key)
+      end)
+    end
+  end
+
+  defp persist_candidate(repo, session_id, candidate, model, operation_key) do
     session = candidate_session(repo, session_id, model)
     snapshot = candidate_check_snapshot(repo, session, candidate)
     id = field(candidate, :id) || ID.v4()
 
-    case one(repo, "SELECT * FROM writing_candidates WHERE id=$1::uuid", [id]) do
-      nil -> insert_candidate(repo, session_id, candidate, model, id, snapshot)
-      previous -> verify_candidate_identity(repo, candidate, model, id, previous, snapshot)
+    previous =
+      if is_binary(operation_key) do
+        one(repo, "SELECT * FROM writing_candidates WHERE operation_key=$1", [operation_key])
+      else
+        one(repo, "SELECT * FROM writing_candidates WHERE id=$1::uuid", [id])
+      end
+
+    case previous do
+      nil -> insert_candidate(repo, session_id, candidate, model, id, snapshot, operation_key)
+      previous -> verify_candidate_identity(repo, candidate, model, previous["id"], previous, snapshot, operation_key)
     end
   end
 
@@ -323,7 +392,7 @@ defmodule Fount.Persistence do
     end
   end
 
-  defp verify_candidate_identity(repo, candidate, model, id, previous, snapshot) do
+  defp verify_candidate_identity(repo, candidate, model, id, previous, snapshot, operation_key) do
     existing =
       one(repo, "SELECT content_hash,render_hash,model FROM revisions WHERE id=$1::uuid", [
         previous["result_revision_id"]
@@ -355,7 +424,9 @@ defmodule Fount.Persistence do
         :ok
     end
 
-    Map.put(candidate, :id, id)
+    candidate
+    |> Map.put(:id, id)
+    |> Map.put(:operation_key, operation_key)
   end
 
   defp candidate_revision_matches?(previous, candidate, model, existing) do
@@ -367,12 +438,12 @@ defmodule Fount.Persistence do
       candidate_payload(previous) == candidate_payload(candidate)
   end
 
-  defp insert_candidate(repo, session_id, candidate, model, id, snapshot) do
+  defp insert_candidate(repo, session_id, candidate, model, id, snapshot, operation_key) do
     insert_revision(repo, model)
 
     q(
       repo,
-      "INSERT INTO writing_candidates(id,screenplay_id,session_id,base_revision_id,result_revision_id,parent_candidate_id,label,strategy,change_groups,lineage,provenance,required_checks,check_set_fingerprint) VALUES($1::uuid,$2::uuid,$3::uuid,$4::uuid,$5::uuid,$6::uuid,$7,$8::jsonb,$9::jsonb,$10::jsonb,$11::jsonb,$12::jsonb,$13)",
+      "INSERT INTO writing_candidates(id,screenplay_id,session_id,base_revision_id,result_revision_id,parent_candidate_id,label,strategy,change_groups,lineage,provenance,required_checks,check_set_fingerprint,operation_key) VALUES($1::uuid,$2::uuid,$3::uuid,$4::uuid,$5::uuid,$6::uuid,$7,$8::jsonb,$9::jsonb,$10::jsonb,$11::jsonb,$12::jsonb,$13,$14)",
       [
         id,
         model.id,
@@ -386,7 +457,8 @@ defmodule Fount.Persistence do
         json(field(candidate, :lineage) || []),
         json(field(candidate, :provenance) || %{}),
         json(snapshot["required_checks"]),
-        snapshot["check_set_fingerprint"]
+        snapshot["check_set_fingerprint"],
+        operation_key
       ]
     )
 
@@ -395,7 +467,9 @@ defmodule Fount.Persistence do
       CanonicalJSON.hash(candidate_payload(candidate))
     ])
 
-    Map.put(candidate, :id, id)
+    candidate
+    |> Map.put(:id, id)
+    |> Map.put(:operation_key, operation_key)
   end
 
   @doc "Loads a saved candidate and its actual revision value."
@@ -408,6 +482,15 @@ defmodule Fount.Persistence do
         with {:ok, model} <- load_revision(repo, row["screenplay_id"], row["result_revision_id"]) do
           {:ok, Map.put(row, "screenplay", model)}
         end
+    end
+  end
+
+
+  @doc "Looks up the immutable candidate saved for an external operation key."
+  def candidate_by_operation(repo, operation_key) when is_binary(operation_key) do
+    case one(repo, "SELECT id FROM writing_candidates WHERE operation_key=$1", [operation_key]) do
+      nil -> {:error, :not_found}
+      row -> candidate(repo, row["id"])
     end
   end
 
@@ -1139,6 +1222,24 @@ defmodule Fount.Persistence do
           pair
       end)
     end)
+  end
+
+
+  defp guarded_write(repo, opts, kind, identity) do
+    case Keyword.get(opts, :guard) do
+      nil ->
+        :ok
+
+      guard when is_function(guard, 2) ->
+        case guard.(kind, identity) do
+          :ok -> :ok
+          {:error, reason} -> rollback(repo, reason)
+          _ -> rollback(repo, :invalid_write_guard_result)
+        end
+
+      _ ->
+        rollback(repo, :invalid_write_guard)
+    end
   end
 
   defp rollback(repo, reason), do: repo.rollback(reason)

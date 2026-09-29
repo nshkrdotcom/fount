@@ -54,7 +54,7 @@ defmodule FountRun.FoundationIntegrationTest do
 
     assert Enum.sort(tables) ==
              Enum.sort(
-               ~w(fount_run_approval_attempts fount_run_attempts fount_run_decisions fount_run_deliveries fount_run_events fount_run_plans fount_run_policies fount_run_steps fount_run_usage fount_runs)
+               ~w(fount_run_approval_attempts fount_run_attempts fount_run_decisions fount_run_deliveries fount_run_events fount_run_plans fount_run_policies fount_run_provider_requests fount_run_steps fount_run_usage fount_runs)
              )
   end
 

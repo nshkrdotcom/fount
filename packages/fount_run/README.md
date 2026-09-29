@@ -1,18 +1,28 @@
 # FountRun
 
-FountRun is the durable orchestration/storage layer for Fount. Phase 02 establishes the Run package, shared-database migrations, trusted actor boundary, immutable plan/policy snapshots, durable decision and approval-attempt records, usage accounting identities, future-worker step/lease/attempt storage, events and delivery identities.
+FountRun is the durable orchestration layer for bounded Fount work. Phase 02 established trusted Run identity and storage. Phase 03 adds the reusable execution engine for **one explicit operation at a time**: enqueue, claim, heartbeat, fence, execute, checkpoint, reconcile and inspect.
 
-It does **not** execute providers, claim/reclaim work, generate screenplay pages, dispatch approval callbacks, accept Core canon or export files yet. Those behaviors are implemented in later phases instead of appearing here as successful no-ops.
+The engine deliberately does not schedule the intake → investigate → plan → write → check screenplay pipeline. That orchestration and strategy-decision flow is Phase 04. Writer steering APIs, approval/acceptance and delivery remain later phases.
 
-## Shared Repo
+## Shared Repo and migration order
 
-A caller owns and starts the Ecto Repo. Run uses the same PostgreSQL database as Fount Core and never starts a second Repo.
+The host owns the Ecto Repo. Run and Workshop use the same PostgreSQL database as Core; no second storage system is started.
 
 ```elixir
 Ecto.Migrator.run(MyRepo, Fount.Persistence.migrations_path(), :up, all: true)
 Ecto.Migrator.run(MyRepo, FountRun.migrations_path(), :up, all: true)
 ```
 
-Construct `FountRun.ActorContext` only after host authentication/authorization. `FountRun.start_run/4` validates a closed plan/policy, verifies the base revision, then atomically writes run + plan version 1 + policy version 1. The caller-supplied idempotency key replays the original run only for the same normalized input and authenticated calling principal. Phase 02 accepts no start options beyond the default empty list; later phases add options only when they have real behavior.
+Core migrations add idempotent Workshop session/candidate operation keys without importing Run. Run migrations add provider-intent/reconciliation records and execution counters on top of the Phase 02 tables.
+
+## One durable operation
+
+Construct `FountRun.ActorContext` only after host authentication/authorization, create a run, then explicitly enqueue one step. A host may call `FountRun.step/4` directly or configure `FountRun.Worker` pollers.
+
+For the Phase 03 real-domain lane, the closed registry maps `write` to `FountRun.WorkshopHandler`. It opens and links a Workshop session before provider work, resumes it with Run-owned budgets/retry allowances, and saves candidates through Core's ordinary candidate path under a fencing guard. Candidate generation does not advance canon.
+
+Provider dispatch records intent and reserves resource budget before the call. A saved success is reused after restart. A dispatched response whose outcome cannot be recovered becomes `unknown`; its reservation remains charged/reserved and Run does not replay it blindly.
+
+`FountRun.progress/3` exposes run, step, usage and provider-status metadata without returning prompts or provider response bodies.
 
 See `guides/architecture.md` and `guides/storage.md`.

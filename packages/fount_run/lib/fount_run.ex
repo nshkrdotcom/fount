@@ -2,11 +2,11 @@ defmodule FountRun do
   @moduledoc """
   Durable Run foundation for Fount.
 
-  Phase 02 implements run creation/read/list plus explicit persistence primitives
-  for immutable plan/policy snapshots, decisions, approval attempts, steps, usage
-  and delivery identity. It intentionally does not claim work, invoke providers,
-  materialize screenplay routes, dispatch approvers, accept canon, or deliver
-  artifacts; those behaviors belong to later phases.
+  Phase 03 retains the Phase 02 immutable storage/approval contracts and adds a
+  fenced engine for one bounded operation at a time: enqueue, claim, heartbeat,
+  execute, checkpoint, reconcile and inspect. It does not schedule the Phase 04
+  screenplay pipeline, choose strategies, dispatch approvers, accept canon or
+  deliver artifacts.
   """
 
   alias FountRun.Persistence
@@ -32,8 +32,29 @@ defmodule FountRun do
     |> emit(:list_runs)
   end
 
-  # Deliberately no successful no-op implementations of step/update/pause/resume/
-  # stop/approve/deliver. Later phases add those commands when their behavior is real.
+  @doc "Creates one explicit durable operation; Phase 04 is responsible for workflow scheduling."
+  def enqueue_step(repo, run_id, attrs, actor_context) do
+    repo
+    |> Persistence.create_step(run_id, attrs, actor_context)
+    |> emit(:enqueue_step)
+  end
+
+  @doc "Claims and executes at most one durable operation."
+  def step(repo, run_id, actor_context, opts \\ []) do
+    repo
+    |> FountRun.Engine.step(run_id, actor_context, opts)
+    |> emit(:step)
+  end
+
+  @doc "Returns persisted run/step/provider usage without prompts or provider response bodies."
+  def progress(repo, run_id, actor_context) do
+    repo
+    |> FountRun.ExecutionStore.progress(run_id, actor_context)
+    |> emit(:progress)
+  end
+
+  # Writer-facing pause/stop/approve/deliver commands remain deliberately absent;
+  # they arrive only with their Phase 05 authorization and stale-base semantics.
 
   defp emit({:ok, _value} = result, operation) do
     :telemetry.execute([:fount_run, operation], %{system_time: System.system_time()}, %{

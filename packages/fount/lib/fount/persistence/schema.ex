@@ -181,6 +181,7 @@ defmodule Fount.Persistence.Schema.WritingSession do
     field(:progress, :map)
     field(:provenance, :map)
     field(:lock_version, :integer)
+    field(:operation_key, :string)
   end
 end
 
@@ -207,6 +208,7 @@ defmodule Fount.Persistence.Schema.WritingCandidate do
     field(:required_checks, Fount.Persistence.JSONValue)
     field(:check_set_fingerprint, :string)
     field(:approval_id, Ecto.UUID)
+    field(:operation_key, :string)
   end
 end
 

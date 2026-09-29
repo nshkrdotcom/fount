@@ -57,11 +57,13 @@ defmodule FountWorkshop.Session do
           "status" => "open",
           "strategies" => [],
           "progress" => progress,
+          "operation_key" => session_operation_key(opts),
           "provenance" => %{
             "limits" => limits(opts),
             "implementation" => "creative-workflows-v1",
             "phase9_preflight" => preflight,
-            "phase12_open" => %{"provider_calls" => 0, "changes_canon" => false}
+            "phase12_open" => %{"provider_calls" => 0, "changes_canon" => false},
+            "run_operation_key" => Keyword.get(opts, :operation_key)
           }
         }
       ])
@@ -457,28 +459,39 @@ defmodule FountWorkshop.Session do
   end
 
   defp generate_save(model, session, strategy, context, services, opts) do
-    with {:ok, candidate} <-
-           Generation.propose(model, request(session), strategy, context, services, opts),
-         check_opts =
-           opts
-           |> Keyword.put(:workshop_request, request(session))
-           |> Keyword.put(:workshop_context, context)
-           |> Keyword.put(:session_strategies, session["strategies"]),
-         {:ok, candidate, reports} <- Candidate.check(model, candidate, services, check_opts),
-         {:ok, report_ids} <-
-           save_reports(reports, session["id"], services, [
-             candidate["screenplay"] | context.source_models
-           ]),
-         provenance =
-           candidate["provenance"]
-           |> Map.put("report_ids", report_ids)
-           |> Map.put("preparation_report_ids", session["progress"]["report_ids"]),
-         {:ok, saved} <-
-           Store.call(services[:store], :save_candidate, [
-             session["id"],
-             Map.put(candidate, "provenance", provenance)
-           ]) do
-      {:ok, saved, report_ids}
+    operation_key = candidate_operation_key(opts, strategy)
+
+    case recover_candidate(operation_key, services) do
+      {:ok, saved} ->
+        {:ok, saved, get_in(saved, ["provenance", "report_ids"]) || []}
+
+      :not_found ->
+        with {:ok, candidate} <-
+               Generation.propose(model, request(session), strategy, context, services, opts),
+             check_opts =
+               opts
+               |> Keyword.put(:workshop_request, request(session))
+               |> Keyword.put(:workshop_context, context)
+               |> Keyword.put(:session_strategies, session["strategies"]),
+             {:ok, candidate, reports} <- Candidate.check(model, candidate, services, check_opts),
+             {:ok, report_ids} <-
+               save_reports(reports, session["id"], services, [
+                 candidate["screenplay"] | context.source_models
+               ]),
+             provenance =
+               candidate["provenance"]
+               |> Map.put("report_ids", report_ids)
+               |> Map.put("preparation_report_ids", session["progress"]["report_ids"]),
+             candidate =
+               candidate
+               |> Map.put("provenance", provenance)
+               |> put_operation_key(operation_key),
+             {:ok, saved} <- Store.call(services[:store], :save_candidate, [session["id"], candidate]) do
+          {:ok, saved, report_ids}
+        end
+
+      {:error, reason} ->
+        {:error, reason}
     end
   end
 
@@ -658,6 +671,34 @@ defmodule FountWorkshop.Session do
       true -> "continue_when_ready"
     end
   end
+
+
+  defp session_operation_key(opts) do
+    case Keyword.get(opts, :operation_key) do
+      value when is_binary(value) and value != "" -> value <> ":session"
+      _ -> nil
+    end
+  end
+
+  defp candidate_operation_key(opts, strategy) do
+    case Keyword.get(opts, :operation_key) do
+      value when is_binary(value) and value != "" -> value <> ":candidate:" <> strategy["id"]
+      _ -> nil
+    end
+  end
+
+  defp recover_candidate(nil, _services), do: :not_found
+
+  defp recover_candidate(operation_key, services) do
+    case Store.call(services[:store], :candidate_by_operation, [operation_key]) do
+      {:ok, candidate} -> {:ok, candidate}
+      {:error, :not_found} -> :not_found
+      {:error, _} = error -> error
+    end
+  end
+
+  defp put_operation_key(candidate, nil), do: candidate
+  defp put_operation_key(candidate, operation_key), do: Map.put(candidate, "operation_key", operation_key)
 
   defp services(%{store: %Store{}, inference: %Inference.Client{}}), do: :ok
   defp services(_), do: {:error, :explicit_store_and_inference_services_required}

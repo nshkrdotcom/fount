@@ -2,6 +2,8 @@
 
 ## Unreleased - Fount Run Phase 01 core approval safety (source delivery)
 
+- Fount Run Phase 03: allow Run-managed sessions to reuse durable session/candidate operation identity, provider dispatch/recovery hooks, subordinate measurement reservations, decode-repair allowance and transport retries while preserving standalone Session behavior.
+
 - Migrate standalone Review/Acceptance, CLI accept, fake stores, examples and acceptance tests to Core's typed stable approval plus trusted authority API.
 - Remove the actor-string review shape as a writable acceptance path while preserving rejection, review/export surfaces and candidate-only workflows.
 - Add source regressions for approval identity and required-check handling; runtime Elixir/PostgreSQL verification remains pending.

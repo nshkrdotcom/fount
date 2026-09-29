@@ -38,6 +38,8 @@ defmodule FountWorkshop.Writing.Completion do
         validator: validator,
         mode: mode,
         repairs: repairs,
+        initial_repairs: repairs,
+        transport_retry: 0,
         trace: [],
         opts: opts
       })
@@ -72,6 +74,8 @@ defmodule FountWorkshop.Writing.Completion do
       validator: validator,
       mode: mode,
       repairs: repairs,
+      initial_repairs: initial_repairs,
+      transport_retry: transport_retry,
       trace: trace,
       opts: opts
     } = state
@@ -202,9 +206,85 @@ defmodule FountWorkshop.Writing.Completion do
         {:error, :session_inference_limit}
 
       true ->
-        Inference.complete(client, request, options)
+        dispatch = %{
+          name: state.name,
+          mode: state.mode,
+          request_sha256: hash(request),
+          dispatch_index: length(state.trace) + 1,
+          transport_retry: state.transport_retry,
+          malformed_repair: state.repairs < state.initial_repairs
+        }
+
+        case dispatch_hook(state.opts, :before, dispatch) do
+          :ok ->
+            result = Inference.complete(client, request, options)
+
+            case dispatch_hook(state.opts, :after, Map.put(dispatch, :result, dispatch_result(result))) do
+              :ok -> maybe_transport_retry(client, request, options, state, result)
+              {:error, reason} -> {:error, reason}
+            end
+
+          {:reuse, response} when is_map(response) ->
+            {:ok, response}
+
+          {:error, reason} ->
+            {:error, reason}
+        end
     end
   end
+
+  defp maybe_transport_retry(client, request, options, state, {:error, error} = result) do
+    limit = Keyword.get(state.opts, :transient_retries, 0)
+
+    if transient_error?(error) and state.transport_retry < limit do
+      request_completion(client, request, options, %{state | transport_retry: state.transport_retry + 1})
+    else
+      result
+    end
+  end
+
+  defp maybe_transport_retry(_client, _request, _options, _state, result), do: result
+
+  defp transient_error?(%Inference.Error{category: category}),
+    do: category in [:timeout, :rate_limited, :adapter_exception, :provider_error]
+
+  defp transient_error?(_), do: false
+
+  defp dispatch_hook(opts, phase, payload) do
+    case Keyword.get(opts, :dispatch_hook) do
+      nil -> :ok
+      hook when is_function(hook, 2) -> hook.(phase, payload)
+      _ -> {:error, :invalid_dispatch_hook}
+    end
+  end
+
+  defp dispatch_result({:ok, response}) do
+    %{
+      "status" => "ok",
+      "id" => Map.get(response, :id),
+      "text" => Map.get(response, :text),
+      "object" => Map.get(response, :object),
+      "model" => Map.get(response, :model),
+      "finish_reason" => Map.get(response, :finish_reason),
+      "usage" => json_value(Map.get(response, :usage) || %{})
+    }
+  end
+
+  defp dispatch_result({:error, %Inference.Error{category: category}}),
+    do: %{"status" => "error", "category" => to_string(category)}
+
+  defp dispatch_result({:error, reason}),
+    do: %{"status" => "error", "category" => safe_error_tag(reason)}
+
+  defp json_value(value) when is_map(value) do
+    Map.new(value, fn {key, item} -> {to_string(key), json_value(item)} end)
+  end
+
+  defp json_value(value) when is_list(value), do: Enum.map(value, &json_value/1)
+  defp json_value(value), do: value
+
+  defp safe_error_tag(reason) when is_atom(reason), do: Atom.to_string(reason)
+  defp safe_error_tag(reason), do: inspect(reason, limit: 10, printable_limit: 200)
 
   defp safe_provider_error(%Inference.Error{category: category})
        when category in [

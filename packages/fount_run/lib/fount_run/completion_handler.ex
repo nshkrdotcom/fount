@@ -56,19 +56,23 @@ defmodule FountRun.CompletionHandler do
         end
 
       "accept" ->
-        with {:ok, approver} <- Principal.from_map(policy["approver"] || %{}),
-             :ok <- completion_check_gate(opts[:run_check], packet, approver.type) do
-          case approver.type do
-            :human ->
-              human_checkpoint(repo, claim, run, packet, approver, context, nil)
-
-            type when type in [:agent, :service] ->
-              automated(repo, claim, run, packet, approver, context, opts)
-          end
-        end
+        accept_current(repo, claim, run, packet, context, opts, policy)
 
       _ ->
         {:error, :invalid_completion_policy}
+    end
+  end
+
+  defp accept_current(repo, claim, run, packet, context, opts, policy) do
+    with {:ok, approver} <- Principal.from_map(policy["approver"] || %{}),
+         :ok <- completion_check_gate(opts[:run_check], packet, approver.type) do
+      case approver.type do
+        :human ->
+          human_checkpoint(repo, claim, run, packet, approver, context, nil)
+
+        type when type in [:agent, :service] ->
+          automated(repo, claim, run, packet, approver, context, opts)
+      end
     end
   end
 
@@ -147,24 +151,28 @@ defmodule FountRun.CompletionHandler do
 
     case {fallback_allowed?(reason), fallback} do
       {true, %{}} ->
-        with {:ok, principal} <- Principal.from_map(fallback) do
-          if parent_attempt_id do
-            _ =
-              Persistence.record_approval_outcome(
-                repo,
-                parent_attempt_id,
-                "fenced",
-                "fallback_started",
-                context
-              )
-          end
-
-          human_checkpoint(repo, claim, run, packet, principal, context, parent_attempt_id)
-        end
+        start_human_fallback(repo, claim, run, packet, context, parent_attempt_id, fallback)
 
       _ ->
         {:partial, :approval_not_completed,
          %{"reason" => inspect(reason), "candidate_id" => packet["candidate_id"]}}
+    end
+  end
+
+  defp start_human_fallback(repo, claim, run, packet, context, parent_attempt_id, fallback) do
+    with {:ok, principal} <- Principal.from_map(fallback) do
+      if parent_attempt_id do
+        _ =
+          Persistence.record_approval_outcome(
+            repo,
+            parent_attempt_id,
+            "fenced",
+            "fallback_started",
+            context
+          )
+      end
+
+      human_checkpoint(repo, claim, run, packet, principal, context, parent_attempt_id)
     end
   end
 

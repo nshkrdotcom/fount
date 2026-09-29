@@ -16,6 +16,21 @@ defmodule FountRun.CLI do
   @exit_runtime 5
 
   @commands ~w(start show step decisions decide plan pause resume stop policy approve export)
+  @usage %{
+    "start" => "mix fount.run start --input run.json",
+    "show" => "mix fount.run show RUN_ID",
+    "step" => "mix fount.run step RUN_ID",
+    "decisions" => "mix fount.run decisions RUN_ID",
+    "decide" => "mix fount.run decide DECISION_ID --input response.json",
+    "plan" => "mix fount.run plan RUN_ID --input plan.json --expected-version N --command-id KEY",
+    "policy" =>
+      "mix fount.run policy RUN_ID --input policy.json --expected-version N --command-id KEY",
+    "pause" => "mix fount.run pause RUN_ID",
+    "resume" => "mix fount.run resume RUN_ID",
+    "stop" => "mix fount.run stop RUN_ID",
+    "approve" => "mix fount.run approve RUN_ID --input exact-approval.json",
+    "export" => "mix fount.run export RUN_ID --destination RELATIVE_DIR [--pdf] [--table-read]"
+  }
 
   @spec run([String.t()], keyword()) :: {non_neg_integer(), map()}
   def run(argv, config \\ [])
@@ -56,13 +71,7 @@ defmodule FountRun.CLI do
 
     with [] <- invalid,
          :ok <- no_duplicate_options(rest) do
-      if opts[:help] do
-        {:ok, %{command: command, help: true}}
-      else
-        with {:ok, parsed} <- parse_command(command, args, opts) do
-          {:ok, Map.put(parsed, :help, false)}
-        end
-      end
+      parse_known_command(command, args, opts)
     else
       [_ | _] -> {:error, :invalid_options}
       {:error, _} = error -> error
@@ -70,6 +79,17 @@ defmodule FountRun.CLI do
   end
 
   def parse([_unknown | _]), do: {:error, :unknown_command}
+
+  defp parse_known_command(command, args, opts) do
+    if opts[:help] do
+      {:ok, %{command: command, help: true}}
+    else
+      case parse_command(command, args, opts) do
+        {:ok, parsed} -> {:ok, Map.put(parsed, :help, false)}
+        error -> error
+      end
+    end
+  end
 
   def execute(%{command: command} = parsed, config) do
     with {:ok, runtime} <- runtime_config(config),
@@ -167,17 +187,12 @@ defmodule FountRun.CLI do
   end
 
   defp execute_command("start", parsed, runtime) do
-    with {:ok, payload} <- json_file(parsed.input),
-         true <- is_map(payload) or {:error, :input_must_be_object} do
+    with {:ok, payload} <- json_object(parsed.input) do
       {attrs, first_step} = start_payload(payload)
 
-      with {:ok, run} <- FountRun.start_run(runtime.repo, attrs, runtime.context),
-           {:ok, result} <-
-             maybe_enqueue_first_step(runtime.repo, run, first_step, runtime.context) do
-        {:ok, result}
+      with {:ok, run} <- FountRun.start_run(runtime.repo, attrs, runtime.context) do
+        maybe_enqueue_first_step(runtime.repo, run, first_step, runtime.context)
       end
-    else
-      {:error, _} = error -> error
     end
   end
 
@@ -262,34 +277,33 @@ defmodule FountRun.CLI do
     step_options = Keyword.get(configured, :step_options, [])
     pdf_options = Keyword.get(configured, :pdf_options, [])
 
-    cond do
-      is_nil(repo) or not is_atom(repo) ->
-        {:error, :cli_repo_not_configured}
-
-      not match?(%ActorContext{}, context) ->
-        {:error, :cli_actor_context_not_configured}
-
-      not (is_map(services) or is_list(services)) ->
-        {:error, :cli_services_invalid}
-
-      not is_list(step_options) ->
-        {:error, :cli_step_options_invalid}
-
-      not is_list(pdf_options) ->
-        {:error, :cli_pdf_options_invalid}
-
-      true ->
-        {:ok,
-         %{
-           repo: repo,
-           context: context,
-           services: if(is_list(services), do: Map.new(services), else: services),
-           artifact_root: artifact_root,
-           step_options: step_options,
-           pdf_options: pdf_options
-         }}
+    with :ok <- valid_repo(repo),
+         :ok <- valid_context(context),
+         :ok <- valid_services(services),
+         :ok <- valid_step_options(step_options),
+         :ok <- valid_pdf_options(pdf_options) do
+      {:ok,
+       %{
+         repo: repo,
+         context: context,
+         services: if(is_list(services), do: Map.new(services), else: services),
+         artifact_root: artifact_root,
+         step_options: step_options,
+         pdf_options: pdf_options
+       }}
     end
   end
+
+  defp valid_repo(repo) when is_atom(repo) and not is_nil(repo), do: :ok
+  defp valid_repo(_), do: {:error, :cli_repo_not_configured}
+  defp valid_context(%ActorContext{}), do: :ok
+  defp valid_context(_), do: {:error, :cli_actor_context_not_configured}
+  defp valid_services(value) when is_map(value) or is_list(value), do: :ok
+  defp valid_services(_), do: {:error, :cli_services_invalid}
+  defp valid_step_options(value) when is_list(value), do: :ok
+  defp valid_step_options(_), do: {:error, :cli_step_options_invalid}
+  defp valid_pdf_options(value) when is_list(value), do: :ok
+  defp valid_pdf_options(_), do: {:error, :cli_pdf_options_invalid}
 
   defp start_payload(%{"run" => attrs} = payload) when is_map(attrs),
     do: {attrs, Map.get(payload, "first_step")}
@@ -355,7 +369,7 @@ defmodule FountRun.CLI do
       tag in ~w(cli_repo_not_configured cli_actor_context_not_configured cli_services_invalid cli_step_options_invalid cli_pdf_options_invalid artifact_root_not_configured unauthorized owner_required wrong_approver unregistered_approver)a ->
         @exit_config
 
-      tag in ~w(already_resolved decision_conflict cross_run_decision stale_plan_version stale_policy_version stale_revision stale_plan stale_policy plan_invalidated policy_invalidated idempotency_conflict immutable_review_conflict immutable_approval_conflict stopped pause_requested stop_requested)a ->
+      tag in ~w(already_resolved decision_conflict cross_run_decision stale_plan_version stale_policy_version stale_revision stale_plan stale_policy stale_decision stale_decision_context stale_decision_binding stale_decision_candidate stale_decision_base stale_decision_content approval_attempt_terminal plan_invalidated policy_invalidated idempotency_conflict immutable_review_conflict immutable_approval_conflict stopped pause_requested stop_requested)a ->
         @exit_conflict
 
       true ->
@@ -380,46 +394,5 @@ defmodule FountRun.CLI do
     "mix fount.run <#{Enum.join(@commands, "|")}> [arguments] [--input JSON]"
   end
 
-  def usage(command) do
-    case command do
-      "start" ->
-        "mix fount.run start --input run.json"
-
-      "show" ->
-        "mix fount.run show RUN_ID"
-
-      "step" ->
-        "mix fount.run step RUN_ID"
-
-      "decisions" ->
-        "mix fount.run decisions RUN_ID"
-
-      "decide" ->
-        "mix fount.run decide DECISION_ID --input response.json"
-
-      "plan" ->
-        "mix fount.run plan RUN_ID --input plan.json --expected-version N --command-id KEY"
-
-      "policy" ->
-        "mix fount.run policy RUN_ID --input policy.json --expected-version N --command-id KEY"
-
-      "pause" ->
-        "mix fount.run pause RUN_ID"
-
-      "resume" ->
-        "mix fount.run resume RUN_ID"
-
-      "stop" ->
-        "mix fount.run stop RUN_ID"
-
-      "approve" ->
-        "mix fount.run approve RUN_ID --input exact-approval.json"
-
-      "export" ->
-        "mix fount.run export RUN_ID --destination RELATIVE_DIR [--pdf] [--table-read]"
-
-      _ ->
-        usage(nil)
-    end
-  end
+  def usage(command), do: Map.get(@usage, command, usage(nil))
 end

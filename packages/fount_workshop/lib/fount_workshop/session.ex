@@ -98,7 +98,7 @@ defmodule FountWorkshop.Session do
           checkpoint(Map.put(prepared, "status", "open"), services, budget)
 
         {:error, reason, partial} ->
-          fail(partial, reason, [], services, budget)
+          fail_preparation(session, partial, reason, services, budget)
 
         {:error, reason} ->
           fail(session, reason, [], services, budget)
@@ -134,7 +134,7 @@ defmodule FountWorkshop.Session do
           finish_plan_only(model, prepared, context, services, stage_opts, budget)
 
         {:error, reason, partial} ->
-          fail(partial, reason, [], services, budget)
+          fail_preparation(session, partial, reason, services, budget)
 
         {:error, reason} ->
           fail(session, reason, [], services, budget)
@@ -724,6 +724,12 @@ defmodule FountWorkshop.Session do
       _ -> {:error, reason, updated}
     end
   end
+
+  defp fail_preparation(_session, %{"progress" => _} = partial, reason, services, budget),
+    do: fail(partial, reason, [], services, budget)
+
+  defp fail_preparation(session, partial, reason, services, budget),
+    do: fail(session, reason, [Model.plain(partial)], services, budget)
 
   defp request(session) do
     discovery = get_in(session, ["progress", "discovery"]) || %{}

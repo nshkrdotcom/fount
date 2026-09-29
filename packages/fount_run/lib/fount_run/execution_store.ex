@@ -4,9 +4,8 @@ defmodule FountRun.ExecutionStore do
   alias Ecto.Adapters.SQL
   alias Fount.ID
   alias Fount.Writing.CanonicalJSON
-  alias FountRun.{ActorContext, ClosedMap, Transition}
+  alias FountRun.{ActorContext, ClosedMap, Persistence, Transition}
 
-  @uuid_columns ~w(id run_id screenplay_id step_id active_step_id session_id input_revision_id input_candidate_id output_candidate_id output_revision_id usage_id)
   @terminal ~w(succeeded failed cancelled fenced)
 
   def claim(repo, run_id, worker_id, %ActorContext{} = context, opts \\ []) do
@@ -1229,18 +1228,5 @@ defmodule FountRun.ExecutionStore do
     Enum.map(result.rows, &row_map(result.columns, &1))
   end
 
-  defp row_map(columns, row) do
-    columns
-    |> Enum.zip(row)
-    |> Map.new(fn
-      {column, <<_::binary-size(16)>> = value} when column in @uuid_columns ->
-        case Ecto.UUID.load(value) do
-          {:ok, uuid} -> {column, uuid}
-          :error -> {column, value}
-        end
-
-      pair ->
-        pair
-    end)
-  end
+  defp row_map(columns, row), do: Persistence.row_map(columns, row)
 end

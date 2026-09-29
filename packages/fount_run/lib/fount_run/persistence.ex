@@ -19,7 +19,7 @@ defmodule FountRun.Persistence do
   }
 
   @run_fields ~w(id owner_type owner_id screenplay_id client_idempotency_key input_fingerprint current_plan_version current_policy_version status stage iteration selected_candidate_id active_step_id current_fencing_token parent_run_id superseding_run_id lock_version pause_requested_at stop_requested_at inserted_at updated_at)a
-  @uuid_columns ~w(id screenplay_id selected_candidate_id active_step_id parent_run_id superseding_run_id run_id base_revision_id step_id input_revision_id input_candidate_id session_id output_candidate_id output_revision_id decision_id candidate_id acceptance_id accepted_revision_id result_revision_id revision_id parent_attempt_id approval_id approval_attempt_id)
+  @uuid_columns ~w(id screenplay_id selected_candidate_id active_step_id parent_run_id superseding_run_id run_id base_revision_id step_id input_revision_id input_candidate_id session_id output_candidate_id output_revision_id decision_id candidate_id acceptance_id accepted_revision_id result_revision_id revision_id parent_attempt_id approval_id approval_attempt_id usage_id)
 
   @start_keys ~w(screenplay_id base_revision_id goal scope constraints protected_material input_brief input_notes operation_parameters policy client_idempotency_key)
   @list_keys ~w(status stage limit)
@@ -327,24 +327,7 @@ defmodule FountRun.Persistence do
       hash = CanonicalJSON.hash(evidence)
 
       transaction(repo, fn ->
-        row = locked_approval_attempt!(repo, attempt_id, context)
-
-        cond do
-          is_nil(row["callback_response"]) ->
-            q!(
-              repo,
-              "UPDATE fount_run_approval_attempts SET callback_response=$2::jsonb,callback_response_hash=$3,updated_at=now() WHERE id=$1::text::uuid",
-              [attempt_id, evidence, hash]
-            )
-
-            approval_attempt_row(repo, attempt_id)
-
-          row["callback_response_hash"] == hash ->
-            row
-
-          true ->
-            rollback(repo, :immutable_callback_response_conflict)
-        end
+        record_callback_response!(repo, attempt_id, evidence, hash, context)
       end)
     else
       {:error, :invalid_callback_response_evidence}
@@ -353,6 +336,27 @@ defmodule FountRun.Persistence do
 
   def record_approval_callback_response(_repo, _attempt_id, _evidence, _context),
     do: {:error, :invalid_callback_response_evidence}
+
+  defp record_callback_response!(repo, attempt_id, evidence, hash, context) do
+    row = locked_approval_attempt!(repo, attempt_id, context)
+
+    cond do
+      is_nil(row["callback_response"]) ->
+        q!(
+          repo,
+          "UPDATE fount_run_approval_attempts SET callback_response=$2::jsonb,callback_response_hash=$3,updated_at=now() WHERE id=$1::text::uuid",
+          [attempt_id, evidence, hash]
+        )
+
+        approval_attempt_row(repo, attempt_id)
+
+      row["callback_response_hash"] == hash ->
+        row
+
+      true ->
+        rollback(repo, :immutable_callback_response_conflict)
+    end
+  end
 
   def record_approval_review(repo, attempt_id, review, recommendation, %ActorContext{} = context) do
     with {:ok, payload} <- ApprovalAttempt.review_payload(review),
@@ -1200,32 +1204,36 @@ defmodule FountRun.Persistence do
 
       is_map(fallback) and {fallback["type"], fallback["id"]} == actual and
           is_binary(attempt.parent_attempt_id) ->
-        parent =
-          one(
-            repo,
-            "SELECT run_id::text,candidate_id::text,outcome FROM fount_run_approval_attempts WHERE id=$1::text::uuid",
-            [attempt.parent_attempt_id]
-          ) || rollback(repo, :fallback_parent_not_found)
-
-        cond do
-          parent["run_id"] != policy["run_id"] ->
-            rollback(repo, :fallback_parent_run_mismatch)
-
-          parent["candidate_id"] != attempt.candidate_id ->
-            rollback(repo, :fallback_parent_candidate_mismatch)
-
-          parent["outcome"] not in ~w(rejected invalid failed fenced) ->
-            rollback(repo, :fallback_parent_not_terminal)
-
-          true ->
-            :ok
-        end
+        validate_fallback_parent!(repo, policy, attempt)
 
       is_nil(configured) ->
         rollback(repo, :policy_does_not_accept)
 
       true ->
         rollback(repo, :policy_approver_mismatch)
+    end
+  end
+
+  defp validate_fallback_parent!(repo, policy, attempt) do
+    parent =
+      one(
+        repo,
+        "SELECT run_id::text,candidate_id::text,outcome FROM fount_run_approval_attempts WHERE id=$1::text::uuid",
+        [attempt.parent_attempt_id]
+      ) || rollback(repo, :fallback_parent_not_found)
+
+    cond do
+      parent["run_id"] != policy["run_id"] ->
+        rollback(repo, :fallback_parent_run_mismatch)
+
+      parent["candidate_id"] != attempt.candidate_id ->
+        rollback(repo, :fallback_parent_candidate_mismatch)
+
+      parent["outcome"] not in ~w(rejected invalid failed fenced) ->
+        rollback(repo, :fallback_parent_not_terminal)
+
+      true ->
+        :ok
     end
   end
 

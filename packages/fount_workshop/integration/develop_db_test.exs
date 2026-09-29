@@ -48,6 +48,10 @@ defmodule FountWorkshop.DevelopDatabaseIntegrationTest do
     {page_text, 0} = System.cmd("pdftotext", [pdf_path, "-"])
     assert page_text =~ "STATION"
     assert page_text =~ "Mara watches"
+    assert {:error, :authorized_approval_required} =
+             FountWorkshop.accept(Repo, chosen.id, root.revision.id, "writer")
+    assert {:ok, unchanged} = Persistence.load(Repo, key)
+    assert unchanged.revision.id == root.revision.id
     {approval, authority} = FountWorkshop.TestApproval.for_repo(Repo, chosen.id)
     assert {:ok, accepted} = Review.accept(Repo, chosen.id, approval, authority)
     assert accepted.revision.id == chosen.screenplay.revision.id

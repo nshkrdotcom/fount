@@ -81,155 +81,206 @@ defmodule FountRun.DecisionCommand do
           {:ok, result}
 
         %{"approval_attempt_id" => attempt_id, "replay" => replay} ->
-          case ApprovalBridge.accept_ready(repo, attempt_id, context) do
-            {:ok, accepted} -> {:ok, Map.put(accepted, "decision_replay", replay)}
-            other -> other
-          end
+          accept_final_attempt(repo, attempt_id, context, replay)
       end
     else
       {:error, _} = error -> error
     end
   end
 
+  defp accept_final_attempt(repo, attempt_id, context, replay) do
+    case ApprovalBridge.accept_ready(repo, attempt_id, context) do
+      {:ok, accepted} -> {:ok, Map.put(accepted, "decision_replay", replay)}
+      other -> other
+    end
+  end
+
   defp prepare_final(repo, decision_id, response, context) do
-    tx(repo, fn ->
-      {decision, run} = locked_decision_and_run!(repo, decision_id, context)
-      verify_exact_binding!(repo, decision, run, response, context, "final_approval")
-      response_fp = CanonicalJSON.hash(response)
-      replay = resolved_replay?(repo, decision, response_fp, context)
+    tx(repo, fn -> prepare_final_locked!(repo, decision_id, response, context) end)
+  end
 
-      if decision["status"] == "pending" do
-        case Persistence.resolve_decision(repo, decision_id, response, context) do
-          {:ok, _} -> :ok
-          {:error, reason} -> rollback(repo, normalize_conflict(reason))
-        end
+  defp prepare_final_locked!(repo, decision_id, response, context) do
+    {decision, run} = locked_decision_and_run!(repo, decision_id, context)
+    verify_exact_binding!(repo, decision, run, response, context, "final_approval")
+    response_fp = CanonicalJSON.hash(response)
+    replay = resolved_replay?(repo, decision, response_fp, context)
+
+    if decision["status"] == "pending" do
+      case Persistence.resolve_decision(repo, decision_id, response, context) do
+        {:ok, _} -> :ok
+        {:error, reason} -> rollback(repo, normalize_conflict(reason))
       end
+    end
 
-      if response["choice"] == "replace" do
-        replace_candidate!(repo, decision, run, response, response_fp, context, replay)
-      else
-        packet = exact_packet!(repo, decision)
-        parent_attempt_id = decision_parent_attempt(decision)
-        recommendation = if response["choice"] == "approve", do: "approve", else: "reject"
-        approver = context.principal
+    if response["choice"] == "replace" do
+      replace_candidate!(repo, decision, run, response, response_fp, context, replay)
+    else
+      prepare_reviewed_final!(
+        repo,
+        decision_id,
+        decision,
+        run,
+        response,
+        response_fp,
+        context,
+        replay
+      )
+    end
+  end
 
-        attempt =
-          ensure_human_attempt!(repo, decision, run, packet, parent_attempt_id, approver, context)
+  defp prepare_reviewed_final!(
+         repo,
+         decision_id,
+         decision,
+         run,
+         response,
+         response_fp,
+         context,
+         replay
+       ) do
+    packet = exact_packet!(repo, decision)
+    parent_attempt_id = decision_parent_attempt(decision)
+    recommendation = if response["choice"] == "approve", do: "approve", else: "reject"
+    approver = context.principal
 
-        review =
-          case Review.new(
-                 reviewer: approver,
-                 candidate_id: packet["candidate_id"],
-                 base_revision_id: packet["base_revision_id"],
-                 content_hash: packet["content_hash"],
-                 report_ids: packet["report_ids"] || [],
-                 check_set_fingerprint: packet["check_set_fingerprint"],
-                 findings: response["findings"] || [],
-                 recommendation: recommendation,
-                 overrides: response["overrides"] || []
-               ) do
-            {:ok, value} -> value
-            {:error, reason} -> rollback(repo, reason)
-          end
+    attempt =
+      ensure_human_attempt!(repo, decision, run, packet, parent_attempt_id, approver, context)
 
-        saved =
-          case Persistence.record_approval_review(
-                 repo,
-                 attempt["id"],
-                 review,
-                 recommendation,
-                 context
-               ) do
-            {:ok, value} -> value
-            {:error, reason} -> rollback(repo, reason)
-          end
+    review =
+      unwrap!(
+        repo,
+        Review.new(
+          reviewer: approver,
+          candidate_id: packet["candidate_id"],
+          base_revision_id: packet["base_revision_id"],
+          content_hash: packet["content_hash"],
+          report_ids: packet["report_ids"] || [],
+          check_set_fingerprint: packet["check_set_fingerprint"],
+          findings: response["findings"] || [],
+          recommendation: recommendation,
+          overrides: response["overrides"] || []
+        )
+      )
 
-        if recommendation == "reject" do
-          rejected =
-            case Persistence.record_approval_outcome(
-                   repo,
-                   attempt["id"],
-                   "rejected",
-                   "human_rejected",
-                   context
-                 ) do
-              {:ok, value} -> value
-              {:error, reason} -> rollback(repo, reason)
-            end
+    saved =
+      unwrap!(
+        repo,
+        Persistence.record_approval_review(
+          repo,
+          attempt["id"],
+          review,
+          recommendation,
+          context
+        )
+      )
 
-          q!(
-            repo,
-            "UPDATE fount_runs SET status='partial',stage='decide',lock_version=lock_version+1,updated_at=now() WHERE id=$1::text::uuid",
-            [run["id"]]
-          )
+    final = %{
+      decision_id: decision_id,
+      decision: decision,
+      run: run,
+      packet: packet,
+      response_fp: response_fp,
+      context: context,
+      replay: replay,
+      review: review,
+      saved: saved
+    }
 
-          event!(repo, run["id"], context, "final_candidate_rejected", %{
-            "decision_id" => decision_id,
-            "approval_attempt_id" => rejected["id"]
-          })
+    if recommendation == "reject",
+      do: reject_final!(repo, final, attempt),
+      else: ready_final!(repo, final)
+  end
 
-          %{
-            "decision_id" => decision_id,
-            "approval_attempt_id" => rejected["id"],
-            "candidate_id" => packet["candidate_id"],
-            "outcome" => "rejected",
-            "replay" => replay
-          }
-        else
-          approval_id = saved["approval_id"] || ID.v5(decision_id, ["approval:", response_fp])
+  defp reject_final!(repo, final, attempt) do
+    rejected =
+      unwrap!(
+        repo,
+        Persistence.record_approval_outcome(
+          repo,
+          attempt["id"],
+          "rejected",
+          "human_rejected",
+          final.context
+        )
+      )
 
-          approval =
-            case Approval.new(
-                   id: approval_id,
-                   approver: approver,
-                   screenplay_id: run["screenplay_id"],
-                   candidate_id: packet["candidate_id"],
-                   base_revision_id: packet["base_revision_id"],
-                   content_hash: packet["content_hash"],
-                   review: review,
-                   run_id: run["id"],
-                   run_policy_version: decision["policy_version"],
-                   run_policy_fingerprint: run["policy"]["fingerprint"]
-                 ) do
-              {:ok, value} -> value
-              {:error, reason} -> rollback(repo, reason)
-            end
+    unless final.replay do
+      q!(
+        repo,
+        "UPDATE fount_runs SET status='partial',stage='decide',lock_version=lock_version+1,updated_at=now() WHERE id=$1::text::uuid",
+        [final.run["id"]]
+      )
 
-          ready =
-            case Persistence.record_approval_payload(
-                   repo,
-                   saved["id"],
-                   approval_id,
-                   approval,
-                   context
-                 ) do
-              {:ok, value} -> value
-              {:error, reason} -> rollback(repo, reason)
-            end
+      event!(repo, final.run["id"], final.context, "final_candidate_rejected", %{
+        "decision_id" => final.decision_id,
+        "approval_attempt_id" => rejected["id"]
+      })
+    end
 
-          q!(
-            repo,
-            "UPDATE fount_runs SET status='waiting_for_approval',stage='decide',lock_version=lock_version+1,updated_at=now() WHERE id=$1::text::uuid",
-            [run["id"]]
-          )
+    %{
+      "decision_id" => final.decision_id,
+      "approval_attempt_id" => rejected["id"],
+      "candidate_id" => final.packet["candidate_id"],
+      "outcome" => "rejected",
+      "replay" => final.replay
+    }
+  end
 
-          event!(repo, run["id"], context, "final_approval_ready", %{
-            "decision_id" => decision_id,
-            "approval_attempt_id" => ready["id"],
-            "approval_id" => approval_id
-          })
+  defp ready_final!(repo, final) do
+    approval_id =
+      final.saved["approval_id"] || ID.v5(final.decision_id, ["approval:", final.response_fp])
 
-          %{
-            "decision_id" => decision_id,
-            "approval_attempt_id" => ready["id"],
-            "approval_id" => approval_id,
-            "candidate_id" => packet["candidate_id"],
-            "outcome" => "ready",
-            "replay" => replay
-          }
-        end
-      end
-    end)
+    approval =
+      unwrap!(
+        repo,
+        Approval.new(
+          id: approval_id,
+          approver: final.context.principal,
+          screenplay_id: final.run["screenplay_id"],
+          candidate_id: final.packet["candidate_id"],
+          base_revision_id: final.packet["base_revision_id"],
+          content_hash: final.packet["content_hash"],
+          review: final.review,
+          run_id: final.run["id"],
+          run_policy_version: final.decision["policy_version"],
+          run_policy_fingerprint: final.run["policy"]["fingerprint"]
+        )
+      )
+
+    ready =
+      unwrap!(
+        repo,
+        Persistence.record_approval_payload(
+          repo,
+          final.saved["id"],
+          approval_id,
+          approval,
+          final.context
+        )
+      )
+
+    unless final.replay do
+      q!(
+        repo,
+        "UPDATE fount_runs SET status='waiting_for_approval',stage='decide',lock_version=lock_version+1,updated_at=now() WHERE id=$1::text::uuid",
+        [final.run["id"]]
+      )
+
+      event!(repo, final.run["id"], final.context, "final_approval_ready", %{
+        "decision_id" => final.decision_id,
+        "approval_attempt_id" => ready["id"],
+        "approval_id" => approval_id
+      })
+    end
+
+    %{
+      "decision_id" => final.decision_id,
+      "approval_attempt_id" => ready["id"],
+      "approval_id" => approval_id,
+      "candidate_id" => final.packet["candidate_id"],
+      "outcome" => "ready",
+      "replay" => final.replay
+    }
   end
 
   defp replace_candidate!(repo, decision, run, response, response_fp, context, replay) do
@@ -250,80 +301,84 @@ defmodule FountRun.DecisionCommand do
         )
 
       {:error, :not_found} ->
-        current =
-          case CorePersistence.load_revision(
-                 repo,
-                 run["screenplay_id"],
-                 decision["base_revision_id"]
-               ) do
-            {:ok, value} -> value
-            {:error, reason} -> rollback(repo, reason)
-          end
-
-        doc =
-          case Fount.parse(source,
-                 document_id: current.id,
-                 parent_revision_id: current.revision.id,
-                 actor: context.principal.id,
-                 message: "Run final-decision replacement"
-               ) do
-            {:ok, value} -> value
-            {:error, reason} -> rollback(repo, {:invalid_replacement_fountain, reason})
-          end
-
-        draft =
-          doc
-          |> Fount.Screenplay.from_document()
-          |> Map.put(:revision, doc.revision)
-          |> Map.put(:import, nil)
-          |> Model.refresh()
-
-        key =
-          one(repo, "SELECT key FROM screenplays WHERE id=$1::text::uuid", [run["screenplay_id"]])[
-            "key"
-          ]
-
-        replacement =
-          case CorePersistence.save_edit_candidate(repo, key, draft,
-                 expected_revision: current.revision.id,
-                 candidate_id: candidate_id,
-                 session_id: ID.v5(decision["id"], "replacement-session"),
-                 label: "Run human replacement",
-                 operations: []
-               ) do
-            {:ok, value} -> value
-            {:error, reason} -> rollback(repo, reason)
-          end
-
-        request =
-          step_request(repo, decision["step_id"]) ||
-            rollback(repo, :decision_step_request_missing)
-
-        step =
-          create_step!(
-            repo,
-            run,
-            "check",
-            request,
-            replacement["id"],
-            "replacement:" <> decision["id"] <> ":check",
-            context
-          )
-
-        q!(
-          repo,
-          "UPDATE fount_runs SET selected_candidate_id=$2::text::uuid,status='queued',stage='check',updated_at=now() WHERE id=$1::text::uuid",
-          [run["id"], replacement["id"]]
-        )
-
-        event!(repo, run["id"], context, "human_replacement_candidate_saved", %{
-          "decision_id" => decision["id"],
-          "candidate_id" => replacement["id"],
-          "check_step_id" => step["id"]
-        })
-
-        replacement_result(decision, replacement, replay, step)
+        save_new_replacement!(repo, decision, run, source, candidate_id, context, replay)
     end
+  end
+
+  defp save_new_replacement!(repo, decision, run, source, candidate_id, context, replay) do
+    current =
+      case CorePersistence.load_revision(
+             repo,
+             run["screenplay_id"],
+             decision["base_revision_id"]
+           ) do
+        {:ok, value} -> value
+        {:error, reason} -> rollback(repo, reason)
+      end
+
+    doc =
+      case Fount.parse(source,
+             document_id: current.id,
+             parent_revision_id: current.revision.id,
+             actor: context.principal.id,
+             message: "Run final-decision replacement"
+           ) do
+        {:ok, value} -> value
+        {:error, reason} -> rollback(repo, {:invalid_replacement_fountain, reason})
+      end
+
+    draft =
+      doc
+      |> Fount.Screenplay.from_document()
+      |> Map.put(:revision, doc.revision)
+      |> Map.put(:import, nil)
+      |> Model.refresh()
+
+    key =
+      one(repo, "SELECT key FROM screenplays WHERE id=$1::text::uuid", [run["screenplay_id"]])[
+        "key"
+      ]
+
+    replacement =
+      case CorePersistence.save_edit_candidate(repo, key, draft,
+             expected_revision: current.revision.id,
+             candidate_id: candidate_id,
+             session_id: ID.v5(decision["id"], "replacement-session"),
+             label: "Run human replacement",
+             operations: []
+           ) do
+        {:ok, value} -> value
+        {:error, reason} -> rollback(repo, reason)
+      end
+
+    request =
+      step_request(repo, decision["step_id"]) ||
+        rollback(repo, :decision_step_request_missing)
+
+    step =
+      create_step!(
+        repo,
+        run,
+        "check",
+        request,
+        replacement["id"],
+        "replacement:" <> decision["id"] <> ":check",
+        context
+      )
+
+    q!(
+      repo,
+      "UPDATE fount_runs SET selected_candidate_id=$2::text::uuid,status='queued',stage='check',updated_at=now() WHERE id=$1::text::uuid",
+      [run["id"], replacement["id"]]
+    )
+
+    event!(repo, run["id"], context, "human_replacement_candidate_saved", %{
+      "decision_id" => decision["id"],
+      "candidate_id" => replacement["id"],
+      "check_step_id" => step["id"]
+    })
+
+    replacement_result(decision, replacement, replay, step)
   end
 
   defp replacement_result(decision, candidate, replay, step) do
@@ -341,31 +396,33 @@ defmodule FountRun.DecisionCommand do
     with {:ok, response} <- normalize(response, @rebase_keys),
          true <- response["choice"] in ["rebase", "stop"] or {:error, :invalid_decision_choice},
          :ok <- decision_response_shape(response) do
-      tx(repo, fn ->
-        {decision, run} = locked_decision_and_run!(repo, decision_id, context)
-        verify_exact_binding!(repo, decision, run, response, context, "rebase")
-        _ = exact_packet!(repo, decision)
-        response_fp = CanonicalJSON.hash(response)
-        replay = resolved_replay?(repo, decision, response_fp, context)
-
-        if decision["status"] == "pending" do
-          case Persistence.resolve_decision(repo, decision_id, response, context) do
-            {:ok, _} -> :ok
-            {:error, reason} -> rollback(repo, normalize_conflict(reason))
-          end
-        end
-
-        if response["choice"] == "stop" do
-          case Control.stop(repo, run["id"], context) do
-            {:ok, value} -> Map.merge(value, %{"decision_id" => decision_id, "replay" => replay})
-            {:error, reason} -> rollback(repo, reason)
-          end
-        else
-          rebase_candidate!(repo, decision, run, response, response_fp, context, replay)
-        end
-      end)
+      tx(repo, fn -> submit_rebase_locked!(repo, decision_id, response, context) end)
     else
       {:error, _} = error -> error
+    end
+  end
+
+  defp submit_rebase_locked!(repo, decision_id, response, context) do
+    {decision, run} = locked_decision_and_run!(repo, decision_id, context)
+    verify_exact_binding!(repo, decision, run, response, context, "rebase")
+    _ = exact_packet!(repo, decision)
+    response_fp = CanonicalJSON.hash(response)
+    replay = resolved_replay?(repo, decision, response_fp, context)
+
+    if decision["status"] == "pending" do
+      case Persistence.resolve_decision(repo, decision_id, response, context) do
+        {:ok, _} -> :ok
+        {:error, reason} -> rollback(repo, normalize_conflict(reason))
+      end
+    end
+
+    if response["choice"] == "stop" do
+      case Control.stop(repo, run["id"], context) do
+        {:ok, value} -> Map.merge(value, %{"decision_id" => decision_id, "replay" => replay})
+        {:error, reason} -> rollback(repo, reason)
+      end
+    else
+      rebase_candidate!(repo, decision, run, response, response_fp, context, replay)
     end
   end
 
@@ -373,20 +430,15 @@ defmodule FountRun.DecisionCommand do
     resolutions = response["resolutions"] || %{"choices" => %{}}
     {:ok, head_id} = Control.current_head(repo, run["screenplay_id"])
 
-    current =
-      case CorePersistence.load_revision(repo, run["screenplay_id"], head_id) do
-        {:ok, model} -> model
-        {:error, reason} -> rollback(repo, reason)
-      end
+    current = unwrap!(repo, CorePersistence.load_revision(repo, run["screenplay_id"], head_id))
 
     services = %{store: FountWorkshop.Store.new(repo)}
 
     rebased =
-      case FountWorkshop.Rebase.run(decision["candidate_id"], current, resolutions, services) do
-        {:ok, %{"id" => _} = candidate} -> candidate
-        {:ok, %{"status" => "no_change"}} -> rollback(repo, :rebase_no_candidate)
-        {:error, reason} -> rollback(repo, reason)
-      end
+      rebase_result!(
+        repo,
+        FountWorkshop.Rebase.run(decision["candidate_id"], current, resolutions, services)
+      )
 
     successor_key = "rebase-successor:" <> decision_id_short(decision["id"], response_fp)
     plan = run["plan"]
@@ -406,11 +458,7 @@ defmodule FountRun.DecisionCommand do
       "client_idempotency_key" => successor_key
     }
 
-    successor =
-      case Persistence.start_run(repo, attrs, context) do
-        {:ok, value} -> value
-        {:error, reason} -> rollback(repo, reason)
-      end
+    successor = unwrap!(repo, Persistence.start_run(repo, attrs, context))
 
     q!(
       repo,
@@ -458,111 +506,122 @@ defmodule FountRun.DecisionCommand do
     }
   end
 
+  defp rebase_result!(_repo, {:ok, %{"id" => _} = candidate}), do: candidate
+
+  defp rebase_result!(repo, {:ok, %{"status" => "no_change"}}),
+    do: rollback(repo, :rebase_no_candidate)
+
+  defp rebase_result!(repo, {:error, reason}), do: rollback(repo, reason)
+
   defp resume_iteration(repo, decision_id, response, context) do
     with {:ok, response} <- normalize(response, @checkpoint_keys),
          true <- response["choice"] == "review" or {:error, :invalid_decision_choice},
          :ok <- decision_response_shape(response) do
-      tx(repo, fn ->
-        {decision, run} = locked_decision_and_run!(repo, decision_id, context)
-        verify_exact_binding!(repo, decision, run, response, context, "iteration")
-        ensure_run_check!(repo, decision)
-        response_fp = CanonicalJSON.hash(response)
-        replay = resolved_replay?(repo, decision, response_fp, context)
-
-        if decision["status"] == "pending" do
-          case Persistence.resolve_decision(repo, decision_id, response, context) do
-            {:ok, _} -> :ok
-            {:error, reason} -> rollback(repo, normalize_conflict(reason))
-          end
-        end
-
-        key = "iteration-review:" <> decision_id <> ":decide"
-        step = existing_step(repo, run["id"], key)
-
-        step =
-          step ||
-            create_step!(
-              repo,
-              run,
-              "decide",
-              step_request(repo, decision["step_id"]),
-              decision["candidate_id"],
-              key,
-              context
-            )
-
-        q!(
-          repo,
-          "UPDATE fount_runs SET selected_candidate_id=$2::text::uuid,status='queued',stage='decide',updated_at=now() WHERE id=$1::text::uuid",
-          [run["id"], decision["candidate_id"]]
-        )
-
-        %{
-          "decision_id" => decision_id,
-          "next_step_id" => step["id"],
-          "candidate_id" => decision["candidate_id"],
-          "replay" => replay,
-          "status" => "queued"
-        }
-      end)
+      tx(repo, fn -> resume_iteration_locked!(repo, decision_id, response, context) end)
     else
       {:error, _} = error -> error
     end
   end
 
-  defp resume_phase04_candidate(repo, decision_id, response, context) do
-    tx(repo, fn ->
-      {decision, run} = locked_decision_and_run!(repo, decision_id, context)
-      response = stringify_keys(response)
+  defp resume_iteration_locked!(repo, decision_id, response, context) do
+    {decision, run} = locked_decision_and_run!(repo, decision_id, context)
+    verify_exact_binding!(repo, decision, run, response, context, "iteration")
+    ensure_run_check!(repo, decision)
+    response_fp = CanonicalJSON.hash(response)
+    replay = resolved_replay?(repo, decision, response_fp, context)
 
-      if response["choice"] not in ["review", "continue"],
-        do: rollback(repo, :invalid_decision_choice)
-
-      response =
-        response
-        |> Map.put_new("context_fingerprint", decision["context_fingerprint"])
-        |> Map.put_new("plan_version", decision["plan_version"])
-        |> Map.put_new("policy_version", decision["policy_version"])
-
-      verify_exact_binding!(repo, decision, run, response, context, "candidate_review")
-      response_fp = CanonicalJSON.hash(response)
-      replay = resolved_replay?(repo, decision, response_fp, context)
-
-      if decision["status"] == "pending" do
-        case Persistence.resolve_decision(repo, decision_id, response, context) do
-          {:ok, _} -> :ok
-          {:error, reason} -> rollback(repo, normalize_conflict(reason))
-        end
+    if decision["status"] == "pending" do
+      case Persistence.resolve_decision(repo, decision_id, response, context) do
+        {:ok, _} -> :ok
+        {:error, reason} -> rollback(repo, normalize_conflict(reason))
       end
+    end
 
-      key = "phase04-upgrade:" <> decision_id <> ":decide"
-      step = existing_step(repo, run["id"], key)
+    key = "iteration-review:" <> decision_id <> ":decide"
+    step = existing_step(repo, run["id"], key)
 
-      step =
-        step ||
-          create_step!(
-            repo,
-            run,
-            "decide",
-            step_request(repo, decision["step_id"]),
-            decision["candidate_id"],
-            key,
-            context
-          )
+    step =
+      step ||
+        create_step!(
+          repo,
+          run,
+          "decide",
+          step_request(repo, decision["step_id"]),
+          decision["candidate_id"],
+          key,
+          context
+        )
 
-      q!(
-        repo,
-        "UPDATE fount_runs SET status='queued',stage='decide',updated_at=now() WHERE id=$1::text::uuid",
-        [run["id"]]
-      )
+    q!(
+      repo,
+      "UPDATE fount_runs SET selected_candidate_id=$2::text::uuid,status='queued',stage='decide',updated_at=now() WHERE id=$1::text::uuid",
+      [run["id"], decision["candidate_id"]]
+    )
 
-      %{
-        "decision_id" => decision_id,
-        "next_step_id" => step["id"],
-        "replay" => replay,
-        "status" => "queued"
-      }
-    end)
+    %{
+      "decision_id" => decision_id,
+      "next_step_id" => step["id"],
+      "candidate_id" => decision["candidate_id"],
+      "replay" => replay,
+      "status" => "queued"
+    }
+  end
+
+  defp resume_phase04_candidate(repo, decision_id, response, context) do
+    tx(repo, fn -> resume_phase04_candidate_locked!(repo, decision_id, response, context) end)
+  end
+
+  defp resume_phase04_candidate_locked!(repo, decision_id, response, context) do
+    {decision, run} = locked_decision_and_run!(repo, decision_id, context)
+    response = stringify_keys(response)
+
+    if response["choice"] not in ["review", "continue"],
+      do: rollback(repo, :invalid_decision_choice)
+
+    response =
+      response
+      |> Map.put_new("context_fingerprint", decision["context_fingerprint"])
+      |> Map.put_new("plan_version", decision["plan_version"])
+      |> Map.put_new("policy_version", decision["policy_version"])
+
+    verify_exact_binding!(repo, decision, run, response, context, "candidate_review")
+    response_fp = CanonicalJSON.hash(response)
+    replay = resolved_replay?(repo, decision, response_fp, context)
+
+    if decision["status"] == "pending" do
+      case Persistence.resolve_decision(repo, decision_id, response, context) do
+        {:ok, _} -> :ok
+        {:error, reason} -> rollback(repo, normalize_conflict(reason))
+      end
+    end
+
+    key = "phase04-upgrade:" <> decision_id <> ":decide"
+    step = existing_step(repo, run["id"], key)
+
+    step =
+      step ||
+        create_step!(
+          repo,
+          run,
+          "decide",
+          step_request(repo, decision["step_id"]),
+          decision["candidate_id"],
+          key,
+          context
+        )
+
+    q!(
+      repo,
+      "UPDATE fount_runs SET status='queued',stage='decide',updated_at=now() WHERE id=$1::text::uuid",
+      [run["id"]]
+    )
+
+    %{
+      "decision_id" => decision_id,
+      "next_step_id" => step["id"],
+      "replay" => replay,
+      "status" => "queued"
+    }
   end
 
   defp ensure_human_attempt!(repo, decision, run, packet, parent_attempt_id, approver, context) do
@@ -645,6 +704,13 @@ defmodule FountRun.DecisionCommand do
       response["context_fingerprint"] != decision["context_fingerprint"] ->
         rollback(repo, :stale_decision_context)
 
+      true ->
+        verify_binding_versions!(repo, decision, run, response)
+    end
+  end
+
+  defp verify_binding_versions!(repo, decision, run, response) do
+    cond do
       response["plan_version"] != decision["plan_version"] ->
         rollback(repo, :stale_decision_binding)
 
@@ -657,6 +723,13 @@ defmodule FountRun.DecisionCommand do
       run["current_policy_version"] != decision["policy_version"] ->
         rollback(repo, :stale_decision)
 
+      true ->
+        verify_binding_control!(repo, run)
+    end
+  end
+
+  defp verify_binding_control!(repo, run) do
+    cond do
       run["stop_requested_at"] ->
         rollback(repo, :stopped)
 
@@ -833,6 +906,9 @@ defmodule FountRun.DecisionCommand do
   end
 
   defp q!(repo, sql, params), do: SQL.query!(repo, sql, params)
+
+  defp unwrap!(_repo, {:ok, value}), do: value
+  defp unwrap!(repo, {:error, reason}), do: rollback(repo, reason)
 
   defp tx(repo, fun) do
     case repo.transaction(fun) do

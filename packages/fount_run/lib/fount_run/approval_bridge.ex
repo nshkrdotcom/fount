@@ -11,96 +11,7 @@ defmodule FountRun.ApprovalBridge do
   @open ~w(pending reviewed ready unknown)
 
   def accept_ready(repo, attempt_id, %ActorContext{} = context, opts \\ []) do
-    result =
-      tx(repo, fn ->
-        identity =
-          one(
-            repo,
-            "SELECT run_id::text FROM fount_run_approval_attempts WHERE id=$1::text::uuid",
-            [attempt_id]
-          ) || rollback(repo, :not_found)
-
-        run = locked_run!(repo, identity["run_id"], context)
-
-        attempt =
-          one(
-            repo,
-            "SELECT * FROM fount_run_approval_attempts WHERE id=$1::text::uuid FOR UPDATE",
-            [attempt_id]
-          ) || rollback(repo, :not_found)
-
-        authorize_attempt!(repo, run, attempt, context)
-
-        cond do
-          attempt["outcome"] == "accepted" ->
-            acceptance =
-              acceptance_by_approval(repo, attempt["approval_id"]) ||
-                rollback(repo, :acceptance_missing)
-
-            acceptance_result(run, attempt, acceptance, true)
-
-          attempt["outcome"] != "ready" ->
-            rollback(repo, {:approval_not_ready, attempt["outcome"]})
-
-          true ->
-            validate_fresh_attempt!(repo, run, attempt)
-            :ok = fault!(repo, opts, :before_core_acceptance)
-
-            approval =
-              case Approval.from_map(attempt["approval_payload"] || %{}) do
-                {:ok, value} -> value
-                {:error, reason} -> rollback(repo, reason)
-              end
-
-            authority =
-              case Authority.new(context.principal, run["screenplay_id"], [:approve]) do
-                {:ok, value} -> value
-                {:error, reason} -> rollback(repo, reason)
-              end
-
-            case CorePersistence.accept_candidate(repo, attempt["candidate_id"],
-                   approval: approval,
-                   authority: authority
-                 ) do
-              {:error, reason} ->
-                # Abort the acceptance transaction so Core and Run remain atomic. The
-                # pre-existing ready attempt is then annotated in a separate transaction.
-                rollback(repo, {:core_acceptance_rejected, reason})
-
-              {:ok, _model} ->
-                :ok = fault!(repo, opts, :after_core_acceptance_before_commit)
-
-                acceptance =
-                  acceptance_by_approval(repo, attempt["approval_id"]) ||
-                    rollback(repo, :acceptance_missing)
-
-                q!(
-                  repo,
-                  "UPDATE fount_run_approval_attempts SET outcome='accepted',outcome_reason=NULL,acceptance_id=$2::text::uuid,finished_at=now(),updated_at=now() WHERE id=$1::text::uuid",
-                  [attempt_id, acceptance["id"]]
-                )
-
-                unless Keyword.get(opts, :defer_run_completion, false) do
-                  # Canonical acceptance and Run delivery completion are separate durable facts.
-                  # Acceptance moves canon here; only a successful delivery bundle makes the Run terminal.
-                  q!(
-                    repo,
-                    "UPDATE fount_runs SET selected_candidate_id=$2::text::uuid,status='partial',stage='deliver',active_step_id=NULL,lock_version=lock_version+1,updated_at=now() WHERE id=$1::text::uuid",
-                    [run["id"], attempt["candidate_id"]]
-                  )
-                end
-
-                event!(repo, run["id"], context, "candidate_accepted", %{
-                  "approval_attempt_id" => attempt_id,
-                  "approval_id" => attempt["approval_id"],
-                  "acceptance_id" => acceptance["id"],
-                  "candidate_id" => attempt["candidate_id"]
-                })
-
-                acceptance_result(run, Map.put(attempt, "outcome", "accepted"), acceptance, false)
-            end
-        end
-      end)
+    result = tx(repo, fn -> accept_ready_locked!(repo, attempt_id, context, opts) end)
 
     case result do
       {:error, {:core_acceptance_rejected, reason}} ->
@@ -123,46 +34,125 @@ defmodule FountRun.ApprovalBridge do
     end
   end
 
+  defp accept_ready_locked!(repo, attempt_id, context, opts) do
+    identity =
+      one(repo, "SELECT run_id::text FROM fount_run_approval_attempts WHERE id=$1::text::uuid", [
+        attempt_id
+      ]) ||
+        rollback(repo, :not_found)
+
+    run = locked_run!(repo, identity["run_id"], context)
+
+    attempt =
+      one(repo, "SELECT * FROM fount_run_approval_attempts WHERE id=$1::text::uuid FOR UPDATE", [
+        attempt_id
+      ]) ||
+        rollback(repo, :not_found)
+
+    authorize_attempt!(repo, run, attempt, context)
+
+    case attempt["outcome"] do
+      "accepted" ->
+        acceptance =
+          acceptance_by_approval(repo, attempt["approval_id"]) ||
+            rollback(repo, :acceptance_missing)
+
+        acceptance_result(run, attempt, acceptance, true)
+
+      "ready" ->
+        accept_new_ready!(repo, run, attempt, context, opts)
+
+      outcome ->
+        rollback(repo, {:approval_not_ready, outcome})
+    end
+  end
+
+  defp accept_new_ready!(repo, run, attempt, context, opts) do
+    validate_fresh_attempt!(repo, run, attempt)
+    :ok = fault!(repo, opts, :before_core_acceptance)
+    approval = unwrap!(repo, Approval.from_map(attempt["approval_payload"] || %{}))
+    authority = unwrap!(repo, Authority.new(context.principal, run["screenplay_id"], [:approve]))
+
+    case CorePersistence.accept_candidate(repo, attempt["candidate_id"],
+           approval: approval,
+           authority: authority
+         ) do
+      {:error, reason} ->
+        # Core and Run acceptance are atomic; a separate transaction records rejection history.
+        rollback(repo, {:core_acceptance_rejected, reason})
+
+      {:ok, _model} ->
+        :ok = fault!(repo, opts, :after_core_acceptance_before_commit)
+        record_accepted!(repo, run, attempt, context, opts)
+    end
+  end
+
+  defp record_accepted!(repo, run, attempt, context, opts) do
+    acceptance =
+      acceptance_by_approval(repo, attempt["approval_id"]) || rollback(repo, :acceptance_missing)
+
+    q!(
+      repo,
+      "UPDATE fount_run_approval_attempts SET outcome='accepted',outcome_reason=NULL,acceptance_id=$2::text::uuid,finished_at=now(),updated_at=now() WHERE id=$1::text::uuid",
+      [attempt["id"], acceptance["id"]]
+    )
+
+    unless Keyword.get(opts, :defer_run_completion, false) do
+      q!(
+        repo,
+        "UPDATE fount_runs SET selected_candidate_id=$2::text::uuid,status='partial',stage='deliver',active_step_id=NULL,lock_version=lock_version+1,updated_at=now() WHERE id=$1::text::uuid",
+        [run["id"], attempt["candidate_id"]]
+      )
+    end
+
+    event!(repo, run["id"], context, "candidate_accepted", %{
+      "approval_attempt_id" => attempt["id"],
+      "approval_id" => attempt["approval_id"],
+      "acceptance_id" => acceptance["id"],
+      "candidate_id" => attempt["candidate_id"]
+    })
+
+    acceptance_result(run, Map.put(attempt, "outcome", "accepted"), acceptance, false)
+  end
+
   defp record_core_failure(repo, attempt_id, context, reason) do
-    case tx(repo, fn ->
-           identity =
-             one(
-               repo,
-               "SELECT run_id::text FROM fount_run_approval_attempts WHERE id=$1::text::uuid",
-               [attempt_id]
-             ) ||
-               rollback(repo, :not_found)
-
-           run = locked_run!(repo, identity["run_id"], context)
-
-           attempt =
-             one(
-               repo,
-               "SELECT * FROM fount_run_approval_attempts WHERE id=$1::text::uuid FOR UPDATE",
-               [attempt_id]
-             ) ||
-               rollback(repo, :not_found)
-
-           if attempt["outcome"] == "ready" do
-             outcome = if match?({:stale_revision, _}, reason), do: "fenced", else: "failed"
-
-             q!(
-               repo,
-               "UPDATE fount_run_approval_attempts SET outcome=$2,outcome_reason=$3,finished_at=now(),updated_at=now() WHERE id=$1::text::uuid",
-               [attempt_id, outcome, inspect(reason)]
-             )
-
-             event!(repo, run["id"], context, "core_acceptance_rejected", %{
-               "approval_attempt_id" => attempt_id,
-               "reason" => inspect(reason)
-             })
-           end
-
-           :ok
-         end) do
+    case tx(repo, fn -> record_core_failure_locked!(repo, attempt_id, context, reason) end) do
       {:ok, :ok} -> :ok
       {:error, history_reason} -> {:error, history_reason}
     end
+  end
+
+  defp record_core_failure_locked!(repo, attempt_id, context, reason) do
+    identity =
+      one(repo, "SELECT run_id::text FROM fount_run_approval_attempts WHERE id=$1::text::uuid", [
+        attempt_id
+      ]) ||
+        rollback(repo, :not_found)
+
+    run = locked_run!(repo, identity["run_id"], context)
+
+    attempt =
+      one(repo, "SELECT * FROM fount_run_approval_attempts WHERE id=$1::text::uuid FOR UPDATE", [
+        attempt_id
+      ]) ||
+        rollback(repo, :not_found)
+
+    if attempt["outcome"] == "ready" do
+      outcome = if match?({:stale_revision, _}, reason), do: "fenced", else: "failed"
+
+      q!(
+        repo,
+        "UPDATE fount_run_approval_attempts SET outcome=$2,outcome_reason=$3,finished_at=now(),updated_at=now() WHERE id=$1::text::uuid",
+        [attempt_id, outcome, inspect(reason)]
+      )
+
+      event!(repo, run["id"], context, "core_acceptance_rejected", %{
+        "approval_attempt_id" => attempt_id,
+        "reason" => inspect(reason)
+      })
+    end
+
+    :ok
   end
 
   @doc "Runs a registered automated reviewer exactly once after persisting callback intent."
@@ -235,6 +225,31 @@ defmodule FountRun.ApprovalBridge do
       control_state == :paused ->
         {:partial, :approval_paused, %{"approval_attempt_id" => attempt["id"]}}
 
+      true ->
+        recover_saved_or_dispatch(
+          repo,
+          run,
+          packet,
+          attempt,
+          owner_context,
+          approval_context,
+          callback,
+          opts
+        )
+    end
+  end
+
+  defp recover_saved_or_dispatch(
+         repo,
+         run,
+         packet,
+         attempt,
+         owner_context,
+         approval_context,
+         callback,
+         opts
+       ) do
+    cond do
       attempt["outcome"] == "ready" ->
         accept_ready(repo, attempt["id"], approval_context, opts)
 
@@ -245,39 +260,58 @@ defmodule FountRun.ApprovalBridge do
         reconcile_unknown(repo, run, packet, attempt, owner_context, approval_context, opts)
 
       true ->
-        with :ok <- fault(opts, :before_callback_dispatch),
-             {:ok, marked} <- mark_callback_dispatched(repo, attempt["id"], owner_context),
-             {:ok, response} <- invoke_callback(callback, packet),
-             :ok <- fault(opts, :after_callback_response_before_persistence) do
-          persist_automated_response(
+        dispatch_callback(
+          repo,
+          run,
+          packet,
+          attempt,
+          owner_context,
+          approval_context,
+          callback,
+          opts
+        )
+    end
+  end
+
+  defp dispatch_callback(
+         repo,
+         run,
+         packet,
+         attempt,
+         owner_context,
+         approval_context,
+         callback,
+         opts
+       ) do
+    with :ok <- fault(opts, :before_callback_dispatch),
+         {:ok, marked} <- mark_callback_dispatched(repo, attempt["id"], owner_context),
+         {:ok, response} <- invoke_callback(callback, packet),
+         :ok <- fault(opts, :after_callback_response_before_persistence) do
+      persist_automated_response(
+        repo,
+        run,
+        marked,
+        packet,
+        response,
+        owner_context,
+        approval_context,
+        opts
+      )
+    else
+      {:error, {:fault, :before_callback_dispatch, _detail} = reason} ->
+        {:error, reason}
+
+      {:error, reason} ->
+        _ =
+          Persistence.record_approval_outcome(
             repo,
-            run,
-            marked,
-            packet,
-            response,
-            owner_context,
-            approval_context,
-            opts
+            attempt["id"],
+            "unknown",
+            inspect(reason),
+            owner_context
           )
-        else
-          {:error, {:fault, :before_callback_dispatch, _detail} = reason} ->
-            # No durable dispatch intent and no callback invocation occurred, so retry is safe.
-            {:error, reason}
 
-          {:error, reason} ->
-            # Once dispatch intent is durable, any missing response is ambiguous until a
-            # provider-specific reconciliation proves the prior callback outcome.
-            _ =
-              Persistence.record_approval_outcome(
-                repo,
-                attempt["id"],
-                "unknown",
-                inspect(reason),
-                owner_context
-              )
-
-            {:partial, :approval_outcome_unknown, %{"approval_attempt_id" => attempt["id"]}}
-        end
+        {:partial, :approval_outcome_unknown, %{"approval_attempt_id" => attempt["id"]}}
     end
   end
 
@@ -310,31 +344,17 @@ defmodule FountRun.ApprovalBridge do
              response["recommendation"],
              owner_context
            ) do
-      case response["recommendation"] do
-        "reject" ->
-          Persistence.record_approval_outcome(
-            repo,
-            attempt["id"],
-            "rejected",
-            "reviewer_rejected",
-            owner_context
-          )
+      review_context = %{
+        run: run,
+        attempt: attempt,
+        saved: saved,
+        review: review,
+        owner: owner_context,
+        approval: approval_context,
+        opts: opts
+      }
 
-        "approve" ->
-          with :ok <- fault(opts, :after_review_persistence),
-               {:ok, ready} <-
-                 persist_approval(
-                   repo,
-                   run,
-                   saved,
-                   review,
-                   owner_context,
-                   approval_context.principal
-                 ),
-               :ok <- fault(opts, :after_approval_payload_persistence) do
-            accept_ready(repo, ready["id"], approval_context, opts)
-          end
-      end
+      apply_automated_recommendation(repo, response["recommendation"], review_context)
     else
       {:error, {:fault, _stage, _detail} = reason} ->
         {:error, reason}
@@ -350,6 +370,32 @@ defmodule FountRun.ApprovalBridge do
           )
 
         {:error, reason}
+    end
+  end
+
+  defp apply_automated_recommendation(repo, "reject", ctx) do
+    Persistence.record_approval_outcome(
+      repo,
+      ctx.attempt["id"],
+      "rejected",
+      "reviewer_rejected",
+      ctx.owner
+    )
+  end
+
+  defp apply_automated_recommendation(repo, "approve", ctx) do
+    with :ok <- fault(ctx.opts, :after_review_persistence),
+         {:ok, ready} <-
+           persist_approval(
+             repo,
+             ctx.run,
+             ctx.saved,
+             ctx.review,
+             ctx.owner,
+             ctx.approval.principal
+           ),
+         :ok <- fault(ctx.opts, :after_approval_payload_persistence) do
+      accept_ready(repo, ready["id"], ctx.approval, ctx.opts)
     end
   end
 
@@ -779,6 +825,9 @@ defmodule FountRun.ApprovalBridge do
   end
 
   defp q!(repo, sql, params), do: SQL.query!(repo, sql, params)
+
+  defp unwrap!(_repo, {:ok, value}), do: value
+  defp unwrap!(repo, {:error, reason}), do: rollback(repo, reason)
 
   defp tx(repo, fun) do
     case repo.transaction(fun) do

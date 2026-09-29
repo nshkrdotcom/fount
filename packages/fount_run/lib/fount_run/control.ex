@@ -13,46 +13,7 @@ defmodule FountRun.Control do
     with {:ok, command_id} <- command_id(opts),
          {:ok, expected_version} <- positive_version(opts, :expected_version) do
       tx(repo, fn ->
-        run = locked_run!(repo, run_id, context)
-
-        command_fp =
-          CanonicalJSON.hash(%{
-            "command_id" => command_id,
-            "expected_version" => expected_version,
-            "payload" => attrs
-          })
-
-        case command_replay(repo, "fount_run_plans", run_id, command_id, command_fp) do
-          {:replay, snapshot} ->
-            %{"run" => hydrate_run(repo, run), "plan" => snapshot, "replay" => true}
-
-          :new ->
-            current = plan_row(repo, run_id, run["current_plan_version"])
-
-            if run["status"] in @terminal_run or successor_plan?(attrs, current) do
-              create_successor!(repo, run, attrs, context, command_id, expected_version)
-            else
-              plan =
-                case Persistence.append_plan_snapshot(repo, run_id, attrs, context,
-                       expected_version: expected_version,
-                       reason: Keyword.get(opts, :reason, "owner_update"),
-                       command_id: command_id,
-                       command_fingerprint: command_fp
-                     ) do
-                  {:ok, value} -> value
-                  {:error, reason} -> rollback(repo, reason)
-                end
-
-              refresh = invalidate_and_refresh!(repo, run_id, context, "plan", plan["version"])
-
-              %{
-                "run" => hydrate_run(repo, run_row(repo, run_id)),
-                "plan" => plan,
-                "refresh_step" => refresh,
-                "replay" => false
-              }
-            end
-        end
+        update_plan_locked(repo, run_id, attrs, context, opts, command_id, expected_version)
       end)
     end
   end
@@ -64,46 +25,131 @@ defmodule FountRun.Control do
     with {:ok, command_id} <- command_id(opts),
          {:ok, expected_version} <- positive_version(opts, :expected_version) do
       tx(repo, fn ->
-        run = locked_run!(repo, run_id, context)
-
-        command_fp =
-          CanonicalJSON.hash(%{
-            "command_id" => command_id,
-            "expected_version" => expected_version,
-            "payload" => value
-          })
-
-        case command_replay(repo, "fount_run_policies", run_id, command_id, command_fp) do
-          {:replay, snapshot} ->
-            %{"run" => hydrate_run(repo, run), "policy" => snapshot, "replay" => true}
-
-          :new ->
-            if run["status"] in @terminal_run, do: rollback(repo, :terminal_run)
-
-            policy =
-              case Persistence.append_policy_snapshot(repo, run_id, value, context,
-                     expected_version: expected_version,
-                     command_id: command_id,
-                     command_fingerprint: command_fp
-                   ) do
-                {:ok, item} -> item
-                {:error, reason} -> rollback(repo, reason)
-              end
-
-            refresh = invalidate_and_refresh!(repo, run_id, context, "policy", policy["version"])
-
-            %{
-              "run" => hydrate_run(repo, run_row(repo, run_id)),
-              "policy" => policy,
-              "refresh_step" => refresh,
-              "replay" => false
-            }
-        end
+        update_policy_locked(repo, run_id, value, context, command_id, expected_version)
       end)
     end
   end
 
   def update_policy(_repo, _run_id, _value, _context, _opts), do: {:error, :invalid_policy_update}
+
+  defp update_plan_locked(repo, run_id, attrs, context, opts, command_id, expected_version) do
+    run = locked_run!(repo, run_id, context)
+    fingerprint = command_fingerprint(command_id, expected_version, attrs)
+
+    case command_replay(repo, "fount_run_plans", run_id, command_id, fingerprint) do
+      {:replay, snapshot} ->
+        %{"run" => hydrate_run(repo, run), "plan" => snapshot, "replay" => true}
+
+      :new ->
+        current = plan_row(repo, run_id, run["current_plan_version"])
+
+        if run["status"] in @terminal_run or successor_plan?(attrs, current) do
+          create_successor!(repo, run, attrs, context, command_id, expected_version)
+        else
+          append_plan_update!(
+            repo,
+            run_id,
+            attrs,
+            context,
+            opts,
+            command_id,
+            expected_version,
+            fingerprint
+          )
+        end
+    end
+  end
+
+  defp append_plan_update!(
+         repo,
+         run_id,
+         attrs,
+         context,
+         opts,
+         command_id,
+         expected_version,
+         fingerprint
+       ) do
+    plan =
+      case Persistence.append_plan_snapshot(repo, run_id, attrs, context,
+             expected_version: expected_version,
+             reason: Keyword.get(opts, :reason, "owner_update"),
+             command_id: command_id,
+             command_fingerprint: fingerprint
+           ) do
+        {:ok, value} -> value
+        {:error, reason} -> rollback(repo, reason)
+      end
+
+    refresh = invalidate_and_refresh!(repo, run_id, context, "plan", plan["version"])
+
+    %{
+      "run" => hydrate_run(repo, run_row(repo, run_id)),
+      "plan" => plan,
+      "refresh_step" => refresh,
+      "replay" => false
+    }
+  end
+
+  defp update_policy_locked(repo, run_id, value, context, command_id, expected_version) do
+    run = locked_run!(repo, run_id, context)
+    fingerprint = command_fingerprint(command_id, expected_version, value)
+
+    case command_replay(repo, "fount_run_policies", run_id, command_id, fingerprint) do
+      {:replay, snapshot} ->
+        %{"run" => hydrate_run(repo, run), "policy" => snapshot, "replay" => true}
+
+      :new ->
+        if run["status"] in @terminal_run, do: rollback(repo, :terminal_run)
+
+        append_policy_update!(
+          repo,
+          run_id,
+          value,
+          context,
+          command_id,
+          expected_version,
+          fingerprint
+        )
+    end
+  end
+
+  defp append_policy_update!(
+         repo,
+         run_id,
+         value,
+         context,
+         command_id,
+         expected_version,
+         fingerprint
+       ) do
+    policy =
+      case Persistence.append_policy_snapshot(repo, run_id, value, context,
+             expected_version: expected_version,
+             command_id: command_id,
+             command_fingerprint: fingerprint
+           ) do
+        {:ok, item} -> item
+        {:error, reason} -> rollback(repo, reason)
+      end
+
+    refresh = invalidate_and_refresh!(repo, run_id, context, "policy", policy["version"])
+
+    %{
+      "run" => hydrate_run(repo, run_row(repo, run_id)),
+      "policy" => policy,
+      "refresh_step" => refresh,
+      "replay" => false
+    }
+  end
+
+  defp command_fingerprint(command_id, expected_version, payload),
+    do:
+      CanonicalJSON.hash(%{
+        "command_id" => command_id,
+        "expected_version" => expected_version,
+        "payload" => payload
+      })
 
   def pause(repo, run_id, %ActorContext{} = context) do
     tx(repo, fn ->
@@ -257,11 +303,7 @@ defmodule FountRun.Control do
       |> Map.put("policy", current_policy["policy"])
       |> Map.put("client_idempotency_key", "successor:" <> run["id"] <> ":" <> command_id)
 
-    successor =
-      case Persistence.start_run(repo, start_attrs, context) do
-        {:ok, item} -> item
-        {:error, reason} -> rollback(repo, reason)
-      end
+    successor = unwrap!(repo, Persistence.start_run(repo, start_attrs, context))
 
     existing = run["superseding_run_id"]
 
@@ -278,54 +320,63 @@ defmodule FountRun.Control do
         }
 
       true ->
-        q!(
-          repo,
-          "UPDATE fount_runs SET superseding_run_id=$2::text::uuid,current_fencing_token=current_fencing_token+1,lock_version=lock_version+1,updated_at=now() WHERE id=$1::text::uuid",
-          [run["id"], successor["id"]]
-        )
-
-        q!(
-          repo,
-          "UPDATE fount_runs SET parent_run_id=$2::text::uuid,iteration=$3,updated_at=now() WHERE id=$1::text::uuid",
-          [successor["id"], run["id"], run["iteration"] || 0]
-        )
-
-        fence_approval_attempts(repo, run["id"], "successor_created")
-        supersede_pending_decisions(repo, run["id"])
-
-        successor_plan = plan_row(repo, successor["id"], successor["current_plan_version"] || 1)
-        request = successor_request(repo, run["id"], successor_plan)
-
-        first_step =
-          if request do
-            create_step!(
-              repo,
-              successor["id"],
-              "intake",
-              request,
-              nil,
-              run["iteration"] || 0,
-              "successor:" <> command_id,
-              context
-            )
-          end
-
-        if first_step do
-          q!(
-            repo,
-            "UPDATE fount_runs SET status='queued',stage='intake',updated_at=now() WHERE id=$1::text::uuid",
-            [successor["id"]]
-          )
-        end
-
-        %{
-          "run" => hydrate_run(repo, run_row(repo, successor["id"])),
-          "successor_of" => run["id"],
-          "refresh_step" => first_step,
-          "replay" => false
-        }
+        activate_successor!(repo, run, successor, context, command_id)
     end
   end
+
+  defp activate_successor!(repo, run, successor, context, command_id) do
+    q!(
+      repo,
+      "UPDATE fount_runs SET superseding_run_id=$2::text::uuid,current_fencing_token=current_fencing_token+1,lock_version=lock_version+1,updated_at=now() WHERE id=$1::text::uuid",
+      [run["id"], successor["id"]]
+    )
+
+    q!(
+      repo,
+      "UPDATE fount_runs SET parent_run_id=$2::text::uuid,iteration=$3,updated_at=now() WHERE id=$1::text::uuid",
+      [successor["id"], run["id"], run["iteration"] || 0]
+    )
+
+    fence_approval_attempts(repo, run["id"], "successor_created")
+    supersede_pending_decisions(repo, run["id"])
+    successor_plan = plan_row(repo, successor["id"], successor["current_plan_version"] || 1)
+    request = successor_request(repo, run["id"], successor_plan)
+    first_step = create_successor_step!(repo, run, successor, request, context, command_id)
+
+    %{
+      "run" => hydrate_run(repo, run_row(repo, successor["id"])),
+      "successor_of" => run["id"],
+      "refresh_step" => first_step,
+      "replay" => false
+    }
+  end
+
+  defp create_successor_step!(_repo, _run, _successor, nil, _context, _command_id), do: nil
+
+  defp create_successor_step!(repo, run, successor, request, context, command_id) do
+    step =
+      create_step!(
+        repo,
+        successor["id"],
+        "intake",
+        request,
+        nil,
+        run["iteration"] || 0,
+        "successor:" <> command_id,
+        context
+      )
+
+    q!(
+      repo,
+      "UPDATE fount_runs SET status='queued',stage='intake',updated_at=now() WHERE id=$1::text::uuid",
+      [successor["id"]]
+    )
+
+    step
+  end
+
+  defp unwrap!(_repo, {:ok, value}), do: value
+  defp unwrap!(repo, {:error, reason}), do: rollback(repo, reason)
 
   defp existing_step(repo, run_id, key),
     do:
@@ -395,50 +446,7 @@ defmodule FountRun.Control do
         [run_id]
       )
 
-    step =
-      cond do
-        kind == "plan" and intake_request ->
-          plan = plan_row(repo, run_id, run["current_plan_version"])
-          request = refresh_plan_request(intake_request["request"], plan)
-
-          create_step!(
-            repo,
-            run_id,
-            "intake",
-            request,
-            nil,
-            run["iteration"],
-            "control-refresh:" <> kind <> ":" <> to_string(version),
-            context
-          )
-
-        (kind == "policy" and run["selected_candidate_id"]) && latest_request ->
-          create_step!(
-            repo,
-            run_id,
-            "check",
-            latest_request["request"],
-            run["selected_candidate_id"],
-            run["iteration"],
-            "control-refresh:" <> kind <> ":" <> to_string(version),
-            context
-          )
-
-        latest_request ->
-          create_step!(
-            repo,
-            run_id,
-            "intake",
-            latest_request["request"],
-            nil,
-            run["iteration"],
-            "control-refresh:" <> kind <> ":" <> to_string(version),
-            context
-          )
-
-        true ->
-          nil
-      end
+    step = refresh_step!(repo, run, kind, version, intake_request, latest_request, context)
 
     if step do
       q!(
@@ -460,6 +468,44 @@ defmodule FountRun.Control do
     })
 
     step
+  end
+
+  defp refresh_step!(repo, run, kind, version, intake_request, latest_request, context) do
+    key = "control-refresh:" <> kind <> ":" <> to_string(version)
+
+    cond do
+      kind == "plan" and intake_request ->
+        plan = plan_row(repo, run["id"], run["current_plan_version"])
+        request = refresh_plan_request(intake_request["request"], plan)
+        create_step!(repo, run["id"], "intake", request, nil, run["iteration"], key, context)
+
+      (kind == "policy" and run["selected_candidate_id"]) && latest_request ->
+        create_step!(
+          repo,
+          run["id"],
+          "check",
+          latest_request["request"],
+          run["selected_candidate_id"],
+          run["iteration"],
+          key,
+          context
+        )
+
+      latest_request ->
+        create_step!(
+          repo,
+          run["id"],
+          "intake",
+          latest_request["request"],
+          nil,
+          run["iteration"],
+          key,
+          context
+        )
+
+      true ->
+        nil
+    end
   end
 
   defp refresh_plan_request(%{"workshop_request" => request} = envelope, plan)

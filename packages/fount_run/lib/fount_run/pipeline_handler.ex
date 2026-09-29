@@ -428,6 +428,7 @@ defmodule FountRun.PipelineHandler do
     else
       false -> {:error, :source_candidate_required}
       [] -> {:error, :iteration_produced_no_candidate}
+      {:error, reason, _saved} -> {:error, reason}
       {:error, _} = error -> error
     end
   end

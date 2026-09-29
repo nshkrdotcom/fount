@@ -33,60 +33,25 @@ defmodule FountRun.DeliveryBundle do
       requested = requested_formats(opts)
       common = common_data(run, candidate, packet, progress, identity)
 
+      delivery_context = %{
+        run: run,
+        candidate: candidate,
+        packet: packet,
+        progress: progress,
+        identity: identity,
+        root: root,
+        directory: directory,
+        relative_directory: relative_directory,
+        actor: context,
+        opts: opts
+      }
+
       results =
         Enum.map(requested, fn format ->
-          deliver_format(
-            repo,
-            run,
-            candidate,
-            packet,
-            progress,
-            identity,
-            root,
-            directory,
-            relative_directory,
-            format,
-            context,
-            opts
-          )
+          deliver_format(repo, delivery_context, format)
         end)
 
-      manifest = build_manifest(common, relative_directory, results)
-      manifest_path = Path.join(directory, "manifest.json")
-
-      with :ok <- atomic_write(manifest_path, Jason.encode!(manifest, pretty: true)),
-           {:ok, manifest_bytes} <- File.read(manifest_path) do
-        manifest_sha = sha256(manifest_bytes)
-        failures = Enum.filter(results, &(&1["state"] != "ready"))
-        status = if failures == [], do: identity.completion_status, else: "partial"
-
-        completion =
-          cond do
-            run["status"] == "stopped" ->
-              {:ok, run}
-
-            Keyword.get(opts, :defer_run_completion, false) ->
-              {:ok, Map.put(run, "delivery_completion_status", status)}
-
-            true ->
-              Control.mark_completion(repo, run_id, candidate_id, status, context)
-          end
-
-        case completion do
-          {:ok, updated_run} ->
-            payload = %{
-              "run" => updated_run,
-              "manifest" => Map.put(manifest, "manifest_sha256", manifest_sha),
-              "manifest_location" => relative_path(root, manifest_path),
-              "failures" => failures
-            }
-
-            if failures == [], do: {:ok, payload}, else: {:partial, :delivery_partial, payload}
-
-          {:error, _} = error ->
-            error
-        end
-      end
+      publish_manifest(repo, delivery_context, common, results)
     end
   rescue
     error in File.Error -> {:error, {:artifact_io_error, error.reason}}
@@ -95,6 +60,48 @@ defmodule FountRun.DeliveryBundle do
 
   def deliver(_repo, _run_id, _destination, _context, _opts),
     do: {:error, :invalid_delivery_request}
+
+  defp publish_manifest(repo, ctx, common, results) do
+    manifest = build_manifest(common, ctx.relative_directory, results)
+    manifest_path = Path.join(ctx.directory, "manifest.json")
+
+    with :ok <- atomic_write(manifest_path, Jason.encode!(manifest, pretty: true)),
+         {:ok, bytes} <- File.read(manifest_path) do
+      failures = Enum.filter(results, &(&1["state"] != "ready"))
+      status = if failures == [], do: ctx.identity.completion_status, else: "partial"
+      finish_manifest(repo, ctx, status, failures, manifest, manifest_path, bytes)
+    end
+  end
+
+  defp finish_manifest(repo, ctx, status, failures, manifest, manifest_path, bytes) do
+    case complete_delivery(repo, ctx, status) do
+      {:ok, run} ->
+        payload = %{
+          "run" => run,
+          "manifest" => Map.put(manifest, "manifest_sha256", sha256(bytes)),
+          "manifest_location" => relative_path(ctx.root, manifest_path),
+          "failures" => failures
+        }
+
+        if failures == [], do: {:ok, payload}, else: {:partial, :delivery_partial, payload}
+
+      {:error, _} = error ->
+        error
+    end
+  end
+
+  defp complete_delivery(repo, ctx, status) do
+    cond do
+      ctx.run["status"] == "stopped" ->
+        {:ok, ctx.run}
+
+      Keyword.get(ctx.opts, :defer_run_completion, false) ->
+        {:ok, Map.put(ctx.run, "delivery_completion_status", status)}
+
+      true ->
+        Control.mark_completion(repo, ctx.run["id"], ctx.candidate["id"], status, ctx.actor)
+    end
+  end
 
   defp deliverable_run(run) do
     cond do
@@ -213,25 +220,12 @@ defmodule FountRun.DeliveryBundle do
       )
   end
 
-  defp deliver_format(
-         repo,
-         run,
-         candidate,
-         packet,
-         progress,
-         identity,
-         root,
-         directory,
-         relative_directory,
-         format,
-         context,
-         opts
-       ) do
-    path = Path.join(directory, file_name(format))
-    relative = relative_path(root, path)
-    base_options = format_options(format, relative_directory, opts)
+  defp deliver_format(repo, ctx, format) do
+    path = Path.join(ctx.directory, file_name(format))
+    relative = relative_path(ctx.root, path)
+    base_options = format_options(format, ctx.relative_directory, ctx.opts)
 
-    case reusable_delivery(repo, run["id"], identity, format, base_options, root) do
+    case reusable_delivery(repo, ctx.run["id"], ctx.identity, format, base_options, ctx.root) do
       {:ready, delivery} ->
         result_row(format, delivery, true)
 
@@ -239,92 +233,66 @@ defmodule FountRun.DeliveryBundle do
         options =
           base_options |> Map.put("retry_index", retry_index) |> Map.put("retry_of", prior_id)
 
-        perform_delivery(
-          repo,
-          run,
-          candidate,
-          packet,
-          progress,
-          identity,
-          format,
-          path,
-          relative,
-          options,
-          context,
-          opts
-        )
+        perform_delivery(repo, ctx, format, path, relative, options)
 
       :new ->
         options = Map.put(base_options, "retry_index", 0)
 
-        perform_delivery(
-          repo,
-          run,
-          candidate,
-          packet,
-          progress,
-          identity,
-          format,
-          path,
-          relative,
-          options,
-          context,
-          opts
-        )
+        perform_delivery(repo, ctx, format, path, relative, options)
     end
   end
 
-  defp perform_delivery(
-         repo,
-         run,
-         candidate,
-         packet,
-         progress,
-         identity,
-         format,
-         path,
-         relative,
-         options,
-         context,
-         opts
-       ) do
+  defp perform_delivery(repo, ctx, format, path, relative, options) do
     attrs =
       %{
-        "candidate_id" => if(identity.kind == "candidate", do: identity.candidate_id, else: nil),
-        "accepted_revision_id" => identity.accepted_revision_id,
+        "candidate_id" =>
+          if(ctx.identity.kind == "candidate", do: ctx.identity.candidate_id, else: nil),
+        "accepted_revision_id" => ctx.identity.accepted_revision_id,
         "format" => format,
         "options" => options
       }
 
-    case Persistence.create_delivery(repo, run["id"], attrs, context) do
+    case Persistence.create_delivery(repo, ctx.run["id"], attrs, ctx.actor) do
       {:ok, delivery} ->
-        case render(format, candidate, packet, progress, run, identity, path, opts) do
+        case render(
+               format,
+               ctx.candidate,
+               ctx.packet,
+               ctx.progress,
+               ctx.run,
+               ctx.identity,
+               path,
+               ctx.opts
+             ) do
           {:ok, metadata} ->
-            with {:ok, bytes} <- File.read(path),
-                 checksum = sha256(bytes),
-                 {:ok, saved} <-
-                   Persistence.record_delivery_result(
-                     repo,
-                     delivery["id"],
-                     %{
-                       "state" => "ready",
-                       "output_checksum" => checksum,
-                       "output_location" => relative,
-                       "error" => nil
-                     },
-                     context
-                   ) do
-              result_row(format, saved, false) |> Map.put("metadata", Model.plain(metadata))
-            else
-              {:error, reason} -> fail_delivery(repo, delivery, format, path, reason, context)
-            end
+            save_rendered_delivery(repo, ctx, delivery, format, path, relative, metadata)
 
           {:error, reason} ->
-            fail_delivery(repo, delivery, format, path, reason, context)
+            fail_delivery(repo, delivery, format, path, reason, ctx.actor)
         end
 
       {:error, reason} ->
         %{"format" => format, "state" => "failed", "error" => error_code(reason)}
+    end
+  end
+
+  defp save_rendered_delivery(repo, ctx, delivery, format, path, relative, metadata) do
+    with {:ok, bytes} <- File.read(path),
+         {:ok, saved} <-
+           Persistence.record_delivery_result(
+             repo,
+             delivery["id"],
+             %{
+               "state" => "ready",
+               "output_checksum" => sha256(bytes),
+               "output_location" => relative,
+               "error" => nil
+             },
+             ctx.actor
+           ) do
+      result_row(format, saved, false) |> Map.put("metadata", Model.plain(metadata))
+    else
+      {:error, reason} -> fail_delivery(repo, delivery, format, path, reason, ctx.actor)
     end
   end
 

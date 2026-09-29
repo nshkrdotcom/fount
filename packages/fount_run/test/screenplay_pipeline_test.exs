@@ -51,13 +51,18 @@ defmodule FountRun.ScreenplayPipelineTest do
   end
 
   test "P03 public strategy submission exists while later decision kinds stay unavailable" do
+    assert Code.ensure_loaded?(FountWorkshop.Session)
     assert function_exported?(FountRun, :submit_decision, 4)
     assert function_exported?(FountWorkshop.Session, :prepare_only, 4)
     assert function_exported?(FountWorkshop.Session, :plan_only, 4)
 
     assert {:ok, registry} = StageRegistry.new()
-    assert {:error, {:stage_handler_unavailable, "decide"}} = StageRegistry.fetch(registry, "decide")
-    assert {:error, {:stage_handler_unavailable, "deliver"}} = StageRegistry.fetch(registry, "deliver")
+
+    assert {:error, {:stage_handler_unavailable, "decide"}} =
+             StageRegistry.fetch(registry, "decide")
+
+    assert {:error, {:stage_handler_unavailable, "deliver"}} =
+             StageRegistry.fetch(registry, "deliver")
   end
 
   test "P04 repair lineage fields are closed and preserve the prior candidate" do

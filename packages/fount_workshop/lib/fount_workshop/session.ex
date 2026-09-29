@@ -131,11 +131,7 @@ defmodule FountWorkshop.Session do
           {context, prepared} =
             seed_investigation(context, prepared, Keyword.get(opts, :investigation_seed))
 
-          case strategies(model, prepared, context, services, stage_opts) do
-            {:ok, planned} -> finish({:ok, planned}, services, budget)
-            {:error, reason, traces} -> fail(prepared, reason, traces, services, budget)
-            {:error, reason} -> fail(prepared, reason, [], services, budget)
-          end
+          finish_plan_only(model, prepared, context, services, stage_opts, budget)
 
         {:error, reason, partial} ->
           fail(partial, reason, [], services, budget)
@@ -143,6 +139,14 @@ defmodule FountWorkshop.Session do
         {:error, reason} ->
           fail(session, reason, [], services, budget)
       end
+    end
+  end
+
+  defp finish_plan_only(model, prepared, context, services, stage_opts, budget) do
+    case strategies(model, prepared, context, services, stage_opts) do
+      {:ok, planned} -> finish({:ok, planned}, services, budget)
+      {:error, reason, traces} -> fail(prepared, reason, traces, services, budget)
+      {:error, reason} -> fail(prepared, reason, [], services, budget)
     end
   end
 

@@ -1225,6 +1225,7 @@ defmodule Fount.Persistence do
                "artifact_id",
                "base_revision_id",
                "result_revision_id",
+               "parent_candidate_id",
                "primary_revision_id",
                "revision_id",
                "session_id",

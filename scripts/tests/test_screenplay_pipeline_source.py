@@ -41,7 +41,7 @@ class ScreenplayPipelineSource(unittest.TestCase):
         self.assertIn("~w(choice context_fingerprint plan_version policy_version)", persistence)
         for token in [":stale_decision_context", ":stale_decision_binding", ":stale_decision", ":decision_conflict", ":unknown_decision_choice", '"replay" => replay']:
             self.assertIn(token, persistence)
-        self.assertIn("transaction(repo, fn -> do_submit_strategy_decision", persistence)
+        self.assertRegex(persistence, r"transaction\(repo, fn ->\s*do_submit_strategy_decision")
         self.assertIn(":pages_generated_before_strategy_decision", pipeline)
         self.assertLess(pipeline.index("Session.plan_only"), pipeline.index(":pages_generated_before_strategy_decision"))
 
@@ -50,7 +50,7 @@ class ScreenplayPipelineSource(unittest.TestCase):
         write = self.read("packages/fount_run/lib/fount_run/workshop_handler.ex")
         execution = self.read("packages/fount_run/lib/fount_run/execution_store.ex")
         self.assertIn('"stage" => stage', pipeline)
-        self.assertIn('schedule(repo, claim, "iterate"', pipeline)
+        self.assertRegex(pipeline, r'schedule\(\s*repo,\s*claim,\s*"iterate"')
         self.assertIn(":iteration_limit_reached", pipeline)
         self.assertIn('"max_iterations"', pipeline)
         self.assertIn("max_repair_rounds: 0", pipeline + write)

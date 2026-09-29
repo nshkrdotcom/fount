@@ -40,54 +40,80 @@ defmodule FountRun.PipelineRequest do
 
   defp validate_uuids(value) do
     Enum.reduce_while(@uuid_keys, :ok, fn key, :ok ->
-      case Map.get(value, key) do
-        nil -> {:cont, :ok}
-        id when is_binary(id) ->
-          if ClosedMap.uuid_string(id), do: {:cont, :ok}, else: {:halt, {:error, {:invalid_field, key}}}
-        _ -> {:halt, {:error, {:invalid_field, key}}}
-      end
+      if valid_optional_uuid?(Map.get(value, key)),
+        do: {:cont, :ok},
+        else: {:halt, {:error, {:invalid_field, key}}}
     end)
   end
 
+  defp valid_optional_uuid?(nil), do: true
+  defp valid_optional_uuid?(id) when is_binary(id), do: ClosedMap.uuid_string(id)
+  defp valid_optional_uuid?(_), do: false
+
   defp optional_map(value, key) do
     case Map.get(value, key) do
-      nil -> :ok
-      item when is_map(item) -> if ClosedMap.json?(item), do: :ok, else: {:error, {:invalid_field, key}}
-      _ -> {:error, {:invalid_field, key}}
+      nil ->
+        :ok
+
+      item when is_map(item) ->
+        if ClosedMap.json?(item), do: :ok, else: {:error, {:invalid_field, key}}
+
+      _ ->
+        {:error, {:invalid_field, key}}
     end
   end
 
   defp optional_strings(value, key) do
     case Map.get(value, key) do
-      nil -> :ok
+      nil ->
+        :ok
+
       list when is_list(list) ->
-        if Enum.all?(list, &ClosedMap.nonempty_string/1), do: :ok, else: {:error, {:invalid_field, key}}
-      _ -> {:error, {:invalid_field, key}}
+        if Enum.all?(list, &ClosedMap.nonempty_string/1),
+          do: :ok,
+          else: {:error, {:invalid_field, key}}
+
+      _ ->
+        {:error, {:invalid_field, key}}
     end
   end
 
   defp optional_json_list(value, key) do
     case Map.get(value, key) do
-      nil -> :ok
-      list when is_list(list) -> if ClosedMap.json?(list), do: :ok, else: {:error, {:invalid_field, key}}
-      _ -> {:error, {:invalid_field, key}}
+      nil ->
+        :ok
+
+      list when is_list(list) ->
+        if ClosedMap.json?(list), do: :ok, else: {:error, {:invalid_field, key}}
+
+      _ ->
+        {:error, {:invalid_field, key}}
     end
   end
 
   defp optional_string(value, key) do
     case Map.get(value, key) do
-      nil -> :ok
-      item when is_binary(item) -> if String.trim(item) == "", do: {:error, {:invalid_field, key}}, else: :ok
-      _ -> {:error, {:invalid_field, key}}
+      nil ->
+        :ok
+
+      item when is_binary(item) ->
+        if String.trim(item) == "", do: {:error, {:invalid_field, key}}, else: :ok
+
+      _ ->
+        {:error, {:invalid_field, key}}
     end
   end
 
   defp optional_hash(value, key) do
     case Map.get(value, key) do
-      nil -> :ok
+      nil ->
+        :ok
+
       item when is_binary(item) ->
         if Regex.match?(~r/^[0-9a-f]{64}$/, item), do: :ok, else: {:error, {:invalid_field, key}}
-      _ -> {:error, {:invalid_field, key}}
+
+      _ ->
+        {:error, {:invalid_field, key}}
     end
   end
 

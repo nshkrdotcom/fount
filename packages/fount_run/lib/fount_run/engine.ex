@@ -16,7 +16,9 @@ defmodule FountRun.Engine do
   defp execute_claim(repo, claim, registry, context, opts) do
     case StageRegistry.fetch(registry, claim["stage"]) do
       {:ok, handler} ->
-        with_heartbeat(repo, claim, opts, fn -> run_handler(repo, claim, handler, context, opts) end)
+        with_heartbeat(repo, claim, opts, fn ->
+          run_handler(repo, claim, handler, context, opts)
+        end)
 
       {:error, reason} ->
         _ = ExecutionStore.fail(repo, claim, reason)

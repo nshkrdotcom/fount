@@ -49,19 +49,21 @@ defmodule FountRun.WorkshopHandler do
          {:ok, inference} <- inference(opts),
          services = guarded_services(repo, claim, inference),
          {:ok, session} <- Store.call(services.store, :session, [session_id]),
-         true <- Enum.all?(selected, &Enum.any?(session["strategies"] || [], fn s -> s["id"] == &1 end)) or
-                   {:error, :unknown_strategy_selection},
+         :ok <- selected_strategies?(selected, session),
          {:ok, _} <- ExecutionStore.link_session(repo, claim, session_id),
          claim = Map.put(claim, "session_id", session_id),
          {:ok, limits} <- ExecutionStore.remaining_limits(repo, claim),
-         {:ok, saved_session} <- run_selected_session(claim, session, selected, services, limits, opts),
+         {:ok, saved_session} <-
+           run_selected_session(claim, session, selected, services, limits, opts),
          write_result = result(saved_session, services),
          [_ | _] = candidate_ids <- write_result["candidate_ids"],
          {:ok, next_request} <-
            PipelineRequest.advance(envelope, %{
              candidate_ids: candidate_ids,
              report_ids: Enum.uniq((envelope["report_ids"] || []) ++ write_result["report_ids"]),
-             lineage: (envelope["lineage"] || []) ++ Enum.map(candidate_ids, &%{"candidate_id" => &1, "operation" => "write"})
+             lineage:
+               (envelope["lineage"] || []) ++
+                 Enum.map(candidate_ids, &%{"candidate_id" => &1, "operation" => "write"})
            }),
          {:ok, next} <-
            Persistence.create_step(
@@ -85,10 +87,18 @@ defmodule FountRun.WorkshopHandler do
        |> Map.put("selection_decision_id", envelope["decision_id"])
        |> Map.put("scheduled_step_id", next["id"])}
     else
-      false -> {:error, :strategy_session_required}
-      [] -> {:error, :write_produced_no_candidate}
-      {:error, reason, partial} when is_map(partial) -> {:partial, reason, result(partial, guarded_services(repo, claim, Keyword.fetch!(opts, :inference)))}
-      {:error, _} = error -> error
+      false ->
+        {:error, :strategy_session_required}
+
+      [] ->
+        {:error, :write_produced_no_candidate}
+
+      {:error, reason, partial} when is_map(partial) ->
+        {:partial, reason,
+         result(partial, guarded_services(repo, claim, Keyword.fetch!(opts, :inference)))}
+
+      {:error, _} = error ->
+        error
     end
   end
 
@@ -152,16 +162,23 @@ defmodule FountRun.WorkshopHandler do
     reservation_hook = fn
       :measurement_states, n ->
         start = :atomics.add_get(measurement_counter, 1, n) - n
-        operation_id = claim["operation_key"] <> ":measurement:" <> Integer.to_string(start) <> ":" <> Integer.to_string(n)
+
+        operation_id =
+          claim["operation_key"] <>
+            ":measurement:" <> Integer.to_string(start) <> ":" <> Integer.to_string(n)
+
         ExecutionStore.reserve_measurement(Keyword.fetch!(opts, :repo), claim, operation_id, n)
-      _kind, n -> {:ok, n}
+
+      _kind, n ->
+        {:ok, n}
     end
 
     session_opts = [
       operation_key: claim["operation_key"],
       strategy_ids: selected,
       max_inference_calls: Map.get(spent, "inference", 0) + limits.max_inference_calls,
-      max_measurement_states: Map.get(spent, "measurement_states", 0) + limits.max_measurement_states,
+      max_measurement_states:
+        Map.get(spent, "measurement_states", 0) + limits.max_measurement_states,
       max_repair_rounds: 0,
       decode_repairs: limits.decode_repairs,
       transient_retries: limits.transient_retries,
@@ -175,8 +192,12 @@ defmodule FountRun.WorkshopHandler do
       {:ok, saved} ->
         :ok = fault(opts, :after_candidate_persisted)
         {:ok, saved}
-      {:error, reason, partial} when is_map(partial) -> {:error, reason, partial}
-      {:error, reason} -> {:error, reason}
+
+      {:error, reason, partial} when is_map(partial) ->
+        {:error, reason, partial}
+
+      {:error, reason} ->
+        {:error, reason}
     end
   end
 
@@ -209,13 +230,26 @@ defmodule FountRun.WorkshopHandler do
            [decision_id, claim["run_id"]],
            log: false
          ).rows do
-      [["resolved", plan_version, policy_version, %{"choice" => choice}]]
-      when plan_version == claim["plan_version"] and policy_version == claim["policy_version"] ->
-        if envelope["selected_strategy_ids"] == [choice], do: :ok, else: {:error, :strategy_decision_mismatch}
+      [["resolved", plan_version, policy_version, %{"choice" => choice}]] ->
+        cond do
+          plan_version != claim["plan_version"] or policy_version != claim["policy_version"] ->
+            {:error, :stale_decision}
 
-      [["resolved", _, _, _]] -> {:error, :stale_decision}
-      [[_, _, _, _]] -> {:error, :strategy_decision_unresolved}
-      [] -> {:error, :strategy_decision_not_found}
+          envelope["selected_strategy_ids"] != [choice] ->
+            {:error, :strategy_decision_mismatch}
+
+          true ->
+            :ok
+        end
+
+      [["resolved", _, _, _]] ->
+        {:error, :stale_decision}
+
+      [[_, _, _, _]] ->
+        {:error, :strategy_decision_unresolved}
+
+      [] ->
+        {:error, :strategy_decision_not_found}
     end
   end
 
@@ -282,6 +316,14 @@ defmodule FountRun.WorkshopHandler do
     ).rows
     |> hd()
     |> hd()
+  end
+
+  defp selected_strategies?(selected, session) do
+    known = MapSet.new(session["strategies"] || [], & &1["id"])
+
+    if Enum.all?(selected, &MapSet.member?(known, &1)),
+      do: :ok,
+      else: {:error, :unknown_strategy_selection}
   end
 
   defp fault(opts, stage) do

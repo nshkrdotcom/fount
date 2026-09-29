@@ -23,7 +23,7 @@ defmodule FountWorkshop.PhaseFourteenNotesTest do
 
     leaving = Enum.find(base.ir.elements, &(&1.text == "Mara leaves."))
     {:ok, repo} = ContinuationStore.start_link(base)
-    on_exit(fn -> if Process.alive?(repo), do: Agent.stop(repo) end)
+    on_exit(fn -> Process.exit(repo, :kill) end)
     services = %{store: %Store{repo: repo, module: ContinuationStore}}
     assert {:ok, session} = Session.open(base, request(base), services)
 

@@ -2,10 +2,12 @@ defmodule FountRun.PipelineHandler do
   @moduledoc "Durable Phase-04 screenplay stages that stop before acceptance or delivery."
   @behaviour FountRun.StageHandler
 
+  alias Ecto.Adapters.SQL
+  alias Fount.Persistence, as: CorePersistence
   alias Fount.Writing.{CanonicalJSON, Principal}
   alias FountRun.{DispatchHook, ExecutionStore, Persistence, PipelineRequest}
-  alias FountWorkshop.{Session, Store}
   alias FountWorkshop.Candidate
+  alias FountWorkshop.{Session, Store}
 
   @stages ~w(intake investigate plan check iterate)
   @common_workshop_options ~w(protected_strengths intended_effect pending_question voice_exemplars protected_text style_preferences)
@@ -111,7 +113,9 @@ defmodule FountRun.PipelineHandler do
          [_ | _] = strategies <- session["strategies"],
          :ok <- no_pages_before_strategy(session, services),
          report_ids =
-           Enum.uniq((envelope["report_ids"] || []) ++ (get_in(session, ["progress", "report_ids"]) || [])),
+           Enum.uniq(
+             (envelope["report_ids"] || []) ++ (get_in(session, ["progress", "report_ids"]) || [])
+           ),
          {:ok, advanced} <-
            PipelineRequest.advance(envelope, %{
              strategy_session_id: session["id"],
@@ -149,7 +153,8 @@ defmodule FountRun.PipelineHandler do
              "base_revision_id" => run["plan"]["base_revision_id"],
              "authorized_principal" => Principal.to_map(authorized)
            },
-           {:ok, decision} <- Persistence.put_pending_decision(repo, claim["run_id"], attrs, context) do
+           {:ok, decision} <-
+             Persistence.put_pending_decision(repo, claim["run_id"], attrs, context) do
         {:ok,
          %{
            "status" => "strategy_checkpoint",
@@ -193,24 +198,47 @@ defmodule FountRun.PipelineHandler do
     with true <- is_binary(candidate_id) or {:error, :candidate_required},
          {:ok, run} <- FountRun.get_run(repo, claim["run_id"], context),
          {:ok, candidate} <- Store.call(services.store, :candidate, [candidate_id]),
-         :ok <- canonical_candidate(run, candidate),
-         checks = pipeline_checks(run, envelope, candidate),
-         fingerprint = CanonicalJSON.hash(checks),
-         reports =
-           Enum.uniq(
-             (envelope["report_ids"] || []) ++
-               (get_in(candidate, ["provenance", "report_ids"]) || []) ++
-               (get_in(candidate, ["provenance", "preparation_report_ids"]) || [])
-           ),
-         failed = required_failures(checks) do
-      check_outcome(repo, claim, run, envelope, candidate, checks, fingerprint, reports, failed, context)
+         :ok <- canonical_candidate(run, candidate) do
+      checks = pipeline_checks(run, envelope, candidate)
+      fingerprint = CanonicalJSON.hash(checks)
+
+      reports =
+        Enum.uniq(
+          (envelope["report_ids"] || []) ++
+            (get_in(candidate, ["provenance", "report_ids"]) || []) ++
+            (get_in(candidate, ["provenance", "preparation_report_ids"]) || [])
+        )
+
+      check_outcome(%{
+        repo: repo,
+        claim: claim,
+        run: run,
+        envelope: envelope,
+        candidate: candidate,
+        checks: checks,
+        fingerprint: fingerprint,
+        reports: reports,
+        failed: required_failures(checks),
+        context: context
+      })
     else
       false -> {:error, :candidate_required}
       {:error, _} = error -> error
     end
   end
 
-  defp check_outcome(repo, claim, _run, envelope, candidate, checks, fingerprint, reports, [], context) do
+  defp check_outcome(%{failed: []} = state) do
+    %{
+      repo: repo,
+      claim: claim,
+      envelope: envelope,
+      candidate: candidate,
+      checks: checks,
+      fingerprint: fingerprint,
+      reports: reports,
+      context: context
+    } = state
+
     attrs = %{
       "checkpoint_key" => "candidate-review:" <> candidate["id"] <> ":" <> fingerprint,
       "kind" => "candidate_review",
@@ -223,7 +251,8 @@ defmodule FountRun.PipelineHandler do
       "check_set_fingerprint" => fingerprint
     }
 
-    with {:ok, decision} <- Persistence.put_pending_decision(repo, claim["run_id"], attrs, context) do
+    with {:ok, decision} <-
+           Persistence.put_pending_decision(repo, claim["run_id"], attrs, context) do
       {:ok,
        check_result(candidate, envelope, checks, fingerprint, reports)
        |> Map.merge(%{
@@ -236,7 +265,20 @@ defmodule FountRun.PipelineHandler do
     end
   end
 
-  defp check_outcome(repo, claim, run, envelope, candidate, checks, fingerprint, reports, failed, context) do
+  defp check_outcome(state) do
+    %{
+      repo: repo,
+      claim: claim,
+      run: run,
+      envelope: envelope,
+      candidate: candidate,
+      checks: checks,
+      fingerprint: fingerprint,
+      reports: reports,
+      failed: failed,
+      context: context
+    } = state
+
     iteration_gate = get_in(run, ["policy", "policy", "gates", "iteration"])
     max_iterations = get_in(run, ["policy", "policy", "limits", "max_iterations"]) || 0
     finding = failed |> hd() |> finding_text()
@@ -248,9 +290,20 @@ defmodule FountRun.PipelineHandler do
                  source_candidate_id: candidate["id"],
                  finding: finding,
                  check_set_fingerprint: fingerprint,
-                 lineage: (envelope["lineage"] || []) ++ [%{"candidate_id" => candidate["id"], "operation" => "check"}]
+                 lineage:
+                   (envelope["lineage"] || []) ++
+                     [%{"candidate_id" => candidate["id"], "operation" => "check"}]
                }),
-             {:ok, next} <- schedule(repo, claim, "iterate", next_request, context, candidate["id"], claim["iteration"] + 1) do
+             {:ok, next} <-
+               schedule(
+                 repo,
+                 claim,
+                 "iterate",
+                 next_request,
+                 context,
+                 candidate["id"],
+                 claim["iteration"] + 1
+               ) do
           {:ok,
            check_result(candidate, envelope, checks, fingerprint, reports)
            |> Map.merge(%{
@@ -261,18 +314,31 @@ defmodule FountRun.PipelineHandler do
         end
 
       iteration_gate == "human" and claim["iteration"] < max_iterations ->
-        iteration_checkpoint(repo, claim, run, candidate, checks, fingerprint, reports, finding, context, "waiting_for_decision")
+        iteration_checkpoint(state, finding, "waiting_for_decision")
 
       true ->
-        iteration_checkpoint(repo, claim, run, candidate, checks, fingerprint, reports, finding, context, "partial")
+        iteration_checkpoint(state, finding, "partial")
     end
   end
 
-  defp iteration_checkpoint(repo, claim, run, candidate, checks, fingerprint, reports, finding, context, status) do
+  defp iteration_checkpoint(state, finding, status) do
+    %{
+      repo: repo,
+      claim: claim,
+      run: run,
+      envelope: envelope,
+      candidate: candidate,
+      checks: checks,
+      fingerprint: fingerprint,
+      reports: reports,
+      context: context
+    } = state
+
     attrs = %{
       "checkpoint_key" => "iteration:" <> candidate["id"] <> ":" <> fingerprint,
       "kind" => "iteration",
-      "prompt" => "Required checks remain unresolved; bounded iteration cannot continue automatically.",
+      "prompt" =>
+        "Required checks remain unresolved; bounded iteration cannot continue automatically.",
       "options" => [%{"id" => "review", "label" => "Review unresolved finding"}],
       "step_id" => claim["step_id"],
       "candidate_id" => candidate["id"],
@@ -281,7 +347,8 @@ defmodule FountRun.PipelineHandler do
       "check_set_fingerprint" => fingerprint
     }
 
-    with {:ok, decision} <- Persistence.put_pending_decision(repo, claim["run_id"], attrs, context) do
+    with {:ok, decision} <-
+           Persistence.put_pending_decision(repo, claim["run_id"], attrs, context) do
       {:ok,
        check_result(candidate, envelope, checks, fingerprint, reports)
        |> Map.merge(%{
@@ -304,7 +371,7 @@ defmodule FountRun.PipelineHandler do
     with true <- is_binary(source_id) or {:error, :source_candidate_required},
          {:ok, run} <- FountRun.get_run(repo, claim["run_id"], context),
          max_iterations = get_in(run, ["policy", "policy", "limits", "max_iterations"]) || 0,
-         true <- claim["iteration"] <= max_iterations or {:error, :iteration_limit_reached},
+         :ok <- check_iteration_limit(claim["iteration"], max_iterations),
          {:ok, source} <- Store.call(read_services.store, :candidate, [source_id]),
          :ok <- canonical_candidate(run, source),
          {:ok, model} <- load_base(repo, run),
@@ -326,17 +393,30 @@ defmodule FountRun.PipelineHandler do
          {:ok, _} <- ExecutionStore.link_session(repo, claim, session["id"]),
          candidates <- load_session_candidates(session, services),
          [candidate | _] <- candidates,
-         true <- candidate["parent_candidate_id"] == source["id"] or {:error, :candidate_lineage_mismatch},
-         true <- candidate["base_revision_id"] == run["plan"]["base_revision_id"] or {:error, :candidate_base_mismatch},
+         true <-
+           candidate["parent_candidate_id"] == source["id"] or
+             {:error, :candidate_lineage_mismatch},
+         true <-
+           candidate["base_revision_id"] == run["plan"]["base_revision_id"] or
+             {:error, :candidate_base_mismatch},
          report_ids <- report_ids(session, candidates),
          candidate_ids <- Enum.map(candidates, & &1["id"]),
          {:ok, advanced} <-
            PipelineRequest.advance(envelope, %{
              candidate_ids: candidate_ids,
              report_ids: Enum.uniq((envelope["report_ids"] || []) ++ report_ids),
-             lineage: (envelope["lineage"] || []) ++ [%{"candidate_id" => candidate["id"], "parent_candidate_id" => source["id"], "operation" => "iterate"}]
+             lineage:
+               (envelope["lineage"] || []) ++
+                 [
+                   %{
+                     "candidate_id" => candidate["id"],
+                     "parent_candidate_id" => source["id"],
+                     "operation" => "iterate"
+                   }
+                 ]
            }),
-         {:ok, next} <- schedule(repo, claim, "check", advanced, context, candidate["id"], claim["iteration"]) do
+         {:ok, next} <-
+           schedule(repo, claim, "check", advanced, context, candidate["id"], claim["iteration"]) do
       {:ok,
        %{
          "status" => "iteration_saved",
@@ -376,9 +456,10 @@ defmodule FountRun.PipelineHandler do
   end
 
   defp exact_scope_binding(run, workshop_request) do
-    if CanonicalJSON.hash(run["plan"]["scope"]) == CanonicalJSON.hash(workshop_request["selection"]),
-      do: :ok,
-      else: {:error, :plan_request_scope_mismatch}
+    if CanonicalJSON.hash(run["plan"]["scope"]) ==
+         CanonicalJSON.hash(workshop_request["selection"]),
+       do: :ok,
+       else: {:error, :plan_request_scope_mismatch}
   end
 
   defp investigation_request(request, plan) do
@@ -402,7 +483,10 @@ defmodule FountRun.PipelineHandler do
 
   defp repair_request(request, finding) do
     common = Map.take(request["options"] || %{}, @common_workshop_options)
-    direction = "Repair only the saved required-check finding while preserving successful work: " <> to_string(finding || "unresolved required check")
+
+    direction =
+      "Repair only the saved required-check finding while preserving successful work: " <>
+        to_string(finding || "unresolved required check")
 
     %{
       "version" => 1,
@@ -456,7 +540,8 @@ defmodule FountRun.PipelineHandler do
     inherited = get_in(candidate, ["provenance", "checks"]) || []
 
     inherited ++
-      [scope_check(run, envelope, candidate)] ++ protected_checks(run["plan"]["protected_material"], candidate)
+      [scope_check(run, envelope, candidate)] ++
+      protected_checks(run["plan"]["protected_material"], candidate)
   end
 
   defp scope_check(run, envelope, candidate) do
@@ -471,19 +556,25 @@ defmodule FountRun.PipelineHandler do
       "severity" => "required",
       "status" => if(pass, do: "pass", else: "fail"),
       "source" => "run",
-      "message" => if(pass, do: "Candidate remains rooted in the authorized canonical base and scope.", else: "Candidate base/scope binding changed.")
+      "message" =>
+        if(pass,
+          do: "Candidate remains rooted in the authorized canonical base and scope.",
+          else: "Candidate base/scope binding changed."
+        )
     }
   end
 
   defp protected_checks([], _candidate) do
-    [%{
-      "constraint_id" => "run:protected-material",
-      "kind" => "protected_material",
-      "severity" => "required",
-      "status" => "pass",
-      "source" => "run",
-      "message" => "No protected material was declared."
-    }]
+    [
+      %{
+        "constraint_id" => "run:protected-material",
+        "kind" => "protected_material",
+        "severity" => "required",
+        "status" => "pass",
+        "source" => "run",
+        "message" => "No protected material was declared."
+      }
+    ]
   end
 
   defp protected_checks(items, candidate) do
@@ -505,7 +596,9 @@ defmodule FountRun.PipelineHandler do
   end
 
   defp protected_status(text, candidate) when is_binary(text) do
-    if String.contains?(Fount.Screenplay.to_fountain(candidate["screenplay"], mode: :spec), text), do: "pass", else: "fail"
+    if String.contains?(Fount.Screenplay.to_fountain(candidate["screenplay"], mode: :spec), text),
+      do: "pass",
+      else: "fail"
   end
 
   defp protected_status(%{"element_id" => id, "text" => text}, candidate)
@@ -534,15 +627,22 @@ defmodule FountRun.PipelineHandler do
   defp protected_message(_), do: "Protected material shape cannot be proven automatically."
 
   defp required_failures(checks),
-    do: Enum.filter(checks, &(&1["severity"] == "required" and &1["status"] in ["fail", "unknown"]))
+    do:
+      Enum.filter(checks, &(&1["severity"] == "required" and &1["status"] in ["fail", "unknown"]))
 
-  defp finding_text(check), do: check["message"] || check["constraint_id"] || "required check failed"
+  defp finding_text(check),
+    do: check["message"] || check["constraint_id"] || "required check failed"
 
   defp canonical_candidate(run, candidate) do
     cond do
-      candidate["screenplay_id"] != run["screenplay_id"] -> {:error, :candidate_screenplay_mismatch}
-      candidate["base_revision_id"] != run["plan"]["base_revision_id"] -> {:error, :candidate_base_mismatch}
-      true -> :ok
+      candidate["screenplay_id"] != run["screenplay_id"] ->
+        {:error, :candidate_screenplay_mismatch}
+
+      candidate["base_revision_id"] != run["plan"]["base_revision_id"] ->
+        {:error, :candidate_base_mismatch}
+
+      true ->
+        :ok
     end
   end
 
@@ -565,12 +665,21 @@ defmodule FountRun.PipelineHandler do
   defp report_ids(session, candidates) do
     Enum.uniq(
       (get_in(session, ["progress", "report_ids"]) || []) ++
-        Enum.flat_map(candidates, fn candidate -> get_in(candidate, ["provenance", "report_ids"]) || [] end)
+        Enum.flat_map(candidates, fn candidate ->
+          get_in(candidate, ["provenance", "report_ids"]) || []
+        end)
     )
   end
 
   defp uncertainty(data) do
-    [data["uncertainty"], data["unknowns"], data["unresolved_questions"], get_in(data, ["investigation", "uncertainty"])]
+    [
+      data["uncertainty"],
+      data["uncertainties"],
+      data["unknowns"],
+      data["unresolved_questions"],
+      get_in(data, ["investigation", "uncertainty"]),
+      get_in(data, ["investigation", "uncertainties"])
+    ]
     |> Enum.flat_map(fn
       list when is_list(list) -> list
       value when is_binary(value) -> [value]
@@ -580,17 +689,19 @@ defmodule FountRun.PipelineHandler do
   end
 
   defp omitted_scope(model, selection) do
-    with {:ok, selected} <- Fount.Selection.selected_ids(model, selection) do
-      model.ir.elements
-      |> Enum.map(& &1.id)
-      |> Enum.reject(&MapSet.member?(selected, &1))
-    else
-      _ -> []
+    case Fount.Selection.selected_ids(model, selection) do
+      {:ok, selected} ->
+        model.ir.elements
+        |> Enum.map(& &1.id)
+        |> Enum.reject(&MapSet.member?(selected, &1))
+
+      _ ->
+        []
     end
   end
 
   defp load_base(repo, run),
-    do: Fount.Persistence.load_revision(repo, run["screenplay_id"], run["plan"]["base_revision_id"])
+    do: CorePersistence.load_revision(repo, run["screenplay_id"], run["plan"]["base_revision_id"])
 
   defp inference(opts) do
     case Keyword.fetch(opts, :inference) do
@@ -612,7 +723,11 @@ defmodule FountRun.PipelineHandler do
       reservation_hook = fn
         :measurement_states, n ->
           start = :atomics.add_get(counter, 1, n) - n
-          operation_id = claim["operation_key"] <> ":measurement:" <> Integer.to_string(start) <> ":" <> Integer.to_string(n)
+
+          operation_id =
+            claim["operation_key"] <>
+              ":measurement:" <> Integer.to_string(start) <> ":" <> Integer.to_string(n)
+
           ExecutionStore.reserve_measurement(repo, claim, operation_id, n)
 
         _kind, n ->
@@ -623,7 +738,8 @@ defmodule FountRun.PipelineHandler do
        [
          operation_key: claim["operation_key"],
          max_inference_calls: Map.get(spent, "inference", 0) + limits.max_inference_calls,
-         max_measurement_states: Map.get(spent, "measurement_states", 0) + limits.max_measurement_states,
+         max_measurement_states:
+           Map.get(spent, "measurement_states", 0) + limits.max_measurement_states,
          max_repair_rounds: 0,
          decode_repairs: limits.decode_repairs,
          transient_retries: limits.transient_retries,
@@ -636,7 +752,7 @@ defmodule FountRun.PipelineHandler do
   end
 
   defp base_revision(repo, claim) do
-    Ecto.Adapters.SQL.query!(
+    SQL.query!(
       repo,
       "SELECT base_revision_id::text FROM fount_run_plans WHERE run_id=$1::text::uuid AND version=$2",
       [claim["run_id"], claim["plan_version"]],
@@ -645,6 +761,9 @@ defmodule FountRun.PipelineHandler do
     |> hd()
     |> hd()
   end
+
+  defp check_iteration_limit(iteration, maximum) when iteration <= maximum, do: :ok
+  defp check_iteration_limit(_, _), do: {:error, :iteration_limit_reached}
 
   defp sha256(value), do: :crypto.hash(:sha256, value) |> Base.encode16(case: :lower)
 end

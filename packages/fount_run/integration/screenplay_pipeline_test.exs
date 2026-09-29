@@ -101,9 +101,9 @@ defmodule FountRun.ScreenplayPipelineIntegrationTest do
     assert [] = Agent.get(script, & &1)
 
     assert {:ok, progress} = FountRun.progress(repo, fixture.run["id"], fixture.context)
-    assert progress["run"]["status"] == "waiting_for_decision"
+    assert progress["run"]["status"] == "queued"
     assert progress["run"]["stage"] == "decide"
-    assert decision!(progress, "candidate_review")["status"] == "pending"
+    refute Enum.any?(progress["decisions"], &(&1["kind"] == "candidate_review"))
 
     check = Enum.find(progress["steps"], &(&1["stage"] == "check"))
     assert check["result"]["candidate_id"]
@@ -111,6 +111,11 @@ defmodule FountRun.ScreenplayPipelineIntegrationTest do
     assert is_binary(check["result"]["check_set_fingerprint"])
     assert Enum.all?(check["result"]["checks"], &(&1["status"] == "pass"))
     assert check["result"]["changes_canon"] == false
+
+    assert {:ok, %{"status" => "succeeded"}} = run_step(repo, fixture, nil)
+    assert {:ok, completion_ready} = FountRun.progress(repo, fixture.run["id"], fixture.context)
+    assert completion_ready["run"]["status"] == "partial"
+    assert completion_ready["run"]["stage"] == "deliver"
 
     assert {:ok, head_after} = Persistence.load(repo, fixture.key)
     assert head_after.revision.id == fixture.root.revision.id
@@ -267,7 +272,11 @@ defmodule FountRun.ScreenplayPipelineIntegrationTest do
     assert final_check["result"]["lineage"] != []
     assert final_check["result"]["report_ids"] != []
     assert Enum.all?(final_check["result"]["checks"], &(&1["status"] == "pass"))
-    assert decision!(progress, "candidate_review")["status"] == "pending"
+    refute Enum.any?(progress["decisions"], &(&1["kind"] == "candidate_review"))
+    assert {:ok, %{"status" => "succeeded"}} = run_step(repo, fixture, nil)
+    assert {:ok, completion_ready} = FountRun.progress(repo, fixture.run["id"], fixture.context)
+    assert completion_ready["run"]["status"] == "partial"
+    assert completion_ready["run"]["stage"] == "deliver"
 
     assert [[3, 0, 0]] =
              sql(
@@ -448,7 +457,7 @@ defmodule FountRun.ScreenplayPipelineIntegrationTest do
              )
   end
 
-  test "P07 all nine Workshop workflow request contracts remain registered while later Run stages stay unavailable",
+  test "P07 all nine Workshop workflows remain registered alongside Phase 05 headless stages",
        %{repo: repo} do
     root = train_root()
     {root, character} = Screenplay.add_character(root, "NORA")
@@ -485,14 +494,15 @@ defmodule FountRun.ScreenplayPipelineIntegrationTest do
     assert {:ok, _} = PipelineRequest.new(hd(requests))
     assert {:ok, registry} = FountRun.StageRegistry.new()
 
-    assert {:error, {:stage_handler_unavailable, "decide"}} =
+    assert {:ok, FountRun.CompletionHandler} =
              FountRun.StageRegistry.fetch(registry, "decide")
 
-    assert {:error, {:stage_handler_unavailable, "deliver"}} =
+    assert {:ok, FountRun.DeliveryHandler} =
              FountRun.StageRegistry.fetch(registry, "deliver")
 
     refute function_exported?(FountRun, :approve, 4)
-    refute function_exported?(FountRun, :deliver, 4)
+    assert function_exported?(FountRun, :approve_run, 4)
+    assert function_exported?(FountRun, :deliver, 5)
     assert [[0]] = sql(repo, "SELECT count(*) FROM fount_run_deliveries")
   end
 

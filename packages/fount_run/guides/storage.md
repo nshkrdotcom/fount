@@ -1,18 +1,27 @@
 # Run storage
 
-Run migrations are separate from Core migrations and run second on the same Repo/database. `FountRun.migrations_path/0` exposes the directory. Core's Phase 03 operation-key migration uses version `20260928011000`; the existing Run foundation retains `20260928010000` and Run durable execution uses `20260928020000`.
+Run migrations are separate from Core migrations and run second on the same Repo/database. `FountRun.migrations_path/0` exposes the directory.
 
-Phase 02 tables remain authoritative: runs, plans, policies, steps, attempts, events, decisions, approval attempts, usage and deliveries. Phase 03 adds `fount_run_provider_requests` plus step result/retry/dispatch/measurement counters. Core separately adds nullable unique `operation_key` columns to `writing_sessions` and `writing_candidates`; those keys make Workshop open/candidate materialization idempotent without changing standalone APIs.
+Phase 02 tables remain authoritative: runs, plans, policies, steps, attempts, events, decisions, approval attempts, usage and deliveries. Phase 03 adds provider-intent/reconciliation records and durable execution counters. Phase 04 uses those records for the screenplay pipeline. Phase 05 adds only the storage needed to make steering/replay and approval lineage exact: plan/policy `command_key` plus `command_fingerprint`, and nullable `parent_attempt_id` on approval attempts.
 
-## Durable execution records
+## Snapshot and control history
 
-- Steps bind the exact plan version, policy version, request fingerprint and input IDs.
-- Attempts retain monotonic fencing token and terminal outcome.
-- Provider requests persist intent, dispatch state, response identity/status and safe usage metadata.
-- Usage reservations are idempotent by operation/resource and enforce global inference/measurement limits atomically under the Run lock.
-- Malformed-output repair and transport-retry counters are distinct and durable.
-- Successful step results are hashed and stored with output candidate/revision/report IDs.
+Plan/policy rows are append-only. Public updates require an expected current version and a caller command id. The stored command fingerprint includes the command id, expected version and complete payload, so an identical retry replays while a same-id/different-request retry conflicts.
 
-An unknown paid response is not released and is not automatically replayed. A later recovered response can settle that same usage record. A configured hard money ceiling requires a known same-currency estimate before dispatch; Phase 03 does not invent model pricing. A dispatched failed call still consumes an inference allowance. Settled actual cost can exceed the estimate; Run records the overrun and pauses. Unknown actual cost under a hard ceiling also pauses while retaining the estimate as a charge.
+A same-base/same-scope plan update advances the existing run. A base/scope change creates a successor and records `parent_run_id` / `superseding_run_id`; previous candidates, decisions, attempts and usage are retained. Usage queries include the parent chain so budget counters do not reset.
 
-`FountRun.progress/3` intentionally omits provider request/response bodies.
+Pause/stop are durable timestamps on the run. Stop fences open approval attempts and running steps but leaves candidate/revision rows available for export.
+
+## Approval attempts
+
+Approval attempts bind run, screenplay, step/decision, optional parent attempt, plan and policy version/fingerprint, candidate, base, content hash, check set, review packet/reference, reviewer, approver, callback operation id and fencing token. That identity is immutable.
+
+The review payload/recommendation becomes immutable once saved. The Core approval id/payload/hash becomes immutable once constructed. Terminal outcomes (`accepted`, `rejected`, `invalid`, `fenced`, `failed`) cannot be rewritten. A fallback human attempt is a new row linked through `parent_attempt_id`, so a failed automated review cannot be laundered into a different origin.
+
+## Delivery rows
+
+Each format is a distinct immutable delivery identity bound to either a candidate or accepted revision. Mutable result fields record `pending|ready|failed`, checksum, relative output location and safe error code. A ready row is reusable only if its file exists inside the configured artifact root and the bytes hash to the stored checksum.
+
+Retries never rewrite a failed identity. They create a new row with `retry_index` and `retry_of` in options. This lets, for example, a PDF renderer fail while Fountain/FDX/review artifacts remain ready and allows only PDF to retry later.
+
+`FountRun.progress/3` exposes safe approval-attempt, delivery, usage and provider status metadata while omitting provider response bodies and approval payload bodies.

@@ -390,11 +390,27 @@ defmodule FountRun.ExecutionStore do
             [run_id]
           )
 
+        approval_attempts =
+          rows(
+            repo,
+            "SELECT id,step_id,decision_id,parent_attempt_id,plan_version,plan_fingerprint,policy_version,policy_fingerprint,candidate_id,base_revision_id,content_hash,check_set_fingerprint,reviewer_type,reviewer_id,approver_type,approver_id,callback_operation_id,fencing_token,review_hash,recommendation,approval_id,approval_hash,outcome,outcome_reason,acceptance_id,finished_at,inserted_at,updated_at FROM fount_run_approval_attempts WHERE run_id=$1::text::uuid ORDER BY inserted_at,id",
+            [run_id]
+          )
+
+        deliveries =
+          rows(
+            repo,
+            "SELECT id,candidate_id,accepted_revision_id,format,options_fingerprint,delivery_key,output_checksum,output_location,state,error,inserted_at,updated_at FROM fount_run_deliveries WHERE run_id=$1::text::uuid ORDER BY inserted_at,id",
+            [run_id]
+          )
+
         {:ok,
          %{
            "run" => run,
            "steps" => steps,
            "decisions" => decisions,
+           "approval_attempts" => approval_attempts,
+           "deliveries" => deliveries,
            "usage" => usage,
            "provider_requests" => providers
          }}
@@ -822,7 +838,7 @@ defmodule FountRun.ExecutionStore do
 
     q!(
       repo,
-      "UPDATE fount_runs SET active_step_id=NULL,status=CASE WHEN $3::text IS NOT NULL THEN $3 WHEN EXISTS(SELECT 1 FROM fount_run_steps WHERE run_id=$1::text::uuid AND status IN ('queued','waiting')) THEN 'queued' ELSE 'running' END,stage=COALESCE($4::text,stage),selected_candidate_id=COALESCE($2::text::uuid,selected_candidate_id),lock_version=lock_version+1,updated_at=now() WHERE id=$1::text::uuid",
+      "UPDATE fount_runs SET active_step_id=NULL,status=CASE WHEN $3::text IS NOT NULL THEN $3 WHEN pause_requested_at IS NOT NULL THEN 'paused' WHEN EXISTS(SELECT 1 FROM fount_run_steps WHERE run_id=$1::text::uuid AND status IN ('queued','waiting')) THEN 'queued' ELSE 'running' END,stage=COALESCE($4::text,stage),selected_candidate_id=COALESCE($2::text::uuid,selected_candidate_id),lock_version=lock_version+1,updated_at=now() WHERE id=$1::text::uuid",
       [claim["run_id"], candidate_id, run_status, next_stage]
     )
 
@@ -838,8 +854,8 @@ defmodule FountRun.ExecutionStore do
     status = result["run_status"]
     stage = result["next_stage"]
 
-    if status not in [nil, "waiting_for_decision", "partial"] or
-         stage not in [nil, "write", "iterate", "decide"] do
+    if status not in [nil, "waiting_for_decision", "waiting_for_approval", "partial", "completed_candidate", "completed_accepted"] or
+         stage not in [nil, "write", "iterate", "decide", "deliver"] do
       rollback(repo, :invalid_checkpoint_transition)
     end
 
@@ -853,12 +869,12 @@ defmodule FountRun.ExecutionStore do
     allow_control = Keyword.get(opts, :allow_control, false)
 
     if is_nil(step), do: rollback(repo, :step_not_found)
-    ensure_run_claim!(repo, run, claim, allow_control)
+    ensure_run_claim!(repo, run, claim, phase, allow_control)
     ensure_step_claim!(repo, run, step, claim, phase, allow_control)
   end
 
-  defp ensure_run_claim!(repo, run, claim, allow_control) do
-    ensure_run_control!(repo, run, allow_control)
+  defp ensure_run_claim!(repo, run, claim, phase, allow_control) do
+    ensure_run_control!(repo, run, phase, allow_control)
 
     cond do
       run["current_plan_version"] != claim["plan_version"] ->
@@ -878,13 +894,13 @@ defmodule FountRun.ExecutionStore do
     end
   end
 
-  defp ensure_run_control!(repo, run, allow_control) do
+  defp ensure_run_control!(repo, run, phase, allow_control) do
     cond do
-      not allow_control and not is_nil(run["pause_requested_at"]) ->
-        rollback(repo, :pause_requested)
-
       not allow_control and not is_nil(run["stop_requested_at"]) ->
         rollback(repo, :stop_requested)
+
+      not allow_control and not is_nil(run["pause_requested_at"]) and phase != :commit ->
+        rollback(repo, :pause_requested)
 
       true ->
         :ok
@@ -1025,7 +1041,7 @@ defmodule FountRun.ExecutionStore do
     row =
       one(
         repo,
-        "SELECT COALESCE(SUM(CASE WHEN reconciliation_state='released' THEN 0 ELSE GREATEST(reserved_quantity,COALESCE(settled_quantity,0)) END),0)::bigint AS total FROM fount_run_usage WHERE run_id=$1::text::uuid AND resource=$2",
+        "WITH RECURSIVE lineage AS (SELECT id,parent_run_id FROM fount_runs WHERE id=$1::text::uuid UNION ALL SELECT r.id,r.parent_run_id FROM fount_runs r JOIN lineage l ON r.id=l.parent_run_id) SELECT COALESCE(SUM(CASE WHEN u.reconciliation_state='released' THEN 0 ELSE GREATEST(u.reserved_quantity,COALESCE(u.settled_quantity,0)) END),0)::bigint AS total FROM fount_run_usage u WHERE u.run_id IN (SELECT id FROM lineage) AND u.resource=$2",
         [run_id, resource]
       )
 
@@ -1036,7 +1052,7 @@ defmodule FountRun.ExecutionStore do
     row =
       one(
         repo,
-        "SELECT COALESCE(SUM(CASE WHEN reconciliation_state='released' THEN 0 ELSE GREATEST(COALESCE(reserved_cost_microunits,0),COALESCE(settled_cost_microunits,0)) END),0)::bigint AS total FROM fount_run_usage WHERE run_id=$1::text::uuid AND currency=$2",
+        "WITH RECURSIVE lineage AS (SELECT id,parent_run_id FROM fount_runs WHERE id=$1::text::uuid UNION ALL SELECT r.id,r.parent_run_id FROM fount_runs r JOIN lineage l ON r.id=l.parent_run_id) SELECT COALESCE(SUM(CASE WHEN u.reconciliation_state='released' THEN 0 ELSE GREATEST(COALESCE(u.reserved_cost_microunits,0),COALESCE(u.settled_cost_microunits,0)) END),0)::bigint AS total FROM fount_run_usage u WHERE u.run_id IN (SELECT id FROM lineage) AND u.currency=$2",
         [run_id, currency]
       )
 

@@ -58,7 +58,8 @@ defmodule FountRun.MixProject do
         "CHANGELOG.md",
         "LICENSE",
         "guides/architecture.md",
-        "guides/storage.md"
+        "guides/storage.md",
+        "guides/control-and-delivery.md"
       ]
     ]
   end

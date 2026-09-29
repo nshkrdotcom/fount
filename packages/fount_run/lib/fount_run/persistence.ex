@@ -121,7 +121,19 @@ defmodule FountRun.Persistence do
 
       :ok = verify_base_or_rollback(repo, plan.screenplay_id, plan.base_revision_id)
       version = expected + 1
-      insert_plan(repo, run_id, version, plan, Keyword.get(opts, :reason, "owner_update"))
+      command_key = Keyword.get(opts, :command_id)
+      command_fingerprint =
+        Keyword.get(opts, :command_fingerprint, command_fingerprint(command_key, attrs))
+
+      insert_plan(
+        repo,
+        run_id,
+        version,
+        plan,
+        Keyword.get(opts, :reason, "owner_update"),
+        command_key,
+        command_fingerprint
+      )
 
       q!(
         repo,
@@ -155,7 +167,10 @@ defmodule FountRun.Persistence do
 
       {:ok, policy} = or_rollback(repo, Policy.new(value, context))
       version = expected + 1
-      insert_policy(repo, run_id, version, policy)
+      command_key = Keyword.get(opts, :command_id)
+      command_fingerprint =
+        Keyword.get(opts, :command_fingerprint, command_fingerprint(command_key, value))
+      insert_policy(repo, run_id, version, policy, command_key, command_fingerprint)
 
       q!(
         repo,
@@ -301,6 +316,40 @@ defmodule FountRun.Persistence do
       {:error, _} = error -> error
     end
   end
+
+  @doc "Persists a redacted/canonical callback response evidence record before interpreting it as a review."
+  def record_approval_callback_response(repo, attempt_id, evidence, %ActorContext{} = context)
+      when is_map(evidence) do
+    if FountRun.ClosedMap.json?(evidence) do
+      hash = CanonicalJSON.hash(evidence)
+
+      transaction(repo, fn ->
+        row = locked_approval_attempt!(repo, attempt_id, context)
+
+        cond do
+          is_nil(row["callback_response"]) ->
+            q!(
+              repo,
+              "UPDATE fount_run_approval_attempts SET callback_response=$2::jsonb,callback_response_hash=$3,updated_at=now() WHERE id=$1::text::uuid",
+              [attempt_id, evidence, hash]
+            )
+
+            approval_attempt_row(repo, attempt_id)
+
+          row["callback_response_hash"] == hash ->
+            row
+
+          true ->
+            rollback(repo, :immutable_callback_response_conflict)
+        end
+      end)
+    else
+      {:error, :invalid_callback_response_evidence}
+    end
+  end
+
+  def record_approval_callback_response(_repo, _attempt_id, _evidence, _context),
+    do: {:error, :invalid_callback_response_evidence}
 
   def record_approval_review(repo, attempt_id, review, recommendation, %ActorContext{} = context) do
     with {:ok, payload} <- ApprovalAttempt.review_payload(review),
@@ -852,8 +901,8 @@ defmodule FountRun.Persistence do
     id = ID.v4()
 
     sql = ~S"""
-    INSERT INTO fount_run_approval_attempts(id,run_id,screenplay_id,step_id,decision_id,plan_version,plan_fingerprint,policy_version,policy_fingerprint,candidate_id,base_revision_id,content_hash,check_set_fingerprint,packet,packet_artifact_ref,reviewer_type,reviewer_id,approver_type,approver_id,callback_operation_id,fencing_token,outcome)
-    VALUES($1::text::uuid,$2::text::uuid,$3::text::uuid,$4::text::uuid,$5::text::uuid,$6,$7,$8,$9,$10::text::uuid,$11::text::uuid,$12,$13,$14::jsonb,$15,$16,$17,$18,$19,$20,$21,'pending')
+    INSERT INTO fount_run_approval_attempts(id,run_id,screenplay_id,step_id,decision_id,parent_attempt_id,plan_version,plan_fingerprint,policy_version,policy_fingerprint,candidate_id,base_revision_id,content_hash,check_set_fingerprint,packet,packet_artifact_ref,reviewer_type,reviewer_id,approver_type,approver_id,callback_operation_id,fencing_token,outcome)
+    VALUES($1::text::uuid,$2::text::uuid,$3::text::uuid,$4::text::uuid,$5::text::uuid,$6::text::uuid,$7,$8,$9,$10,$11::text::uuid,$12::text::uuid,$13,$14,$15::jsonb,$16,$17,$18,$19,$20,$21,$22,'pending')
     ON CONFLICT(callback_operation_id) DO NOTHING RETURNING id::text
     """
 
@@ -864,6 +913,7 @@ defmodule FountRun.Persistence do
         run["screenplay_id"],
         attempt.step_id,
         attempt.decision_id,
+        attempt.parent_attempt_id,
         run["current_plan_version"],
         plan["fingerprint"],
         run["current_policy_version"],
@@ -902,6 +952,12 @@ defmodule FountRun.Persistence do
     validate_review_binding!(repo, row, payload, recommendation)
 
     cond do
+      row["review_hash"] == hash and row["recommendation"] == recommendation ->
+        row
+
+      row["outcome"] in ~w(accepted rejected invalid fenced failed) ->
+        rollback(repo, :already_resolved)
+
       is_nil(row["received_review"]) ->
         q!(
           repo,
@@ -911,9 +967,6 @@ defmodule FountRun.Persistence do
 
         approval_attempt_row(repo, attempt_id)
 
-      row["review_hash"] == hash and row["recommendation"] == recommendation ->
-        row
-
       true ->
         rollback(repo, :immutable_review_conflict)
     end
@@ -921,24 +974,31 @@ defmodule FountRun.Persistence do
 
   defp do_record_approval_payload(repo, attempt_id, approval_id, payload, hash, context) do
     row = locked_approval_attempt!(repo, attempt_id, context)
-    if is_nil(row["received_review"]), do: rollback(repo, :review_required)
-    validate_approval_binding!(repo, row, approval_id, payload)
 
     cond do
-      is_nil(row["approval_id"]) ->
-        q!(
-          repo,
-          "UPDATE fount_run_approval_attempts SET approval_id=$2,approval_payload=$3::jsonb,approval_hash=$4,outcome='ready',updated_at=now() WHERE id=$1::text::uuid",
-          [attempt_id, approval_id, payload, hash]
-        )
-
-        approval_attempt_row(repo, attempt_id)
-
       row["approval_id"] == approval_id and row["approval_hash"] == hash ->
         row
 
+      row["outcome"] in ~w(accepted rejected invalid fenced failed) ->
+        rollback(repo, :already_resolved)
+
+      is_nil(row["received_review"]) ->
+        rollback(repo, :review_required)
+
       true ->
-        rollback(repo, :immutable_approval_conflict)
+        validate_approval_binding!(repo, row, approval_id, payload)
+
+        if is_nil(row["approval_id"]) do
+          q!(
+            repo,
+            "UPDATE fount_run_approval_attempts SET approval_id=$2,approval_payload=$3::jsonb,approval_hash=$4,outcome='ready',updated_at=now() WHERE id=$1::text::uuid",
+            [attempt_id, approval_id, payload, hash]
+          )
+
+          approval_attempt_row(repo, attempt_id)
+        else
+          rollback(repo, :immutable_approval_conflict)
+        end
     end
   end
 
@@ -1128,17 +1188,34 @@ defmodule FountRun.Persistence do
 
   defp validate_policy_approver!(repo, policy, attempt) do
     configured = policy["policy"]["approver"]
+    fallback = policy["policy"]["fallback_approver"]
+    actual = {Atom.to_string(attempt.approver.type), attempt.approver.id}
 
     cond do
+      is_map(configured) and {configured["type"], configured["id"]} == actual ->
+        :ok
+
+      is_map(fallback) and {fallback["type"], fallback["id"]} == actual and
+          is_binary(attempt.parent_attempt_id) ->
+        parent =
+          one(
+            repo,
+            "SELECT run_id::text,candidate_id::text,outcome FROM fount_run_approval_attempts WHERE id=$1::text::uuid",
+            [attempt.parent_attempt_id]
+          ) || rollback(repo, :fallback_parent_not_found)
+
+        cond do
+          parent["run_id"] != policy["run_id"] -> rollback(repo, :fallback_parent_run_mismatch)
+          parent["candidate_id"] != attempt.candidate_id -> rollback(repo, :fallback_parent_candidate_mismatch)
+          parent["outcome"] not in ~w(rejected invalid failed fenced) -> rollback(repo, :fallback_parent_not_terminal)
+          true -> :ok
+        end
+
       is_nil(configured) ->
         rollback(repo, :policy_does_not_accept)
 
-      {configured["type"], configured["id"]} !=
-          {Atom.to_string(attempt.approver.type), attempt.approver.id} ->
-        rollback(repo, :policy_approver_mismatch)
-
       true ->
-        :ok
+        rollback(repo, :policy_approver_mismatch)
     end
   end
 
@@ -1201,7 +1278,7 @@ defmodule FountRun.Persistence do
 
   defp same_approval_attempt?(row, run, plan, policy, attempt, packet, packet_ref) do
     actual =
-      {row["run_id"], row["screenplay_id"], row["step_id"], row["decision_id"],
+      {row["run_id"], row["screenplay_id"], row["step_id"], row["decision_id"], row["parent_attempt_id"],
        row["plan_version"], row["plan_fingerprint"], row["policy_version"],
        row["policy_fingerprint"], row["candidate_id"], row["base_revision_id"],
        row["content_hash"], row["check_set_fingerprint"], row["packet"],
@@ -1209,7 +1286,7 @@ defmodule FountRun.Persistence do
        row["approver_id"], row["fencing_token"]}
 
     expected =
-      {run["id"], run["screenplay_id"], attempt.step_id, attempt.decision_id,
+      {run["id"], run["screenplay_id"], attempt.step_id, attempt.decision_id, attempt.parent_attempt_id,
        run["current_plan_version"], plan["fingerprint"], run["current_policy_version"],
        policy["fingerprint"], attempt.candidate_id, attempt.base_revision_id,
        attempt.content_hash, attempt.check_set_fingerprint, packet, packet_ref,
@@ -1295,8 +1372,8 @@ defmodule FountRun.Persistence do
 
     case result.rows do
       [[^id]] ->
-        insert_plan(repo, id, 1, plan, "run_start")
-        insert_policy(repo, id, 1, policy)
+        insert_plan(repo, id, 1, plan, "run_start", nil, nil)
+        insert_policy(repo, id, 1, policy, nil, nil)
         run = run_row(repo, id)
 
         append_event_locked(repo, run, 1, 1, context.principal, "run_started", %{
@@ -1320,12 +1397,12 @@ defmodule FountRun.Persistence do
     end
   end
 
-  defp insert_plan(repo, run_id, version, plan, reason) do
+  defp insert_plan(repo, run_id, version, plan, reason, command_key, command_fingerprint) do
     q!(
       repo,
       ~S"""
-      INSERT INTO fount_run_plans(run_id,version,screenplay_id,base_revision_id,goal,scope,constraints,protected_material,input_brief,input_notes,operation_parameters,fingerprint,author_type,author_id,change_reason)
-      VALUES($1::text::uuid,$2,$3::text::uuid,$4::text::uuid,$5,$6::jsonb,$7::jsonb,$8::jsonb,$9::jsonb,$10::jsonb,$11::jsonb,$12,$13,$14,$15)
+      INSERT INTO fount_run_plans(run_id,version,screenplay_id,base_revision_id,goal,scope,constraints,protected_material,input_brief,input_notes,operation_parameters,fingerprint,author_type,author_id,change_reason,command_key,command_fingerprint)
+      VALUES($1::text::uuid,$2,$3::text::uuid,$4::text::uuid,$5,$6::jsonb,$7::jsonb,$8::jsonb,$9::jsonb,$10::jsonb,$11::jsonb,$12,$13,$14,$15,$16,$17)
       """,
       [
         run_id,
@@ -1342,24 +1419,35 @@ defmodule FountRun.Persistence do
         plan.fingerprint,
         Atom.to_string(plan.author.type),
         plan.author.id,
-        reason
+        reason,
+        command_key,
+        command_fingerprint
       ]
     )
   end
 
-  defp insert_policy(repo, run_id, version, policy) do
+  defp insert_policy(repo, run_id, version, policy, command_key, command_fingerprint) do
     q!(
       repo,
-      "INSERT INTO fount_run_policies(run_id,version,policy,fingerprint,author_type,author_id) VALUES($1::text::uuid,$2,$3::jsonb,$4,$5,$6)",
+      "INSERT INTO fount_run_policies(run_id,version,policy,fingerprint,author_type,author_id,command_key,command_fingerprint) VALUES($1::text::uuid,$2,$3::jsonb,$4,$5,$6,$7,$8)",
       [
         run_id,
         version,
         policy.value,
         policy.fingerprint,
         Atom.to_string(policy.author.type),
-        policy.author.id
+        policy.author.id,
+        command_key,
+        command_fingerprint
       ]
     )
+  end
+
+  defp command_fingerprint(nil, _payload), do: nil
+
+  defp command_fingerprint(command_key, payload)
+       when is_binary(command_key) and byte_size(command_key) > 0 do
+    CanonicalJSON.hash(%{"command_id" => command_key, "payload" => payload})
   end
 
   defp hydrate_run(repo, run) do

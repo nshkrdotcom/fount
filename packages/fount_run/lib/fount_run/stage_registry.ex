@@ -14,7 +14,9 @@ defmodule FountRun.StageRegistry do
           "plan" => FountRun.PipelineHandler,
           "write" => FountRun.WorkshopHandler,
           "check" => FountRun.PipelineHandler,
-          "iterate" => FountRun.PipelineHandler
+          "iterate" => FountRun.PipelineHandler,
+          "decide" => FountRun.CompletionHandler,
+          "deliver" => FountRun.DeliveryHandler
         },
         stringify_keys(overrides)
       )

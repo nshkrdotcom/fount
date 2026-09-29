@@ -4,7 +4,7 @@ defmodule FountRun.ApprovalAttempt do
   alias Fount.Writing.{Approval, CanonicalJSON, Principal, Review}
   alias FountRun.ClosedMap
 
-  @keys ~w(step_id decision_id candidate_id base_revision_id content_hash check_set_fingerprint packet packet_artifact_ref reviewer approver callback_operation_id fencing_token)
+  @keys ~w(step_id decision_id parent_attempt_id candidate_id base_revision_id content_hash check_set_fingerprint packet packet_artifact_ref reviewer approver callback_operation_id fencing_token)
 
   def validate(attrs) do
     with {:ok, attrs} <- ClosedMap.normalize(attrs, @keys),
@@ -12,6 +12,7 @@ defmodule FountRun.ApprovalAttempt do
          {:ok, base_revision_id} <- required_uuid(attrs, "base_revision_id"),
          :ok <- optional_uuid(attrs, "step_id"),
          :ok <- optional_uuid(attrs, "decision_id"),
+         :ok <- optional_uuid(attrs, "parent_attempt_id"),
          {:ok, content_hash} <- hash(attrs, "content_hash"),
          {:ok, check_hash} <- hash(attrs, "check_set_fingerprint"),
          {:ok, packet} <- packet(attrs),
@@ -23,6 +24,7 @@ defmodule FountRun.ApprovalAttempt do
        %{
          step_id: Map.get(attrs, "step_id"),
          decision_id: Map.get(attrs, "decision_id"),
+         parent_attempt_id: Map.get(attrs, "parent_attempt_id"),
          candidate_id: candidate_id,
          base_revision_id: base_revision_id,
          content_hash: content_hash,

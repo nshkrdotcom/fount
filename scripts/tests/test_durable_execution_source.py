@@ -78,11 +78,14 @@ class DurableExecutionSource(unittest.TestCase):
         self.assertIn("inference_unavailable", handler)
         self.assertEqual(registry.count('"write" => FountRun.WorkshopHandler'), 1)
 
-    def test_phase04_commands_are_absent(self):
+    def test_phase03_workshop_handler_remains_write_only_after_later_phases(self):
         public = self.read("packages/fount_run/lib/fount_run.ex")
-        for token in ["def pause_run(", "def resume_run(", "def choose_strategy(", "def approve_run(", "def deliver("]:
-            self.assertNotIn(token, public)
-        self.assertNotIn("investigate", self.read("packages/fount_run/lib/fount_run/workshop_handler.ex"))
+        handler = self.read("packages/fount_run/lib/fount_run/workshop_handler.ex")
+        for token in ["def start_run", "def enqueue_step", "def step(", "def progress("]:
+            self.assertIn(token, public)
+        self.assertNotIn("investigate", handler)
+        self.assertNotIn("accept_candidate", handler)
+        self.assertNotIn("Review.accept", handler)
 
     def test_migrations_are_additive_and_phase02_foundation_remains(self):
         run_migration = self.read("packages/fount_run/priv/repo/migrations/20260928020000_durable_execution.exs")

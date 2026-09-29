@@ -37,13 +37,11 @@ class RunFoundationSource(unittest.TestCase):
         self.assertIn("alias FountWorkshop.{Session, Store}", production)
         self.assertIn("Inference.complete", self.read("packages/fount_workshop/lib/fount_workshop/writing/completion.ex"))
 
-    def test_public_surface_adds_only_phase_three_execution_commands(self):
+    def test_public_surface_retains_run_foundation_primitives(self):
         public = self.read("packages/fount_run/lib/fount_run.ex")
         for command in ["def start_run", "def get_run", "def list_runs", "def enqueue_step", "def step(", "def progress("]:
             self.assertIn(command, public)
         self.assertIn(":telemetry.execute([:fount_run, operation]", public)
-        for later in ["def update_plan(", "def pause_run(", "def resume_run(", "def approve_run(", "def deliver("]:
-            self.assertNotIn(later, public)
         persistence = self.read("packages/fount_run/lib/fount_run/persistence.ex")
         for primitive in ["append_plan_snapshot", "append_policy_snapshot", "append_event", "put_pending_decision", "resolve_decision", "create_approval_attempt", "record_approval_review", "record_approval_payload", "reserve_usage", "settle_usage", "create_delivery", "store_active_lease"]:
             self.assertIn(f"def {primitive}", persistence, primitive)

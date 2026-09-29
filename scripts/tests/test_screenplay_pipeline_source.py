@@ -79,15 +79,15 @@ class ScreenplayPipelineSource(unittest.TestCase):
         self.assertIn("provider_requests", progress)
         self.assertIn("ambiguous_provider?", progress)
 
-    def test_p07_later_acceptance_delivery_remain_unimplemented(self):
+    def test_p07_phase04_pipeline_remains_nonaccepting_after_phase05_handlers(self):
         registry = self.read("packages/fount_run/lib/fount_run/stage_registry.ex")
         public = self.read("packages/fount_run/lib/fount_run.ex")
-        self.assertNotIn('"decide" =>', registry)
-        self.assertNotIn('"deliver" =>', registry)
-        for later in ["def approve_run(", "def accept(", "def deliver("]:
-            self.assertNotIn(later, public)
-        durable = self.read("packages/fount_run/integration/durable_execution_test.exs")
-        self.assertIn('stage_handler_unavailable, "deliver"', durable)
+        pipeline = self.read("packages/fount_run/lib/fount_run/pipeline_handler.ex")
+        self.assertIn('"decide" => FountRun.CompletionHandler', registry)
+        self.assertIn('"deliver" => FountRun.DeliveryHandler', registry)
+        self.assertIn("def approve_run(", public)
+        self.assertIn("def deliver(", public)
+        self.assertNotIn("accept_candidate", pipeline)
 
 
 if __name__ == "__main__":

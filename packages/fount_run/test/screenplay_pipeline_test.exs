@@ -50,7 +50,7 @@ defmodule FountRun.ScreenplayPipelineTest do
     assert gap["detail"] =~ "motive"
   end
 
-  test "P03 public strategy submission exists while later decision kinds stay unavailable" do
+  test "P03 public strategy submission and Phase 05 completion handlers coexist" do
     assert Code.ensure_loaded?(FountWorkshop.Session)
     assert function_exported?(FountRun, :submit_decision, 4)
     assert function_exported?(FountWorkshop.Session, :prepare_only, 4)
@@ -58,11 +58,8 @@ defmodule FountRun.ScreenplayPipelineTest do
 
     assert {:ok, registry} = StageRegistry.new()
 
-    assert {:error, {:stage_handler_unavailable, "decide"}} =
-             StageRegistry.fetch(registry, "decide")
-
-    assert {:error, {:stage_handler_unavailable, "deliver"}} =
-             StageRegistry.fetch(registry, "deliver")
+    assert {:ok, FountRun.CompletionHandler} = StageRegistry.fetch(registry, "decide")
+    assert {:ok, FountRun.DeliveryHandler} = StageRegistry.fetch(registry, "deliver")
   end
 
   test "P04 repair lineage fields are closed and preserve the prior candidate" do
@@ -110,11 +107,12 @@ defmodule FountRun.ScreenplayPipelineTest do
              PipelineRequest.advance(envelope, %{check_set_fingerprint: "short"})
   end
 
-  test "P07 Phase 05 acceptance and delivery are not exposed by the Phase 04 registry" do
+  test "P07 Phase 05 acceptance and delivery are exposed without a web dependency" do
     assert {:ok, registry} = StageRegistry.new()
-    refute Map.has_key?(registry, "decide")
-    refute Map.has_key?(registry, "deliver")
-    refute function_exported?(FountRun, :deliver, 4)
-    refute function_exported?(FountRun, :approve_run, 4)
+    assert Map.has_key?(registry, "decide")
+    assert Map.has_key?(registry, "deliver")
+    assert function_exported?(FountRun, :deliver, 5)
+    assert function_exported?(FountRun, :approve_run, 4)
+    refute Code.ensure_loaded?(Phoenix.LiveView)
   end
 end

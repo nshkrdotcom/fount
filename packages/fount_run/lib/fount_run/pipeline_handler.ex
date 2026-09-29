@@ -239,27 +239,21 @@ defmodule FountRun.PipelineHandler do
       context: context
     } = state
 
-    attrs = %{
-      "checkpoint_key" => "candidate-review:" <> candidate["id"] <> ":" <> fingerprint,
-      "kind" => "candidate_review",
-      "prompt" => "Candidate and required checks are saved. Review/acceptance is Phase 05.",
-      "options" => [%{"id" => "review", "label" => "Review saved candidate"}],
-      "step_id" => claim["step_id"],
-      "candidate_id" => candidate["id"],
-      "base_revision_id" => candidate["base_revision_id"],
-      "content_hash" => candidate["screenplay"].revision.content_hash,
-      "check_set_fingerprint" => fingerprint
-    }
-
-    with {:ok, decision} <-
-           Persistence.put_pending_decision(repo, claim["run_id"], attrs, context) do
+    with {:ok, next} <-
+           schedule(
+             repo,
+             claim,
+             "decide",
+             envelope,
+             context,
+             candidate["id"],
+             claim["iteration"]
+           ) do
       {:ok,
        check_result(candidate, envelope, checks, fingerprint, reports)
        |> Map.merge(%{
-         "status" => "check_saved",
-         "decision_id" => decision["id"],
-         "decision_context_fingerprint" => decision["context_fingerprint"],
-         "run_status" => "waiting_for_decision",
+         "status" => "completion_scheduled",
+         "scheduled_step_id" => next["id"],
          "next_stage" => "decide"
        })}
     end

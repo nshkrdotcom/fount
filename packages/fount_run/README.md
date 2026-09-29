@@ -1,8 +1,8 @@
 # FountRun
 
-FountRun is the durable orchestration layer for controlled Fount work. Phase 02 established trusted Run identity and storage; Phase 03 added the reusable fenced execution engine. Phase 04 composes that engine into the headless screenplay pipeline: intake/preflight → investigate → saved dramatic routes → exact strategy decision → write → check → limited iteration.
+FountRun is the durable orchestration layer for controlled Fount work. Phase 05 completes the **headless** screenplay product: the Phase 04 intake/investigate/plan/write/check pipeline is followed by exact steering and approval decisions, plan/policy updates, pause/resume/stop, stale-base rebase, canonical acceptance through Core, candidate-only completion, and durable exports.
 
-The Phase 04 pipeline stops at a saved candidate/check decision boundary. It does not accept canon, deliver artifacts, or expose the later writer-control/web surfaces reserved for Phases 05–06.
+Phase 06 owns the web application. Nothing in FountRun starts Phoenix/LiveView or trusts browser/request JSON with Repo modules, identities, provider clients, credentials, or artifact roots.
 
 ## Shared Repo and migration order
 
@@ -13,28 +13,63 @@ Ecto.Migrator.run(MyRepo, Fount.Persistence.migrations_path(), :up, all: true)
 Ecto.Migrator.run(MyRepo, FountRun.migrations_path(), :up, all: true)
 ```
 
-Core migrations add idempotent Workshop session/candidate operation keys without importing Run. Run migrations add provider-intent/reconciliation records and execution counters on top of the Phase 02 tables.
+Phase 05 adds exact command replay identity for plan/policy updates and parent approval-attempt lineage. Historical rows remain immutable.
 
-The Core operation-key migration is version `20260928011000`, distinct from the existing Run foundation migration at `20260928010000`. This lets a populated Phase 02 database apply both new Core and Run migrations without re-running the foundation schema.
+## Public headless API
 
-## Headless screenplay pipeline
+The writer-facing Run surface is:
 
-`FountRun.StageRegistry` now closes over the Phase 04 stages `intake`, `investigate`, `plan`, `write`, `check` and `iterate`. Intake performs provider-free Workshop preflight. Investigation persists report/evidence/uncertainty context. Planning reuses that saved investigation and persists three closed routes without materializing pages. When policy requires a human route gate, `FountRun.submit_decision/4` must resolve the exact saved strategy checkpoint before `write` can run; exact response replay is idempotent while competing or stale submissions conflict.
+```elixir
+FountRun.start_run(repo, attrs, actor_context, opts \\ [])
+FountRun.get_run(repo, run_id, actor_context)
+FountRun.list_runs(repo, filter, actor_context)
+FountRun.step(repo, run_id, services, opts \\ [])
+FountRun.submit_decision(repo, decision_id, response, actor_context)
+FountRun.update_plan(repo, run_id, plan, actor_context, opts \\ [])
+FountRun.update_policy(repo, run_id, policy, actor_context, opts \\ [])
+FountRun.pause_run(repo, run_id, actor_context)
+FountRun.resume_run(repo, run_id, actor_context)
+FountRun.stop_run(repo, run_id, actor_context)
+FountRun.approve_run(repo, run_id, exact_response, actor_context)
+FountRun.deliver(repo, run_id, destination, actor_context, opts \\ [])
+```
 
-Selected-route writing uses `FountWorkshop.Strategy.materialize/4`. Checks bind candidate, canonical base, authorized scope and protected material. Failed required checks may enqueue a separate durable `iterate` step up to `max_iterations`; the inner Workshop creative repair loop remains disabled. Every candidate remains rooted in the immutable canonical base and carries parent-candidate/report lineage. Canon is never advanced by these stages.
+`approve_run/4` is only a convenience wrapper over the exact persisted final-approval decision. It requires the decision id, context fingerprint, plan version, and policy version and then delegates to the same `submit_decision` implementation. It never chooses “the pending approval” implicitly.
 
-`FountRun.progress/3` exposes run, step, decision, usage and provider-status metadata without provider response bodies. Candidate review/acceptance and delivery are intentionally not registered in Phase 04.
+`step/4` accepts a trusted services map containing `:actor_context` and closed service keys. The older explicit `%ActorContext{}` call form remains valid for Phase 03/04 workers. An actor string is not a writable compatibility path.
 
-## One durable operation
+## Completion and acceptance
 
-Construct `FountRun.ActorContext` only after host authentication/authorization, create a run, then explicitly enqueue one step. A host may call `FountRun.step/4` directly or configure `FountRun.Worker` pollers.
+A checked candidate is revalidated against the current plan/policy/head before completion. Candidate-only policy completes without moving canonical head. Accepting policy creates either an exact human final-approval decision or a durable agent/service approval attempt.
 
-For the Phase 03 real-domain lane, the closed registry maps `write` to `FountRun.WorkshopHandler`. It opens and links a Workshop session before provider work, resumes it with Run-owned budgets/retry allowances, and saves candidates through Core's ordinary candidate path under a fencing guard. Candidate generation does not advance canon.
+Automated approval records callback intent before dispatch, persists the exact review before constructing an approval, saves a stable approval id/payload before Core acceptance, and rechecks authorization/fencing immediately before acceptance. Core remains the only canonical acceptance implementation. A failed/ambiguous callback, plan/policy change, pause/stop, or stale head cannot silently advance canon.
 
-Provider dispatch records intent and reserves resource budget before the call. A saved success is reused after restart. A dispatched response whose outcome cannot be recovered becomes `unknown`; its reservation remains charged/reserved and Run does not replay it blindly.
+A stale canonical head opens an explicit rebase decision. Rebase creates a linked successor run/candidate and requires fresh checks; it does not mutate an already reviewed candidate. Writer replacement Fountain likewise becomes a new candidate and returns to `check`.
 
-When policy sets a money ceiling, supply a same-currency estimate to `step/4` as `reserved_cost_microunits:` and `currency:`. Dispatch fails closed without an estimate. If the provider returns `usage.cost_microunits` and `usage.currency`, Run settles the actual cost. An overrun or unknown actual cost retains the charge and pauses further dispatch.
+## Delivery
 
-`FountRun.progress/3` exposes run, step, usage and provider-status metadata without returning prompts or provider response bodies.
+`FountRun.deliver/5` writes under a host-configured artifact root. Standard bundles include Fountain, FDX, exact review JSON, review Markdown, source diff, structural diff, resource/check summary, provenance, and a manifest written last. PDF and table-read JSON/HTML are optional and use the existing Workshop exporters when requested.
 
-See `guides/architecture.md` and `guides/storage.md`.
+Every format has an immutable durable delivery row and checksum. A ready file is reused only when the bytes still match its recorded digest. Failed or missing formats retry independently with a new delivery identity. Candidate-only exports are labeled as candidates; accepted exports bind the stored accepted revision even if canonical head later moves.
+
+## CLI
+
+`mix fount.run` exposes `start`, `show`, `step`, `decisions`, `decide`, `plan`, `pause`, `resume`, `stop`, `policy`, `approve`, and `export`.
+
+The host configures trusted runtime objects, for example:
+
+```elixir
+config :fount_run, :cli,
+  repo: MyApp.Repo,
+  actor_context: trusted_actor_context,
+  services: %{inference: inference_client},
+  artifact_root: "/srv/fount/artifacts",
+  step_options: [lease_ms: 30_000],
+  pdf_options: []
+```
+
+Command JSON contains only work data. `plan` and `policy` require `--expected-version` and `--command-id`. `approve` requires an exact approval response JSON. `export` accepts a relative destination under the configured root and optional `--pdf` / `--table-read`.
+
+CLI exit classes are stable: `2` usage/input, `3` trusted runtime/auth configuration, `4` conflict/stale/fenced control state, and `5` execution/runtime failure. Success is `0`.
+
+See `guides/architecture.md`, `guides/storage.md`, and `guides/control-and-delivery.md`.

@@ -38,7 +38,7 @@ defmodule FountRun.DurableExecutionTest do
              Transition.evaluate(run, %{step | "status" => "succeeded"}, :claim)
   end
 
-  test "stage registry is closed and missing later-stage handlers are explicit" do
+  test "stage registry is closed and Phase 05 handlers are explicit" do
     assert {:ok, registry} = StageRegistry.new(%{"check" => FixtureHandler})
     assert {:ok, FountRun.PipelineHandler} = StageRegistry.fetch(registry, "intake")
     assert {:ok, FountRun.PipelineHandler} = StageRegistry.fetch(registry, "investigate")
@@ -47,11 +47,8 @@ defmodule FountRun.DurableExecutionTest do
     assert {:ok, FixtureHandler} = StageRegistry.fetch(registry, "check")
     assert {:ok, FountRun.PipelineHandler} = StageRegistry.fetch(registry, "iterate")
 
-    assert {:error, {:stage_handler_unavailable, "decide"}} =
-             StageRegistry.fetch(registry, "decide")
-
-    assert {:error, {:stage_handler_unavailable, "deliver"}} =
-             StageRegistry.fetch(registry, "deliver")
+    assert {:ok, FountRun.CompletionHandler} = StageRegistry.fetch(registry, "decide")
+    assert {:ok, FountRun.DeliveryHandler} = StageRegistry.fetch(registry, "deliver")
 
     assert {:error, {:invalid_stage, "future"}} = StageRegistry.fetch(registry, "future")
     assert {:error, :invalid_stage_registry} = StageRegistry.new(%{"future" => FixtureHandler})

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Complete the Phase 05 headless product: exact final decisions, plan/policy steering, pause/resume/stop, explicit rebase/replacement, durable human/agent/service approval through Core, candidate-only completion, and checksum-verified delivery bundles.
+- Add durable callback/review/approval recovery, fallback-attempt lineage, acceptance replay after lost acknowledgement, independent PDF retry, and safe progress projection for approval/delivery state.
+- Add the full `FountRun` public control API and `mix fount.run` CLI with trusted runtime configuration and stable exit classes; Phase 06 web UI remains intentionally absent.
+- Add C01-C07 unit/integration coverage, including exact approval races, control restart, candidate export identity and crash-recovery scenarios.
+
 - Add the Phase 04 headless screenplay pipeline over the durable Run engine: preflight, investigation, saved dramatic routes, exact strategy checkpoint, selected-route writing, required checks and limited durable iteration.
 - Add production `submit_decision/4` for strategy checkpoints with exact actor/context/plan/policy/base binding, idempotent replay and stale/competing conflict semantics.
 - Persist decision metadata in progress, preserve canonical-base candidate lineage and reports, enforce scope/protected-material checks, and stop before Phase 05 acceptance or delivery.

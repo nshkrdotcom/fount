@@ -142,6 +142,25 @@ if config_env() == :prod do
   config :fount_web, :artifact_root, artifact_root
   config :fount_run, :artifact_root, artifact_root
 else
+  repo = Application.fetch_env!(:fount, Fount.Repo)
+  endpoint = Application.fetch_env!(:fount_web, FountWeb.Endpoint)
+  port = System.get_env("PORT", to_string(endpoint[:http][:port])) |> String.to_integer()
+
+  config :fount, Fount.Repo, url: System.get_env("FOUNT_DATABASE_URL", Keyword.fetch!(repo, :url))
+
+  config :fount_web, FountWeb.Endpoint,
+    http: [port: port],
+    url: [port: port]
+
+  if config_env() == :test do
+    browser_server? = System.get_env("PHX_SERVER") == "true"
+
+    config :fount, Fount.Repo,
+      pool: if(browser_server?, do: DBConnection.ConnectionPool, else: Ecto.Adapters.SQL.Sandbox)
+
+    config :fount_web, FountWeb.Endpoint, server: browser_server?
+  end
+
   owner = Application.fetch_env!(:fount_web, :owner)
 
   artifact_root =

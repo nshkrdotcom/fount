@@ -144,3 +144,34 @@ test('H03-H05 integrated analysis survives review reconnect and stays candidate-
   await expect(page.getByRole('heading', {name: 'Prewrite Intelligence'})).toBeVisible();
   await expect(page.getByRole('heading', {name: 'Revision Intelligence'})).toBeVisible();
 });
+
+
+test('Create Run submits over HTTP when JavaScript is unavailable', async ({browser}) => {
+  const context = await browser.newContext({javaScriptEnabled: false});
+  const page = await context.newPage();
+  await login(page);
+  await page.goto('/projects/new');
+  await page.getByLabel('Project key', {exact: true}).fill(`native-${Date.now()}`);
+  await page.getByRole('button', {name: 'Create Run', exact: true}).click();
+  await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+\/setup$/);
+  await expect(page.getByText('Run setup', {exact: true})).toBeVisible();
+  await context.close();
+});
+
+test('LiveView falls back to long polling when WebSocket connections fail', async ({browser}) => {
+  const context = await browser.newContext();
+  await context.addInitScript(() => {
+    const NativeWebSocket = window.WebSocket;
+    window.WebSocket = class extends NativeWebSocket {
+      constructor(url, protocols) {
+        super(url.replace(/:\d+\/live\/websocket/, ':1/live/websocket'), protocols);
+      }
+    };
+  });
+  const page = await context.newPage();
+  await login(page);
+  const runId = await createJourney(page, 'opening', `longpoll-${Date.now()}`);
+  await chooseRoute(page, runId);
+  await waitForCandidate(page, runId, 'INT. LOCKED ROOM - NIGHT');
+  await context.close();
+});

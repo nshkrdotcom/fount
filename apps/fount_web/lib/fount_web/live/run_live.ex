@@ -18,6 +18,7 @@ defmodule FountWeb.RunLive do
 
         {:ok,
          socket
+         |> assign(:live_connected, connected?(socket))
          |> assign(:run_id, run_id)
          |> assign(:access, access)
          |> assign(:context, context)
@@ -362,6 +363,7 @@ defmodule FountWeb.RunLive do
 
     ~H"""
     <main>
+      <p :if={!@live_connected} role="status">Connecting live controls…</p>
       <nav aria-label="Run">
         <a href={~p"/"}>Projects</a>
         <a href={~p"/runs/#{@run_id}/setup"}>Setup</a>
@@ -442,18 +444,20 @@ defmodule FountWeb.RunLive do
             </select>
           </label>
           <p>Configured approver: <code>{inspect(@current_policy["approver"])}</code></p>
-          <button type="submit">Save policy snapshot</button>
+          <button disabled={!@live_connected} type="submit">Save policy snapshot</button>
         </form>
-        <div class="card"><button phx-click="launch">Launch / resume durable worker</button></div>
+        <div class="card">
+          <button disabled={!@live_connected} phx-click="launch">Launch / resume durable worker</button>
+        </div>
       </section>
 
       <section :if={@live_action == :timeline} class="stack">
         <h2>Durable timeline and controls</h2>
         <div class="card">
-          <button phx-click="pause">Pause</button>
-          <button phx-click="resume">Resume</button>
-          <button phx-click="stop">Stop</button>
-          <button phx-click="launch">Ensure worker is running</button>
+          <button disabled={!@live_connected} phx-click="pause">Pause</button>
+          <button disabled={!@live_connected} phx-click="resume">Resume</button>
+          <button disabled={!@live_connected} phx-click="stop">Stop</button>
+          <button disabled={!@live_connected} phx-click="launch">Ensure worker is running</button>
         </div>
         <p>
           Progress is reloaded from PostgreSQL every second and after PubSub wakeups. Socket or worker loss does not own correctness.
@@ -552,7 +556,8 @@ defmodule FountWeb.RunLive do
                 placeholder="Paste the complete replacement Fountain source for a new checked candidate"
               ></textarea>
             </label>
-            <button type="submit">{option["title"] || option["label"] || option["id"] ||
+            <button disabled={!@live_connected} type="submit">{option["title"] || option["label"] ||
+              option["id"] ||
               option["value"]}</button>
           </form>
         </article>
@@ -626,7 +631,7 @@ defmodule FountWeb.RunLive do
           Include PDF (requires configured renderer and Poppler checks)</label>
           <label><input type="checkbox" name="export[table_read]" value="true" />
           Include table-read bundle</label>
-          <button type="submit">Publish / retry bundle</button>
+          <button disabled={!@live_connected} type="submit">Publish / retry bundle</button>
         </form>
         <table>
           <thead>

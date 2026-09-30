@@ -8,6 +8,7 @@ defmodule FountWeb.MixProject do
       elixir: "~> 1.18",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
+      listeners: [Phoenix.CodeReloader],
       dialyzer: [plt_add_apps: [:mix]],
       aliases: aliases(),
       deps: deps()

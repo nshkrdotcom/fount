@@ -22,17 +22,21 @@ Invalid/missing required configuration fails during runtime configuration or wor
 
 The default development configuration is a credential-free deterministic demo. The default token (`fount-demo-owner-token`) is intentionally non-secret and safe only for loopback development. A deployed host must set `FOUNT_OWNER_ID`, `FOUNT_OWNER_TOKEN`, `FOUNT_DATABASE_URL`, `FOUNT_ARTIFACT_ROOT`, `SECRET_KEY_BASE`, and `PHX_HOST`.
 
+Run from the repository root:
+
 ```bash
-cd apps/fount_web
-mix deps.get
-mix fount_web.migrate       # Core -> Run -> host
-mix assets.setup
-mix assets.build
-mix phx.server
-# http://127.0.0.1:4000/login
+./scripts/dev.sh setup    # fetch dependencies, create/migrate DB, install/build assets
+./scripts/dev.sh start    # foreground Phoenix server; Ctrl+C stops it
+./scripts/dev.sh --help   # commands and options
 ```
 
-The Hex and browser dependency locks were resolved during Phase 06 runtime QC and are committed. On a fresh checkout, use `FOUNT_SYSTEM_ONE_SDK_PATH` when resolving dependencies if the local System One SDK is supplied as a path rather than through Hex.
+`./scripts/dev.sh` (or `up`) combines setup and start. No environment exports are required. The launcher finds the sibling `system_one_sdk/packages/system_one_sdk` checkout automatically, selects development mode and deterministic Sandbox providers, and scopes its settings to child processes. If the SDK lives elsewhere, use `--sdk-path /path/to/package`. Use `--port 4050` or `--database-url 'ecto://user:password@localhost/fount_dev'` when your local connection differs. PostgreSQL must already be running; setup creates a missing database and migrates it without dropping/resetting it.
+
+Open `http://127.0.0.1:4000/login` with the local demo token `fount-demo-owner-token`. `setup` leaves the server stopped; `start` never daemonizes it. Development setup installs the pinned Workshop PDF renderer dependency through npm, but does not install system PDF utilities.
+
+The SDK release required by this workspace is not currently available from Hex. The script supplies the supported local path to all Mix commands; running bare Mix commands without that build setting will still attempt Hex. Dependency selection belongs to build configuration in Observe's `mix.exs`. All host runtime environment reads are centralized in `config/runtime.exs`; `dev.exs` and `test.exs` contain static defaults. Application modules receive configuration/services rather than reading or mutating the process environment.
+
+The Hex and browser dependency locks were resolved during Phase 06 runtime QC and are committed.
 
 ## Authenticated writer surfaces
 
@@ -67,7 +71,7 @@ The maintained harness is `browser/` with `@playwright/test` 1.63.0 and Chromium
 FOUNT_DATABASE_URL=ecto://... scripts/run_phase06_browser.sh
 ```
 
-The runner migrates Core -> Run -> host, builds assets, starts the app on `127.0.0.1:4011`, and drives the retained U01-U05 coverage plus the integrated H03-H05 analysis/reconnect journey. The review surface shows safe prewrite/revision packet status (`complete`, `partial`, `failed`, or `not-run`) and separates semantic advisory checks from authoritative required Run/Core checks. Runtime QC must execute the maintained suite; this offline source delivery does not claim it passed.
+The runner migrates Core -> Run -> host, builds assets, starts the app on `127.0.0.1:4011`, and drives the retained U01-U05 coverage plus the integrated H03-H05 analysis/reconnect journey. The review surface shows safe prewrite/revision packet status (`complete`, `partial`, `failed`, or `not-run`) and separates semantic advisory checks from authoritative required Run/Core checks. The Phase 03 runtime QC report records the executed suite and its exact certified revision. Subsequent development changes must be verified separately.
 
 PDF is never faked. It remains an explicit format failure unless Afterwriting and the configured Poppler checks are actually available.
 
@@ -76,3 +80,5 @@ PDF is never faked. It remains an explicit format failure unless Afterwriting an
 See `../../docs/implementation_handoff/PHASE_06_BUILD_AND_RELEASE.md` for the five-library + host build/release inventory.
 
 The test browser server (`PHX_SERVER=true`) uses the normal database connection pool so durable workers and LiveViews can share it without retaining Sandbox ownership. ExUnit continues to use SQL Sandbox. Run database suites and the browser harness sequentially against a disposable database.
+
+Project creation also has an authenticated, CSRF-protected HTTP POST path, so an unavailable LiveView connection cannot silently turn Create Run into a GET. Uploaded files keep the same 1 MiB limit. Live Run controls wait for a connection; Phoenix falls back to long polling when WebSockets fail. JavaScript is required for live controls.

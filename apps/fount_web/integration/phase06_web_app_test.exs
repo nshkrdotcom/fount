@@ -7,6 +7,87 @@ defmodule FountWeb.Phase06IntegrationTest do
     assert html =~ "Upload Fountain/FDX"
   end
 
+  test "Run launch waits for the live connection instead of losing an early click", %{conn: conn} do
+    conn = FountWeb.ConnCase.login(conn)
+
+    {:ok, %{run: run}} =
+      FountWeb.Launch.create("test-owner", %{
+        "title" => "Connection gate",
+        "key" => "connection-gate",
+        "journey" => "opening",
+        "source" => FountWeb.Journeys.fixture_fountain()
+      })
+
+    path = "/runs/#{run["id"]}/setup"
+    html = conn |> get(path) |> html_response(200)
+    assert html =~ "Connecting live controls"
+    assert html =~ ~r/<button[^>]*disabled[^>]*phx-click="launch"/
+    assert {:ok, view, _html} = live(conn, path)
+    refute has_element?(view, "button[phx-click=launch][disabled]")
+  end
+
+  test "native POST creates a Run for the signed owner without LiveView", %{conn: conn} do
+    conn = FountWeb.ConnCase.login(conn)
+
+    response =
+      post(conn, "/projects", %{
+        "project" => %{
+          "title" => "Native form",
+          "key" => "native-form",
+          "journey" => "opening",
+          "source" => FountWeb.Journeys.fixture_fountain()
+        }
+      })
+
+    location = redirected_to(response)
+    assert location =~ ~r{^/runs/[0-9a-f-]+/setup$}
+    run_id = location |> String.split("/") |> Enum.at(2)
+    assert {:ok, access} = FountWeb.Store.run_access(Fount.Repo, "test-owner", run_id)
+    assert access["owner_id"] == "test-owner"
+  end
+
+  test "native POST accepts an upload and rejects oversized uploads visibly", %{conn: conn} do
+    conn = FountWeb.ConnCase.login(conn)
+    path = Path.join(System.tmp_dir!(), "fount-native-#{Fount.ID.v4()}.fountain")
+    on_exit(fn -> File.rm(path) end)
+    File.write!(path, FountWeb.Journeys.fixture_fountain())
+    upload = %Plug.Upload{path: path, filename: "story.fountain", content_type: "text/plain"}
+
+    attrs = %{
+      "title" => "Native upload",
+      "key" => "native-upload",
+      "journey" => "opening",
+      "source" => ""
+    }
+
+    assert post(conn, "/projects", %{"project" => attrs, "screenplay" => upload})
+           |> redirected_to() =~ "/setup"
+
+    File.write!(path, :binary.copy("x", 1_048_577))
+
+    response =
+      post(conn, "/projects", %{
+        "project" => Map.put(attrs, "key", "native-large"),
+        "screenplay" => upload
+      })
+
+    assert redirected_to(response) == "/projects/new"
+    assert Phoenix.Flash.get(response.assigns.flash, :error) =~ "1 MiB"
+
+    assert {:error, :not_found} =
+             FountWeb.Store.project_by_key(Fount.Repo, "test-owner", "native-large")
+  end
+
+  test "native POST requires authentication and reports validation failure", %{conn: conn} do
+    assert redirected_to(post(conn, "/projects", %{"project" => %{}})) == "/login"
+
+    response =
+      conn |> FountWeb.ConnCase.login() |> post("/projects", %{"project" => %{"key" => "!"}})
+
+    assert redirected_to(response) == "/projects/new"
+    assert Phoenix.Flash.get(response.assigns.flash, :error) != nil
+  end
+
   test "U01 project intake creates candidate-only Run and exact owner mapping", %{conn: conn} do
     conn = FountWeb.ConnCase.login(conn)
 

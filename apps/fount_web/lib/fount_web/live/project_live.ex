@@ -128,14 +128,22 @@ defmodule FountWeb.ProjectLive do
           Deterministic demo mode uses no secret credential. It exercises persistence, Run decisions, Workshop edits, Observe-backed Intelligence, checks and delivery; it does not certify screenplay quality.
         </p>
         <p :if={@error} role="alert">{@error}</p>
+        <p :if={@flash["error"]} role="alert">{@flash["error"]}</p>
 
-        <form phx-submit="create" class="stack">
+        <form
+          id="create-project"
+          action={~p"/projects"}
+          method="post"
+          enctype="multipart/form-data"
+          class="stack"
+        >
+          <input type="hidden" name="_csrf_token" value={Plug.CSRFProtection.get_csrf_token()} />
           <label>Project title <input name="project[title]" value="Phase 06 Demo" required /></label>
           <label>Project key
           <input
             name="project[key]"
             value={"phase06-" <> Integer.to_string(System.unique_integer([:positive]))}
-            pattern="[a-z0-9][a-z0-9_-]{1,63}"
+            pattern="[a-z0-9][a-z0-9_\-]{1,63}"
             required
           /></label>
           <label>
@@ -154,12 +162,13 @@ defmodule FountWeb.ProjectLive do
             </select>
           </label>
           <label>
-            Upload Fountain/FDX (max 1 MiB) <.live_file_input upload={@uploads.screenplay} />
+            Upload Fountain/FDX (max 1 MiB)
+            <input type="file" name="screenplay" accept=".fountain,.fdx" />
           </label>
           <label>
             Or Fountain source <textarea name="project[source]"><%= @fixture_source %></textarea>
           </label>
-          <button type="submit">Create Run</button>
+          <button type="submit" phx-disable-with="Creating Run…">Create Run</button>
         </form>
       </section>
     </main>

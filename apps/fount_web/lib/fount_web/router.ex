@@ -25,6 +25,8 @@ defmodule FountWeb.Router do
   scope "/", FountWeb do
     pipe_through [:browser, :owner]
 
+    post "/projects", ProjectController, :create
+
     live_session :owner, on_mount: [{FountWeb.OwnerAuth, :ensure_authenticated}] do
       live "/", ProjectLive, :index
       live "/projects/new", ProjectLive, :new

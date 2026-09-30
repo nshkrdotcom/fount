@@ -3,6 +3,7 @@ defmodule FountRun.WorkshopHandler do
   @behaviour FountRun.StageHandler
 
   alias Ecto.Adapters.SQL
+
   alias FountRun.{
     AnalysisLineage,
     DispatchHook,
@@ -11,6 +12,7 @@ defmodule FountRun.WorkshopHandler do
     PipelineRequest,
     WorkshopIntegration
   }
+
   alias FountWorkshop.{Session, Store}
   alias FountWorkshop.Strategy
 

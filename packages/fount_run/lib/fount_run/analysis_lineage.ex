@@ -3,7 +3,8 @@ defmodule FountRun.AnalysisLineage do
 
   @doc "Returns the safe analysis lineage already persisted with a Workshop session."
   def from_session(session) when is_map(session) do
-    packet = get_in(session, ["progress", "preparation", "context", "data", "writer_intelligence"])
+    packet =
+      get_in(session, ["progress", "preparation", "context", "data", "writer_intelligence"])
 
     compact(%{
       "writer" => packet_summary(packet)
@@ -100,7 +101,10 @@ defmodule FountRun.AnalysisLineage do
   defp resource_summary(_), do: nil
 
   defp add_known(acc, _key, nil), do: acc
-  defp add_known(acc, key, value) when is_integer(value), do: Map.update(acc, key, value, &(&1 + value))
+
+  defp add_known(acc, key, value) when is_integer(value),
+    do: Map.update(acc, key, value, &(&1 + value))
+
   defp add_known(acc, _key, _value), do: acc
 
   defp compact(map) do

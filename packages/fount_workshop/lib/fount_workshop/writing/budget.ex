@@ -20,7 +20,8 @@ defmodule FountWorkshop.Writing.Budget do
       analysis:
         Resources.new(
           max_measurement_states: Keyword.get(opts, :max_measurement_states, 500),
-          spent: Map.get(spent, "measurement_states", 0)
+          spent: Map.get(spent, "measurement_states", 0),
+          reservation_hook: Keyword.get(opts, :reservation_hook)
         )
     }
   end
@@ -28,8 +29,7 @@ defmodule FountWorkshop.Writing.Budget do
   def take(nil, _kind, n) when is_integer(n) and n >= 0, do: n
 
   def take(budget, :measurement_states, n) when is_integer(n) and n >= 0 do
-    allowed = reserve(budget.reservation_hook, :measurement_states, n)
-    Resources.take(budget.analysis, allowed)
+    Resources.take(budget.analysis, n)
   end
 
   def take(budget, :inference, n) when is_integer(n) and n >= 0 do
@@ -47,14 +47,4 @@ defmodule FountWorkshop.Writing.Budget do
       "inference" => :atomics.get(budget.counter, 1),
       "measurement_states" => Resources.spent(budget.analysis)
     }
-
-  defp reserve(nil, _kind, n), do: n
-
-  defp reserve(hook, kind, n) when is_function(hook, 2) do
-    case hook.(kind, n) do
-      {:ok, granted} when is_integer(granted) and granted >= 0 and granted <= n -> granted
-      {:error, _reason} -> 0
-      _ -> 0
-    end
-  end
 end

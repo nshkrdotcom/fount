@@ -5,6 +5,7 @@ defmodule FountRun.PipelineHandler do
   alias Ecto.Adapters.SQL
   alias Fount.Persistence, as: CorePersistence
   alias Fount.Writing.{CanonicalJSON, Principal}
+
   alias FountRun.{
     AnalysisLineage,
     DispatchHook,
@@ -13,6 +14,7 @@ defmodule FountRun.PipelineHandler do
     PipelineRequest,
     WorkshopIntegration
   }
+
   alias FountWorkshop.Candidate
   alias FountWorkshop.{Session, Store}
 
@@ -415,6 +417,7 @@ defmodule FountRun.PipelineHandler do
              services,
              stage_opts ++ [source_candidate: source_packet, parent_candidate_id: source["id"]]
            ),
+         :ok <- fault(opts, :after_candidate_persisted),
          {:ok, _} <- ExecutionStore.link_session(repo, claim, session["id"]),
          candidates <- load_session_candidates(session, services),
          [candidate | _] <- candidates,

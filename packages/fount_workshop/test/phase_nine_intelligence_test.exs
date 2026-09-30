@@ -105,6 +105,23 @@ defmodule FountWorkshop.PhaseNineIntelligenceTest do
     assert Enum.any?(checks, &(&1["status"] == "review"))
   end
 
+  test "partial revision analysis cannot claim preservation or a semantic pass" do
+    packet = %{
+      "status" => "partial",
+      "revision_comparison" => %{
+        "protected_strengths" => %{
+          "declared" => ["Keep the ledger"],
+          "status" => "evidence_of_preservation"
+        },
+        "collateral_change" => %{"risk_support" => %{}}
+      }
+    }
+
+    checks = Intelligence.revision_checks(packet)
+    assert Enum.all?(checks, &(&1["status"] == "unresolved"))
+    assert Enum.all?(checks, &(&1["severity"] == "advisory"))
+  end
+
   defp screenplay do
     Screenplay.new(
       scenes: [

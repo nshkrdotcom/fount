@@ -16,6 +16,10 @@ defmodule FountRun.ScreenplayPipelineIntegrationTest do
     use Ecto.Repo, otp_app: :fount_run, adapter: Ecto.Adapters.Postgres
   end
 
+  defmodule PeerRepo do
+    use Ecto.Repo, otp_app: :fount_run, adapter: Ecto.Adapters.Postgres
+  end
+
   setup do
     url = System.fetch_env!("FOUNT_DATABASE_URL")
     prefix = "phase04_#{String.replace(ID.v4(), "-", "")}"
@@ -895,6 +899,15 @@ defmodule FountRun.ScreenplayPipelineIntegrationTest do
 
     measurement = progress["resources"]["measurement_states"]
     assert measurement["consumed"] > 0
+
+    assert [[durable_consumed]] =
+             sql(
+               repo,
+               "SELECT COALESCE(sum(settled_quantity),0)::bigint FROM fount_run_usage WHERE run_id=$1::text::uuid AND resource='measurement_states'",
+               [fixture.run["id"]]
+             )
+
+    assert durable_consumed == measurement["consumed"]
     assert measurement["remaining"] == measurement["limit"] - measurement["consumed"]
     refute measurement["exhausted"]
 
@@ -911,6 +924,13 @@ defmodule FountRun.ScreenplayPipelineIntegrationTest do
                "SELECT count(*) FROM analysis_runs WHERE id=$1::text::uuid AND session_id=$2::text::uuid",
                [analysis["analysis_run_id"], investigate["result"]["session_id"]]
              )
+
+    assert [[persisted_packet_id]] =
+             sql(repo, "SELECT result->>'id' FROM analysis_runs WHERE id=$1::text::uuid", [
+               analysis["analysis_run_id"]
+             ])
+
+    assert persisted_packet_id == analysis["packet_id"]
 
     assert [[observations]] =
              sql(
@@ -943,7 +963,10 @@ defmodule FountRun.ScreenplayPipelineIntegrationTest do
              run_step(repo, exhausted, exhausted_client, exhausted_observe)
 
     assert [] = Agent.get(exhausted_script, & &1)
-    assert {:ok, exhausted_progress} = FountRun.progress(repo, exhausted.run["id"], exhausted.context)
+
+    assert {:ok, exhausted_progress} =
+             FountRun.progress(repo, exhausted.run["id"], exhausted.context)
+
     exhausted_step = Enum.find(exhausted_progress["steps"], &(&1["stage"] == "investigate"))
 
     assert exhausted_progress["resources"]["measurement_states"] == %{
@@ -958,6 +981,7 @@ defmodule FountRun.ScreenplayPipelineIntegrationTest do
 
     packet = writer_packet(repo, exhausted_step)
     assert Enum.any?(packet["errors"] || [], &(&1["class"] == "budget_exhausted"))
+
     assert get_in(packet, [
              "resource_usage",
              "capability_runs",
@@ -970,10 +994,29 @@ defmodule FountRun.ScreenplayPipelineIntegrationTest do
   test "D03 durable Sandbox cache reuses equivalent work and changed semantic context misses",
        %{repo: repo} do
     root = dialogue_root()
+    dialogue_id = Enum.find(root.ir.elements, &(&1.type == :dialogue)).id
+
+    {:ok, changed_root, _} =
+      Screenplay.apply(root, [
+        %{
+          "kind" => "replace_text",
+          "target" => %{"kind" => "element", "id" => dialogue_id},
+          "value" => "I saw the missing ledger and chose to hide it."
+        }
+      ])
+
+    fixtures =
+      Map.merge(
+        observe_provider(root).state.fixtures,
+        observe_provider(changed_root).state.fixtures
+      )
 
     first = fixture_run(repo, "d03-first", root: root)
-    {first_client, first_script} = scripted_client([investigation_plan(), investigation_explanation()])
-    first_step = run_investigation(repo, first, first_client, observe_provider(root))
+
+    {first_client, first_script} =
+      scripted_client([investigation_plan(), investigation_explanation()])
+
+    first_step = run_investigation(repo, first, first_client, Sandbox.new!(fixtures))
     assert [] = Agent.get(first_script, & &1)
     first_summary = first_step["result"]["analysis"]["writer"]
     assert first_summary["resources"]["scheduled_states"] > 0
@@ -998,7 +1041,7 @@ defmodule FountRun.ScreenplayPipelineIntegrationTest do
     {second_client, second_script} =
       scripted_client([investigation_plan(), investigation_explanation()])
 
-    second_step = run_investigation(repo, second, second_client, observe_provider(root))
+    second_step = run_investigation(repo, second, second_client, Sandbox.new!(fixtures))
     assert [] = Agent.get(second_script, & &1)
     second_summary = second_step["result"]["analysis"]["writer"]
 
@@ -1014,21 +1057,31 @@ defmodule FountRun.ScreenplayPipelineIntegrationTest do
              )
 
     assert access_after > access_before
-    assert [[^observations_before]] = sql(repo, "SELECT count(*) FROM analysis_observations")
+    # Each run owns cache-derived audit observations; measurement identity remains stable.
+    assert [[observations_after]] = sql(repo, "SELECT count(*) FROM analysis_observations")
+    assert observations_after == observations_before * 2
 
-    changed =
-      fixture_run(repo, "d03-changed",
-        root: root,
-        request: first.request,
-        goal: "Inspect a deliberately changed semantic concern for the same selected pages",
-        persist: false,
-        key: first.key
-      )
+    assert [[0]] =
+             sql(
+               repo,
+               """
+               SELECT count(*) FROM analysis_observations a
+               WHERE a.analysis_run_id=$1::text::uuid AND NOT EXISTS (
+                 SELECT 1 FROM analysis_observations b
+                 WHERE b.analysis_run_id=$2::text::uuid
+                   AND b.result_id=a.result_id AND b.kind=a.kind AND b.target=a.target
+               )
+               """,
+               [second_summary["analysis_run_id"], first_summary["analysis_run_id"]]
+             )
+
+    assert {:ok, _} = Persistence.save_edit_candidate(repo, first.key, changed_root)
+    changed = fixture_run(repo, "d03-changed", root: changed_root, persist: false, key: first.key)
 
     {changed_client, changed_script} =
       scripted_client([investigation_plan(), investigation_explanation()])
 
-    changed_step = run_investigation(repo, changed, changed_client, observe_provider(root))
+    changed_step = run_investigation(repo, changed, changed_client, Sandbox.new!(fixtures))
     assert [] = Agent.get(changed_script, & &1)
     changed_summary = changed_step["result"]["analysis"]["writer"]
 
@@ -1039,6 +1092,8 @@ defmodule FountRun.ScreenplayPipelineIntegrationTest do
 
     assert [[cache_rows_after]] = sql(repo, "SELECT count(*) FROM analysis_measurement_results")
     assert cache_rows_after > cache_rows_before
+    assert {:ok, unchanged_canon} = Persistence.load(repo, first.key)
+    assert unchanged_canon.revision.id == root.revision.id
   end
 
   test "D05 pre-analysis crash replays one logical session without resetting measurement usage",
@@ -1115,7 +1170,7 @@ defmodule FountRun.ScreenplayPipelineIntegrationTest do
   end
 
   test "D05 candidate crash preserves one candidate and a policy-fenced analysis cannot attach",
-       %{repo: repo} do
+       %{repo: repo, prefix: prefix} do
     root = dialogue_root()
     dialogue = Enum.find(root.ir.elements, &(&1.type == :dialogue))
     fixture = fixture_run(repo, "d05-candidate", root: root)
@@ -1158,6 +1213,7 @@ defmodule FountRun.ScreenplayPipelineIntegrationTest do
 
     assert_receive {:DOWN, ^ref, :process, ^pid, :phase02_candidate_crash}, 5_000
     assert [] = Agent.get(script, & &1)
+
     assert [[1]] =
              sql(
                repo,
@@ -1179,6 +1235,7 @@ defmodule FountRun.ScreenplayPipelineIntegrationTest do
              run_step(repo, fixture, retry_client, observe)
 
     assert [] = Agent.get(retry_script, & &1)
+
     assert [[1]] =
              sql(
                repo,
@@ -1198,10 +1255,23 @@ defmodule FountRun.ScreenplayPipelineIntegrationTest do
     assert write_step["result"]["candidate_id"] == candidate_id_before
     assert is_binary(get_in(write_step, ["result", "analysis", "revision", "analysis_run_id"]))
 
+    start_supervised!(
+      {PeerRepo,
+       url: System.fetch_env!("FOUNT_DATABASE_URL"),
+       pool_size: 1,
+       parameters: [search_path: prefix]}
+    )
+
+    assert [[worker_backend]] = sql(repo, "SELECT pg_backend_pid()")
+    assert [[peer_backend]] = sql(PeerRepo, "SELECT pg_backend_pid()")
+    refute worker_backend == peer_backend
+
     fenced_root = dialogue_root()
     fenced = fixture_run(repo, "d05-fenced", root: fenced_root)
     fenced_observe = observe_provider(fenced_root)
-    {fenced_client, fenced_script} = scripted_client([investigation_plan(), investigation_explanation()])
+
+    {fenced_client, fenced_script} =
+      scripted_client([investigation_plan(), investigation_explanation()])
 
     assert {:ok, _} = enqueue_intake(repo, fenced)
     assert {:ok, %{"status" => "succeeded"}} = run_step(repo, fenced, nil)
@@ -1218,7 +1288,7 @@ defmodule FountRun.ScreenplayPipelineIntegrationTest do
                  :after_pre_analysis_persisted ->
                    assert {:ok, _} =
                             FountRun.update_policy(
-                              repo,
+                              PeerRepo,
                               fenced.run["id"],
                               changed_policy,
                               fenced.context,
@@ -1285,6 +1355,7 @@ defmodule FountRun.ScreenplayPipelineIntegrationTest do
     check = Enum.find(after_check["steps"], &(&1["stage"] == "check"))
 
     assert get_in(check, ["result", "analysis", "revision", "status"]) == revision["status"]
+
     assert get_in(check, ["result", "analysis", "revision", "analysis_run_id"]) ==
              revision["analysis_run_id"]
 
@@ -1301,7 +1372,7 @@ defmodule FountRun.ScreenplayPipelineIntegrationTest do
   end
 
   test "D06/D07 layered check reuses revision evidence and iterate remeasures the child once",
-       %{repo: repo} do
+       %{repo: repo, prefix: prefix} do
     root = train_root()
     action = Enum.find(root.ir.elements, &(&1.type == :action))
     dialogue = Enum.find(root.ir.elements, &(&1.type == :dialogue))
@@ -1349,10 +1420,14 @@ defmodule FountRun.ScreenplayPipelineIntegrationTest do
     assert is_binary(revision_run_id)
     assert {:ok, %{"status" => "succeeded"}} = run_step(repo, fixture, nil)
     assert {:ok, after_check} = FountRun.progress(repo, fixture.run["id"], fixture.context)
-    first_check = Enum.find(after_check["steps"], &(&1["stage"] == "check" and &1["iteration"] == 0))
+
+    first_check =
+      Enum.find(after_check["steps"], &(&1["stage"] == "check" and &1["iteration"] == 0))
 
     assert after_check["resources"]["measurement_states"]["consumed"] == measurement_before_check
-    assert get_in(first_check, ["result", "analysis", "revision", "analysis_run_id"]) == revision_run_id
+
+    assert get_in(first_check, ["result", "analysis", "revision", "analysis_run_id"]) ==
+             revision_run_id
 
     assert Enum.any?(first_check["result"]["checks"], fn check ->
              check["kind"] == "revision_intelligence" and check["severity"] == "advisory"
@@ -1364,18 +1439,70 @@ defmodule FountRun.ScreenplayPipelineIntegrationTest do
            end)
 
     assert first_check["result"]["status"] == "repair_scheduled"
+
+    {pid, ref} =
+      spawn_monitor(fn ->
+        FountRun.step(repo, fixture.run["id"], fixture.context,
+          inference: client,
+          observe: observe,
+          lease_ms: 5_000,
+          fault_injector: fn
+            :after_candidate_persisted -> exit(:phase02_iterate_crash)
+            _ -> :ok
+          end
+        )
+      end)
+
+    assert_receive {:DOWN, ^ref, :process, ^pid, :phase02_iterate_crash}, 5_000
+    assert [] = Agent.get(script, & &1)
+    assert {:ok, crashed} = FountRun.progress(repo, fixture.run["id"], fixture.context)
+    crashed_usage = crashed["resources"]["measurement_states"]["consumed"]
+
+    assert [[2]] =
+             sql(
+               repo,
+               "SELECT count(*) FROM writing_candidates WHERE screenplay_id=$1::text::uuid",
+               [root.id]
+             )
+
+    restart_repo(prefix)
+    expire_active_lease(repo, fixture.run["id"])
     assert {:ok, %{"status" => "succeeded"}} = run_step(repo, fixture, client, observe)
     assert {:ok, after_iterate} = FountRun.progress(repo, fixture.run["id"], fixture.context)
+    assert after_iterate["resources"]["measurement_states"]["consumed"] >= crashed_usage
+
+    assert [[2]] =
+             sql(
+               repo,
+               "SELECT count(*) FROM writing_candidates WHERE screenplay_id=$1::text::uuid",
+               [root.id]
+             )
+
     iterate = Enum.find(after_iterate["steps"], &(&1["stage"] == "iterate"))
     child_id = iterate["result"]["candidate_id"]
     child_revision_run_id = get_in(iterate, ["result", "analysis", "revision", "analysis_run_id"])
 
     assert is_binary(child_revision_run_id)
+
+    assert [[1]] =
+             sql(
+               repo,
+               "SELECT count(*) FROM analysis_runs WHERE id=$1::text::uuid AND revision_id=$2::text::uuid",
+               [child_revision_run_id, iterate["result"]["revision_id"]]
+             )
+
+    assert get_in(iterate, ["result", "analysis", "revision", "resources", "scheduled_states"]) >
+             0
+
     refute child_revision_run_id == revision_run_id
-    assert after_iterate["resources"]["measurement_states"]["consumed"] >= measurement_before_check
+
+    assert after_iterate["resources"]["measurement_states"]["consumed"] >=
+             measurement_before_check
+
     assert {:ok, child} = Store.call(Store.new(repo), :candidate, [child_id])
     assert child["parent_candidate_id"] == first_check["result"]["candidate_id"]
     assert child["base_revision_id"] == root.revision.id
+
     assert get_in(child, ["provenance", "revision_intelligence", "source_revision"]) ==
              child["result_revision_id"]
 
@@ -1390,6 +1517,7 @@ defmodule FountRun.ScreenplayPipelineIntegrationTest do
     assert [] = Agent.get(script, & &1)
 
     assert {:ok, final_progress} = FountRun.progress(repo, fixture.run["id"], fixture.context)
+
     assert [[1]] =
              sql(
                repo,
@@ -1399,6 +1527,19 @@ defmodule FountRun.ScreenplayPipelineIntegrationTest do
 
     assert final_progress["resources"]["measurement_states"]["consumed"] <=
              final_progress["resources"]["measurement_states"]["limit"]
+
+    assert {:ok, accepted_head} = Persistence.load(repo, fixture.key)
+    assert accepted_head.revision.id == root.revision.id
+
+    assert final_progress["resources"]["inference"]["consumed"] <=
+             final_progress["resources"]["inference"]["limit"]
+
+    assert [[0]] =
+             sql(
+               repo,
+               "SELECT count(*) FROM fount_run_steps WHERE run_id=$1::text::uuid AND stage='iterate' AND iteration>1",
+               [fixture.run["id"]]
+             )
   end
 
   defp reach_strategy_gate(repo, fixture, client) do
@@ -1417,6 +1558,7 @@ defmodule FountRun.ScreenplayPipelineIntegrationTest do
     if Keyword.get(opts, :persist, true) do
       assert {:ok, _} = Persistence.create(repo, key, root)
     end
+
     {:ok, owner} = Principal.new(:human, "owner-#{suffix}")
     {:ok, context} = ActorContext.new(owner, owner, root.id, [:read_run, :manage_run])
 

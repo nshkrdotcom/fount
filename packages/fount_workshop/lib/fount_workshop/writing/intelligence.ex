@@ -201,7 +201,7 @@ defmodule FountWorkshop.Writing.Intelligence do
         "kind" => "revision_intelligence",
         "severity" => "advisory",
         "evaluation" => "semantic",
-        "status" => protected_status(protected),
+        "status" => truthful_status(status, protected_status(protected)),
         "measurements" => protected
       },
       %{
@@ -209,7 +209,7 @@ defmodule FountWorkshop.Writing.Intelligence do
         "kind" => "revision_intelligence",
         "severity" => "advisory",
         "evaluation" => "semantic",
-        "status" => collateral_status(collateral),
+        "status" => truthful_status(status, collateral_status(collateral)),
         "measurements" => collateral
       }
     ]
@@ -421,6 +421,9 @@ defmodule FountWorkshop.Writing.Intelligence do
   defp safe_reason(reason) when is_atom(reason), do: Atom.to_string(reason)
   defp safe_reason(reason) when is_binary(reason), do: reason
   defp safe_reason(_), do: "analysis_unavailable"
+
+  defp truthful_status("partial", "pass"), do: "unresolved"
+  defp truthful_status(_, status), do: status
 
   defp protected_status(%{"declared" => []}), do: "not_applicable"
   defp protected_status(%{"status" => "evidence_of_preservation"}), do: "pass"

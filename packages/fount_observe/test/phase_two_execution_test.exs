@@ -192,6 +192,35 @@ defmodule Fount.Observe.PhaseTwoExecutionTest do
     assert hd(strict.entries).error.class == :invalid_provider_response
   end
 
+  test "shared Observe scheduling uses the durable reservation grant exactly once" do
+    parent = self()
+
+    budget =
+      Budget.new(
+        limit: 7,
+        reservation_hook: fn :measurement_states, requested ->
+          send(parent, {:reserved, requested})
+          {:ok, min(requested, 2)}
+        end
+      )
+
+    assert Budget.take(budget, 5) == 2
+    assert_receive {:reserved, 5}
+    refute_receive {:reserved, _}
+    assert Budget.spent(budget) == 2
+
+    denied =
+      Budget.new(
+        limit: 7,
+        reservation_hook: fn :measurement_states, _ ->
+          {:error, :stale_claim}
+        end
+      )
+
+    assert Budget.take(denied, 5) == 0
+    assert Budget.spent(denied) == 0
+  end
+
   test "atomic reservations cannot overspend one shared state budget" do
     budget = Budget.new(limit: 7)
 

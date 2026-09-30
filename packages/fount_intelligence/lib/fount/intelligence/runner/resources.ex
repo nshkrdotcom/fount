@@ -6,7 +6,8 @@ defmodule Fount.Intelligence.Runner.Resources do
     do:
       Budget.new(
         limit: Keyword.get(opts, :max_measurement_states, 500),
-        spent: Keyword.get(opts, :spent, 0)
+        spent: Keyword.get(opts, :spent, 0),
+        reservation_hook: Keyword.get(opts, :reservation_hook)
       )
 
   def take(budget, count), do: Budget.take(budget, count)

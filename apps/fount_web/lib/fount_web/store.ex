@@ -172,7 +172,9 @@ defmodule FountWeb.Store do
     id = Map.get(attrs, :id) || Map.get(attrs, "id") || Fount.ID.v4()
 
     case repo.transaction(fn ->
-           SQL.query!(repo, "SELECT pg_advisory_xact_lock(hashtext($1))", [owner <> ":" <> name], log: false)
+           SQL.query!(repo, "SELECT pg_advisory_xact_lock(hashtext($1))", [owner <> ":" <> name],
+             log: false
+           )
 
            SQL.query!(
              repo,

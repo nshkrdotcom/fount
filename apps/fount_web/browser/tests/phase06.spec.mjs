@@ -115,6 +115,7 @@ test('U05 control, unknown-cost and failure semantics are visible and keyboard r
   await expect(page.locator('p.status[aria-live="polite"]')).toBeVisible();
   await page.keyboard.press('Tab');
   await expect(page.locator(':focus')).toBeVisible();
+  await page.getByLabel('Confirm permanent stop and fencing').check();
   await page.getByRole('button', {name: 'Stop'}).click();
   await expect(page.getByRole('status')).toContainText('Stop recorded');
 });

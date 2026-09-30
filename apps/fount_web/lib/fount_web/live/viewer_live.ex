@@ -67,7 +67,10 @@ defmodule FountWeb.ViewerLive do
         {:noreply,
          socket
          |> assign(:scope_notice, nil)
-         |> assign(:error, "Scope rejected: #{inspect(reason)}. Reselect targets from the Run base.")}
+         |> assign(
+           :error,
+           "Scope rejected: #{inspect(reason)}. Reselect targets from the Run base."
+         )}
     end
   end
 
@@ -75,20 +78,7 @@ defmodule FountWeb.ViewerLive do
     filter = params |> Map.get("character", "") |> bounded_filter()
     token = Map.get(params, "view")
 
-    {workspace, error} =
-      case ScreenplayViews.load(Fount.Repo, access, run, progress, token) do
-        {:ok, workspace} ->
-          {workspace, nil}
-
-        {:error, reason} ->
-          case ScreenplayViews.load(Fount.Repo, access, run, progress, nil) do
-            {:ok, fallback} ->
-              {fallback, human_view_error(reason) <> " Showing the bound Run base instead."}
-
-            {:error, fallback_reason} ->
-              {nil, human_view_error(fallback_reason)}
-          end
-      end
+    {workspace, error} = load_bound_workspace(access, run, progress, token)
 
     index =
       if workspace,
@@ -117,8 +107,15 @@ defmodule FountWeb.ViewerLive do
           {saved, nil}
 
         {:error, reason} ->
-          _ = FountWeb.Store.delete_workflow_selection(Fount.Repo, socket.assigns.current_owner, run_id)
-          {nil, "Saved workflow scope is stale (#{inspect(reason)}); reselect from this exact base revision."}
+          _ =
+            FountWeb.Store.delete_workflow_selection(
+              Fount.Repo,
+              socket.assigns.current_owner,
+              run_id
+            )
+
+          {nil,
+           "Saved workflow scope is stale (#{inspect(reason)}); reselect from this exact base revision."}
       end
 
     socket
@@ -134,7 +131,26 @@ defmodule FountWeb.ViewerLive do
     |> assign(:context, context)
     |> assign(:workflow_selection, workflow_selection)
     |> assign(:scope_notice, nil)
-    |> assign(:error, Enum.find([error, target_error, scene_error, selection_error], &is_binary/1))
+    |> assign(
+      :error,
+      Enum.find([error, target_error, scene_error, selection_error], &is_binary/1)
+    )
+  end
+
+  defp load_bound_workspace(access, run, progress, token) do
+    case ScreenplayViews.load(Fount.Repo, access, run, progress, token) do
+      {:ok, workspace} ->
+        {workspace, nil}
+
+      {:error, reason} ->
+        case ScreenplayViews.load(Fount.Repo, access, run, progress, nil) do
+          {:ok, fallback} ->
+            {fallback, human_view_error(reason) <> " Showing the bound Run base instead."}
+
+          {:error, fallback_reason} ->
+            {nil, human_view_error(fallback_reason)}
+        end
+    end
   end
 
   defp evidence_target_error(%{selection: %{kind: :evidence}, screenplay: screenplay}, target_id)
@@ -320,7 +336,11 @@ defmodule FountWeb.ViewerLive do
           </FountWeb.CoreComponents.dialog>
         </section>
 
-        <section :if={@base_screenplay} class="workflow-scope-panel card stack" aria-labelledby="workflow-scope-title">
+        <section
+          :if={@base_screenplay}
+          class="workflow-scope-panel card stack"
+          aria-labelledby="workflow-scope-title"
+        >
           <div class="workflow-scope-head">
             <div>
               <p class="eyebrow">Phase 07 · Run input</p>
@@ -339,8 +359,7 @@ defmodule FountWeb.ViewerLive do
                 name="scope[whole_screenplay]"
                 value="true"
                 checked={scope_whole?(@workflow_selection)}
-              />
-              Whole screenplay
+              /> Whole screenplay
             </label>
             <details open>
               <summary>Scene targets ({length(@base_screenplay.ir.scenes)})</summary>

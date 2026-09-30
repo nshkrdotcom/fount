@@ -85,7 +85,18 @@ defmodule FountWeb.Phase07WorkflowManagementTest do
 
     assert {:error, :owner_context_mismatch} =
              Workflow.policy_from_form(valid_policy_form(), context, "other-owner")
+
     assert is_binary(fingerprint)
+
+    for field <-
+          ~w(principal_id principal_type approver_id approver_type reviewer_id fallback_approver) do
+      assert {:error, :unsupported_policy_field} =
+               Workflow.policy_from_form(
+                 valid_policy_form(%{field => "browser-injected"}),
+                 context,
+                 "test-owner"
+               )
+    end
 
     assert {:error, :unauthorized_principal_selection} =
              Workflow.policy_from_form(
@@ -95,7 +106,11 @@ defmodule FountWeb.Phase07WorkflowManagementTest do
              )
 
     assert {:error, :invalid_currency} =
-             Workflow.policy_from_form(valid_policy_form(%{"currency" => "usd"}), context, "test-owner")
+             Workflow.policy_from_form(
+               valid_policy_form(%{"currency" => "usd"}),
+               context,
+               "test-owner"
+             )
 
     presets = Workflow.built_in_presets("test-owner", context)
     assert Enum.all?(presets, &(&1["version"] == 1 and &1["compatible"]))
@@ -104,10 +119,14 @@ defmodule FountWeb.Phase07WorkflowManagementTest do
 
   test "W02 catalog is closed and only source-verified durable actions build requests" do
     catalog = Workflow.action_catalog()
-    assert Enum.map(catalog, & &1["id"]) |> Enum.sort() ==
-             ~w(alternatives character develop investigate notes pass propagate recover sequence) |> Enum.sort()
 
-    assert Enum.map(Workflow.enabled_actions(), & &1["id"]) |> Enum.sort() == ~w(develop pass propagate)
+    assert Enum.map(catalog, & &1["id"]) |> Enum.sort() ==
+             ~w(alternatives character develop investigate notes pass propagate recover sequence)
+             |> Enum.sort()
+
+    assert Enum.map(Workflow.enabled_actions(), & &1["id"]) |> Enum.sort() ==
+             ~w(develop pass propagate)
+
     assert Enum.all?(catalog, &Map.has_key?(&1, "handler"))
 
     screenplay = model()
@@ -115,7 +134,12 @@ defmodule FountWeb.Phase07WorkflowManagementTest do
 
     for action <- ~w(develop pass propagate) do
       assert {:ok, request} =
-               Workflow.build_workshop_request(screenplay, action, "Tighten this beat.", selection)
+               Workflow.build_workshop_request(
+                 screenplay,
+                 action,
+                 "Tighten this beat.",
+                 selection
+               )
 
       assert request["workflow"] == action
       assert request["base_revision_id"] == screenplay.revision.id
@@ -137,6 +161,7 @@ defmodule FountWeb.Phase07WorkflowManagementTest do
              })
 
     assert Enum.map(targets, & &1["kind"]) == ["scene", "element"]
+
     assert {:error, :invalid_scope_selection} =
              Workflow.selection_from_params(%{"page_ids" => ["12"]})
   end
@@ -158,8 +183,11 @@ defmodule FountWeb.Phase07WorkflowManagementTest do
   end
 
   test "W07 multi-launch is finite and never silently truncates selected targets" do
-    targets = for _ <- 1..Workflow.max_multi_launch(), do: %{"kind" => "scene", "id" => Fount.ID.v4()}
-    assert length(Workflow.split_scopes(%{"targets" => targets}, true)) == Workflow.max_multi_launch()
+    targets =
+      for _ <- 1..Workflow.max_multi_launch(), do: %{"kind" => "scene", "id" => Fount.ID.v4()}
+
+    assert length(Workflow.split_scopes(%{"targets" => targets}, true)) ==
+             Workflow.max_multi_launch()
 
     too_many = targets ++ [%{"kind" => "scene", "id" => Fount.ID.v4()}]
     assert Workflow.split_scopes(%{"targets" => too_many}, true) == []

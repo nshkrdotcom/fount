@@ -3,9 +3,7 @@ defmodule FountWeb.Phase07WorkflowManagementIntegrationTest do
 
   alias FountWeb.WorkflowManagement, as: Workflow
 
-  defp create_run(suffix \\ nil) do
-    suffix = suffix || Integer.to_string(System.unique_integer([:positive]))
-
+  defp create_run(suffix) do
     FountWeb.Launch.create("test-owner", %{
       "title" => "Phase 07 #{suffix}",
       "key" => "phase07-#{suffix}",
@@ -62,11 +60,21 @@ defmodule FountWeb.Phase07WorkflowManagementIntegrationTest do
   test "W02/W03 exact-base scope feeds only enabled durable action requests and duplicate launch replays" do
     assert {:ok, %{project: project, run: run}} = create_run("scope-action")
     {:ok, context} = FountWeb.Actors.owner_context("test-owner", run["screenplay_id"])
-    {:ok, model} = Fount.Persistence.load_revision(Fount.Repo, run["screenplay_id"], get_in(run, ["plan", "base_revision_id"]))
+
+    {:ok, model} =
+      Fount.Persistence.load_revision(
+        Fount.Repo,
+        run["screenplay_id"],
+        get_in(run, ["plan", "base_revision_id"])
+      )
+
     [scene | _] = model.ir.scenes
 
     selection = %{"targets" => [%{"kind" => "scene", "id" => scene.id}]}
-    assert {:ok, saved} = Workflow.save_selection(Fount.Repo, "test-owner", run, selection, context)
+
+    assert {:ok, saved} =
+             Workflow.save_selection(Fount.Repo, "test-owner", run, selection, context)
+
     assert saved["base_revision_id"] == get_in(run, ["plan", "base_revision_id"])
     assert saved["selection"] == selection
 
@@ -183,12 +191,13 @@ defmodule FountWeb.Phase07WorkflowManagementIntegrationTest do
 
     candidate_revision_id = Fount.ID.v4()
 
-    context = Workflow.decision_context(progress, decision, %{
-      "candidate_id" => candidate_id,
-      "base_revision_id" => base_id,
-      "candidate_revision_id" => candidate_revision_id,
-      "check_set_fingerprint" => check_fingerprint
-    })
+    context =
+      Workflow.decision_context(progress, decision, %{
+        "candidate_id" => candidate_id,
+        "base_revision_id" => base_id,
+        "candidate_revision_id" => candidate_revision_id,
+        "check_set_fingerprint" => check_fingerprint
+      })
 
     assert context["analysis_lineage"]["analysis_run_id"] == "analysis-1"
     assert context["report_ids"] == ["report-1"]
@@ -215,12 +224,20 @@ defmodule FountWeb.Phase07WorkflowManagementIntegrationTest do
     assert mismatched["check_set_fingerprint"] == check_fingerprint
   end
 
-  test "W06 export preview identifies candidate truthfully and exposes only supported options", %{conn: conn} do
+  test "W06 export preview identifies candidate truthfully and exposes only supported options", %{
+    conn: conn
+  } do
     conn = FountWeb.ConnCase.login(conn)
     assert {:ok, %{run: run, access: access}} = create_run("exports")
     {:ok, base} = Fount.Persistence.load(Fount.Repo, access["key"])
     [action | _] = Fount.Query.elements(base, :action)
-    {:ok, changed} = Fount.Screenplay.apply(base, Fount.Edit.replace_text(action.id, "A deterministic Phase 07 edit."))
+
+    {:ok, changed} =
+      Fount.Screenplay.apply(
+        base,
+        Fount.Edit.replace_text(action.id, "A deterministic Phase 07 edit.")
+      )
+
     {:ok, candidate} = Fount.Persistence.save_edit_candidate(Fount.Repo, access["key"], changed)
 
     Ecto.Adapters.SQL.query!(
@@ -255,6 +272,7 @@ defmodule FountWeb.Phase07WorkflowManagementIntegrationTest do
     refute resumed["run"]["status"] == "paused"
 
     assert {:ok, plan} = Workflow.plan_update(run["plan"], "Updated owner goal")
+
     assert {:ok, plan_result} =
              FountRun.update_plan(Fount.Repo, run["id"], plan, context,
                expected_version: run["current_plan_version"],
@@ -270,8 +288,13 @@ defmodule FountWeb.Phase07WorkflowManagementIntegrationTest do
              )
 
     {:ok, after_plan} = FountRun.get_run(Fount.Repo, run["id"], context)
+
     assert {:ok, policy_result} =
-             FountRun.update_policy(Fount.Repo, run["id"], get_in(run, ["policy", "policy"]), context,
+             FountRun.update_policy(
+               Fount.Repo,
+               run["id"],
+               get_in(run, ["policy", "policy"]),
+               context,
                expected_version: after_plan["current_policy_version"],
                command_id: "phase07-policy"
              )
@@ -287,12 +310,22 @@ defmodule FountWeb.Phase07WorkflowManagementIntegrationTest do
 
   test "W07 bounded multi-launch preserves partial results and duplicate-safe retry" do
     assert {:ok, %{project: project, run: run}} = create_run("multi")
-    {:ok, model} = Fount.Persistence.load_revision(Fount.Repo, run["screenplay_id"], get_in(run, ["plan", "base_revision_id"]))
+
+    {:ok, model} =
+      Fount.Persistence.load_revision(
+        Fount.Repo,
+        run["screenplay_id"],
+        get_in(run, ["plan", "base_revision_id"])
+      )
+
     [first_scene, second_scene | _] = model.ir.scenes
-    selection = %{"targets" => [
-      %{"kind" => "scene", "id" => first_scene.id},
-      %{"kind" => "scene", "id" => second_scene.id}
-    ]}
+
+    selection = %{
+      "targets" => [
+        %{"kind" => "scene", "id" => first_scene.id},
+        %{"kind" => "scene", "id" => second_scene.id}
+      ]
+    }
 
     assert {:ok, preview} =
              Workflow.launch_preview(
@@ -305,7 +338,10 @@ defmodule FountWeb.Phase07WorkflowManagementIntegrationTest do
              )
 
     [valid, invalid] = preview["entries"]
-    invalid = put_in(invalid, ["selection", "targets"], [%{"kind" => "scene", "id" => Fount.ID.v4()}])
+
+    invalid =
+      put_in(invalid, ["selection", "targets"], [%{"kind" => "scene", "id" => Fount.ID.v4()}])
+
     preview = %{preview | "entries" => [valid, invalid]}
 
     first = Workflow.execute_launch_preview("test-owner", project["id"], preview)
@@ -320,13 +356,23 @@ defmodule FountWeb.Phase07WorkflowManagementIntegrationTest do
 
     rows = Workflow.list_owner_runs(Fount.Repo, "test-owner", limit: 2)
     assert length(rows) <= 2
-    assert Enum.all?(rows, &(&1["screenplay_id"] == run["screenplay_id"] or is_binary(&1["screenplay_id"])))
+
+    assert Enum.all?(
+             rows,
+             &(&1["screenplay_id"] == run["screenplay_id"] or is_binary(&1["screenplay_id"]))
+           )
+
     assert Workflow.list_owner_runs(Fount.Repo, "other-owner", limit: 50) == []
 
     created_id = hd(first)["run_id"]
-    assert {:ok, comparison} = Workflow.compare_owner_runs(Fount.Repo, "test-owner", run["id"], created_id)
+
+    assert {:ok, comparison} =
+             Workflow.compare_owner_runs(Fount.Repo, "test-owner", run["id"], created_id)
+
     assert is_list(comparison["facts"])
-    assert {:error, :not_found} = Workflow.compare_owner_runs(Fount.Repo, "other-owner", run["id"], created_id)
+
+    assert {:error, :not_found} =
+             Workflow.compare_owner_runs(Fount.Repo, "other-owner", run["id"], created_id)
   end
 
   test "W08 PubSub is a reload hint and reconnect projection is deterministic and owner scoped" do
@@ -340,7 +386,10 @@ defmodule FountWeb.Phase07WorkflowManagementIntegrationTest do
 
     assert {:ok, durable_run} = FountRun.get_run(Fount.Repo, run["id"], context)
     assert {:ok, progress} = FountRun.progress(Fount.Repo, run["id"], context)
-    assert Workflow.notifications(durable_run, progress) == Workflow.notifications(durable_run, progress)
+
+    assert Workflow.notifications(durable_run, progress) ==
+             Workflow.notifications(durable_run, progress)
+
     assert {:error, :not_found} = FountWeb.Store.run_access(Fount.Repo, "other-owner", run["id"])
   end
 end

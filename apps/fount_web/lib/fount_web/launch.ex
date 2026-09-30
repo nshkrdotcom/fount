@@ -1,6 +1,7 @@
 defmodule FountWeb.Launch do
   @moduledoc "Creates the canonical genesis project, Run, and intake operation without advancing canon afterward."
   alias Fount.{Persistence, Screenplay}
+  alias Fount.Writing.CanonicalJSON
   alias FountRun.PipelineRequest
 
   @max_bytes 1_048_576
@@ -221,8 +222,8 @@ defmodule FountWeb.Launch do
       "client_idempotency_key" => idempotency_key,
       "operation_parameters" => %{
         "workflow" => request["workflow"],
-        "request_fingerprint" => Fount.Writing.CanonicalJSON.hash(request),
-        "selection_fingerprint" => Fount.Writing.CanonicalJSON.hash(request["selection"])
+        "request_fingerprint" => CanonicalJSON.hash(request),
+        "selection_fingerprint" => CanonicalJSON.hash(request["selection"])
       },
       "policy" => policy
     }

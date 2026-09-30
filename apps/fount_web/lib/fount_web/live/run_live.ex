@@ -1,6 +1,8 @@
 defmodule FountWeb.RunLive do
   use FountWeb, :live_view
 
+  alias Fount.Writing.Principal
+
   @refresh_ms 1_000
 
   @impl true
@@ -128,29 +130,29 @@ defmodule FountWeb.RunLive do
   end
 
   def handle_event("save_policy", %{"policy" => params}, socket) do
-    with {:ok, policy, _fingerprint} <-
-           FountWeb.WorkflowManagement.policy_from_form(
-             params,
-             socket.assigns.context,
-             socket.assigns.current_owner
-           ) do
-      opts = [
-        expected_version: socket.assigns.run["current_policy_version"],
-        command_id: "web-policy:" <> Fount.ID.v4()
-      ]
+    case FountWeb.WorkflowManagement.policy_from_form(
+           params,
+           socket.assigns.context,
+           socket.assigns.current_owner
+         ) do
+      {:ok, policy, _fingerprint} ->
+        opts = [
+          expected_version: socket.assigns.run["current_policy_version"],
+          command_id: "web-policy:" <> Fount.ID.v4()
+        ]
 
-      command_result(
-        socket,
-        FountRun.update_policy(
-          Fount.Repo,
-          socket.assigns.run_id,
-          policy,
-          socket.assigns.context,
-          opts
-        ),
-        "Policy snapshot updated; prior-version work and decisions were fenced and refreshed."
-      )
-    else
+        command_result(
+          socket,
+          FountRun.update_policy(
+            Fount.Repo,
+            socket.assigns.run_id,
+            policy,
+            socket.assigns.context,
+            opts
+          ),
+          "Policy snapshot updated; prior-version work and decisions were fenced and refreshed."
+        )
+
       {:error, reason} ->
         {:noreply,
          socket
@@ -180,55 +182,58 @@ defmodule FountWeb.RunLive do
   end
 
   def handle_event("apply_preset", %{"reference" => reference}, socket) do
-    with {:ok, preset} <-
-           FountWeb.WorkflowManagement.find_preset(
-             Fount.Repo,
-             socket.assigns.current_owner,
-             reference,
-             socket.assigns.context
-           ) do
-      opts = [
-        expected_version: socket.assigns.run["current_policy_version"],
-        command_id: "web-preset:" <> Fount.ID.v4()
-      ]
+    case FountWeb.WorkflowManagement.find_preset(
+           Fount.Repo,
+           socket.assigns.current_owner,
+           reference,
+           socket.assigns.context
+         ) do
+      {:ok, preset} ->
+        opts = [
+          expected_version: socket.assigns.run["current_policy_version"],
+          command_id: "web-preset:" <> Fount.ID.v4()
+        ]
 
-      command_result(
-        socket,
-        FountRun.update_policy(
-          Fount.Repo,
-          socket.assigns.run_id,
-          preset["policy"],
-          socket.assigns.context,
-          opts
-        ),
-        "Preset #{preset["name"]} v#{preset["version"]} loaded as a new policy snapshot."
-      )
-    else
-      {:error, reason} -> {:noreply, socket |> assign(:error, "Preset rejected: #{inspect(reason)}") |> refresh()}
+        command_result(
+          socket,
+          FountRun.update_policy(
+            Fount.Repo,
+            socket.assigns.run_id,
+            preset["policy"],
+            socket.assigns.context,
+            opts
+          ),
+          "Preset #{preset["name"]} v#{preset["version"]} loaded as a new policy snapshot."
+        )
+
+      {:error, reason} ->
+        {:noreply, socket |> assign(:error, "Preset rejected: #{inspect(reason)}") |> refresh()}
     end
   end
 
   def handle_event("update_plan", %{"plan" => %{"goal" => goal}}, socket) do
-    with {:ok, plan} <- FountWeb.WorkflowManagement.plan_update(current_plan(socket.assigns.run), goal) do
-      opts = [
-        expected_version: socket.assigns.run["current_plan_version"],
-        command_id: "web-plan:" <> Fount.ID.v4(),
-        reason: "owner_goal_update"
-      ]
+    case FountWeb.WorkflowManagement.plan_update(current_plan(socket.assigns.run), goal) do
+      {:ok, plan} ->
+        opts = [
+          expected_version: socket.assigns.run["current_plan_version"],
+          command_id: "web-plan:" <> Fount.ID.v4(),
+          reason: "owner_goal_update"
+        ]
 
-      command_result(
-        socket,
-        FountRun.update_plan(
-          Fount.Repo,
-          socket.assigns.run_id,
-          plan,
-          socket.assigns.context,
-          opts
-        ),
-        "Plan snapshot updated on the same base and scope; prior-version work was fenced."
-      )
-    else
-      {:error, reason} -> {:noreply, assign(socket, :error, "Plan update rejected: #{inspect(reason)}")}
+        command_result(
+          socket,
+          FountRun.update_plan(
+            Fount.Repo,
+            socket.assigns.run_id,
+            plan,
+            socket.assigns.context,
+            opts
+          ),
+          "Plan snapshot updated on the same base and scope; prior-version work was fenced."
+        )
+
+      {:error, reason} ->
+        {:noreply, assign(socket, :error, "Plan update rejected: #{inspect(reason)}")}
     end
   end
 
@@ -253,15 +258,26 @@ defmodule FountWeb.RunLive do
        socket
        |> assign(:launch_preview, preview)
        |> assign(:launch_results, nil)
-       |> assign(:notice, "Launch preview validated. Confirm to create the listed independent Runs.")
+       |> assign(
+         :notice,
+         "Launch preview validated. Confirm to create the listed independent Runs."
+       )
        |> assign(:error, nil)}
     else
-      nil -> {:noreply, assign(socket, :error, "Select and save a valid workflow scope in the Viewer first.")}
-      {:error, reason} -> {:noreply, assign(socket, :error, "Launch preview rejected: #{inspect(reason)}")}
+      nil ->
+        {:noreply,
+         assign(socket, :error, "Select and save a valid workflow scope in the Viewer first.")}
+
+      {:error, reason} ->
+        {:noreply, assign(socket, :error, "Launch preview rejected: #{inspect(reason)}")}
     end
   end
 
-  def handle_event("confirm_workflow_launch", _params, %{assigns: %{launch_preview: preview}} = socket)
+  def handle_event(
+        "confirm_workflow_launch",
+        _params,
+        %{assigns: %{launch_preview: preview}} = socket
+      )
       when is_map(preview) do
     results =
       FountWeb.WorkflowManagement.execute_launch_preview(
@@ -279,7 +295,13 @@ defmodule FountWeb.RunLive do
      socket
      |> assign(:launch_results, summary)
      |> assign(:notice, message)
-     |> assign(:error, if(summary["failed"] == [], do: nil, else: "Some launches failed; successful Run IDs are preserved and retry-safe."))}
+     |> assign(
+       :error,
+       if(summary["failed"] == [],
+         do: nil,
+         else: "Some launches failed; successful Run IDs are preserved and retry-safe."
+       )
+     )}
   end
 
   def handle_event("confirm_workflow_launch", _params, socket),
@@ -547,15 +569,19 @@ defmodule FountWeb.RunLive do
     approver = policy["approver"]
 
     Enum.find_value(options, "owner", fn option ->
-      if Fount.Writing.Principal.to_map(option["principal"]) == approver, do: option["key"]
+      if Principal.to_map(option["principal"]) == approver, do: option["key"]
     end)
   end
 
-  defp policy_route_rule(policy), do: get_in(policy, ["route_choice", "rule"]) || "pause_on_material_tradeoff"
+  defp policy_route_rule(policy),
+    do: get_in(policy, ["route_choice", "rule"]) || "pause_on_material_tradeoff"
 
   defp policy_reviewer_key(policy, options) do
     reviewer_id = get_in(policy, ["route_choice", "reviewer_id"])
-    Enum.find_value(options, "owner", fn option -> if option["reviewer_id"] == reviewer_id, do: option["key"] end)
+
+    Enum.find_value(options, "owner", fn option ->
+      if option["reviewer_id"] == reviewer_id, do: option["key"]
+    end)
   end
 
   defp limit_value(policy, key, default), do: get_in(policy, ["limits", key]) || default
@@ -631,6 +657,7 @@ defmodule FountWeb.RunLive do
       <section :if={@live_action == :setup} class="stack">
         <h2>Run setup</h2>
         <p class="warning">
+          Accepted pages can change canon only through Core's exact approval path.
           Policy and plan changes append versioned snapshots and fence affected work. The host exposes only source-verified controls; there is no arbitrary stage restart.
         </p>
 
@@ -638,7 +665,11 @@ defmodule FountWeb.RunLive do
           <div class="card">
             <p class="eyebrow">Plan snapshot</p>
             <h3>Goal</h3><p>{@current_plan["goal"]}</p>
-            <p>Version <strong>{@run["current_plan_version"]}</strong> · fingerprint <code>{get_in(@run, ["plan", "fingerprint"]) || "recorded in Run lineage"}</code></p>
+            <p>
+              Version <strong>{@run["current_plan_version"]}</strong>
+              · fingerprint
+              <code>{get_in(@run, ["plan", "fingerprint"]) || "recorded in Run lineage"}</code>
+            </p>
           </div>
           <div class="card">
             <h3>Exact scope</h3><pre><%= json(@current_plan["scope"]) %></pre>
@@ -654,7 +685,9 @@ defmodule FountWeb.RunLive do
 
         <form phx-submit="update_plan" class="card stack">
           <h3>Update plan goal</h3>
-          <p>Phase 07 only updates the goal on the same base and scope. Base/scope rebases are not invented here.</p>
+          <p>
+            Phase 07 only updates the goal on the same base and scope. Base/scope rebases are not invented here.
+          </p>
           <label>Goal <textarea name="plan[goal]" maxlength="2000"><%= @current_plan["goal"] %></textarea></label>
           <button disabled={!@live_connected || !@lifecycle["update_plan"]} type="submit">Append plan snapshot</button>
         </form>
@@ -663,43 +696,84 @@ defmodule FountWeb.RunLive do
           <div>
             <p class="eyebrow">Server-validated policy</p>
             <h3>Gates, completion, routing and ceilings</h3>
-            <p>Policy v{@run["current_policy_version"]} · fingerprint <code>{get_in(@run, ["policy", "fingerprint"]) || "recorded"}</code></p>
+            <p>
+              Policy v{@run["current_policy_version"]} · fingerprint
+              <code>{get_in(@run, ["policy", "fingerprint"]) || "recorded"}</code>
+            </p>
           </div>
           <div class="policy-grid">
-            <label :for={gate <- ~w(investigation_scope strategy_choice candidate_generation iteration)}>
+            <label :for={
+              gate <- ~w(investigation_scope strategy_choice candidate_generation iteration)
+            }>
               {String.replace(gate, "_", " ")}
               <select name={"policy[#{gate}]"}>
-                <option value="human" selected={get_in(@current_policy, ["gates", gate]) == "human"}>Human checkpoint</option>
-                <option value="automatic" selected={get_in(@current_policy, ["gates", gate]) == "automatic"}>Automatic</option>
+                <option value="human" selected={get_in(@current_policy, ["gates", gate]) == "human"}>
+                  Human checkpoint
+                </option>
+                <option
+                  value="automatic"
+                  selected={get_in(@current_policy, ["gates", gate]) == "automatic"}
+                >
+                  Automatic
+                </option>
               </select>
             </label>
             <label>
               Completion
               <select name="policy[completion]">
-                <option value="candidate" selected={@current_policy["completion"] == "candidate"}>Candidate only — canon unchanged</option>
-                <option value="accept" selected={@current_policy["completion"] == "accept"}>Accept — exact approver required</option>
+                <option value="candidate" selected={@current_policy["completion"] == "candidate"}>
+                  Candidate only — canon unchanged
+                </option>
+                <option value="accept" selected={@current_policy["completion"] == "accept"}>
+                  Accept — exact approver required
+                </option>
               </select>
             </label>
             <label>
               Trusted approver
               <select name="policy[approver]">
-                <option :for={option <- @policy_principals} value={option["key"]} selected={policy_principal_key(@current_policy, @policy_principals) == option["key"]}>
+                <option
+                  :for={option <- @policy_principals}
+                  value={option["key"]}
+                  selected={
+                    policy_principal_key(@current_policy, @policy_principals) == option["key"]
+                  }
+                >
                   {option["label"]}
                 </option>
               </select>
             </label>
-            <label class="inline-check"><input type="checkbox" name="policy[owner_fallback_enabled]" value="true" checked={not is_nil(@current_policy["fallback_approver"])} /> Use authenticated owner as fallback approver</label>
+            <label class="inline-check"><input
+              type="checkbox"
+              name="policy[owner_fallback_enabled]"
+              value="true"
+              checked={not is_nil(@current_policy["fallback_approver"])}
+            /> Use authenticated owner as fallback approver</label>
             <label>
               Route
               <select name="policy[route_choice]">
-                <option value="pause_on_material_tradeoff" selected={policy_route_rule(@current_policy) == "pause_on_material_tradeoff"}>Pause on material tradeoff</option>
-                <option value="registered_reviewer" selected={policy_route_rule(@current_policy) == "registered_reviewer"}>Route to registered human reviewer</option>
+                <option
+                  value="pause_on_material_tradeoff"
+                  selected={policy_route_rule(@current_policy) == "pause_on_material_tradeoff"}
+                >
+                  Pause on material tradeoff
+                </option>
+                <option
+                  value="registered_reviewer"
+                  selected={policy_route_rule(@current_policy) == "registered_reviewer"}
+                >
+                  Route to registered human reviewer
+                </option>
               </select>
             </label>
             <label>
               Registered route reviewer
               <select name="policy[route_reviewer_key]">
-                <option :for={option <- @policy_reviewers} value={option["key"]} selected={policy_reviewer_key(@current_policy, @policy_reviewers) == option["key"]}>
+                <option
+                  :for={option <- @policy_reviewers}
+                  value={option["key"]}
+                  selected={policy_reviewer_key(@current_policy, @policy_reviewers) == option["key"]}
+                >
                   {option["label"]}
                 </option>
               </select>
@@ -708,25 +782,76 @@ defmodule FountWeb.RunLive do
           <fieldset>
             <legend>Resource ceilings</legend>
             <div class="policy-grid">
-              <label>Iterations <input type="number" min="0" name="policy[max_iterations]" value={limit_value(@current_policy, "max_iterations", 3)} /></label>
-              <label>Malformed repairs/call <input type="number" min="0" name="policy[max_malformed_repairs_per_call]" value={limit_value(@current_policy, "max_malformed_repairs_per_call", 1)} /></label>
-              <label>Transient retries <input type="number" min="0" name="policy[max_transient_retries]" value={limit_value(@current_policy, "max_transient_retries", 2)} /></label>
-              <label>Inference calls <input type="number" min="0" name="policy[max_inference_calls]" value={limit_value(@current_policy, "max_inference_calls", 12)} /></label>
-              <label>Measurement states <input type="number" min="0" name="policy[max_measurement_states]" value={limit_value(@current_policy, "max_measurement_states", 500)} /></label>
+              <label>Iterations
+              <input
+                type="number"
+                min="0"
+                name="policy[max_iterations]"
+                value={limit_value(@current_policy, "max_iterations", 3)}
+              /></label>
+              <label>Malformed repairs/call
+              <input
+                type="number"
+                min="0"
+                name="policy[max_malformed_repairs_per_call]"
+                value={limit_value(@current_policy, "max_malformed_repairs_per_call", 1)}
+              /></label>
+              <label>Transient retries
+              <input
+                type="number"
+                min="0"
+                name="policy[max_transient_retries]"
+                value={limit_value(@current_policy, "max_transient_retries", 2)}
+              /></label>
+              <label>Inference calls
+              <input
+                type="number"
+                min="0"
+                name="policy[max_inference_calls]"
+                value={limit_value(@current_policy, "max_inference_calls", 12)}
+              /></label>
+              <label>Measurement states
+              <input
+                type="number"
+                min="0"
+                name="policy[max_measurement_states]"
+                value={limit_value(@current_policy, "max_measurement_states", 500)}
+              /></label>
             </div>
-            <label class="inline-check"><input type="checkbox" name="policy[money_enabled]" value="true" checked={not is_nil(get_in(@current_policy, ["limits", "money"]))} /> Enable money ceiling</label>
+            <label class="inline-check"><input
+              type="checkbox"
+              name="policy[money_enabled]"
+              value="true"
+              checked={not is_nil(get_in(@current_policy, ["limits", "money"]))}
+            /> Enable money ceiling</label>
             <div class="policy-grid">
-              <label>Currency <input name="policy[currency]" maxlength="3" value={money_value(@current_policy, "currency") || "USD"} /></label>
-              <label>Max microunits <input type="number" min="0" name="policy[max_microunits]" value={money_value(@current_policy, "max_microunits") || 0} /></label>
+              <label>Currency
+              <input
+                name="policy[currency]"
+                maxlength="3"
+                value={money_value(@current_policy, "currency") || "USD"}
+              /></label>
+              <label>Max microunits
+              <input
+                type="number"
+                min="0"
+                name="policy[max_microunits]"
+                value={money_value(@current_policy, "max_microunits") || 0}
+              /></label>
             </div>
-            <p><strong>Effective limits and estimates.</strong> Money is an integer ceiling in microunits. Estimated cost: unknown unless persisted provider accounting says otherwise; estimates do not become incurred cost.</p>
+            <p>
+              <strong>Effective limits and estimates.</strong>
+              Money is an integer ceiling in microunits. Estimated cost: unknown unless persisted provider accounting says otherwise; estimates do not become incurred cost.
+            </p>
           </fieldset>
           <button disabled={!@live_connected || !@lifecycle["update_policy"]} type="submit">Append validated policy snapshot</button>
         </form>
 
         <div class="card stack">
           <h3>Versioned policy presets</h3>
-          <p>Built-ins are host-owned v1 presets. Saved presets get monotonically increasing owner/name versions. Unknown or incompatible values remain visible rather than being silently dropped.</p>
+          <p>
+            Built-ins are host-owned v1 presets. Saved presets get monotonically increasing owner/name versions. Unknown or incompatible values remain visible rather than being silently dropped.
+          </p>
           <form phx-submit="save_current_preset" class="inline-form">
             <label>Preset name <input name="preset[name]" maxlength="80" required /></label>
             <button disabled={!@live_connected} type="submit">Save current policy</button>
@@ -738,16 +863,28 @@ defmodule FountWeb.RunLive do
               <p>Fingerprint <code>{preset["fingerprint"]}</code></p>
               <pre><%= json(preset["policy"]) %></pre>
               <p :if={!preset["compatible"]} role="status">Cannot apply: {preset["error"]}</p>
-              <button :if={preset["compatible"]} phx-click="apply_preset" phx-value-reference={preset["reference"]} name="preset[reference]" value={preset["reference"]} disabled={!@live_connected}>Apply as new snapshot</button>
+              <button
+                :if={preset["compatible"]}
+                phx-click="apply_preset"
+                phx-value-reference={preset["reference"]}
+                name="preset[reference]"
+                value={preset["reference"]}
+                disabled={!@live_connected}
+              >Apply as new snapshot</button>
             </article>
           </div>
         </div>
 
         <div class="card stack">
           <h3>Revision-bound workflow scope</h3>
-          <p :if={is_nil(@workflow_selection)}>No valid selection is bound. Open the Viewer and reselect against this exact base revision.</p>
+          <p :if={is_nil(@workflow_selection)}>
+            No valid selection is bound. Open the Viewer and reselect against this exact base revision.
+          </p>
           <div :if={@workflow_selection}>
-            <p>Base <code>{@workflow_selection["base_revision_id"]}</code> · selection <code>{@workflow_selection["selection_fingerprint"]}</code></p>
+            <p>
+              Base <code>{@workflow_selection["base_revision_id"]}</code>
+              · selection <code>{@workflow_selection["selection_fingerprint"]}</code>
+            </p>
             <pre><%= json(@workflow_selection["preview"]) %></pre>
           </div>
           <a href={~p"/runs/#{@run_id}/viewer"}>Choose or repair scope in Viewer</a>
@@ -755,11 +892,21 @@ defmodule FountWeb.RunLive do
 
         <div class="card stack">
           <h3>Closed action catalog</h3>
-          <p>Only actions with an exact validated request and retained durable Run handler path are launchable. Workshop helpers are not promoted by name.</p>
+          <p>
+            Only actions with an exact validated request and retained durable Run handler path are launchable. Workshop helpers are not promoted by name.
+          </p>
           <div class="action-catalog">
-            <article :for={action <- @workflow_actions} class={if(action["enabled"], do: "action-card enabled", else: "action-card unavailable")}>
+            <article
+              :for={action <- @workflow_actions}
+              class={
+                if(action["enabled"], do: "action-card enabled", else: "action-card unavailable")
+              }
+            >
               <h4>{action["label"]}</h4>
-              <p>Status: <strong>{if(action["enabled"], do: "enabled", else: "unavailable through Run")}</strong></p>
+              <p>
+                Status:
+                <strong>{if(action["enabled"], do: "enabled", else: "unavailable through Run")}</strong>
+              </p>
               <p>Mode: {action["mode"]}</p>
               <p>{action["request"]}</p>
               <p>{action["handler"]}</p>
@@ -770,21 +917,37 @@ defmodule FountWeb.RunLive do
 
         <form phx-submit="preview_workflow_launch" class="card stack">
           <h3>Explicit workflow launch</h3>
-          <label>Action
+          <label>
+            Action
             <select name="workflow[action]">
-              <option :for={action <- @enabled_workflow_actions} value={action["id"]}>{action["label"]}</option>
+              <option :for={action <- @enabled_workflow_actions} value={action["id"]}>
+                {action["label"]}
+              </option>
             </select>
           </label>
           <label>Instruction <textarea name="workflow[instruction]" maxlength="4096" required></textarea></label>
-          <label class="inline-check"><input type="checkbox" name="workflow[multi_launch]" value="true" /> Launch one independent Run per selected target (maximum {FountWeb.WorkflowManagement.max_multi_launch()})</label>
-          <p>Each Run keeps its own full policy budget; there is no shared batch budget or second scheduler.</p>
+          <label class="inline-check"><input
+            type="checkbox"
+            name="workflow[multi_launch]"
+            value="true"
+          />
+          Launch one independent Run per selected target (maximum {FountWeb.WorkflowManagement.max_multi_launch()})</label>
+          <p>
+            Each Run keeps its own full policy budget; there is no shared batch budget or second scheduler.
+          </p>
           <button disabled={!@live_connected || is_nil(@workflow_selection)} type="submit">Validate launch preview</button>
         </form>
 
         <div :if={@launch_preview} class="card stack launch-preview">
           <h3>Validated launch preview</h3>
-          <p>Command <code>{@launch_preview["command_id"]}</code> · base <code>{@launch_preview["base_revision_id"]}</code></p>
-          <article :for={{entry, index} <- Enum.with_index(@launch_preview["entries"])} class="launch-entry">
+          <p>
+            Command <code>{@launch_preview["command_id"]}</code>
+            · base <code>{@launch_preview["base_revision_id"]}</code>
+          </p>
+          <article
+            :for={{entry, index} <- Enum.with_index(@launch_preview["entries"])}
+            class="launch-entry"
+          >
             <strong>Run {index + 1}</strong> · selection <code>{entry["selection_fingerprint"]}</code>
             <pre><%= json(%{"preview" => entry["preview"], "budget" => entry["budget"], "request_fingerprint" => entry["request_fingerprint"]}) %></pre>
           </article>
@@ -793,10 +956,18 @@ defmodule FountWeb.RunLive do
 
         <div :if={@launch_results} class="card">
           <h3>Launch results</h3>
-          <p>{length(@launch_results["created"])} created/replayed · {length(@launch_results["failed"])} failed · partial: {to_string(@launch_results["partial"])}</p>
+          <p>
+            {length(@launch_results["created"])} created/replayed · {length(@launch_results["failed"])} failed · partial: {to_string(
+              @launch_results["partial"]
+            )}
+          </p>
           <ul>
-            <li :for={row <- @launch_results["created"]}>Ready: <a href={~p"/runs/#{row["run_id"]}/setup"}><code>{row["run_id"]}</code></a></li>
-            <li :for={row <- @launch_results["failed"]}>Failed for <code>{row["selection_fingerprint"]}</code>: {row["error"]}</li>
+            <li :for={row <- @launch_results["created"]}>
+              Ready: <a href={~p"/runs/#{row["run_id"]}/setup"}><code>{row["run_id"]}</code></a>
+            </li>
+            <li :for={row <- @launch_results["failed"]}>
+              Failed for <code>{row["selection_fingerprint"]}</code>: {row["error"]}
+            </li>
           </ul>
         </div>
 
@@ -808,16 +979,35 @@ defmodule FountWeb.RunLive do
 
       <section :if={@live_action == :timeline} class="stack">
         <h2>Durable timeline and controls</h2>
+        <p>
+          Completion policy: <strong>{@current_policy["completion"]}</strong>. Candidate saving leaves canon unchanged; acceptance requires exact Core approval.
+        </p>
         <div class="card">
           <button disabled={!@live_connected || !@lifecycle["pause"]} phx-click="pause">Pause</button>
           <button disabled={!@live_connected || !@lifecycle["resume"]} phx-click="resume">Resume</button>
           <form phx-submit="stop" class="inline-form stop-confirmation">
-            <label class="inline-check"><input type="checkbox" name="control[confirm_stop]" value="true" required disabled={!@live_connected || !@lifecycle["stop"]} /> Confirm permanent stop and fencing</label>
+            <label class="inline-check"><input
+              type="checkbox"
+              name="control[confirm_stop]"
+              value="true"
+              required
+              disabled={!@live_connected || !@lifecycle["stop"]}
+            /> Confirm permanent stop and fencing</label>
             <button disabled={!@live_connected || !@lifecycle["stop"]} type="submit">Stop</button>
           </form>
-          <button disabled={!@live_connected || @run["status"] in ~w(completed_candidate completed_accepted stopped failed)} phx-click="launch">Ensure worker is running</button>
+          <button
+            disabled={
+              !@live_connected ||
+                @run["status"] in ~w(completed_candidate completed_accepted stopped failed)
+            }
+            phx-click="launch"
+          >Ensure worker is running</button>
           <p><strong>Permitted-state summary:</strong> {@lifecycle["reason"]}</p>
-          <p>Plan v{@run["current_plan_version"]} · policy v{@run["current_policy_version"]} · lock/fencing version {@run["lock_version"] || "—"}. Repeated commands remain subject to backend idempotency and conflict checks.</p>
+          <p>
+            Plan v{@run["current_plan_version"]} · policy v{@run["current_policy_version"]} · lock/fencing version {@run[
+              "lock_version"
+            ] || "—"}. Repeated commands remain subject to backend idempotency and conflict checks.
+          </p>
         </div>
         <p>
           Progress is reloaded from PostgreSQL every second and after PubSub wakeups. Socket or worker loss does not own correctness.
@@ -885,8 +1075,13 @@ defmodule FountWeb.RunLive do
           <p>Decision <code>{decision["id"]}</code></p>
           <p><strong>Question:</strong> {decision["prompt"]}</p>
           <p>Fingerprint <code>{decision["context_fingerprint"]}</code></p>
-          <p :if={is_nil(@decision_contexts[decision["id"]]["analysis_lineage"])} role="status">Intelligence lineage: not recorded for this decision.</p>
-          <div :if={!is_nil(@decision_contexts[decision["id"]]["analysis_lineage"])} class="decision-lineage">
+          <p :if={is_nil(@decision_contexts[decision["id"]]["analysis_lineage"])} role="status">
+            Intelligence lineage: not recorded for this decision.
+          </p>
+          <div
+            :if={!is_nil(@decision_contexts[decision["id"]]["analysis_lineage"])}
+            class="decision-lineage"
+          >
             <strong>Recorded Intelligence lineage</strong>
             <pre><%= json(@decision_contexts[decision["id"]]["analysis_lineage"]) %></pre>
           </div>
@@ -1048,26 +1243,50 @@ defmodule FountWeb.RunLive do
         <h2>Exports</h2>
         <div class="card">
           <h3>Export identity and fidelity preview</h3>
-          <p :if={@export_preview["available"] == false}>No exportable candidate yet: {@export_preview["reason"]}</p>
+          <p :if={@export_preview["available"] == false}>
+            No exportable candidate yet: {@export_preview["reason"]}
+          </p>
           <dl :if={@export_preview["available"] != false} class="binding-ledger">
-            <div><dt>Content identity</dt><dd>{@export_preview["completion"]}</dd></div>
-            <div><dt>Candidate</dt><dd><code>{@export_preview["candidate_id"]}</code></dd></div>
-            <div><dt>Result revision</dt><dd><code>{@export_preview["result_revision_id"] || "not accepted"}</code></dd></div>
-            <div><dt>Fountain bytes</dt><dd>{@export_preview["fountain_bytes"]}</dd></div>
-            <div><dt>FDX fidelity/loss report</dt><dd><pre><%= json(@export_preview["fdx_losses"]) %></pre></dd></div>
-            <div><dt>Recorded delivery rows</dt><dd>{@export_preview["delivery_count"]}</dd></div>
+            <div>
+              <dt>Content identity</dt><dd>{@export_preview["completion"]}</dd>
+            </div>
+            <div>
+              <dt>Candidate</dt><dd><code>{@export_preview["candidate_id"]}</code></dd>
+            </div>
+            <div>
+              <dt>Result revision</dt><dd>
+                <code>{@export_preview["result_revision_id"] || "not accepted"}</code>
+              </dd>
+            </div>
+            <div>
+              <dt>Fountain bytes</dt><dd>{@export_preview["fountain_bytes"]}</dd>
+            </div>
+            <div>
+              <dt>FDX fidelity/loss report</dt><dd>
+                <pre><%= json(@export_preview["fdx_losses"]) %></pre>
+              </dd>
+            </div>
+            <div>
+              <dt>Recorded delivery rows</dt><dd>{@export_preview["delivery_count"]}</dd>
+            </div>
           </dl>
-          <p>Standard bundle formats are Fountain, FDX, review JSON/Markdown, source/structural diffs, resources/checks and provenance. Optional formats are only PDF and table-read. Unsupported options are not exposed.</p>
+          <p>
+            Standard bundle formats are Fountain, FDX, review JSON/Markdown, source/structural diffs, resources/checks and provenance. Optional formats are only PDF and table-read. Unsupported options are not exposed.
+          </p>
         </div>
         <form phx-submit="deliver" class="card stack">
-          <label><input type="checkbox" name="export[pdf]" value="true" /> Include PDF (explicitly fails/partials when the configured renderer or PDF checks are unavailable)</label>
-          <label><input type="checkbox" name="export[table_read]" value="true" /> Include table-read JSON/HTML bundle</label>
-          <button disabled={!@live_connected} type="submit">Publish / retry supported bundle</button>
+          <label><input type="checkbox" name="export[pdf]" value="true" />
+          Include PDF (explicitly fails/partials when the configured renderer or PDF checks are unavailable)</label>
+          <label><input type="checkbox" name="export[table_read]" value="true" />
+          Include table-read JSON/HTML bundle</label>
+          <button disabled={!@live_connected} type="submit">Publish / retry bundle</button>
         </form>
         <table>
           <thead>
             <tr>
-              <th>Format</th><th>Content identity</th><th>State</th><th>Checksum / explicit error</th><th>Access</th>
+              <th>Format</th><th>Content identity</th><th>State</th><th>Checksum / explicit error</th><th>
+                Access
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -1077,9 +1296,15 @@ defmodule FountWeb.RunLive do
               <td>{delivery["state"]}</td>
               <td><code>{delivery["output_checksum"] || delivery["error"] || "unknown"}</code></td>
               <td>
-                <a :if={delivery_previewable?(delivery)} href={~p"/artifacts/#{@run_id}/#{delivery["id"]}/preview"}>Preview</a>
+                <a
+                  :if={delivery_previewable?(delivery)}
+                  href={~p"/artifacts/#{@run_id}/#{delivery["id"]}/preview"}
+                >Preview</a>
                 <span :if={delivery_previewable?(delivery)}> · </span>
-                <a :if={delivery["state"] == "ready"} href={~p"/artifacts/#{@run_id}/#{delivery["id"]}"}>Download</a>
+                <a
+                  :if={delivery["state"] == "ready"}
+                  href={~p"/artifacts/#{@run_id}/#{delivery["id"]}"}
+                >Download</a>
                 <span :if={delivery["state"] == "failed"}>Explicit failure; no artifact is served.</span>
               </td>
             </tr>

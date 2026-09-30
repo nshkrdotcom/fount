@@ -58,9 +58,24 @@ defmodule FountWeb.ProjectLive do
   end
 
   def handle_event("filter_runs", %{"runs" => %{"status" => status}}, socket) do
-    allowed = ["", "queued", "running", "paused", "waiting_for_decision", "waiting_for_approval", "partial", "completed_candidate", "completed_accepted", "stopped", "failed"]
+    allowed = [
+      "",
+      "queued",
+      "running",
+      "paused",
+      "waiting_for_decision",
+      "waiting_for_approval",
+      "partial",
+      "completed_candidate",
+      "completed_accepted",
+      "stopped",
+      "failed"
+    ]
+
     status = if status in allowed, do: status, else: ""
-    {:noreply, socket |> assign(:run_filter, status) |> assign(:comparison, nil) |> load_projects()}
+
+    {:noreply,
+     socket |> assign(:run_filter, status) |> assign(:comparison, nil) |> load_projects()}
   end
 
   def handle_event("compare_runs", %{"compare" => %{"left" => left, "right" => right}}, socket) do
@@ -70,8 +85,11 @@ defmodule FountWeb.ProjectLive do
            left,
            right
          ) do
-      {:ok, comparison} -> {:noreply, socket |> assign(:comparison, comparison) |> assign(:error, nil)}
-      {:error, reason} -> {:noreply, assign(socket, :error, "Run comparison unavailable: #{inspect(reason)}")}
+      {:ok, comparison} ->
+        {:noreply, socket |> assign(:comparison, comparison) |> assign(:error, nil)}
+
+      {:error, reason} ->
+        {:noreply, assign(socket, :error, "Run comparison unavailable: #{inspect(reason)}")}
     end
   end
 
@@ -156,20 +174,38 @@ defmodule FountWeb.ProjectLive do
           <div>
             <p class="eyebrow">Authorized bounded registry</p>
             <h2 id="run-registry-title">Runs</h2>
-            <p>Up to 50 owner-authorized Runs are loaded. Filters are validated by the Run listing contract; comparisons are factual and never rank outcomes.</p>
+            <p>
+              Up to 50 owner-authorized Runs are loaded. Filters are validated by the Run listing contract; comparisons are factual and never rank outcomes.
+            </p>
           </div>
           <form phx-change="filter_runs" class="inline-form">
-            <label>Status
+            <label>
+              Status
               <select name="runs[status]">
                 <option value="" selected={@run_filter == ""}>All statuses</option>
-                <option :for={status <- ~w(queued running paused waiting_for_decision waiting_for_approval partial completed_candidate completed_accepted stopped failed)} value={status} selected={@run_filter == status}>{String.replace(status, "_", " ")}</option>
+                <option
+                  :for={
+                    status <-
+                      ~w(queued running paused waiting_for_decision waiting_for_approval partial completed_candidate completed_accepted stopped failed)
+                  }
+                  value={status}
+                  selected={@run_filter == status}
+                >
+                  {String.replace(status, "_", " ")}
+                </option>
               </select>
             </label>
           </form>
           <p :if={@runs == []}>No authorized Runs match this filter.</p>
-          <div class="table-scroll" :if={@runs != []}>
+          <div :if={@runs != []} class="table-scroll">
             <table>
-              <thead><tr><th>Project</th><th>Status</th><th>Stage</th><th>Plan/policy</th><th>Base</th><th>Open</th></tr></thead>
+              <thead>
+                <tr>
+                  <th>Project</th><th>Status</th><th>Stage</th><th>Plan/policy</th><th>Base</th><th>
+                    Open
+                  </th>
+                </tr>
+              </thead>
               <tbody>
                 <tr :for={run <- @runs}>
                   <td>{run["project"]["title"]}</td>
@@ -183,25 +219,41 @@ defmodule FountWeb.ProjectLive do
             </table>
           </div>
           <form :if={length(@runs) >= 2} phx-submit="compare_runs" class="compare-form">
-            <label>Left Run
+            <label>
+              Left Run
               <select name="compare[left]">
-                <option :for={run <- @runs} value={run["id"]}>{run["project"]["title"]} · {run["status"]} · {String.slice(run["id"], 0, 8)}</option>
+                <option :for={run <- @runs} value={run["id"]}>
+                  {run["project"]["title"]} · {run["status"]} · {String.slice(run["id"], 0, 8)}
+                </option>
               </select>
             </label>
-            <label>Right Run
+            <label>
+              Right Run
               <select name="compare[right]">
-                <option :for={run <- Enum.reverse(@runs)} value={run["id"]}>{run["project"]["title"]} · {run["status"]} · {String.slice(run["id"], 0, 8)}</option>
+                <option :for={run <- Enum.reverse(@runs)} value={run["id"]}>
+                  {run["project"]["title"]} · {run["status"]} · {String.slice(run["id"], 0, 8)}
+                </option>
               </select>
             </label>
             <button type="submit">Compare persisted facts</button>
           </form>
           <div :if={@comparison} class="comparison-card">
-            <p>Same screenplay: {to_string(@comparison["same_screenplay"])} · same base: {to_string(@comparison["same_base"])} · same scope: {to_string(@comparison["same_scope"])}</p>
+            <p>
+              Same screenplay: {to_string(@comparison["same_screenplay"])} · same base: {to_string(
+                @comparison["same_base"]
+              )} · same scope: {to_string(@comparison["same_scope"])}
+            </p>
             <table>
-              <thead><tr><th>Field</th><th>Left</th><th>Right</th></tr></thead>
+              <thead>
+                <tr>
+                  <th>Field</th><th>Left</th><th>Right</th>
+                </tr>
+              </thead>
               <tbody>
                 <tr :for={fact <- @comparison["facts"]}>
-                  <td>{fact["field"]}</td><td>{to_string(fact["left"] || "—")}</td><td>{to_string(fact["right"] || "—")}</td>
+                  <td>{fact["field"]}</td><td>{to_string(fact["left"] || "—")}</td><td>
+                    {to_string(fact["right"] || "—")}
+                  </td>
                 </tr>
               </tbody>
             </table>
@@ -224,6 +276,7 @@ defmodule FountWeb.ProjectLive do
 
         <form
           id="create-project"
+          phx-update="ignore"
           action={~p"/projects"}
           method="post"
           enctype="multipart/form-data"

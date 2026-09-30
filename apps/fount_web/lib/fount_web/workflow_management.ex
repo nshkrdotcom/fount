@@ -13,6 +13,9 @@ defmodule FountWeb.WorkflowManagement do
   @gate_keys ~w(investigation_scope strategy_choice candidate_generation iteration)
   @gate_modes ~w(automatic human)
   @limit_keys ~w(max_iterations max_malformed_repairs_per_call max_transient_retries max_inference_calls max_measurement_states)
+  @policy_form_keys @gate_keys ++
+                      @limit_keys ++
+                      ~w(completion approver owner_fallback_enabled route_choice route_reviewer_key money_enabled currency max_microunits)
   @terminal ~w(completed_candidate completed_accepted stopped failed)
   @max_instruction_bytes 4_096
   @max_scope_targets 64
@@ -36,7 +39,8 @@ defmodule FountWeb.WorkflowManagement do
       "mode" => "revise",
       "request" => "FountWorkshop.Request workflow=propagate; change + repair_scope",
       "handler" => "FountRun.PipelineRequest → PipelineHandler → WorkshopHandler",
-      "preconditions" => "nonempty instruction, exact base revision and validated screenplay selection"
+      "preconditions" =>
+        "nonempty instruction, exact base revision and validated screenplay selection"
     },
     %{
       "id" => "pass",
@@ -98,7 +102,8 @@ defmodule FountWeb.WorkflowManagement do
       "enabled" => false,
       "mode" => "diagnose",
       "request" => "FountWorkshop.Workflows.investigate/4 exists",
-      "handler" => "durable Run already owns an investigate stage; wrapper is not promoted to a Run action",
+      "handler" =>
+        "durable Run already owns an investigate stage; wrapper is not promoted to a Run action",
       "preconditions" => "diagnosis helper is not a separately proven durable Run launch"
     }
   ]
@@ -113,14 +118,19 @@ defmodule FountWeb.WorkflowManagement do
       "completion" => ~w(candidate accept),
       "route_choices" => ["pause_on_material_tradeoff", "registered_reviewer"],
       "limits" => @limit_keys,
-      "money" => %{"currency" => "ISO-4217 three-letter code", "max_microunits" => "nonnegative integer"}
+      "money" => %{
+        "currency" => "ISO-4217 three-letter code",
+        "max_microunits" => "nonnegative integer"
+      }
     }
   end
 
   def policy_from_form(params, %ActorContext{} = context, owner_id) when is_map(params) do
     with :ok <- trusted_owner(context, owner_id),
+         :ok <- validate_policy_form_keys(params),
          {:ok, gates} <- gates_from_form(params),
-         {:ok, completion} <- enum(params["completion"], ~w(candidate accept), :invalid_completion),
+         {:ok, completion} <-
+           enum(params["completion"], ~w(candidate accept), :invalid_completion),
          {:ok, approver} <- approver_from_form(params, completion, owner_id),
          {:ok, fallback_approver} <- fallback_approver_from_form(params, completion, owner_id),
          {:ok, limits} <- limits_from_form(params),
@@ -138,15 +148,23 @@ defmodule FountWeb.WorkflowManagement do
     end
   end
 
+  defp validate_policy_form_keys(params) do
+    if Enum.all?(Map.keys(params), &(&1 in @policy_form_keys)),
+      do: :ok,
+      else: {:error, :unsupported_policy_field}
+  end
+
   def built_in_presets(owner_id, %ActorContext{} = context) do
     if trusted_owner(context, owner_id) == :ok do
       owner = principal_map(:human, owner_id)
       service = FountWeb.Actors.principal(:service) |> Principal.to_map()
 
       [
-        {"candidate-careful", "Candidate · deliberate", preset_policy("candidate", nil, "human", 8)},
+        {"candidate-careful", "Candidate · deliberate",
+         preset_policy("candidate", nil, "human", 8)},
         {"owner-approval", "Owner approval", preset_policy("accept", owner, "human", 8)},
-        {"service-pass", "Service approval · focused", preset_policy("accept", service, "automatic", 12)}
+        {"service-pass", "Service approval · focused",
+         preset_policy("accept", service, "automatic", 12)}
       ]
       |> Enum.map(fn {key, label, value} ->
         preset_row("builtin:" <> key, label, 1, value, context, "built-in")
@@ -158,28 +176,30 @@ defmodule FountWeb.WorkflowManagement do
 
   def presets(repo, owner_id, %ActorContext{} = context) do
     if trusted_owner(context, owner_id) == :ok do
-      stored =
-        case FountWeb.Store.list_policy_presets(repo, owner_id) do
-          rows when is_list(rows) ->
-            Enum.map(rows, fn row ->
-              preset_row(
-                "host:" <> row["id"] <> ":" <> Integer.to_string(row["version"]),
-                row["name"],
-                row["version"],
-                row["policy"],
-                context,
-                "host"
-              )
-            end)
-
-          _ ->
-            []
-        end
+      stored = stored_presets(repo, owner_id, context)
 
       built_in_presets(owner_id, context) ++ stored
     else
       []
     end
+  end
+
+  defp stored_presets(repo, owner_id, context) do
+    case FountWeb.Store.list_policy_presets(repo, owner_id) do
+      rows when is_list(rows) -> Enum.map(rows, &stored_preset(&1, context))
+      _ -> []
+    end
+  end
+
+  defp stored_preset(row, context) do
+    preset_row(
+      "host:" <> row["id"] <> ":" <> Integer.to_string(row["version"]),
+      row["name"],
+      row["version"],
+      row["policy"],
+      context,
+      "host"
+    )
   end
 
   def save_preset(repo, owner_id, name, value, %ActorContext{} = context) do
@@ -236,7 +256,8 @@ defmodule FountWeb.WorkflowManagement do
 
     with :ok <- trusted_owner(context, owner_id),
          :ok <- ActorContext.authorize(context, :read_run, run["screenplay_id"]),
-         {:ok, model} <- Fount.Persistence.load_revision(repo, run["screenplay_id"], base_revision_id),
+         {:ok, model} <-
+           Fount.Persistence.load_revision(repo, run["screenplay_id"], base_revision_id),
          {:ok, selection} <- validate_selection(model, selection) do
       fingerprint = CanonicalJSON.hash(selection)
 
@@ -260,11 +281,17 @@ defmodule FountWeb.WorkflowManagement do
     with :ok <- trusted_owner(context, owner_id),
          :ok <- ActorContext.authorize(context, :read_run, run["screenplay_id"]),
          {:ok, row} <- FountWeb.Store.workflow_selection(repo, owner_id, run["id"]),
-         true <- row["screenplay_id"] == run["screenplay_id"] or {:error, :selection_screenplay_stale},
+         true <-
+           row["screenplay_id"] == run["screenplay_id"] or {:error, :selection_screenplay_stale},
          true <- row["base_revision_id"] == base_revision_id or {:error, :selection_base_stale},
-         {:ok, model} <- Fount.Persistence.load_revision(repo, run["screenplay_id"], base_revision_id),
+         {:ok, model} <-
+           Fount.Persistence.load_revision(repo, run["screenplay_id"], base_revision_id),
          {:ok, selection} <- validate_selection(model, row["selection"]) do
-      {:ok, Map.merge(row, %{"selection" => selection, "preview" => selection_preview(model, selection)})}
+      {:ok,
+       Map.merge(row, %{
+         "selection" => selection,
+         "preview" => selection_preview(model, selection)
+       })}
     else
       {:error, :not_found} -> default_selection(repo, owner_id, run, context)
       {:error, _} = error -> error
@@ -305,7 +332,8 @@ defmodule FountWeb.WorkflowManagement do
   def launch_preview(model, action_id, instruction, selection, policy, multi?) do
     scopes = split_scopes(selection, multi?)
 
-    with true <- scopes != [] and length(scopes) <= @max_multi_launch or {:error, :multi_launch_limit},
+    with true <-
+           (scopes != [] and length(scopes) <= @max_multi_launch) or {:error, :multi_launch_limit},
          {:ok, policy} <- ensure_policy_map(policy),
          {:ok, entries} <- preview_entries(model, action_id, instruction, scopes, policy) do
       {:ok,
@@ -326,13 +354,18 @@ defmodule FountWeb.WorkflowManagement do
     |> Enum.map(fn {entry, index} ->
       command_id = preview["command_id"] <> ":" <> Integer.to_string(index)
 
-      case FountWeb.Launch.create_action_from_base(owner_id, project_id, preview["base_revision_id"], %{
-             "command_id" => command_id,
-             "action" => preview["action"],
-             "instruction" => preview["instruction"],
-             "selection" => entry["selection"],
-             "policy" => preview["policy"]
-           }) do
+      case FountWeb.Launch.create_action_from_base(
+             owner_id,
+             project_id,
+             preview["base_revision_id"],
+             %{
+               "command_id" => command_id,
+               "action" => preview["action"],
+               "instruction" => preview["instruction"],
+               "selection" => entry["selection"],
+               "policy" => preview["policy"]
+             }
+           ) do
         {:ok, %{run: run}} -> Map.merge(entry, %{"state" => "created", "run_id" => run["id"]})
         {:error, reason} -> Map.merge(entry, %{"state" => "failed", "error" => inspect(reason)})
       end
@@ -368,7 +401,9 @@ defmodule FountWeb.WorkflowManagement do
     else
       {:ok,
        current
-       |> Map.take(~w(screenplay_id base_revision_id goal scope constraints protected_material input_brief input_notes operation_parameters))
+       |> Map.take(
+         ~w(screenplay_id base_revision_id goal scope constraints protected_material input_brief input_notes operation_parameters)
+       )
        |> Map.put("goal", goal)}
     end
   end
@@ -385,55 +420,88 @@ defmodule FountWeb.WorkflowManagement do
       "candidate_id" => decision["candidate_id"],
       "base_revision_id" => decision["base_revision_id"],
       "candidate_revision_id" => review["candidate_revision_id"],
-      "check_set_fingerprint" => decision["check_set_fingerprint"] || review["check_set_fingerprint"]
+      "check_set_fingerprint" =>
+        decision["check_set_fingerprint"] || review["check_set_fingerprint"]
     }
   end
 
   def notifications(run, progress) do
-    decision_items =
-      for item <- progress["decisions"] || [], item["status"] == "pending" do
-        notification("decision:" <> item["id"], "decision_required", "Decision required", item["kind"] || "checkpoint")
-      end
-
-    artifact_items =
-      for item <- progress["deliveries"] || [], item["state"] in ["ready", "failed"] do
-        case item["state"] do
-          "ready" -> notification("artifact:" <> item["id"], "artifact_ready", "Artifact ready", item["format"])
-          "failed" -> notification("artifact:" <> item["id"] <> ":failed", "error", "Artifact failed", item["format"] <> ": " <> to_string(item["error"] || "delivery_failed"))
-        end
-      end
-
-    step_items =
-      for item <- progress["steps"] || [], item["status"] in ["failed", "error"] do
-        notification("step:" <> item["id"] <> ":failed", "error", "Run step failed", item["stage"] || "step")
-      end
-
-    run_items =
-      if run["status"] == "failed" do
-        [notification("run:" <> run["id"] <> ":failed:" <> to_string(run["lock_version"] || 0), "error", "Run failed", "Persisted state reports failure")]
-      else
-        []
-      end
-
-    (decision_items ++ artifact_items ++ step_items ++ run_items)
+    (decision_notifications(progress) ++
+       artifact_notifications(progress) ++
+       step_notifications(progress) ++ run_notifications(run))
     |> Enum.uniq_by(& &1["id"])
     |> Enum.sort_by(& &1["id"])
+  end
+
+  defp decision_notifications(progress) do
+    for item <- progress["decisions"] || [], item["status"] == "pending" do
+      notification(
+        "decision:" <> item["id"],
+        "decision_required",
+        "Decision required",
+        item["kind"] || "checkpoint"
+      )
+    end
+  end
+
+  defp artifact_notifications(progress) do
+    for item <- progress["deliveries"] || [], item["state"] in ["ready", "failed"] do
+      case item["state"] do
+        "ready" ->
+          notification(
+            "artifact:" <> item["id"],
+            "artifact_ready",
+            "Artifact ready",
+            item["format"]
+          )
+
+        "failed" ->
+          notification(
+            "artifact:" <> item["id"] <> ":failed",
+            "error",
+            "Artifact failed",
+            item["format"] <> ": " <> to_string(item["error"] || "delivery_failed")
+          )
+      end
+    end
+  end
+
+  defp step_notifications(progress) do
+    for item <- progress["steps"] || [], item["status"] in ["failed", "error"] do
+      notification(
+        "step:" <> item["id"] <> ":failed",
+        "error",
+        "Run step failed",
+        item["stage"] || "step"
+      )
+    end
+  end
+
+  defp run_notifications(run) do
+    if run["status"] == "failed" do
+      [
+        notification(
+          "run:" <> run["id"] <> ":failed:" <> to_string(run["lock_version"] || 0),
+          "error",
+          "Run failed",
+          "Persisted state reports failure"
+        )
+      ]
+    else
+      []
+    end
   end
 
   def list_owner_runs(repo, owner_id, opts \\ []) do
     limit = opts |> Keyword.get(:limit, @max_run_list) |> min(@max_run_list) |> max(1)
 
-    case FountWeb.Store.list_run_accesses(repo, owner_id, limit: limit, status: Keyword.get(opts, :status)) do
+    case FountWeb.Store.list_run_accesses(repo, owner_id,
+           limit: limit,
+           status: Keyword.get(opts, :status)
+         ) do
       rows when is_list(rows) ->
         rows
-        |> Enum.flat_map(fn access ->
-          with {:ok, context} <- FountWeb.Actors.owner_context(owner_id, access["screenplay_id"]),
-               {:ok, run} <- FountRun.get_run(repo, access["run_id"], context) do
-            [Map.put(run, "project", Map.take(access, ~w(project_id title key screenplay_id)))]
-          else
-            _ -> []
-          end
-        end)
+        |> Enum.flat_map(&read_owner_run(repo, owner_id, &1))
         |> Enum.take(limit)
 
       _ ->
@@ -441,6 +509,15 @@ defmodule FountWeb.WorkflowManagement do
     end
   rescue
     _ -> []
+  end
+
+  defp read_owner_run(repo, owner_id, access) do
+    with {:ok, context} <- FountWeb.Actors.owner_context(owner_id, access["screenplay_id"]),
+         {:ok, run} <- FountRun.get_run(repo, access["run_id"], context) do
+      [Map.put(run, "project", Map.take(access, ~w(project_id title key screenplay_id)))]
+    else
+      _ -> []
+    end
   end
 
   def compare_owner_runs(repo, owner_id, left_id, right_id) do
@@ -465,14 +542,18 @@ defmodule FountWeb.WorkflowManagement do
     with true <- is_binary(candidate_id) or {:error, :no_exportable_candidate},
          :ok <- ActorContext.authorize(context, :read_run, run["screenplay_id"]),
          {:ok, candidate} <- Fount.Persistence.candidate(repo, candidate_id),
-         true <- candidate["screenplay_id"] == run["screenplay_id"] or {:error, :candidate_identity_mismatch},
+         true <-
+           candidate["screenplay_id"] == run["screenplay_id"] or
+             {:error, :candidate_identity_mismatch},
          {:ok, fdx} <- Fount.Screenplay.to_fdx(candidate["screenplay"]) do
       {:ok,
        %{
          "candidate_id" => candidate_id,
          "result_revision_id" => candidate["result_revision_id"],
-         "completion" => if(run["status"] == "completed_accepted", do: "accepted", else: "candidate"),
-         "fountain_bytes" => byte_size(Fount.Screenplay.to_fountain(candidate["screenplay"], mode: :spec)),
+         "completion" =>
+           if(run["status"] == "completed_accepted", do: "accepted", else: "candidate"),
+         "fountain_bytes" =>
+           byte_size(Fount.Screenplay.to_fountain(candidate["screenplay"], mode: :spec)),
          "fdx_losses" => fdx.losses,
          "delivery_count" => length(progress["deliveries"] || [])
        }}
@@ -507,7 +588,11 @@ defmodule FountWeb.WorkflowManagement do
       %{"field" => "status", "left" => left["status"], "right" => right["status"]},
       %{"field" => "stage", "left" => left["stage"], "right" => right["stage"]},
       %{"field" => "usage rows", "left" => left["usage_rows"], "right" => right["usage_rows"]},
-      %{"field" => "delivery rows", "left" => left["delivery_rows"], "right" => right["delivery_rows"]}
+      %{
+        "field" => "delivery rows",
+        "left" => left["delivery_rows"],
+        "right" => right["delivery_rows"]
+      }
     ]
   end
 
@@ -540,29 +625,25 @@ defmodule FountWeb.WorkflowManagement do
   end
 
   defp selection_preview(model, %{"targets" => targets}) do
-    Enum.map(targets, fn target ->
-      label =
-        case target do
-          %{"kind" => "scene", "id" => id} ->
-            case Fount.Query.scene(model, id) do
-              nil -> "Deleted scene"
-              scene ->
-                case Fount.Query.node(model, scene.heading_id) do
-                  nil -> "Scene"
-                  heading -> heading.text || "Scene"
-                end
-            end
-
-          %{"kind" => "element", "id" => id} ->
-            case Fount.Query.node(model, id) do
-              nil -> "Deleted element"
-              element -> "#{element.type}: " <> String.slice(element.text || "", 0, 72)
-            end
-        end
-
-      Map.put(target, "label", label)
-    end)
+    Enum.map(targets, &Map.put(&1, "label", target_label(model, &1)))
   end
+
+  defp target_label(model, %{"kind" => "scene", "id" => id}) do
+    case Fount.Query.scene(model, id) do
+      nil -> "Deleted scene"
+      scene -> scene_label(Fount.Query.node(model, scene.heading_id))
+    end
+  end
+
+  defp target_label(model, %{"kind" => "element", "id" => id}) do
+    case Fount.Query.node(model, id) do
+      nil -> "Deleted element"
+      element -> "#{element.type}: " <> String.slice(element.text || "", 0, 72)
+    end
+  end
+
+  defp scene_label(nil), do: "Scene"
+  defp scene_label(heading), do: heading.text || "Scene"
 
   defp preview_entries(model, action_id, instruction, scopes, policy) do
     Enum.reduce_while(scopes, {:ok, []}, fn selection, {:ok, acc} ->
@@ -636,7 +717,9 @@ defmodule FountWeb.WorkflowManagement do
     if truthy?(params["money_enabled"]) do
       currency = params["currency"]
 
-      with true <- is_binary(currency) and Regex.match?(~r/^[A-Z]{3}$/, currency) or {:error, :invalid_currency},
+      with true <-
+             (is_binary(currency) and Regex.match?(~r/^[A-Z]{3}$/, currency)) or
+               {:error, :invalid_currency},
            {:ok, max_microunits} <- nonnegative_integer(params["max_microunits"]) do
         {:ok, %{"currency" => currency, "max_microunits" => max_microunits}}
       end
@@ -708,19 +791,27 @@ defmodule FountWeb.WorkflowManagement do
     end
   end
 
-  defp action_options("develop", _instruction, _selection, _attrs), do: %{"placement" => %{"kind" => "start"}}
+  defp action_options("develop", _instruction, _selection, _attrs),
+    do: %{"placement" => %{"kind" => "start"}}
 
   defp action_options("propagate", instruction, selection, _attrs),
     do: %{"change" => String.trim(instruction), "repair_scope" => selection}
 
   defp action_options("pass", _instruction, _selection, attrs) do
-    profile = if attrs["profile"] in ~w(dialogue_subtext action_visual sound_space cinematic_rhythm transition brevity dry_comedy tension), do: attrs["profile"], else: "dialogue_subtext"
+    profile =
+      if attrs["profile"] in ~w(dialogue_subtext action_visual sound_space cinematic_rhythm transition brevity dry_comedy tension),
+        do: attrs["profile"],
+        else: "dialogue_subtext"
+
     %{"profile" => profile}
   end
 
   defp valid_instruction(value) when is_binary(value) do
     trimmed = String.trim(value)
-    if trimmed != "" and byte_size(trimmed) <= @max_instruction_bytes, do: :ok, else: {:error, :invalid_instruction}
+
+    if trimmed != "" and byte_size(trimmed) <= @max_instruction_bytes,
+      do: :ok,
+      else: {:error, :invalid_instruction}
   end
 
   defp valid_instruction(_), do: {:error, :invalid_instruction}
@@ -745,10 +836,17 @@ defmodule FountWeb.WorkflowManagement do
 
   defp lifecycle_reason(run) do
     cond do
-      run["status"] in @terminal -> "Run is terminal; restart-from-stage is not supported."
-      not is_nil(run["stop_requested_at"]) -> "Run is stopped and fenced."
-      not is_nil(run["pause_requested_at"]) -> "Run is paused; resume is the supported continuation."
-      true -> "Current state accepts supported owner controls."
+      run["status"] in @terminal ->
+        "Run is terminal; restart-from-stage is not supported."
+
+      not is_nil(run["stop_requested_at"]) ->
+        "Run is stopped and fenced."
+
+      not is_nil(run["pause_requested_at"]) ->
+        "Run is paused; resume is the supported continuation."
+
+      true ->
+        "Current state accepts supported owner controls."
     end
   end
 
@@ -760,7 +858,8 @@ defmodule FountWeb.WorkflowManagement do
     Principal.to_map(principal)
   end
 
-  defp enum(value, values, error), do: if(value in values, do: {:ok, value}, else: {:error, error})
+  defp enum(value, values, error),
+    do: if(value in values, do: {:ok, value}, else: {:error, error})
 
   defp nonnegative_integer(value) when is_integer(value) and value >= 0, do: {:ok, value}
 

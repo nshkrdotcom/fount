@@ -34,8 +34,16 @@ defmodule FountWeb.Actors do
 
     [
       %{"key" => "owner", "label" => "Authenticated owner", "principal" => owner},
-      %{"key" => "agent", "label" => "Configured agent approver", "principal" => principal(:agent)},
-      %{"key" => "service", "label" => "Configured service approver", "principal" => principal(:service)}
+      %{
+        "key" => "agent",
+        "label" => "Configured agent approver",
+        "principal" => principal(:agent)
+      },
+      %{
+        "key" => "service",
+        "label" => "Configured service approver",
+        "principal" => principal(:service)
+      }
     ]
   end
 

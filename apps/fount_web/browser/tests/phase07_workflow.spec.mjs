@@ -45,9 +45,9 @@ test('W01-W03 expose validated policy, closed actions and persistent exact-base 
     await expect(page.locator(`select[name="policy[${gate}]"]`)).toBeVisible();
   }
   await expect(page.getByText(/Max microunits/)).toBeVisible();
-  await expect(page.getByText(/Authenticated owner/)).toBeVisible();
-  await expect(page.getByText(/Unknown provider cost stays unknown/)).toBeVisible();
-  await page.getByLabel('Route').selectOption('registered_reviewer');
+  await expect(page.getByLabel('Trusted approver')).toHaveValue('owner');
+  await expect(page.getByText(/estimates do not become incurred cost/)).toBeVisible();
+  await page.locator('select[name="policy[route_choice]"]').selectOption('registered_reviewer');
   await page.getByLabel('Registered route reviewer').selectOption('owner');
   await page.getByRole('button', {name: 'Append validated policy snapshot'}).click();
   await expect(page.getByText(/Policy snapshot updated/)).toBeVisible();
@@ -101,10 +101,13 @@ test('W06-W07 supported export options, finite multi-launch, partial-safe identi
   await expect(page.locator('.launch-entry')).toHaveCount(2);
   await page.getByRole('button', {name: 'Create these independent Runs'}).click();
   await expect(page.getByText(/2 created\/replayed · 0 failed/)).toBeVisible();
+  const created = await page.locator('li').filter({hasText: 'Ready:'}).locator('a').evaluateAll(links => links.map(link => link.getAttribute('href')));
+  expect(created).toHaveLength(2);
 
   await page.goto('/');
   await expect(page.getByRole('heading', {name: 'Runs'})).toBeVisible();
-  await expect(page.locator('.run-registry tbody tr')).toHaveCount(3);
+  expect(await page.locator('.run-registry tbody tr').count()).toBeLessThanOrEqual(50);
+  for (const href of created) await expect(page.locator(`.run-registry a[href="${href}"]`)).toBeVisible();
   await expect(page.getByRole('button', {name: 'Compare persisted facts'})).toBeVisible();
 
   await page.goto(`/runs/${runId}/exports`);
@@ -150,4 +153,32 @@ test('Phase 07 controls remain keyboard-readable at 480px with reduced motion an
   expect(overflow).toBeLessThanOrEqual(1);
   await page.keyboard.press('Tab');
   await expect(page.locator(':focus')).toBeVisible();
+});
+
+test('native intake retains edited journey and source across delayed LiveView connection', async ({browser}) => {
+  const context = await browser.newContext();
+  let connect;
+  await context.routeWebSocket('**/live/websocket**', socket => {
+    connect = () => socket.connectToServer();
+  });
+  const page = await context.newPage();
+  await login(page);
+  await page.goto('/projects/new');
+  const key = `delayed-intake-${Date.now()}`;
+  await page.getByLabel('Project title').fill('Delayed native intake');
+  await page.getByLabel('Project key').fill(key);
+  await page.getByLabel('Journey').selectOption('reveal');
+  // The reveal fixture needs a later action as well as its protected platform beat.
+  const source = `${fixture}\nINT. INTERVIEW ROOM - LATER\n\nNora keeps her hands flat on the table.\n`;
+  await page.getByLabel('Or Fountain source').fill(source);
+  connect();
+  await expect(page.locator('.phx-connected')).toBeVisible();
+  await expect(page.getByLabel('Project title')).toHaveValue('Delayed native intake');
+  await expect(page.getByLabel('Project key')).toHaveValue(key);
+  await expect(page.getByLabel('Journey')).toHaveValue('reveal');
+  await expect(page.getByLabel('Or Fountain source')).toHaveValue(source);
+  await page.getByRole('button', {name: 'Create Run', exact: true}).click();
+  await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+\/setup$/);
+  await expect(page.getByLabel('Goal', {exact: true})).toHaveValue('Move the reveal while preserving the protected train beat and approve exact checked pages');
+  await context.close();
 });

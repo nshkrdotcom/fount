@@ -13,7 +13,7 @@ defmodule FountWeb.ViewerLive do
              {:ok, run} <- FountRun.get_run(Fount.Repo, run_id, context),
              {:ok, progress} <- FountRun.progress(Fount.Repo, run_id, context) do
           {:ok,
-           load_workspace(socket, run_id, access, run, progress, params)
+           load_workspace(socket, run_id, access, run, progress, params, context)
            |> assign(:identity_dialog_open, false)}
         else
           {:error, reason} ->
@@ -28,6 +28,9 @@ defmodule FountWeb.ViewerLive do
              |> assign(:character_filter, "")
              |> assign(:selected_scene_id, nil)
              |> assign(:base_screenplay, nil)
+             |> assign(:context, nil)
+             |> assign(:workflow_selection, nil)
+             |> assign(:scope_notice, nil)
              |> assign(:identity_dialog_open, false)
              |> assign(:error, "Run state unavailable: #{inspect(reason)}")}
         end
@@ -44,7 +47,31 @@ defmodule FountWeb.ViewerLive do
   def handle_event("close_identity_dialog", _params, socket),
     do: {:noreply, assign(socket, :identity_dialog_open, false)}
 
-  defp load_workspace(socket, run_id, access, run, progress, params) do
+  def handle_event("save_workflow_scope", %{"scope" => params}, socket) do
+    with {:ok, selection} <- FountWeb.WorkflowManagement.selection_from_params(params),
+         {:ok, saved} <-
+           FountWeb.WorkflowManagement.save_selection(
+             Fount.Repo,
+             socket.assigns.current_owner,
+             socket.assigns.run,
+             selection,
+             socket.assigns.context
+           ) do
+      {:noreply,
+       socket
+       |> assign(:workflow_selection, saved)
+       |> assign(:scope_notice, "Workflow scope saved against the exact Run base revision.")
+       |> assign(:error, nil)}
+    else
+      {:error, reason} ->
+        {:noreply,
+         socket
+         |> assign(:scope_notice, nil)
+         |> assign(:error, "Scope rejected: #{inspect(reason)}. Reselect targets from the Run base.")}
+    end
+  end
+
+  defp load_workspace(socket, run_id, access, run, progress, params, context) do
     filter = params |> Map.get("character", "") |> bounded_filter()
     token = Map.get(params, "view")
 
@@ -79,6 +106,21 @@ defmodule FountWeb.ViewerLive do
     target_error = evidence_target_error(workspace, params["target"])
     base_screenplay = load_base_screenplay(run, access)
 
+    {workflow_selection, selection_error} =
+      case FountWeb.WorkflowManagement.load_selection(
+             Fount.Repo,
+             socket.assigns.current_owner,
+             run,
+             context
+           ) do
+        {:ok, saved} ->
+          {saved, nil}
+
+        {:error, reason} ->
+          _ = FountWeb.Store.delete_workflow_selection(Fount.Repo, socket.assigns.current_owner, run_id)
+          {nil, "Saved workflow scope is stale (#{inspect(reason)}); reselect from this exact base revision."}
+      end
+
     socket
     |> assign(:run_id, run_id)
     |> assign(:access, access)
@@ -89,7 +131,10 @@ defmodule FountWeb.ViewerLive do
     |> assign(:character_filter, filter)
     |> assign(:selected_scene_id, selected_scene_id)
     |> assign(:base_screenplay, base_screenplay)
-    |> assign(:error, Enum.find([error, target_error, scene_error], &is_binary/1))
+    |> assign(:context, context)
+    |> assign(:workflow_selection, workflow_selection)
+    |> assign(:scope_notice, nil)
+    |> assign(:error, Enum.find([error, target_error, scene_error, selection_error], &is_binary/1))
   end
 
   defp evidence_target_error(%{selection: %{kind: :evidence}, screenplay: screenplay}, target_id)
@@ -163,6 +208,21 @@ defmodule FountWeb.ViewerLive do
 
   defp revision_kind(%{kind: :evidence}),
     do: "Read-only analysis evidence revision — may be stale relative to current work"
+
+  defp scope_whole?(%{"selection" => %{"whole_screenplay" => true}}), do: true
+  defp scope_whole?(_), do: false
+
+  defp scope_target?(%{"selection" => %{"targets" => targets}}, kind, id) when is_list(targets),
+    do: Enum.any?(targets, &(&1["kind"] == kind and &1["id"] == id))
+
+  defp scope_target?(_, _kind, _id), do: false
+
+  defp scope_scene_label(screenplay, scene) do
+    case Fount.Query.node(screenplay, scene.heading_id) do
+      nil -> "Untitled scene"
+      heading -> heading.text || "Untitled scene"
+    end
+  end
 
   @impl true
   def render(assigns) do
@@ -258,6 +318,71 @@ defmodule FountWeb.ViewerLive do
               <FountWeb.CoreComponents.button type="button" phx-click="close_identity_dialog">Close</FountWeb.CoreComponents.button>
             </:actions>
           </FountWeb.CoreComponents.dialog>
+        </section>
+
+        <section :if={@base_screenplay} class="workflow-scope-panel card stack" aria-labelledby="workflow-scope-title">
+          <div class="workflow-scope-head">
+            <div>
+              <p class="eyebrow">Phase 07 · Run input</p>
+              <h2 id="workflow-scope-title">Revision-bound workflow scope</h2>
+            </div>
+            <code>{get_in(@run, ["plan", "base_revision_id"])}</code>
+          </div>
+          <p>
+            Scope is validated against this exact owner-authorized Run base. Page estimates are display-only and never become durable target IDs. A changed or deleted target must be reselected.
+          </p>
+          <p :if={@scope_notice} role="status">{@scope_notice}</p>
+          <form phx-submit="save_workflow_scope" class="scope-picker">
+            <label class="scope-whole">
+              <input
+                type="checkbox"
+                name="scope[whole_screenplay]"
+                value="true"
+                checked={scope_whole?(@workflow_selection)}
+              />
+              Whole screenplay
+            </label>
+            <details open>
+              <summary>Scene targets ({length(@base_screenplay.ir.scenes)})</summary>
+              <div class="scope-target-grid">
+                <label :for={scene <- @base_screenplay.ir.scenes}>
+                  <input
+                    type="checkbox"
+                    name="scope[scene_ids][]"
+                    value={scene.id}
+                    checked={scope_target?(@workflow_selection, "scene", scene.id)}
+                  />
+                  <span>{scope_scene_label(@base_screenplay, scene)}</span>
+                  <code>{scene.id}</code>
+                </label>
+              </div>
+            </details>
+            <details>
+              <summary>Element targets ({length(@base_screenplay.ir.elements)})</summary>
+              <div class="scope-target-grid scope-elements">
+                <label :for={element <- @base_screenplay.ir.elements}>
+                  <input
+                    type="checkbox"
+                    name="scope[element_ids][]"
+                    value={element.id}
+                    checked={scope_target?(@workflow_selection, "element", element.id)}
+                  />
+                  <span>{element.type}: {String.slice(element.text || "", 0, 72)}</span>
+                  <code>{element.id}</code>
+                </label>
+              </div>
+            </details>
+            <FountWeb.CoreComponents.button type="submit">Save exact scope</FountWeb.CoreComponents.button>
+          </form>
+          <div :if={@workflow_selection} class="scope-preview" aria-label="Selected workflow scope">
+            <strong>Selected scope</strong>
+            <span>fingerprint <code>{@workflow_selection["selection_fingerprint"]}</code></span>
+            <ul>
+              <li :for={target <- @workflow_selection["preview"] || []}>
+                <span>{target["label"]}</span> <code>{target["id"]}</code>
+              </li>
+            </ul>
+          </div>
         </section>
 
         <div class="workspace-grid">

@@ -1,7 +1,7 @@
 defmodule FountWeb.Store do
   @moduledoc "Owner-scoped durable host metadata. Run and screenplay state remain owned by Fount/FountRun."
   alias Ecto.Adapters.SQL
-  @uuid_columns ~w(id screenplay_id run_id project_id)
+  @uuid_columns ~w(id screenplay_id run_id project_id base_revision_id)
 
   def create_project(repo, attrs) do
     id = attrs[:id] || attrs["id"] || Fount.ID.v4()
@@ -94,6 +94,48 @@ defmodule FountWeb.Store do
     end
   end
 
+  @run_statuses ~w(queued running paused waiting_for_decision waiting_for_approval partial completed_candidate completed_accepted stopped failed)
+
+  def list_run_accesses(repo, owner, opts \\ []) do
+    limit = opts |> Keyword.get(:limit, 50) |> min(50) |> max(1)
+    status = Keyword.get(opts, :status)
+
+    cond do
+      status in [nil, ""] ->
+        query(
+          repo,
+          """
+          SELECT wr.*,p.screenplay_id::text,p.key,p.title,r.status,r.stage,r.inserted_at AS run_inserted_at
+          FROM fount_web_runs wr
+          JOIN fount_web_projects p ON p.id=wr.project_id
+          JOIN fount_runs r ON r.id=wr.run_id
+          WHERE wr.owner_id=$1 AND p.owner_id=$1
+          ORDER BY r.inserted_at DESC,wr.run_id
+          LIMIT $2
+          """,
+          [owner, limit]
+        )
+
+      status in @run_statuses ->
+        query(
+          repo,
+          """
+          SELECT wr.*,p.screenplay_id::text,p.key,p.title,r.status,r.stage,r.inserted_at AS run_inserted_at
+          FROM fount_web_runs wr
+          JOIN fount_web_projects p ON p.id=wr.project_id
+          JOIN fount_runs r ON r.id=wr.run_id
+          WHERE wr.owner_id=$1 AND p.owner_id=$1 AND r.status=$2
+          ORDER BY r.inserted_at DESC,wr.run_id
+          LIMIT $3
+          """,
+          [owner, status, limit]
+        )
+
+      true ->
+        {:error, :invalid_run_status}
+    end
+  end
+
   def mark_launched(repo, owner, run_id) do
     case SQL.query(
            repo,
@@ -120,6 +162,97 @@ defmodule FountWeb.Store do
       """,
       []
     )
+  end
+
+  def save_policy_preset(repo, attrs) do
+    owner = fetch!(attrs, :owner_id)
+    name = fetch!(attrs, :name)
+    policy = fetch!(attrs, :policy)
+    fingerprint = fetch!(attrs, :policy_fingerprint)
+    id = Map.get(attrs, :id) || Map.get(attrs, "id") || Fount.ID.v4()
+
+    case repo.transaction(fn ->
+           SQL.query!(repo, "SELECT pg_advisory_xact_lock(hashtext($1))", [owner <> ":" <> name], log: false)
+
+           SQL.query!(
+             repo,
+             """
+             INSERT INTO fount_web_policy_presets(id,owner_id,name,version,policy,policy_fingerprint,inserted_at,updated_at)
+             SELECT $1::text::uuid,$2,$3,COALESCE(MAX(version),0)+1,$4::jsonb,$5,now(),now()
+             FROM fount_web_policy_presets WHERE owner_id=$2 AND name=$3
+             RETURNING *
+             """,
+             [id, owner, name, policy, fingerprint],
+             log: false
+           )
+           |> one()
+         end) do
+      {:ok, row} -> {:ok, row}
+      {:error, _} -> {:error, :storage_error}
+    end
+  end
+
+  def list_policy_presets(repo, owner) do
+    query(
+      repo,
+      "SELECT * FROM fount_web_policy_presets WHERE owner_id=$1 ORDER BY name,version DESC,id",
+      [owner]
+    )
+  end
+
+  def put_workflow_selection(repo, attrs) do
+    values = [
+      fetch!(attrs, :run_id),
+      fetch!(attrs, :owner_id),
+      fetch!(attrs, :screenplay_id),
+      fetch!(attrs, :base_revision_id),
+      fetch!(attrs, :selection),
+      fetch!(attrs, :selection_fingerprint)
+    ]
+
+    case SQL.query(
+           repo,
+           """
+           INSERT INTO fount_web_workflow_selections(run_id,owner_id,screenplay_id,base_revision_id,selection,selection_fingerprint,inserted_at,updated_at)
+           VALUES($1::text::uuid,$2,$3::text::uuid,$4::text::uuid,$5::jsonb,$6,now(),now())
+           ON CONFLICT(run_id) DO UPDATE SET
+             base_revision_id=EXCLUDED.base_revision_id,selection=EXCLUDED.selection,
+             selection_fingerprint=EXCLUDED.selection_fingerprint,updated_at=now()
+           WHERE fount_web_workflow_selections.owner_id=EXCLUDED.owner_id
+             AND fount_web_workflow_selections.screenplay_id=EXCLUDED.screenplay_id
+           RETURNING *
+           """,
+           values,
+           log: false
+         ) do
+      {:ok, %{num_rows: 1} = result} -> {:ok, one(result)}
+      {:ok, _} -> {:error, :unauthorized}
+      {:error, reason} -> {:error, storage_reason(reason)}
+    end
+  end
+
+  def workflow_selection(repo, owner, run_id) do
+    case query(
+           repo,
+           "SELECT * FROM fount_web_workflow_selections WHERE owner_id=$1 AND run_id=$2::text::uuid",
+           [owner, run_id]
+         ) do
+      [row] -> {:ok, row}
+      [] -> {:error, :not_found}
+      {:error, _} = error -> error
+    end
+  end
+
+  def delete_workflow_selection(repo, owner, run_id) do
+    case SQL.query(
+           repo,
+           "DELETE FROM fount_web_workflow_selections WHERE owner_id=$1 AND run_id=$2::text::uuid",
+           [owner, run_id],
+           log: false
+         ) do
+      {:ok, _} -> :ok
+      {:error, _} -> {:error, :storage_error}
+    end
   end
 
   def delivery(repo, owner, run_id, delivery_id) do

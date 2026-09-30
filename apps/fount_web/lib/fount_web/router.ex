@@ -40,6 +40,7 @@ defmodule FountWeb.Router do
       live "/runs/:id/exports", RunLive, :exports
     end
 
+    get "/artifacts/:run_id/:delivery_id/preview", ArtifactController, :preview
     get "/artifacts/:run_id/:delivery_id", ArtifactController, :show
   end
 end

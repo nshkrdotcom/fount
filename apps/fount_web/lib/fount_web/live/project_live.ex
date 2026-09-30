@@ -8,6 +8,9 @@ defmodule FountWeb.ProjectLive do
     socket =
       socket
       |> assign(:projects, [])
+      |> assign(:runs, [])
+      |> assign(:run_filter, "")
+      |> assign(:comparison, nil)
       |> assign(:error, nil)
       |> assign(:fixture_source, FountWeb.Journeys.fixture_fountain())
       |> allow_upload(:screenplay,
@@ -54,6 +57,24 @@ defmodule FountWeb.ProjectLive do
     end
   end
 
+  def handle_event("filter_runs", %{"runs" => %{"status" => status}}, socket) do
+    allowed = ["", "queued", "running", "paused", "waiting_for_decision", "waiting_for_approval", "partial", "completed_candidate", "completed_accepted", "stopped", "failed"]
+    status = if status in allowed, do: status, else: ""
+    {:noreply, socket |> assign(:run_filter, status) |> assign(:comparison, nil) |> load_projects()}
+  end
+
+  def handle_event("compare_runs", %{"compare" => %{"left" => left, "right" => right}}, socket) do
+    case FountWeb.WorkflowManagement.compare_owner_runs(
+           Fount.Repo,
+           socket.assigns.current_owner,
+           left,
+           right
+         ) do
+      {:ok, comparison} -> {:noreply, socket |> assign(:comparison, comparison) |> assign(:error, nil)}
+      {:error, reason} -> {:noreply, assign(socket, :error, "Run comparison unavailable: #{inspect(reason)}")}
+    end
+  end
+
   defp uploaded_source(socket, params) do
     case consume_uploaded_entries(socket, :screenplay, fn %{path: path}, entry ->
            {:ok, {File.read!(path), entry.client_name}}
@@ -65,8 +86,19 @@ defmodule FountWeb.ProjectLive do
 
   defp load_projects(socket) do
     case FountWeb.Store.list_projects(Fount.Repo, socket.assigns.current_owner) do
-      projects when is_list(projects) -> assign(socket, :projects, projects)
-      {:error, reason} -> assign(socket, :error, "Projects unavailable: #{inspect(reason)}")
+      projects when is_list(projects) ->
+        runs =
+          FountWeb.WorkflowManagement.list_owner_runs(
+            Fount.Repo,
+            socket.assigns.current_owner,
+            limit: 50,
+            status: socket.assigns.run_filter
+          )
+
+        assign(socket, projects: projects, runs: runs)
+
+      {:error, reason} ->
+        assign(socket, :error, "Projects unavailable: #{inspect(reason)}")
     end
   end
 
@@ -119,6 +151,62 @@ defmodule FountWeb.ProjectLive do
             </form>
           </article>
         </div>
+
+        <section class="card stack run-registry" aria-labelledby="run-registry-title">
+          <div>
+            <p class="eyebrow">Authorized bounded registry</p>
+            <h2 id="run-registry-title">Runs</h2>
+            <p>Up to 50 owner-authorized Runs are loaded. Filters are validated by the Run listing contract; comparisons are factual and never rank outcomes.</p>
+          </div>
+          <form phx-change="filter_runs" class="inline-form">
+            <label>Status
+              <select name="runs[status]">
+                <option value="" selected={@run_filter == ""}>All statuses</option>
+                <option :for={status <- ~w(queued running paused waiting_for_decision waiting_for_approval partial completed_candidate completed_accepted stopped failed)} value={status} selected={@run_filter == status}>{String.replace(status, "_", " ")}</option>
+              </select>
+            </label>
+          </form>
+          <p :if={@runs == []}>No authorized Runs match this filter.</p>
+          <div class="table-scroll" :if={@runs != []}>
+            <table>
+              <thead><tr><th>Project</th><th>Status</th><th>Stage</th><th>Plan/policy</th><th>Base</th><th>Open</th></tr></thead>
+              <tbody>
+                <tr :for={run <- @runs}>
+                  <td>{run["project"]["title"]}</td>
+                  <td>{run["status"]}</td>
+                  <td>{run["stage"] || "—"}</td>
+                  <td>v{run["current_plan_version"]} / v{run["current_policy_version"]}</td>
+                  <td><code>{run["plan"]["base_revision_id"]}</code></td>
+                  <td><a href={~p"/runs/#{run["id"]}/setup"}>Open</a></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <form :if={length(@runs) >= 2} phx-submit="compare_runs" class="compare-form">
+            <label>Left Run
+              <select name="compare[left]">
+                <option :for={run <- @runs} value={run["id"]}>{run["project"]["title"]} · {run["status"]} · {String.slice(run["id"], 0, 8)}</option>
+              </select>
+            </label>
+            <label>Right Run
+              <select name="compare[right]">
+                <option :for={run <- Enum.reverse(@runs)} value={run["id"]}>{run["project"]["title"]} · {run["status"]} · {String.slice(run["id"], 0, 8)}</option>
+              </select>
+            </label>
+            <button type="submit">Compare persisted facts</button>
+          </form>
+          <div :if={@comparison} class="comparison-card">
+            <p>Same screenplay: {to_string(@comparison["same_screenplay"])} · same base: {to_string(@comparison["same_base"])} · same scope: {to_string(@comparison["same_scope"])}</p>
+            <table>
+              <thead><tr><th>Field</th><th>Left</th><th>Right</th></tr></thead>
+              <tbody>
+                <tr :for={fact <- @comparison["facts"]}>
+                  <td>{fact["field"]}</td><td>{to_string(fact["left"] || "—")}</td><td>{to_string(fact["right"] || "—")}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
       </section>
 
       <section :if={@live_action == :new} class="project-create">

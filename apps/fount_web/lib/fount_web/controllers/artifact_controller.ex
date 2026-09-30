@@ -18,6 +18,34 @@ defmodule FountWeb.ArtifactController do
     end
   end
 
+  @preview_formats ~w(fountain fdx review_json review_markdown source_diff structural_diff resources_checks provenance table_read_json table_read_html)
+  @preview_bytes 204_800
+
+  def preview(conn, %{"run_id" => run_id, "delivery_id" => delivery_id}) do
+    owner = conn.assigns.current_owner
+
+    with {:ok, delivery} <- FountWeb.Store.delivery(Fount.Repo, owner, run_id, delivery_id),
+         true <- delivery["state"] == "ready" or {:error, :not_ready},
+         true <- delivery["format"] in @preview_formats or {:error, :unsupported_preview},
+         {:ok, path} <- safe_artifact(delivery["output_location"]),
+         {:ok, bytes} <- File.read(path),
+         true <- checksum(bytes) == delivery["output_checksum"] or {:error, :checksum_mismatch} do
+      {preview, truncated?} =
+        if byte_size(bytes) > @preview_bytes,
+          do: {binary_part(bytes, 0, @preview_bytes), true},
+          else: {bytes, false}
+
+      suffix = if truncated?, do: "\n\n[preview truncated at #{@preview_bytes} bytes]\n", else: ""
+
+      conn
+      |> put_resp_content_type("text/plain", "utf-8")
+      |> put_resp_header("content-disposition", ~s(inline; filename="#{Path.basename(path)}.txt"))
+      |> send_resp(:ok, preview <> suffix)
+    else
+      _ -> send_resp(conn, :not_found, "artifact preview not found")
+    end
+  end
+
   defp safe_artifact(location) when is_binary(location) do
     root = Application.fetch_env!(:fount_web, :artifact_root) |> Path.expand()
     path = Path.expand(location, root)

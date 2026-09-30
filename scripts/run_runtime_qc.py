@@ -14,6 +14,12 @@ import time
 
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGES = ['fount', 'fount_observe', 'fount_intelligence', 'fount_workshop', 'fount_run']
+PHASE_REQUIRED_FOCUSED = {
+    7: [
+        'test/fount_web/phase07_workflow_management_test.exs',
+        'integration/phase07_workflow_management_test.exs',
+    ],
+}
 LADDER = [
     ['mix', 'setup'],
     ['mix', 'format', '--check-formatted'],
@@ -90,6 +96,10 @@ def main():
     else:
         focused = sorted(str(p.relative_to(app)) for directory in ['test', 'integration']
                          for p in (app / directory).rglob(f'*phase{args.phase:02d}*.exs'))
+    required_focused = PHASE_REQUIRED_FOCUSED.get(args.phase, [])
+    missing_focused = [name for name in required_focused if name not in focused]
+    if missing_focused:
+        raise RuntimeError(f'Missing required focused Phase {args.phase:02d} suites: {missing_focused}')
     if not focused:
         raise RuntimeError('Implement the selected phase focused suite before certification')
     if not list((app / 'browser/tests').glob(f'phase{args.phase:02d}*.spec.mjs')):

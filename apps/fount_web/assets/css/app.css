@@ -474,3 +474,54 @@ tbody tr:hover { background: rgba(121,242,207,.025); }
 @media (prefers-color-scheme: dark) {
   :root { color-scheme: dark; }
 }
+
+/* Phase 07 workflow controls */
+.notification-panel { border-left: 3px solid var(--ice); }
+.notification-panel summary { cursor: pointer; font-weight: 800; color: var(--ice); }
+.notification-list { margin: .35rem 0 .5rem; padding-left: 1.15rem; display: grid; gap: .22rem; }
+.notification-list li { color: var(--text-soft); overflow-wrap: anywhere; }
+.policy-form fieldset { margin: 0; padding: .5rem; border: 1px solid var(--line); }
+.policy-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: .4rem; }
+.policy-grid label, .compare-form label { min-width: 0; }
+.inline-check { display: inline-flex; align-items: center; gap: .35rem; width: fit-content; }
+.inline-check input { width: auto; }
+.inline-form { display: flex; flex-wrap: wrap; gap: .4rem; align-items: end; }
+.inline-form label { min-width: min(19rem,100%); }
+.preset-grid, .action-catalog { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: .4rem; }
+.preset-card, .action-card { min-width: 0; border: 1px solid var(--line); padding: .48rem; background: rgba(9,14,21,.7); }
+.action-card.enabled { border-left: 3px solid var(--mint); }
+.action-card.unavailable { border-left: 3px dashed var(--text-dim); opacity: .88; }
+.preset-card pre, .action-card pre, .launch-entry pre { max-height: 13rem; overflow: auto; }
+.launch-preview { border-left: 3px solid var(--mint); }
+.launch-entry { border-top: 1px solid var(--line); padding-top: .4rem; }
+.decision-lineage { margin: .4rem 0; padding: .4rem .5rem; border-left: 2px solid var(--violet); background: rgba(182,165,255,.04); }
+.workflow-scope-panel { border-left: 3px solid var(--mint); }
+.workflow-scope-head { display: flex; justify-content: space-between; align-items: end; gap: .5rem; }
+.workflow-scope-head h2 { margin-bottom: 0; }
+.scope-picker { display: grid; gap: .5rem; }
+.scope-whole { border: 1px solid var(--line); padding: .45rem; }
+.scope-target-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .2rem .55rem; max-height: 15rem; overflow: auto; padding: .35rem; border: 1px solid var(--line); }
+.scope-target-grid label { display: grid; grid-template-columns: auto minmax(0,1fr); align-items: start; gap: .35rem; }
+.scope-target-grid input { width: auto; margin-top: .2rem; }
+.scope-preview { display: grid; gap: .2rem; padding: .45rem; border-left: 2px solid var(--ice); background: rgba(158,223,255,.04); }
+.scope-preview ul { margin: .2rem 0 0; padding-left: 1.1rem; }
+.run-registry { margin-top: .55rem; }
+.table-scroll { max-width: 100%; overflow-x: auto; }
+.compare-form { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)) auto; gap: .4rem; align-items: end; }
+.comparison-card { border-top: 1px solid var(--line); padding-top: .45rem; }
+
+@media (max-width: 760px) {
+  .policy-grid, .preset-grid, .action-catalog, .compare-form { grid-template-columns: 1fr; }
+  .workflow-scope-head { display: grid; }
+}
+
+@media (max-width: 480px) {
+  .run-shell, .project-shell, .workspace-shell { padding-inline: .24rem; }
+  .card { padding: .48rem; }
+  .scope-target-grid { grid-template-columns: 1fr; max-height: 18rem; }
+  .inline-form { display: grid; grid-template-columns: 1fr; }
+  .inline-form label { min-width: 0; }
+  .policy-form input, .policy-form select, .policy-form textarea,
+  .scope-picker input, .scope-picker select, .compare-form select { min-width: 0; max-width: 100%; }
+  .notification-panel summary { overflow-wrap: anywhere; }
+}

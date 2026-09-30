@@ -146,6 +146,88 @@ defmodule FountWeb.Launch do
     end
   end
 
+  @doc "Starts a closed-catalog Phase 07 action from an exact owner-authorized screenplay revision."
+  def create_action_from_base(owner_id, project_id, base_revision_id, attrs)
+      when is_binary(owner_id) and is_binary(project_id) and is_binary(base_revision_id) and
+             is_map(attrs) do
+    command_id = Map.get(attrs, "command_id", "") |> String.trim()
+    action = Map.get(attrs, "action", "")
+    instruction = Map.get(attrs, "instruction", "")
+    selection = Map.get(attrs, "selection")
+    policy = Map.get(attrs, "policy")
+
+    with :ok <- validate_authoring_command(command_id),
+         {:ok, project} <- FountWeb.Store.project(Fount.Repo, owner_id, project_id),
+         {:ok, root} <-
+           Persistence.load_revision(Fount.Repo, project["screenplay_id"], base_revision_id),
+         true <- root.id == project["screenplay_id"],
+         {:ok, context} <- FountWeb.Actors.owner_context(owner_id, root.id),
+         {:ok, request} <-
+           FountWeb.WorkflowManagement.build_workshop_request(
+             root,
+             action,
+             instruction,
+             selection
+           ),
+         {:ok, validated_policy} <- FountRun.Policy.new(policy, context),
+         {:ok, run} <-
+           FountRun.start_run(
+             Fount.Repo,
+             action_run_attrs(
+               root,
+               request,
+               validated_policy.value,
+               instruction,
+               "web-action:" <> command_id
+             ),
+             context
+           ),
+         {:ok, access} <-
+           FountWeb.Store.register_run(Fount.Repo, %{
+             run_id: run["id"],
+             project_id: project["id"],
+             owner_id: owner_id,
+             preset: preset(validated_policy.value),
+             journey: "workflow:" <> action
+           }),
+         {:ok, envelope} <- PipelineRequest.new(request),
+         {:ok, _step} <-
+           FountRun.enqueue_step(Fount.Repo, run["id"], intake(root, envelope), context) do
+      {:ok,
+       %{
+         project: project,
+         run: run,
+         access:
+           Map.merge(access, %{
+             "screenplay_id" => root.id,
+             "key" => project["key"],
+             "title" => project["title"]
+           })
+       }}
+    else
+      false -> {:error, :project_screenplay_mismatch}
+      {:error, _} = error -> error
+    end
+  end
+
+  defp action_run_attrs(root, request, policy, instruction, idempotency_key) do
+    %{
+      "screenplay_id" => root.id,
+      "base_revision_id" => root.revision.id,
+      "goal" => String.trim(instruction),
+      "scope" => request["selection"],
+      "constraints" => request["constraints"] || [],
+      "protected_material" => [],
+      "client_idempotency_key" => idempotency_key,
+      "operation_parameters" => %{
+        "workflow" => request["workflow"],
+        "request_fingerprint" => Fount.Writing.CanonicalJSON.hash(request),
+        "selection_fingerprint" => Fount.Writing.CanonicalJSON.hash(request["selection"])
+      },
+      "policy" => policy
+    }
+  end
+
   defp validate_authoring_command(command_id) do
     if command_id != "" and byte_size(command_id) <= 128,
       do: :ok,

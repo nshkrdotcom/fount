@@ -24,15 +24,15 @@ defmodule Fount.Screenplay.SourceReconciler do
 
   @spec reconcile(Screenplay.t(), binary(), keyword()) ::
           {:ok, result()} | {:error, term()}
-  def reconcile(%Screenplay{} = base, raw, opts \\ []) when is_binary(raw) do
+  def reconcile(base, raw, opts \\ [])
+
+  def reconcile(%Screenplay{} = base, raw, opts) when is_binary(raw) do
     max_bytes = Keyword.get(opts, :max_bytes, @default_max_bytes)
 
-    cond do
-      byte_size(raw) > max_bytes ->
-        {:error, {:source_too_large, max_bytes}}
-
-      true ->
-        do_reconcile(base, raw, opts)
+    if byte_size(raw) > max_bytes do
+      {:error, {:source_too_large, max_bytes}}
+    else
+      do_reconcile(base, raw, opts)
     end
   end
 
@@ -57,7 +57,7 @@ defmodule Fount.Screenplay.SourceReconciler do
              screenplay: model,
              document: document,
              diagnostics: diagnostics,
-             fidelity: fidelity(base, model, raw, diagnostics),
+             fidelity: fidelity(base, model, prior, raw, diagnostics),
              anchors: anchors(document),
              identity_anchors: Identity.anchors(document.ir)
            }}
@@ -134,9 +134,9 @@ defmodule Fount.Screenplay.SourceReconciler do
     end)
   end
 
-  defp fidelity(base, model, raw, diagnostics) do
+  defp fidelity(base, model, prior, raw, diagnostics) do
     diff = Screenplay.diff(base, model)
-    before_elements = MapSet.new(Enum.map(base.ir.elements, & &1.id))
+    before_elements = MapSet.new(Enum.map(prior.ir.elements, & &1.id))
     after_elements = MapSet.new(Enum.map(model.ir.elements, & &1.id))
     before_cast = MapSet.new(Map.keys(base.cast))
     after_cast = MapSet.new(Map.keys(model.cast))

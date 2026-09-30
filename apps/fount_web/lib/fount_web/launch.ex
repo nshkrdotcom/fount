@@ -98,7 +98,8 @@ defmodule FountWeb.Launch do
 
   @doc "Starts the generic authoring AI journey from an owner-bound saved manual candidate without accepting it."
   def create_from_candidate(owner_id, project_id, candidate_id, attrs)
-      when is_binary(owner_id) and is_binary(project_id) and is_binary(candidate_id) and is_map(attrs) do
+      when is_binary(owner_id) and is_binary(project_id) and is_binary(candidate_id) and
+             is_map(attrs) do
     command_id = Map.get(attrs, "command_id", "") |> String.trim()
 
     with :ok <- validate_authoring_command(command_id),

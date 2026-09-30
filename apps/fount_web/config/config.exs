@@ -26,7 +26,6 @@ config :fount_web, :authoring,
   draft_limit: 12,
   max_source_bytes: 1_048_576
 
-
 config :fount_web, :artifact_root, Path.expand("../../_artifacts/fount_web", __DIR__)
 
 config :esbuild,

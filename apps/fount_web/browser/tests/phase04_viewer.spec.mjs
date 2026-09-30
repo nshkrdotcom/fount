@@ -125,6 +125,11 @@ test('U02/U07 narrow, dark, reduced-motion and reload retain the explicitly sele
   await page.reload();
   await expect(page.getByLabel('Displayed revision')).toHaveValue(selected);
   await expect(page.getByText('MARA', {exact: true}).first()).toBeVisible();
+  await page.waitForFunction(() => {
+    const view = Object.values(window.liveSocket?.roots || {})[0];
+    const element = document.querySelector('[phx-hook="SceneNavigator"]');
+    return element && view?.getHook(element);
+  });
   await page.evaluate(() => {
     window.sceneScrollCalls = [];
     const original = Element.prototype.scrollIntoView;

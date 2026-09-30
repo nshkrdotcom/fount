@@ -258,7 +258,7 @@ const AuthoringEditor = {
 
     this.handleEvent("authoring:replace_source", ({source, expected_client_seq, reset_history}) => {
       if (!this.source) return
-      if (Number(expected_client_seq) !== this.seq) {
+      if (this.composing || Number(expected_client_seq) !== this.seq) {
         this.pushEvent("replace_source_rejected", {client_seq: this.seq})
         return
       }
@@ -288,6 +288,10 @@ const AuthoringEditor = {
       if (!target) return
       target.scrollIntoView({block: "nearest", behavior: "auto"})
     })
+  },
+
+  updated() {
+    if (this.source) this.source.readOnly = this.el.dataset.draftStatus !== "active"
   },
 
   destroyed() {

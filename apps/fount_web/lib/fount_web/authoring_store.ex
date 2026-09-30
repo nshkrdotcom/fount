@@ -2,6 +2,7 @@ defmodule FountWeb.AuthoringStore do
   @moduledoc "Owner-scoped recovery storage for raw working drafts. It never owns canonical screenplay state."
 
   alias Ecto.Adapters.SQL
+  alias Fount.Screenplay.SourceReconciler
 
   @uuid_columns ~w(id project_id screenplay_id base_revision_id saved_candidate_id draft_id)
   @default_history_limit 30
@@ -24,11 +25,15 @@ defmodule FountWeb.AuthoringStore do
 
     with :ok <- validate_source(raw) do
       transaction(repo, fn ->
-        case latest_active_for_update(repo, owner, project["id"]) do
-          nil -> create_locked(repo, owner, project, base, raw)
-          draft -> draft
-        end
+        open_locked(repo, owner, project, base, raw)
       end)
+    end
+  end
+
+  defp open_locked(repo, owner, project, base, raw) do
+    case latest_active_for_update(repo, owner, project["id"]) do
+      nil -> create_locked(repo, owner, project, base, raw)
+      draft -> draft
     end
   end
 
@@ -45,26 +50,39 @@ defmodule FountWeb.AuthoringStore do
   end
 
   def save(repo, owner, draft_id, expected_version, raw, attrs \\ %{})
-      when is_binary(owner) and is_binary(draft_id) and is_integer(expected_version) and is_binary(raw) and
+      when is_binary(owner) and is_binary(draft_id) and is_integer(expected_version) and
+             is_binary(raw) and
              is_map(attrs) do
     with :ok <- validate_source(raw) do
       transaction(repo, fn ->
-        draft = lock_owned!(repo, owner, draft_id)
-        ensure_active!(repo, draft)
-        hash = Fount.ID.hash(raw)
-
-        cond do
-          draft["version"] == expected_version ->
-            snapshot_locked(repo, draft, Map.get(attrs, :reason, Map.get(attrs, "reason", "autosave")))
-            update_locked(repo, draft, raw, hash, attrs)
-
-          draft["version"] == expected_version + 1 and draft["source_sha256"] == hash ->
-            Map.put(draft, "save_replay", true)
-
-          true ->
-            rollback(repo, {:stale_draft, public_conflict(draft)})
-        end
+        save_locked(repo, owner, draft_id, expected_version, raw, attrs)
       end)
+    end
+  end
+
+  defp save_locked(repo, owner, draft_id, expected_version, raw, attrs) do
+    draft = lock_owned!(repo, owner, draft_id)
+    ensure_active!(repo, draft)
+    hash = Fount.ID.hash(raw)
+
+    cond do
+      draft["version"] == expected_version and draft["source_sha256"] == hash ->
+        Map.put(draft, "save_replay", true)
+
+      draft["version"] == expected_version ->
+        snapshot_locked(
+          repo,
+          draft,
+          Map.get(attrs, :reason, Map.get(attrs, "reason", "autosave"))
+        )
+
+        update_locked(repo, draft, raw, hash, attrs)
+
+      draft["version"] == expected_version + 1 and draft["source_sha256"] == hash ->
+        Map.put(draft, "save_replay", true)
+
+      true ->
+        rollback(repo, {:stale_draft, public_conflict(draft)})
     end
   end
 
@@ -90,7 +108,8 @@ defmodule FountWeb.AuthoringStore do
   end
 
   def bind_candidate(repo, owner, draft_id, expected_version, candidate_id)
-      when is_binary(owner) and is_binary(draft_id) and is_integer(expected_version) and is_binary(candidate_id) do
+      when is_binary(owner) and is_binary(draft_id) and is_integer(expected_version) and
+             is_binary(candidate_id) do
     transaction(repo, fn ->
       draft = lock_owned!(repo, owner, draft_id)
       ensure_active!(repo, draft)
@@ -146,7 +165,7 @@ defmodule FountWeb.AuthoringStore do
 
     query(
       repo,
-      "SELECT h.* FROM fount_web_draft_history h JOIN fount_web_drafts d ON d.id=h.draft_id WHERE h.owner_id=$1 AND h.draft_id=$2::text::uuid AND d.owner_id=$1 ORDER BY h.inserted_at DESC,h.id DESC LIMIT $3",
+      "SELECT h.* FROM fount_web_draft_history h JOIN fount_web_drafts d ON d.id=h.draft_id WHERE h.owner_id=$1 AND h.draft_id=$2::text::uuid AND d.owner_id=$1 ORDER BY h.draft_version DESC,h.id DESC LIMIT $3",
       [owner, draft_id, limit]
     )
   end
@@ -160,19 +179,30 @@ defmodule FountWeb.AuthoringStore do
         ensure_active!(repo, source)
 
         project =
-          one_row(repo, "SELECT * FROM fount_web_projects WHERE owner_id=$1 AND id=$2::text::uuid", [
-            owner,
-            source["project_id"]
-          ]) || rollback(repo, :project_not_found)
+          one_row(
+            repo,
+            "SELECT * FROM fount_web_projects WHERE owner_id=$1 AND id=$2::text::uuid",
+            [
+              owner,
+              source["project_id"]
+            ]
+          ) || rollback(repo, :project_not_found)
 
-        base =
-          case Fount.Persistence.load_revision(repo, source["screenplay_id"], source["base_revision_id"]) do
-            {:ok, model} -> model
-            {:error, _} -> rollback(repo, :base_revision_not_found)
-          end
+        base = load_base!(repo, source)
 
-        create_locked(repo, owner, project, base, raw)
+        create_locked(repo, owner, project, base, raw, source)
       end)
+    end
+  end
+
+  defp load_base!(repo, source) do
+    case Fount.Persistence.load_revision(
+           repo,
+           source["screenplay_id"],
+           source["base_revision_id"]
+         ) do
+      {:ok, model} -> model
+      {:error, _} -> rollback(repo, :base_revision_not_found)
     end
   end
 
@@ -182,39 +212,72 @@ defmodule FountWeb.AuthoringStore do
       source =
         one_row(
           repo,
-          "SELECT h.* FROM fount_web_draft_history h JOIN fount_web_drafts d ON d.id=h.draft_id WHERE h.owner_id=$1 AND h.draft_id=$2::text::uuid AND h.id=$3::text::uuid AND d.owner_id=$1 FOR SHARE OF d",
+          "SELECT h.*,d.last_valid_source,d.identity_anchors FROM fount_web_draft_history h JOIN fount_web_drafts d ON d.id=h.draft_id WHERE h.owner_id=$1 AND h.draft_id=$2::text::uuid AND h.id=$3::text::uuid AND d.owner_id=$1 FOR SHARE OF d",
           [owner, draft_id, history_id]
         ) || rollback(repo, :history_not_found)
 
       project =
-        one_row(repo, "SELECT * FROM fount_web_projects WHERE owner_id=$1 AND id=$2::text::uuid", [
-          owner,
-          source["project_id"]
-        ]) || rollback(repo, :project_not_found)
+        one_row(
+          repo,
+          "SELECT * FROM fount_web_projects WHERE owner_id=$1 AND id=$2::text::uuid",
+          [
+            owner,
+            source["project_id"]
+          ]
+        ) || rollback(repo, :project_not_found)
 
       base =
-        case Fount.Persistence.load_revision(repo, source["screenplay_id"], source["base_revision_id"]) do
+        case Fount.Persistence.load_revision(
+               repo,
+               source["screenplay_id"],
+               source["base_revision_id"]
+             ) do
           {:ok, model} -> model
           {:error, _} -> rollback(repo, :base_revision_not_found)
         end
 
-      create_locked(repo, owner, project, base, source["raw_source"])
+      create_locked(repo, owner, project, base, source["raw_source"], source)
     end)
   end
 
-  defp create_locked(repo, owner, project, base, raw) do
+  defp create_locked(repo, owner, project, base, raw, prior \\ %{}) do
     enforce_draft_limit!(repo, owner, project["id"])
     id = Fount.ID.v4()
     hash = Fount.ID.hash(raw)
+    {valid_source, anchors} = recovery_sidecar(base, raw, prior)
 
     result =
       q!(
         repo,
-        "INSERT INTO fount_web_drafts(id,project_id,owner_id,screenplay_id,base_revision_id,raw_source,source_sha256,last_valid_source,last_valid_sha256,last_valid_fidelity,identity_anchors,version,status,inserted_at,updated_at) VALUES($1::text::uuid,$2::text::uuid,$3,$4::text::uuid,$5::text::uuid,$6,$7,$6,$7,'{}'::jsonb,$8::jsonb,1,'active',now(),now()) RETURNING *",
-        [id, project["id"], owner, base.id, base.revision.id, raw, hash, Jason.encode!(Fount.Identity.anchors(base.ir))]
+        "INSERT INTO fount_web_drafts(id,project_id,owner_id,screenplay_id,base_revision_id,raw_source,source_sha256,last_valid_source,last_valid_sha256,last_valid_fidelity,identity_anchors,version,status,inserted_at,updated_at) VALUES($1::text::uuid,$2::text::uuid,$3,$4::text::uuid,$5::text::uuid,$6,$7,$8,$9,'{}'::jsonb,$10::jsonb,1,'active',now(),now()) RETURNING *",
+        [
+          id,
+          project["id"],
+          owner,
+          base.id,
+          base.revision.id,
+          raw,
+          hash,
+          valid_source,
+          Fount.ID.hash(valid_source),
+          anchors
+        ]
       )
 
     one(result)
+  end
+
+  defp recovery_sidecar(base, raw, prior) do
+    source = prior["last_valid_source"] || Fount.Screenplay.to_fountain(base)
+    anchors = prior["identity_anchors"] || Fount.Identity.anchors(base.ir)
+
+    case SourceReconciler.reconcile(base, raw,
+           prior_source: source,
+           identity_anchors: anchors
+         ) do
+      {:ok, result} -> {raw, result.identity_anchors}
+      {:error, {:invalid_source, _, _}} -> {source, anchors}
+    end
   end
 
   defp update_locked(repo, draft, raw, hash, attrs) do
@@ -246,8 +309,8 @@ defmodule FountWeb.AuthoringStore do
           hash,
           last_valid_source,
           last_valid_sha,
-          Jason.encode!(last_valid_fidelity),
-          Jason.encode!(next_identity_anchors),
+          last_valid_fidelity,
+          next_identity_anchors,
           next_version
         ]
       )
@@ -280,7 +343,7 @@ defmodule FountWeb.AuthoringStore do
 
     q!(
       repo,
-      "DELETE FROM fount_web_draft_history WHERE id IN (SELECT id FROM fount_web_draft_history WHERE draft_id=$1::text::uuid ORDER BY inserted_at DESC,id DESC OFFSET $2)",
+      "DELETE FROM fount_web_draft_history WHERE id IN (SELECT id FROM fount_web_draft_history WHERE draft_id=$1::text::uuid ORDER BY draft_version DESC,id DESC OFFSET $2)",
       [draft_id, limit]
     )
   end
@@ -329,7 +392,7 @@ defmodule FountWeb.AuthoringStore do
              "SELECT id::text FROM revisions WHERE screenplay_id=$1::text::uuid AND id=$2::text::uuid",
              [screenplay_id, revision_id]
            ),
-      do: rollback(repo, :base_revision_not_found)
+           do: rollback(repo, :base_revision_not_found)
   end
 
   defp validate_source(raw) do

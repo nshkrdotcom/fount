@@ -160,7 +160,7 @@ defmodule FountWeb.Phase06AnalysisContractTest do
     views = File.read!(Path.expand("../../lib/fount_web/screenplay_views.ex", __DIR__))
 
     for state <- ~w(complete partial failed stale not_run), do: assert(live =~ state)
-    assert review =~ "Exact evidence binding"
+    assert review =~ "Analysis for this revision"
     assert review =~ "check_set_fingerprint"
     assert editor =~ "unsaved local draft is unanalyzed"
     assert views =~ "def token(%{kind: :evidence"

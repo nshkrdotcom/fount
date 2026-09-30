@@ -52,7 +52,7 @@ defmodule FountWeb.CoreComponentsTest do
     assert html =~ ~s(aria-describedby="title-error")
     assert html =~ ~r/id="revision"[^>]*disabled/
     assert html =~ "partial"
-    assert html =~ "●"
+    refute html =~ "●"
     assert html =~ ~s(role="alert")
     assert html =~ "Loading revision"
     assert html =~ "No scenes"

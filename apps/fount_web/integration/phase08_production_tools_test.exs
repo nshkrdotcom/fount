@@ -22,7 +22,7 @@ defmodule FountWeb.Phase08ProductionToolsIntegrationTest do
 
     conn = FountWeb.ConnCase.login(conn)
     assert {:ok, _view, html} = live(conn, "/runs/#{run["id"]}/tools?section=search")
-    assert html =~ "Search this exact revision"
+    assert html =~ "Search this screenplay version"
     assert html =~ workspace.screenplay.revision.id
   end
 

@@ -101,7 +101,6 @@ defmodule FountWeb.CoreComponents do
   def status_badge(assigns) do
     ~H"""
     <span class={["ui-status", "ui-status--#{safe_status(@status)}"]}>
-      <span class="ui-status__mark" aria-hidden="true">●</span>
       {@label || human_status(@status)}
     </span>
     """

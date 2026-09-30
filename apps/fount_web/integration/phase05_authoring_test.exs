@@ -8,7 +8,7 @@ defmodule FountWeb.Phase05AuthoringIntegrationTest do
     conn = FountWeb.ConnCase.login(conn)
 
     assert {:ok, view, html} = live(conn, "/runs/#{run["id"]}/edit")
-    assert html =~ "Interactive Fountain authoring"
+    assert html =~ "Screenplay editor"
     assert html =~ "Fountain syntax assistance"
     assert html =~ "Candidate creation never advances canon"
 

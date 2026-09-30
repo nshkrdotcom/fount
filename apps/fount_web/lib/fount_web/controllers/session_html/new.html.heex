@@ -1,33 +1,22 @@
 <main class="login-shell">
   <section class="login-identity" aria-labelledby="login-title">
-    <p class="eyebrow">Private writer control room</p>
+    <p class="eyebrow">Screenplay development</p>
     <h1 id="login-title">Fount</h1>
     <p class="login-deck">
-      A dense, evidence-aware workspace for screenplay inspection, revision and controlled authoring.
+      Read, revise and develop your screenplay. Review proposed changes before approving a new version.
     </p>
-    <dl class="login-signals">
-      <div>
-        <dt>authority</dt><dd>human acceptance</dd>
-      </div>
-      <div>
-        <dt>analysis</dt><dd>revision-bound</dd>
-      </div>
-      <div>
-        <dt>canon</dt><dd>explicit only</dd>
-      </div>
-    </dl>
   </section>
   <section class="login-panel">
-    <p class="micro-label">Owner session</p>
+    <p class="micro-label">Sign in</p>
     <h2>Enter the workspace</h2>
     <p>
-      This local one-owner host authenticates with the configured <code>FOUNT_OWNER_TOKEN</code>. The deterministic demo token is non-secret and must not be used for remote deployment.
+      Enter your workspace access token.
     </p>
     <p :if={@error} class="ui-alert ui-alert--error" role="alert">{@error}</p>
     <form action={~p"/login"} method="post" class="stack">
       <input type="hidden" name="_csrf_token" value={get_csrf_token()} />
       <label>
-        Owner token
+        Access token
         <input name="session[token]" type="password" autocomplete="current-password" required />
       </label>
       <button type="submit">Sign in to Fount</button>

@@ -6,7 +6,7 @@ const fixture = `Title: Phase 06 Intelligence\nAuthor: Fount\n\nINT. KITCHEN - M
 
 async function login(page) {
   await page.goto('/login');
-  await page.getByLabel('Owner token').fill(token);
+  await page.getByLabel('Access token').fill(token);
   await page.getByRole('button', {name: /Sign in/}).click();
   await expect(page).toHaveURL(/\/$/);
 }
@@ -22,7 +22,7 @@ async function createAnalysisRun(page, key) {
   const match = page.url().match(/\/runs\/([0-9a-f-]+)\/setup$/);
   expect(match).toBeTruthy();
   const runId = match[1];
-  await page.getByRole('button', {name: 'Launch / resume durable worker'}).click();
+  await page.getByRole('button', {name: 'Launch / resume Run'}).click();
   await page.goto(`/runs/${runId}/decisions`);
   const route = page.getByRole('button', {name: /Commit now|route-a/i}).first();
   await expect(route).toBeVisible({timeout: 60_000});
@@ -38,11 +38,11 @@ test('A01-A07 saved intelligence is inspectable, bounded, accessible and revisio
 
   await page.goto(`/runs/${runId}/analysis`);
   await expect(page.getByRole('heading', {name: 'Phase 06 Intelligence'})).toBeVisible();
-  await expect(page.getByText('Persisted evidence console')).toBeVisible();
-  await expect(page.getByText(/Inspection reads saved rows only/)).toBeVisible();
-  await expect(page.getByRole('heading', {name: 'Authoritative required checks'})).toBeVisible();
-  await expect(page.getByRole('heading', {name: 'Workshop application checks'})).toBeVisible();
-  await expect(page.getByRole('heading', {name: 'Semantic advisory findings'})).toBeVisible();
+  await expect(page.getByText('Script analysis')).toBeVisible();
+  await expect(page.getByText(/Browsing or comparing reports does not start AI work/)).toBeVisible();
+  await expect(page.getByRole('heading', {name: 'Required checks'})).toBeVisible();
+  await expect(page.getByRole('heading', {name: 'Revision checks'})).toBeVisible();
+  await expect(page.getByRole('heading', {name: 'Story observations'})).toBeVisible();
   await expect(page.getByRole('heading', {name: 'Usage & reservations'})).toBeVisible();
   await expect(page.getByText(/not HTTP request counts/)).toBeVisible();
   await expect(page.getByText(/No quality ranking/)).toBeVisible();
@@ -70,8 +70,8 @@ test('A01-A07 saved intelligence is inspectable, bounded, accessible and revisio
   }
 
   await page.goto(`/runs/${runId}/review`);
-  await expect(page.getByRole('heading', {name: 'Revision intelligence beside the candidate'})).toBeVisible();
-  await expect(page.getByText(/Advisory confidence never changes required checks/)).toBeVisible();
+  await expect(page.getByRole('heading', {name: 'Analysis of proposed changes'})).toBeVisible();
+  await expect(page.getByText(/Story observations do not replace required checks/)).toBeVisible();
 });
 
 test('site-wide signal-room layout is dense, responsive and does not overflow narrow screens', async ({page}) => {
@@ -166,7 +166,7 @@ test('stored fixtures prove all states, finite graph controls, comparable histor
   await page.goto(`/runs/${f.run_id}/viewer?view=evidence%3A${f.complete}%3A${f.revision_id}&target=deleted-target`);
   await expect(page.getByText(/Recorded target unresolved in this exact analysis evidence revision/)).toBeVisible();
   await inspect(f.oversized);
-  await expect(page.getByText(/View bounded to 48 nodes and 96 links/)).toBeVisible();
+  await expect(page.getByText(/Showing up to 48 nodes and 96 links/)).toBeVisible();
   await expect(graph.locator('.graph-node')).toHaveCount(48);
   await expect(page.locator('.graph-card table').first().locator('tbody tr')).toHaveCount(48);
   await expect(page.locator('.event-sequence li')).toHaveCount(70);
@@ -239,7 +239,7 @@ for (const width of [1440, 480]) {
     }
     const source = page.getByLabel('Fountain screenplay source');
     await source.fill(`${await source.inputValue()}\nUnsaved local observation.\n`);
-    await expect(page.locator('.analysis-draft-marker')).toContainText('unsaved local draft is unanalyzed');
+    await expect(page.locator('.analysis-draft-marker')).toContainText('This unsaved draft has not been analyzed');
   });
 }
 

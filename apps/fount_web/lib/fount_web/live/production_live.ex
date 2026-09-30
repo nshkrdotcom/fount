@@ -140,7 +140,7 @@ defmodule FountWeb.ProductionLive do
          socket
          |> put_flash(
            :info,
-           "Note candidate #{short(candidate.id)} saved. Canon is unchanged until exact approval."
+           "Note candidate #{short(candidate.id)} saved. The approved screenplay is unchanged until you approve this revision."
          )
          |> assign(:error, nil)
          |> reload_human_records()}
@@ -165,7 +165,7 @@ defmodule FountWeb.ProductionLive do
          socket
          |> put_flash(
            :info,
-           "Deletion candidate #{short(candidate.id)} saved. Canon is unchanged."
+           "Deletion candidate #{short(candidate.id)} saved. The approved screenplay is unchanged."
          )
          |> assign(:error, nil)
          |> reload_human_records()}
@@ -291,7 +291,7 @@ defmodule FountWeb.ProductionLive do
         {:reply, %{status: "stale", version: row["version"]},
          socket
          |> assign(:selected_read, row)
-         |> assign(:error, "Table-read state changed in another tab; reloaded persisted state.")}
+         |> assign(:error, "Table-read state changed in another tab; loaded the saved state.")}
 
       {:error, reason} ->
         {:reply, %{status: "error"},
@@ -445,7 +445,7 @@ defmodule FountWeb.ProductionLive do
         <%= if @workspace do %>
           <header class="production-mast">
             <div>
-              <p class="eyebrow">Revision-scoped writer workspace</p>
+              <p class="eyebrow">Screenplay tools</p>
               <h1>{@workspace.project["title"]}</h1>
               <p>
                 Screenplay <code>{@workspace.screenplay.id}</code>
@@ -458,7 +458,7 @@ defmodule FountWeb.ProductionLive do
             </div>
             <form id="production-revision-form" phx-change="change_view" class="compact-form">
               <label>
-                Exact revision
+                Screenplay version
                 <select name="revision[view]">
                   <option
                     :for={option <- @workspace.options}
@@ -486,8 +486,8 @@ defmodule FountWeb.ProductionLive do
 
           <section :if={@section == "search"} class="tool-grid" aria-labelledby="search-title">
             <article class="card stack tool-controls">
-              <p class="eyebrow">S01 · literal retrieval</p><h2 id="search-title">
-                Search this exact revision
+              <p class="eyebrow">Search</p><h2 id="search-title">
+                Search this screenplay version
               </h2>
               <form phx-submit="search" class="stack">
                 <label>Literal phrase <input name="search[query]" value={@search_query} required /></label>
@@ -505,9 +505,9 @@ defmodule FountWeb.ProductionLive do
                   </select>
                 </label>
                 <label>
-                  Character facet
+                  Character
                   <select name="search[character_id]">
-                    <option value="">Any resolved character</option>
+                    <option value="">Any character</option>
                     <option
                       :for={character <- @characters}
                       value={character.id}
@@ -518,7 +518,7 @@ defmodule FountWeb.ProductionLive do
                   </select>
                 </label>
                 <label>
-                  Location facet
+                  Location
                   <select name="search[location]">
                     <option value="">Any resolved location</option>
                     <option
@@ -574,7 +574,7 @@ defmodule FountWeb.ProductionLive do
                 <button type="submit">Search selected revision</button>
               </form>
               <p class="muted">
-                Literal phrase matching only. No cross-project index and no provider dispatch.
+                Matches the words you enter in this screenplay version. Search does not use AI.
               </p>
               <p :if={@search_notice} class="warning" role="status">{@search_notice}</p>
             </article>
@@ -610,7 +610,7 @@ defmodule FountWeb.ProductionLive do
 
           <section :if={@section == "cast"} class="stack" aria-labelledby="cast-title">
             <div class="section-heading">
-              <p class="eyebrow">S02 · cast evidence</p><h2 id="cast-title">Character profiles</h2>
+              <p class="eyebrow">Cast</p><h2 id="cast-title">Character profiles</h2>
             </div>
             <div class="dense-card-grid">
               <article :for={character <- @characters} class="card character-card">
@@ -656,7 +656,7 @@ defmodule FountWeb.ProductionLive do
 
           <section :if={@section == "locations"} class="stack" aria-labelledby="locations-title">
             <div class="section-heading">
-              <p class="eyebrow">S03 · parsed scene headings</p><h2 id="locations-title">
+              <p class="eyebrow">Locations</p><h2 id="locations-title">
                 Locations and scene order
               </h2>
             </div>
@@ -675,7 +675,7 @@ defmodule FountWeb.ProductionLive do
                         {entry.parsed_context}
                       </td><td>{entry.parsed_time}</td>
                       <td>
-                        <a href={source_link(@run_id, @view_token, "scene-#{entry.scene_id}")}>Exact revision</a>
+                        <a href={source_link(@run_id, @view_token, "scene-#{entry.scene_id}")}>Screenplay version</a>
                       </td>
                     </tr>
                   </tbody>
@@ -696,7 +696,7 @@ defmodule FountWeb.ProductionLive do
 
           <section :if={@section == "notes"} class="tool-grid" aria-labelledby="notes-title">
             <article class="card stack tool-controls">
-              <p class="eyebrow">S04 · authored provenance</p><h2 id="notes-title">Authored notes</h2>
+              <p class="eyebrow">Writer notes</p><h2 id="notes-title">Writer notes</h2>
               <form id="production-note-filter" phx-change="filter_notes" class="stack">
                 <label>Filter <input name="notes[query]" value={@note_filter["query"] || ""} /></label>
                 <label>
@@ -815,7 +815,7 @@ defmodule FountWeb.ProductionLive do
             class="card stack candidate-registry"
           >
             <h2>Pending production-tool candidates</h2>
-            <p>Saving a candidate never advances canon. Exact human approval is a separate action.</p>
+            <p>Saving proposed changes leaves the approved screenplay unchanged. Review and approve them separately.</p>
             <div class="table-scroll">
               <table>
                 <thead>
@@ -843,7 +843,7 @@ defmodule FountWeb.ProductionLive do
 
           <section :if={@section == "read"} class="tool-grid" aria-labelledby="read-title">
             <article class="card stack tool-controls">
-              <p class="eyebrow">S05 · provider-free human read</p><h2 id="read-title">Table read</h2>
+              <p class="eyebrow">Read together</p><h2 id="read-title">Table read</h2>
               <form phx-submit="create_table_read" class="stack">
                 <label>
                   Material
@@ -928,7 +928,7 @@ defmodule FountWeb.ProductionLive do
 
           <section :if={@section == "usefulness"} class="tool-grid" aria-labelledby="usefulness-title">
             <article class="card stack tool-controls">
-              <p class="eyebrow">S06 · descriptive human evidence</p><h2 id="usefulness-title">
+              <p class="eyebrow">Your feedback</p><h2 id="usefulness-title">
                 Usefulness records
               </h2>
               <form phx-submit="save_usefulness" class="stack">

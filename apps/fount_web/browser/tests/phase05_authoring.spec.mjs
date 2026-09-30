@@ -5,7 +5,7 @@ const fixture = `Title: Phase 05 Authoring\nAuthor: Zoë\n\nINT. CAFÉ - MORNING
 
 async function login(page) {
   await page.goto('/login');
-  await page.getByLabel('Owner token').fill(token);
+  await page.getByLabel('Access token').fill(token);
   await page.getByRole('button', {name: 'Sign in'}).click();
   await expect(page).toHaveURL(/\/$/);
 }
@@ -101,7 +101,7 @@ test('E04-E06 candidate save leaves canon unchanged, AI uses Run, and acceptance
   await source.fill(edited);
   await page.getByRole('button', {name: 'Save draft'}).click();
   await page.getByRole('button', {name: 'Save candidate'}).click();
-  await expect(page.getByText(/Canon is unchanged/)).toBeVisible();
+  await expect(page.getByText(/The approved screenplay is unchanged/)).toBeVisible();
 
   await page.goto(`/runs/${runId}/viewer`);
   await expect(page.locator('.screenplay')).toContainText('departure board');
@@ -120,10 +120,10 @@ test('E04-E06 candidate save leaves canon unchanged, AI uses Run, and acceptance
   await expect(page.locator('pre.script').last()).toContainText('INT. LOCKED ROOM - NIGHT', {timeout: 60_000});
   await expect(page.locator('pre.script').first()).toContainText('blue departure board');
   await expect(page.locator('p.status')).toContainText('stage: decide', {timeout: 60_000});
-  await expect(page.getByRole('heading', {name: /Prewrite Intelligence/i})).toBeVisible();
+  await expect(page.getByRole('heading', {name: /Analysis before writing/i})).toBeVisible();
   await page.goto(`/runs/${aiRunId}/decisions`);
   await expect(page.getByRole('button', {name: 'Rebase candidate onto current canon'})).toBeVisible();
-  await page.getByLabel('Confirm permanent stop and fencing').check();
+  await page.getByLabel('Confirm permanent stop').check();
   await page.getByRole('button', {name: 'Stop this run'}).click();
   await expect(page.locator('p.status')).toContainText('stopped');
   await page.goto(`/runs/${runId}/viewer`);
@@ -131,7 +131,7 @@ test('E04-E06 candidate save leaves canon unchanged, AI uses Run, and acceptance
 
   await page.goto(`/runs/${runId}/edit`);
   await page.getByRole('button', {name: 'Accept exact candidate'}).click();
-  await expect(page.getByText(/canonical head advanced/)).toBeVisible();
+  await expect(page.getByText(/Revision approved and saved/)).toBeVisible();
   await expect(source).toHaveAttribute('readonly', '');
   await page.goto(`/runs/${runId}/viewer`);
   await expect(page.locator('.screenplay')).not.toContainText('blue departure board');
@@ -252,7 +252,7 @@ test('E05/E06 immediate unsaved AI and acceptance clicks cannot race preview deb
   const runId = await createRun(page, `authoring-action-race-${Date.now()}`);
   await page.goto(`/runs/${runId}/edit`);
   await page.getByRole('button', {name: 'Save candidate'}).click();
-  await expect(page.getByText(/Canon is unchanged/)).toBeVisible();
+  await expect(page.getByText(/The approved screenplay is unchanged/)).toBeVisible();
   for (const id of ['ai-assist', 'candidate-accept']) {
     await page.evaluate(action => {
       const source = document.querySelector('[data-authoring-source]');

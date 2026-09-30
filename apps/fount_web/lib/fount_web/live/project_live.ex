@@ -34,7 +34,7 @@ defmodule FountWeb.ProjectLive do
       {:ok, %{run: run}} ->
         {:noreply,
          socket
-         |> put_flash(:info, "Project and durable Run created. Review setup before launch.")
+         |> put_flash(:info, "Project created. Review setup before starting.")
          |> push_navigate(to: ~p"/runs/#{run["id"]}/setup")}
 
       {:error, reason} ->
@@ -172,13 +172,13 @@ defmodule FountWeb.ProjectLive do
 
       <section :if={@live_action == :index} class="project-index">
         <header class="project-mast">
-          <p class="eyebrow">Story workspace registry</p><h1>Fount projects</h1>
+          <p class="eyebrow">Your development slate</p><h1>Fount projects</h1>
         </header>
         <p>
-          Authenticated owner: <strong><%= @current_owner %></strong>. Canon changes remain explicit Run decisions.
+          Signed in as: <strong><%= @current_owner %></strong>. Screenplay changes require your approval.
         </p>
         <p class="muted">
-          Showing at most the 24 most recent owner-visible projects; filter and sort operate inside that bounded set.
+          Showing your 24 most recent projects. Search and sort apply to this list.
         </p>
         <form phx-change="filter_projects" class="project-filter inline-form">
           <label>Filter projects
@@ -202,12 +202,12 @@ defmodule FountWeb.ProjectLive do
           <article :for={card <- @project_cards} class="card project-card">
             <% project = card.project %>
             <h2>{project["title"]}</h2>
-            <p><code>{project["key"]}</code></p>
-            <p :if={project["synopsis"]}>{project["synopsis"]}</p>
+            <p class="project-card__identity"><code>{project["key"]}</code></p>
+            <p :if={project["synopsis"]} class="project-card__synopsis">{project["synopsis"]}</p>
             <p :if={project["thumbnail_ref"]}>
               Thumbnail reference: <code>{project["thumbnail_ref"]}</code>
             </p>
-            <p>
+            <p class="project-card__identity">
               Screenplay <code>{project["screenplay_id"]}</code>
               · accepted revision <code>{card.revision_id || "unavailable"}</code>
             </p>
@@ -223,7 +223,7 @@ defmodule FountWeb.ProjectLive do
               </div>
             </dl>
             <p>{card.page_estimate || "Page estimate unavailable"}</p>
-            <p>
+            <p class="project-card__provenance">
               Import: {project["import_format"] || "legacy / unknown"} · losses {card.import_fidelity[
                 "loss_count"
               ] || "unknown"} · source preserved unchanged {to_string(
@@ -231,7 +231,7 @@ defmodule FountWeb.ProjectLive do
               )}
             </p>
             <p>
-              Starting here reloads the current accepted head; it does not create or accept generated pages.
+              Start from the current approved screenplay. Proposed changes will need separate approval.
             </p>
             <div :if={card.latest_run} class="project-links">
               <a href={~p"/runs/#{card.latest_run["id"]}/viewer"}>Viewer</a>
@@ -239,7 +239,7 @@ defmodule FountWeb.ProjectLive do
               <a href={~p"/runs/#{card.latest_run["id"]}/tools"}>Search & production tools</a>
             </div>
             <details :if={card.recent_activity != []}>
-              <summary>Recent persisted activity</summary>
+              <summary>Recent activity</summary>
               <ul>
                 <li :for={item <- card.recent_activity}>
                   {item["kind"]}: {item["detail"]} · {item["resource_id"]}
@@ -265,10 +265,10 @@ defmodule FountWeb.ProjectLive do
 
         <section class="card stack run-registry" aria-labelledby="run-registry-title">
           <div>
-            <p class="eyebrow">Authorized bounded registry</p>
+            <p class="eyebrow">Recent work</p>
             <h2 id="run-registry-title">Runs</h2>
             <p>
-              Up to 50 owner-authorized Runs are loaded. Filters are validated by the Run listing contract; comparisons are factual and never rank outcomes.
+              Your 50 most recent Runs. Filter by status or compare their recorded results.
             </p>
           </div>
           <form phx-change="filter_runs" class="inline-form">
@@ -328,7 +328,7 @@ defmodule FountWeb.ProjectLive do
                 </option>
               </select>
             </label>
-            <button type="submit">Compare persisted facts</button>
+            <button type="submit">Compare results</button>
           </form>
           <div :if={@comparison} class="comparison-card">
             <p>
@@ -356,13 +356,13 @@ defmodule FountWeb.ProjectLive do
 
       <section :if={@live_action == :new} class="project-create">
         <header class="project-mast">
-          <p class="eyebrow">Genesis + durable Run</p><h1>New screenplay Run</h1>
+          <p class="eyebrow">Start a project</p><h1>New screenplay project</h1>
         </header>
         <p>
           The supplied screenplay becomes the explicit genesis revision. Generated pages are candidates until the configured exact approval path accepts them.
         </p>
         <p class="warning">
-          Deterministic demo mode uses no secret credential. It exercises persistence, Run decisions, Workshop edits, Observe-backed Intelligence, checks and delivery; it does not certify screenplay quality.
+          Demo mode uses simulated responses to demonstrate editing, analysis, review and export. It does not assess screenplay quality.
         </p>
         <p :if={@error} role="alert">{@error}</p>
         <p :if={@flash["error"]} role="alert">{@flash["error"]}</p>
@@ -376,7 +376,7 @@ defmodule FountWeb.ProjectLive do
           class="stack"
         >
           <input type="hidden" name="_csrf_token" value={Plug.CSRFProtection.get_csrf_token()} />
-          <label>Project title <input name="project[title]" value="Phase 06 Demo" required /></label>
+          <label>Project title <input name="project[title]" value="Untitled screenplay" required /></label>
           <label>Project key
           <input
             name="project[key]"
@@ -388,14 +388,14 @@ defmodule FountWeb.ProjectLive do
             Journey
             <select name="project[journey]">
               <option value="opening">
-                Brief → checked opening candidate → export (canon unchanged)
+                Brief → proposed opening → review and export
               </option>
               <option value="reveal">
                 Reveal move → protected beat repair → human exact approval
               </option>
               <option value="dialogue">Selected-scene dialogue → configured service approval</option>
               <option value="analysis">
-                Selected-scene dialogue → Observe-backed candidate (canon unchanged)
+                Selected scene → proposed dialogue changes → review
               </option>
             </select>
           </label>
@@ -417,7 +417,7 @@ defmodule FountWeb.ProjectLive do
             Or Fountain source <textarea name="project[source]"><%= @fixture_source %></textarea>
           </label>
           <p role="status">
-            Import is synchronous. The next page appears only after parsing, genesis persistence and durable Run creation succeed.
+            Your file will be imported and saved before setup opens.
           </p>
           <button type="submit" phx-disable-with="Importing + creating Run…">Create Run</button>
         </form>

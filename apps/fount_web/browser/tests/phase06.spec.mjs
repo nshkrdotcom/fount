@@ -6,7 +6,7 @@ const fixture = `Title: Phase 06 Browser Fixture\nAuthor: Fount\n\nINT. KITCHEN 
 
 async function login(page) {
   await page.goto('/login');
-  await page.getByLabel('Owner token').fill(token);
+  await page.getByLabel('Access token').fill(token);
   await page.getByRole('button', {name: 'Sign in'}).click();
   await expect(page).toHaveURL(/\/$/);
 }
@@ -20,7 +20,7 @@ async function createJourney(page, journey, key) {
   await page.getByRole('button', {name: 'Create Run'}).click();
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+\/setup$/);
   const runId = page.url().match(/\/runs\/([0-9a-f-]+)\/setup$/)[1];
-  await page.getByRole('button', {name: 'Launch / resume durable worker'}).click();
+  await page.getByRole('button', {name: 'Launch / resume Run'}).click();
   return runId;
 }
 
@@ -115,9 +115,9 @@ test('U05 control, unknown-cost and failure semantics are visible and keyboard r
   await expect(page.locator('p.status[aria-live="polite"]')).toBeVisible();
   await page.keyboard.press('Tab');
   await expect(page.locator(':focus')).toBeVisible();
-  await page.getByLabel('Confirm permanent stop and fencing').check();
+  await page.getByLabel('Confirm permanent stop').check();
   await page.getByRole('button', {name: 'Stop'}).click();
-  await expect(page.getByRole('status')).toContainText('Stop recorded');
+  await expect(page.getByRole('status')).toContainText('Stop requested');
 });
 
 test('H03-H05 integrated analysis survives review reconnect and stays candidate-only', async ({page}) => {
@@ -127,11 +127,11 @@ test('H03-H05 integrated analysis survives review reconnect and stays candidate-
   await waitForCandidate(page, runId, 'If you missed it, you were meant to.');
   await expect(page.locator('p.status')).toContainText('stage: deliver', {timeout: 60_000});
 
-  await expect(page.getByRole('heading', {name: 'Prewrite Intelligence'}).first()).toBeVisible();
-  await expect(page.getByRole('heading', {name: 'Revision Intelligence'}).first()).toBeVisible();
+  await expect(page.getByRole('heading', {name: 'Analysis before writing'}).first()).toBeVisible();
+  await expect(page.getByRole('heading', {name: 'Analysis of changes'}).first()).toBeVisible();
   await expect(page.getByText(/Status: (complete|partial)/).first()).toBeVisible({timeout: 60_000});
-  await expect(page.getByRole('heading', {name: 'Semantic advisory checks'})).toBeVisible();
-  await expect(page.getByRole('heading', {name: 'Authoritative required checks'})).toBeVisible();
+  await expect(page.getByRole('heading', {name: 'Story observations'})).toBeVisible();
+  await expect(page.getByRole('heading', {name: 'Required checks'})).toBeVisible();
   await expect(page.getByText(/revision_intelligence/).first()).toBeVisible();
   await expect(page.locator('pre.script').first()).toContainText("I didn't miss anything.");
   await expect(page.locator('pre.script').first()).not.toContainText('If you missed it, you were meant to.');
@@ -142,8 +142,8 @@ test('H03-H05 integrated analysis survives review reconnect and stays candidate-
 
   await page.goto(`/runs/${runId}/timeline`);
   await expect(page.getByText(/Analysis service:.*Deterministic Sandbox/)).toBeVisible();
-  await expect(page.getByRole('heading', {name: 'Prewrite Intelligence'})).toBeVisible();
-  await expect(page.getByRole('heading', {name: 'Revision Intelligence'})).toBeVisible();
+  await expect(page.getByRole('heading', {name: 'Analysis before writing'})).toBeVisible();
+  await expect(page.getByRole('heading', {name: 'Analysis of changes'})).toBeVisible();
 });
 
 

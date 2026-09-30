@@ -6,7 +6,7 @@ const fdx = `<FinalDraft><Content><Paragraph Type="Scene Heading"><Text>INT. FDX
 
 async function login(page) {
   await page.goto('/login');
-  await page.getByLabel('Owner token').fill(token);
+  await page.getByLabel('Access token').fill(token);
   await page.getByRole('button', {name: 'Sign in'}).click();
   await expect(page).toHaveURL(/\/$/);
 }
@@ -66,7 +66,7 @@ test('S04 note changes are durable candidates, separate from annotations, and ex
   await page.getByLabel('Title').first().fill('Continuity');
   await page.getByRole('textbox', {name: 'Note', exact: true}).fill('Keep the receipt visible.');
   await page.getByRole('button', {name: 'Save note candidate'}).click();
-  await expect(page.getByText(/Canon is unchanged until exact approval/)).toBeVisible();
+  await expect(page.getByText(/The approved screenplay is unchanged until you approve/)).toBeVisible();
   await expect(page.getByRole('heading', {name: 'Pending production-tool candidates'})).toBeVisible();
   await page.getByRole('button', {name: 'Exact approve'}).click();
   await expect(page.getByText(/Candidate accepted as revision/)).toBeVisible();
@@ -85,8 +85,8 @@ test('S04 note changes are durable candidates, separate from annotations, and ex
   await page.getByLabel('Literal phrase').fill('receipt');
   await page.getByRole('button', {name: 'Search selected revision'}).click();
   await expect(page.locator('.search-hits li').first()).toBeVisible();
-  const base = await page.getByRole('combobox', {name: /^Exact revision/}).locator('option').filter({hasText: 'Run base'}).getAttribute('value');
-  await page.getByRole('combobox', {name: /^Exact revision/}).selectOption(base);
+  const base = await page.getByRole('combobox', {name: /^Screenplay version/}).locator('option').filter({hasText: 'Run base'}).getAttribute('value');
+  await page.getByRole('combobox', {name: /^Screenplay version/}).selectOption(base);
   await expect(page.getByText('Search cleared because the exact revision changed.')).toBeVisible();
   await expect(page.locator('.search-hits li')).toHaveCount(0);
 });
@@ -190,7 +190,7 @@ for (const viewport of [
     await expect(page.locator(':focus')).toBeVisible();
     await page.evaluate(() => window.liveSocket.disconnect());
     await page.evaluate(() => window.liveSocket.connect());
-    await expect(page.getByRole('heading', {name: 'Search this exact revision'})).toBeVisible();
+    await expect(page.getByRole('heading', {name: 'Search this screenplay version'})).toBeVisible();
 
     await openSection(page, runId, 'read');
     await page.getByRole('button', {name: 'Save read packet'}).click();
@@ -239,7 +239,7 @@ test('S05 two tabs recover persisted table-read state after an optimistic confli
   await firstRead.getByRole('button', {name: 'Bookmark active turn'}).click();
   await expect(firstRead).toHaveAttribute('data-version', '2');
   await secondRead.getByRole('button', {name: 'Bookmark active turn'}).click();
-  await expect(second.getByText('Table-read state changed in another tab; reloaded persisted state.')).toBeVisible();
+  await expect(second.getByText('Table-read state changed in another tab; loaded the saved state.')).toBeVisible();
   await expect(secondRead).toHaveAttribute('data-version', '2');
   await expect(secondRead).toHaveAttribute('data-bookmark', '1');
   await secondRead.locator('[data-read-turn]').nth(2).focus();

@@ -202,7 +202,7 @@ defmodule FountWeb.AnalysisLive do
       <%= if @dashboard do %>
         <header class="analysis-mast">
           <div class="analysis-mast__title">
-            <p class="eyebrow">Persisted evidence console</p>
+            <p class="eyebrow">Script analysis</p>
             <h1>{@dashboard.access["title"]}</h1>
             <p>
               Run <code>{@run_id}</code>
@@ -223,7 +223,7 @@ defmodule FountWeb.AnalysisLive do
 
         <section class="analysis-strip" aria-label="Analysis identity and state">
           <div>
-            <span class="micro-label">packet</span>
+            <span class="micro-label">report</span>
             <strong>{short(@dashboard.selected.packet && @dashboard.selected.packet["id"])}</strong>
           </div>
           <div>
@@ -235,11 +235,11 @@ defmodule FountWeb.AnalysisLive do
             <strong>{(@dashboard.selected.run && @dashboard.selected.run["playbook"]) || "—"}</strong>
           </div>
           <div>
-            <span class="micro-label">candidate binding</span>
+            <span class="micro-label">proposed revision</span>
             <strong>{short(@dashboard.review["candidate_id"])}</strong>
           </div>
           <div>
-            <span class="micro-label">check fingerprint</span>
+            <span class="micro-label">check reference</span>
             <strong>{short(@dashboard.review["check_set_fingerprint"])}</strong>
           </div>
         </section>
@@ -311,7 +311,7 @@ defmodule FountWeb.AnalysisLive do
             </dl>
 
             <div class="rail-note">
-              Inspection reads saved rows only. Reloading, reconnecting, selecting packets, graph navigation and comparisons perform no provider dispatch or budget reservation.
+              This page shows saved analysis. Browsing or comparing reports does not start AI work or incur new charges.
             </div>
           </aside>
 
@@ -319,8 +319,8 @@ defmodule FountWeb.AnalysisLive do
             <section class="analysis-grid analysis-grid--status" aria-label="Check categories">
               <article class="evidence-card evidence-card--required">
                 <header>
-                  <span class="micro-label">deterministic authority</span><h2>
-                    Authoritative required checks
+                  <span class="micro-label">required checks</span><h2>
+                    Required checks
                   </h2>
                 </header>
                 <p :if={@dashboard.checks.required_deterministic == []}>
@@ -337,12 +337,12 @@ defmodule FountWeb.AnalysisLive do
 
               <article class="evidence-card evidence-card--application">
                 <header>
-                  <span class="micro-label">Workshop application</span><h2>
-                    Workshop application checks
+                  <span class="micro-label">revision checks</span><h2>
+                    Revision checks
                   </h2>
                 </header>
                 <p :if={@dashboard.checks.workshop_application == []}>
-                  No Workshop application checks are recorded.
+                  No Revision checks are recorded.
                 </p>
                 <ul class="check-list">
                   <li :for={check <- @dashboard.checks.workshop_application}>
@@ -356,7 +356,7 @@ defmodule FountWeb.AnalysisLive do
 
               <article class="evidence-card evidence-card--advisory">
                 <header>
-                  <span class="micro-label">semantic advice</span><h2>Semantic advisory findings</h2>
+                  <span class="micro-label">story observations</span><h2>Story observations</h2>
                 </header>
                 <p :if={@dashboard.checks.semantic_advisory == []}>
                   No semantic advisory checks are recorded.
@@ -374,7 +374,7 @@ defmodule FountWeb.AnalysisLive do
             <section class="analysis-grid analysis-grid--packet">
               <article class="evidence-card evidence-card--wide">
                 <header>
-                  <span class="micro-label">writer packet</span><h2>Finding & diagnosis</h2>
+                  <span class="micro-label">writer report</span><h2>Finding & diagnosis</h2>
                 </header>
                 <p class="lead-finding">
                   {(@dashboard.selected.packet && @dashboard.selected.packet["finding"]) ||
@@ -410,7 +410,7 @@ defmodule FountWeb.AnalysisLive do
 
               <article class="evidence-card">
                 <header>
-                  <span class="micro-label">uncertainty</span><h2>Unknowns remain visible</h2>
+                  <span class="micro-label">uncertainty</span><h2>What is unknown</h2>
                 </header>
                 <ul class="plain-list">
                   <li :for={item <- @dashboard.selected.uncertainty}>{value_preview(item)}</li>
@@ -421,7 +421,7 @@ defmodule FountWeb.AnalysisLive do
                 <p :if={
                   @dashboard.selected.uncertainty == [] and @dashboard.selected.missing_evidence == []
                 }>
-                  No uncertainty fields were persisted in this packet.
+                  This report has no recorded uncertainty details.
                 </p>
               </article>
             </section>
@@ -434,7 +434,7 @@ defmodule FountWeb.AnalysisLive do
                 <span>{length(@dashboard.selected.evidence)} references</span>
               </header>
               <p :if={@dashboard.selected.evidence == []}>
-                No source evidence references were persisted with this packet.
+                This report has no saved source references.
               </p>
               <div class="evidence-register">
                 <article :for={item <- @dashboard.selected.evidence} class="evidence-row">
@@ -454,7 +454,7 @@ defmodule FountWeb.AnalysisLive do
             <section class="evidence-card graph-card" aria-labelledby="graph-title">
               <header class="section-heading">
                 <div>
-                  <span class="micro-label">stored story records</span><h2 id="graph-title">
+                  <span class="micro-label">story connections</span><h2 id="graph-title">
                     Evidence graph
                   </h2>
                 </div>
@@ -472,7 +472,7 @@ defmodule FountWeb.AnalysisLive do
                 <span><i class="legend-line"></i>stored reference</span>
               </div>
               <p :if={@dashboard.graph.truncated} class="warning">
-                View bounded to {@dashboard.graph.node_limit} nodes and {@dashboard.graph.edge_limit} links; stored totals are {@dashboard.graph.total_nodes} nodes / {@dashboard.graph.total_edges} links.
+                Showing up to {@dashboard.graph.node_limit} nodes and {@dashboard.graph.edge_limit} links; saved totals are {@dashboard.graph.total_nodes} nodes / {@dashboard.graph.total_edges} links.
               </p>
               <div
                 :if={@dashboard.graph.nodes != []}
@@ -511,7 +511,7 @@ defmodule FountWeb.AnalysisLive do
               <FountWeb.CoreComponents.empty_state
                 :if={@dashboard.graph.nodes == []}
                 title="No stored graph records"
-                detail="This packet has no persisted story-world records. The UI does not invent graph structure from prose findings."
+                detail="No story connections are saved in this report."
               />
 
               <details class="evidence-detail" open>
@@ -554,7 +554,7 @@ defmodule FountWeb.AnalysisLive do
 
               <div class="event-sequence">
                 <h3>Recorded event order</h3>
-                <p>Order reflects persisted record order only; it is not a causal chain.</p>
+                <p>Events appear in saved order. This order does not imply cause and effect.</p>
                 <ol>
                   <li :for={event <- @dashboard.graph.events}>
                     <span>{event.order}</span>
@@ -566,7 +566,7 @@ defmodule FountWeb.AnalysisLive do
                   </li>
                 </ol>
                 <p :if={@dashboard.graph.events == []}>
-                  No event records were persisted for this packet.
+                  No events are saved in this report.
                 </p>
               </div>
             </section>
@@ -589,7 +589,7 @@ defmodule FountWeb.AnalysisLive do
               </article>
               <article class="evidence-card">
                 <header>
-                  <span class="micro-label">authoritative resource state</span><h2>
+                  <span class="micro-label">recorded usage</span><h2>
                     Backend ceilings
                   </h2>
                 </header>
@@ -611,7 +611,7 @@ defmodule FountWeb.AnalysisLive do
                     </div>
                   </dl>
                 </details>
-                <p>Indicators are informational. Backend policy enforcement remains authoritative.</p>
+                <p>Usage indicators are informational. Your configured limits still apply.</p>
               </article>
             </section>
 
@@ -710,7 +710,7 @@ defmodule FountWeb.AnalysisLive do
             <section class="evidence-card evidence-card--quiet">
               <header>
                 <span class="micro-label">limits & provenance</span><h2>
-                  What this page does not claim
+                  About this analysis
                 </h2>
               </header>
               <ul class="plain-list">
@@ -719,7 +719,7 @@ defmodule FountWeb.AnalysisLive do
                 <li>
                   Graph links do not invent causality; unresolved targets stay tied to their recorded revision.
                 </li>
-                <li>Manual or unsaved drafts without a persisted packet remain unanalyzed.</li>
+                <li>Drafts without a saved analysis report have not been analyzed.</li>
               </ul>
             </section>
           </div>

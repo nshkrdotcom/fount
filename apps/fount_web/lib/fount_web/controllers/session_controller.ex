@@ -16,7 +16,7 @@ defmodule FountWeb.SessionController do
   end
 
   def create(conn, _params),
-    do: conn |> put_status(:bad_request) |> render(:new, error: "Owner token is required")
+    do: conn |> put_status(:bad_request) |> render(:new, error: "Access token is required")
 
   def delete(conn, _params), do: conn |> FountWeb.OwnerAuth.log_out() |> redirect(to: "/login")
 end

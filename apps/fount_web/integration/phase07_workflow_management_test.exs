@@ -12,7 +12,7 @@ defmodule FountWeb.Phase07WorkflowManagementIntegrationTest do
 
     for params <- [%{"choice" => "stop"}, %{"choice" => "stop", "confirm_stop" => "false"}] do
       assert render_click(view, "submit_decision", %{"decision" => params}) =~
-               "Confirm stop before fencing the Run."
+               "Confirm that you want to stop this Run."
     end
 
     {:ok, context} = FountWeb.Actors.owner_context("test-owner", run["screenplay_id"])
@@ -42,7 +42,7 @@ defmodule FountWeb.Phase07WorkflowManagementIntegrationTest do
 
     assert html =~ "Max microunits"
     assert html =~ "Authenticated owner"
-    assert html =~ "Versioned policy presets"
+    assert html =~ "Saved settings"
     assert html =~ "registered_reviewer"
     assert html =~ "Registered route reviewer"
 

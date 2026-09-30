@@ -84,16 +84,16 @@ defmodule FountWeb.RunLive do
     command_result(
       socket,
       FountRun.stop_run(Fount.Repo, socket.assigns.run_id, socket.assigns.context),
-      "Stop recorded; pending work and decisions are fenced by the durable Run control path."
+      "Stop requested. No new work or decisions will start."
     )
   end
 
   def handle_event("stop", _params, socket),
-    do: {:noreply, assign(socket, :error, "Confirm stop before fencing the Run.")}
+    do: {:noreply, assign(socket, :error, "Confirm that you want to stop this Run.")}
 
   def handle_event("submit_decision", %{"decision" => %{"choice" => "stop"} = params}, socket)
       when not is_map_key(params, "confirm_stop"),
-      do: {:noreply, assign(socket, :error, "Confirm stop before fencing the Run.")}
+      do: {:noreply, assign(socket, :error, "Confirm that you want to stop this Run.")}
 
   def handle_event(
         "submit_decision",
@@ -101,7 +101,7 @@ defmodule FountWeb.RunLive do
         socket
       )
       when value not in ["true", "on", "1"],
-      do: {:noreply, assign(socket, :error, "Confirm stop before fencing the Run.")}
+      do: {:noreply, assign(socket, :error, "Confirm that you want to stop this Run.")}
 
   def handle_event("submit_decision", %{"decision" => params}, socket) do
     response =
@@ -162,7 +162,7 @@ defmodule FountWeb.RunLive do
             socket.assigns.context,
             opts
           ),
-          "Policy snapshot updated; prior-version work and decisions were fenced and refreshed."
+          "Run settings saved; prior-version work and decisions were fenced and refreshed."
         )
 
       {:error, reason} ->
@@ -184,7 +184,7 @@ defmodule FountWeb.RunLive do
       {:ok, row} ->
         {:noreply,
          socket
-         |> assign(:notice, "Saved host preset #{row["name"]} v#{row["version"]}.")
+         |> assign(:notice, "Saved preset #{row["name"]} v#{row["version"]}.")
          |> assign(:error, nil)
          |> refresh()}
 
@@ -649,9 +649,9 @@ defmodule FountWeb.RunLive do
       <details class="card notification-panel" open={@unread_notifications != []}>
         <summary>Session notifications · {length(@unread_notifications)} unread</summary>
         <p>
-          These indicators are rebuilt from authorized persisted Run state after reload/reconnect. PubSub only prompts a reload; this browser session is not a durable inbox.
+          Notices refresh from saved work when you reconnect. Read and unread marks apply to this browser session.
         </p>
-        <p :if={@notifications == []}>No persisted state currently requires attention.</p>
+        <p :if={@notifications == []}>Nothing needs your attention.</p>
         <ul :if={@notifications != []} class="notification-list">
           <li :for={item <- @notifications}>
             <strong>[{item["kind"]}] {item["title"]}</strong> — {item["detail"]}
@@ -669,8 +669,8 @@ defmodule FountWeb.RunLive do
       <section :if={@live_action == :setup} class="stack">
         <h2>Run setup</h2>
         <p class="warning">
-          Accepted pages can change canon only through Core's exact approval path.
-          Policy and plan changes append versioned snapshots and fence affected work. The host exposes only source-verified controls; there is no arbitrary stage restart.
+          Proposed pages replace the approved screenplay only after your approval.
+          Changing settings creates a saved version and prevents affected work from continuing with old settings.
         </p>
 
         <div class="grid">
@@ -679,7 +679,7 @@ defmodule FountWeb.RunLive do
             <h3>Goal</h3><p>{@current_plan["goal"]}</p>
             <p>
               Version <strong>{@run["current_plan_version"]}</strong>
-              · fingerprint
+              · version reference
               <code>{get_in(@run, ["plan", "fingerprint"]) || "recorded in Run lineage"}</code>
             </p>
           </div>
@@ -698,18 +698,18 @@ defmodule FountWeb.RunLive do
         <form phx-submit="update_plan" class="card stack">
           <h3>Update plan goal</h3>
           <p>
-            Phase 07 only updates the goal on the same base and scope. Base/scope rebases are not invented here.
+            Update the goal for the selected screenplay and material. To change the selection, start a new Run.
           </p>
           <label>Goal <textarea name="plan[goal]" maxlength="2000"><%= @current_plan["goal"] %></textarea></label>
-          <button disabled={!@live_connected || !@lifecycle["update_plan"]} type="submit">Append plan snapshot</button>
+          <button disabled={!@live_connected || !@lifecycle["update_plan"]} type="submit">Save plan changes</button>
         </form>
 
         <form phx-submit="save_policy" class="card stack policy-form">
           <div>
-            <p class="eyebrow">Server-validated policy</p>
-            <h3>Gates, completion, routing and ceilings</h3>
+            <p class="eyebrow">Run settings</p>
+            <h3>Review steps, completion and limits</h3>
             <p>
-              Policy v{@run["current_policy_version"]} · fingerprint
+              Policy v{@run["current_policy_version"]} · version reference
               <code>{get_in(@run, ["policy", "fingerprint"]) || "recorded"}</code>
             </p>
           </div>
@@ -734,7 +734,7 @@ defmodule FountWeb.RunLive do
               Completion
               <select name="policy[completion]">
                 <option value="candidate" selected={@current_policy["completion"] == "candidate"}>
-                  Candidate only — canon unchanged
+                  Proposed changes — approval required
                 </option>
                 <option value="accept" selected={@current_policy["completion"] == "accept"}>
                   Accept — exact approver required
@@ -853,16 +853,16 @@ defmodule FountWeb.RunLive do
             </div>
             <p>
               <strong>Effective limits and estimates.</strong>
-              Money is an integer ceiling in microunits. Estimated cost: unknown unless persisted provider accounting says otherwise; estimates do not become incurred cost.
+              Enter a spending limit in millionths of a dollar. Estimated cost is shown only when available. Estimates are separate from actual charges.
             </p>
           </fieldset>
-          <button disabled={!@live_connected || !@lifecycle["update_policy"]} type="submit">Append validated policy snapshot</button>
+          <button disabled={!@live_connected || !@lifecycle["update_policy"]} type="submit">Save Run settings</button>
         </form>
 
         <div class="card stack">
-          <h3>Versioned policy presets</h3>
+          <h3>Saved settings</h3>
           <p>
-            Built-ins are host-owned v1 presets. Saved presets get monotonically increasing owner/name versions. Unknown or incompatible values remain visible rather than being silently dropped.
+            Use a built-in preset or save your own settings. Each update saves a new version. Incompatible settings are flagged.
           </p>
           <form phx-submit="save_current_preset" class="inline-form">
             <label>Preset name <input name="preset[name]" maxlength="80" required /></label>
@@ -872,7 +872,7 @@ defmodule FountWeb.RunLive do
             <article :for={preset <- @policy_presets} class="preset-card">
               <p><strong>{preset["name"]}</strong> · {preset["source"]} v{preset["version"]}</p>
               <p>Status: {if(preset["compatible"], do: "compatible", else: "incompatible")}</p>
-              <p>Fingerprint <code>{preset["fingerprint"]}</code></p>
+              <p>Version reference <code>{preset["fingerprint"]}</code></p>
               <pre><%= json(preset["policy"]) %></pre>
               <p :if={!preset["compatible"]} role="status">Cannot apply: {preset["error"]}</p>
               <button
@@ -882,15 +882,15 @@ defmodule FountWeb.RunLive do
                 name="preset[reference]"
                 value={preset["reference"]}
                 disabled={!@live_connected}
-              >Apply as new snapshot</button>
+              >Apply settings</button>
             </article>
           </div>
         </div>
 
         <div class="card stack">
-          <h3>Revision-bound workflow scope</h3>
+          <h3>Selected screenplay material</h3>
           <p :if={is_nil(@workflow_selection)}>
-            No valid selection is bound. Open the Viewer and reselect against this exact base revision.
+            No material is selected. Open the Viewer to choose scenes from this screenplay version.
           </p>
           <div :if={@workflow_selection}>
             <p>
@@ -899,13 +899,13 @@ defmodule FountWeb.RunLive do
             </p>
             <pre><%= json(@workflow_selection["preview"]) %></pre>
           </div>
-          <a href={~p"/runs/#{@run_id}/viewer"}>Choose or repair scope in Viewer</a>
+          <a href={~p"/runs/#{@run_id}/viewer"}>Select scenes in Viewer</a>
         </div>
 
         <div class="card stack">
-          <h3>Closed action catalog</h3>
+          <h3>Available actions</h3>
           <p>
-            Only actions with an exact validated request and retained durable Run handler path are launchable. Workshop helpers are not promoted by name.
+            Only available actions can be started. Review their settings before continuing.
           </p>
           <div class="action-catalog">
             <article
@@ -928,7 +928,7 @@ defmodule FountWeb.RunLive do
         </div>
 
         <form phx-submit="preview_workflow_launch" class="card stack">
-          <h3>Explicit workflow launch</h3>
+          <h3>Start work</h3>
           <label>
             Action
             <select name="workflow[action]">
@@ -951,7 +951,7 @@ defmodule FountWeb.RunLive do
         </form>
 
         <div :if={@launch_preview} class="card stack launch-preview">
-          <h3>Validated launch preview</h3>
+          <h3>Review before starting</h3>
           <p>
             Command <code>{@launch_preview["command_id"]}</code>
             · base <code>{@launch_preview["base_revision_id"]}</code>
@@ -984,15 +984,15 @@ defmodule FountWeb.RunLive do
         </div>
 
         <div class="card">
-          <button disabled={!@live_connected} phx-click="launch">Launch / resume durable worker</button>
-          <p>Existing durable worker launch/idempotency behavior is retained.</p>
+          <button disabled={!@live_connected} phx-click="launch">Launch / resume Run</button>
+          <p>Resuming continues this Run without starting a duplicate.</p>
         </div>
       </section>
 
       <section :if={@live_action == :timeline} class="stack">
-        <h2>Durable timeline and controls</h2>
+        <h2>Progress and controls</h2>
         <p>
-          Completion policy: <strong>{@current_policy["completion"]}</strong>. Candidate saving leaves canon unchanged; acceptance requires exact Core approval.
+          Completion policy: <strong>{@current_policy["completion"]}</strong>. Saving proposed pages leaves the approved screenplay unchanged. Approval is a separate action.
         </p>
         <div class="card">
           <button disabled={!@live_connected || !@lifecycle["pause"]} phx-click="pause">Pause</button>
@@ -1004,7 +1004,7 @@ defmodule FountWeb.RunLive do
               value="true"
               required
               disabled={!@live_connected || !@lifecycle["stop"]}
-            /> Confirm permanent stop and fencing</label>
+            /> Confirm permanent stop</label>
             <button disabled={!@live_connected || !@lifecycle["stop"]} type="submit">Stop</button>
           </form>
           <button
@@ -1022,7 +1022,7 @@ defmodule FountWeb.RunLive do
           </p>
         </div>
         <p>
-          Progress is reloaded from PostgreSQL every second and after PubSub wakeups. Socket or worker loss does not own correctness.
+          Progress updates from saved work. Reconnect to recover the latest state.
         </p>
         <p>Current scope: <code>{json(@current_plan["scope"])}</code></p>
         <p>
@@ -1031,12 +1031,12 @@ defmodule FountWeb.RunLive do
         </p>
         <div class="grid">
           <div class="card">
-            <h3>Prewrite Intelligence</h3>
+            <h3>Analysis before writing</h3>
             <p>Status: <strong>{analysis_status(@review.pre_analysis)}</strong></p>
             <pre><%= json(@review.pre_analysis) %></pre>
           </div>
           <div class="card">
-            <h3>Revision Intelligence</h3>
+            <h3>Analysis of changes</h3>
             <p>Status: <strong>{analysis_status(@review.revision_analysis)}</strong></p>
             <pre><%= json(@review.revision_analysis) %></pre>
           </div>
@@ -1045,7 +1045,7 @@ defmodule FountWeb.RunLive do
           Pause requested at {@run["pause_requested_at"]}; any already-dispatched provider call is settling before another dispatch.
         </p>
         <p :if={@run["stop_requested_at"]}>
-          Stop requested at {@run["stop_requested_at"]}; already-persisted partial results remain available and no new dispatch may start.
+          Stop requested at {@run["stop_requested_at"]}; saved partial results remain available. No new work will start.
         </p>
         <table>
           <thead>
@@ -1079,14 +1079,14 @@ defmodule FountWeb.RunLive do
       <section :if={@live_action == :decisions} class="stack">
         <h2>Decision inbox</h2>
         <p>
-          Every form submits the exact persisted context fingerprint plus plan/policy versions. Your identity is reconstructed from the signed server session, never from browser fields.
+          Decisions apply to the saved version shown here. If it changes, reload and review before submitting.
         </p>
         <p :if={@pending_decisions == []}>No pending decisions.</p>
         <article :for={decision <- @pending_decisions} class="card">
           <h3>{decision["kind"]}</h3>
           <p>Decision <code>{decision["id"]}</code></p>
           <p><strong>Question:</strong> {decision["prompt"]}</p>
-          <p>Fingerprint <code>{decision["context_fingerprint"]}</code></p>
+          <p>Version reference <code>{decision["context_fingerprint"]}</code></p>
           <p :if={is_nil(@decision_contexts[decision["id"]]["analysis_lineage"])} role="status">
             Intelligence lineage: not recorded for this decision.
           </p>
@@ -1102,7 +1102,7 @@ defmodule FountWeb.RunLive do
               <h4>Available choices and consequences</h4><pre><%= json(decision["options"]) %></pre>
             </div>
             <div>
-              <h4>Exact decision / approval binding</h4><pre><%= json(Map.merge(Map.take(decision, ["candidate_id", "base_revision_id", "content_hash", "check_set_fingerprint", "plan_version", "policy_version"]), @decision_contexts[decision["id"]])) %></pre>
+              <h4>Version details for this decision</h4><pre><%= json(Map.merge(Map.take(decision, ["candidate_id", "base_revision_id", "content_hash", "check_set_fingerprint", "plan_version", "policy_version"]), @decision_contexts[decision["id"]])) %></pre>
             </div>
           </div>
           <p>
@@ -1132,7 +1132,7 @@ defmodule FountWeb.RunLive do
                 value="true"
                 required
                 disabled={!@live_connected}
-              /> Confirm permanent stop and fencing
+              /> Confirm permanent stop
             </label>
             <label :if={(option["id"] || option["value"]) == "replace"}>
               Replacement Fountain <textarea
@@ -1151,22 +1151,22 @@ defmodule FountWeb.RunLive do
         <h2>Side-by-side candidate review</h2>
         <div class="grid">
           <div class="card">
-            <h3>Prewrite Intelligence</h3>
+            <h3>Analysis before writing</h3>
             <p>Status: <strong>{analysis_status(@review.pre_analysis)}</strong></p>
             <pre><%= json(@review.pre_analysis) %></pre>
           </div>
           <div class="card">
-            <h3>Revision Intelligence</h3>
+            <h3>Analysis of changes</h3>
             <p>Status: <strong>{analysis_status(@review.revision_analysis)}</strong></p>
             <pre><%= json(@review.revision_analysis) %></pre>
           </div>
         </div>
         <p :if={is_nil(@review.candidate)}>
-          No candidate has been persisted yet. Generated pages cannot appear before the configured strategy gate is resolved.
+          No proposed pages have been saved yet. Complete the required review before generation can continue.
         </p>
         <div :if={@review.candidate} class="grid">
           <div>
-            <h3>Canonical base</h3><pre class="script"><%= @review.base %></pre>
+            <h3>Approved original</h3><pre class="script"><%= @review.base %></pre>
           </div>
           <div>
             <h3>Candidate <code>{@review.candidate_id}</code></h3><pre class="script"><%= @review.candidate %></pre>
@@ -1174,8 +1174,8 @@ defmodule FountWeb.RunLive do
         </div>
         <div :if={@review.candidate} class="card intelligence-binding-card">
           <div>
-            <p class="eyebrow">Exact evidence binding</p>
-            <h3>Revision intelligence beside the candidate</h3>
+            <p class="eyebrow">Analysis for this revision</p>
+            <h3>Analysis of proposed changes</h3>
           </div>
           <dl class="binding-ledger">
             <div>
@@ -1207,23 +1207,23 @@ defmodule FountWeb.RunLive do
               <dt>Freshness</dt><dd>{@review.analysis_binding["freshness"]}</dd>
             </div>
             <div>
-              <dt>Required-check fingerprint</dt><dd>
+              <dt>Check reference</dt><dd>
                 <code>{@review.analysis_binding["check_set_fingerprint"] || "—"}</code>
               </dd>
             </div>
           </dl>
           <p>
-            Advisory confidence never changes required checks or approval authority. Missing or stale evidence stays visible rather than being treated as a pass.
+            Story observations do not replace required checks or your approval. Missing or outdated analysis is not a pass.
           </p>
-          <a class="inline-action" href={~p"/runs/#{@run_id}/analysis"}>Inspect saved intelligence evidence</a>
+          <a class="inline-action" href={~p"/runs/#{@run_id}/analysis"}>Open saved analysis</a>
         </div>
 
         <div :if={@review.candidate} class="card">
-          <h3>Actual structural diff</h3>
+          <h3>Compare screenplay changes</h3>
           <FountWeb.Components.DiffViewer.diff
             before={@review.base_model}
             after={@review.candidate_model}
-            before_label="Canonical base"
+            before_label="Approved original"
             after_label="Candidate"
             before_status="base"
             after_status="candidate"
@@ -1232,21 +1232,21 @@ defmodule FountWeb.RunLive do
         </div>
         <div :if={@review.candidate} class="grid">
           <div class="card">
-            <h3>Provenance and lineage</h3><pre><%= json(%{"provenance" => @review.provenance, "lineage" => @review.lineage, "result_revision_id" => @review.result_revision_id}) %></pre>
+            <h3>Revision history</h3><pre><%= json(%{"provenance" => @review.provenance, "lineage" => @review.lineage, "result_revision_id" => @review.result_revision_id}) %></pre>
           </div>
           <div class="card">
-            <h3>Required check identity</h3><pre><%= json(%{"required_checks" => @review.required_checks, "check_set_fingerprint" => @review.check_set_fingerprint}) %></pre>
+            <h3>Check details</h3><pre><%= json(%{"required_checks" => @review.required_checks, "check_set_fingerprint" => @review.check_set_fingerprint}) %></pre>
           </div>
         </div>
         <div class="grid">
           <div class="card">
-            <h3>Semantic advisory checks</h3><pre><%= json(@review.advisory_checks) %></pre><p>
+            <h3>Story observations</h3><pre><%= json(@review.advisory_checks) %></pre><p>
               These are advisory semantic findings. Partial or failed semantic analysis is never displayed as an advisory pass.
             </p>
           </div>
           <div class="card">
-            <h3>Authoritative required checks</h3><pre><%= json(@review.required_run_checks) %></pre><p>
-              Required Run/Core checks remain distinct from semantic advice and continue to control repair/acceptance under existing rules.
+            <h3>Required checks</h3><pre><%= json(@review.required_run_checks) %></pre><p>
+              Required checks must be resolved before approval. Story observations are advice, not approval.
             </p>
           </div>
         </div>
@@ -1254,10 +1254,10 @@ defmodule FountWeb.RunLive do
           <h3>Other recorded checks</h3><pre><%= json(@review.other_checks) %></pre>
         </div>
         <p>
-          Unknown, failed and uninspected checks remain visible; absence is not converted into a pass. Any permitted override remains part of the persisted decision/approval record rather than being hidden here.
+          Missing checks do not count as passes. Any permitted exception is recorded with your decision.
         </p>
         <p :if={@review.candidate}>
-          Candidate selection and acceptance are explicit persisted decisions. <a href={
+          Choosing a proposed revision and approving it are separate saved decisions. <a href={
             ~p"/runs/#{@run_id}/decisions"
           }>Open the current decision inbox</a>; this review page never accepts pages implicitly.
         </p>

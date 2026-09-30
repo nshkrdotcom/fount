@@ -5,7 +5,7 @@ const fixture = `Title: Phase 04 Viewer <Fixture>\nAuthor: Zoë\n\n# ACT ONE\n\n
 
 async function login(page) {
   await page.goto('/login');
-  await page.getByLabel('Owner token').fill(token);
+  await page.getByLabel('Access token').fill(token);
   await page.getByRole('button', {name: 'Sign in'}).click();
   await expect(page).toHaveURL(/\/$/);
 }
@@ -22,7 +22,7 @@ async function createRun(page, key, journey = 'opening', source = fixture) {
 }
 
 async function launchAndChoose(page, runId) {
-  await page.getByRole('button', {name: 'Launch / resume durable worker'}).click();
+  await page.getByRole('button', {name: 'Launch / resume Run'}).click();
   await page.goto(`/runs/${runId}/decisions`);
   const route = page.getByRole('button', {name: /Commit now|route-a/i}).first();
   await expect(route).toBeVisible({timeout: 60_000});
@@ -164,7 +164,7 @@ test('U06/U08 candidate diff is Run-bound and stale arbitrary IDs fall back trut
   await page.getByRole('button', {name: 'Apply view'}).click();
   await expect(page.locator('.screenplay')).toContainText('INT. LOCKED ROOM - NIGHT');
   await expect(page.locator('.diff-viewer')).toBeVisible();
-  await expect(page.getByText(/Candidate — canon unchanged/)).toBeVisible();
+  await expect(page.getByText(/Candidate — approval required/)).toBeVisible();
 
   const selectedRevision = await page.locator('.workspace-controls code').first().textContent();
   await page.reload();
@@ -197,7 +197,7 @@ test('U08 accepted revision is separately labeled after exact approval and outsi
   const acceptedToken = await accepted.getAttribute('value');
   await page.getByLabel('Displayed revision').selectOption(acceptedToken);
   await page.getByRole('button', {name: 'Apply view'}).click();
-  await expect(page.getByText('Accepted canonical revision')).toBeVisible();
+  await expect(page.getByText('Approved screenplay revision')).toBeVisible();
 
   const outsider = await browser.newPage();
   await outsider.goto(`/runs/${runId}/viewer`);

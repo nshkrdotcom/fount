@@ -5,7 +5,7 @@ const fixture = `Title: Phase 07 Browser Fixture\nAuthor: Fount\n\nINT. KITCHEN 
 
 async function login(page) {
   await page.goto('/login');
-  await page.getByLabel('Owner token').fill(token);
+  await page.getByLabel('Access token').fill(token);
   await page.getByRole('button', {name: 'Sign in'}).click();
   await expect(page).toHaveURL(/\/$/);
 }
@@ -19,13 +19,13 @@ async function createRun(page, key, launch = false) {
   await page.getByRole('button', {name: 'Create Run'}).click();
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+\/setup$/);
   const runId = page.url().match(/\/runs\/([0-9a-f-]+)\/setup$/)[1];
-  if (launch) await page.getByRole('button', {name: 'Launch / resume durable worker'}).click();
+  if (launch) await page.getByRole('button', {name: 'Launch / resume Run'}).click();
   return runId;
 }
 
 async function selectTwoScenes(page, runId) {
   await page.goto(`/runs/${runId}/viewer`);
-  await expect(page.getByRole('heading', {name: 'Revision-bound workflow scope'})).toBeVisible();
+  await expect(page.getByRole('heading', {name: 'Selected screenplay material'})).toBeVisible();
   await page.locator('input[name="scope[whole_screenplay]"]').uncheck();
   const scenes = page.locator('input[name="scope[scene_ids][]"]');
   await expect(scenes).toHaveCount(2);
@@ -46,19 +46,19 @@ test('W01-W03 expose validated policy, closed actions and persistent exact-base 
   }
   await expect(page.getByText(/Max microunits/)).toBeVisible();
   await expect(page.getByLabel('Trusted approver')).toHaveValue('owner');
-  await expect(page.getByText(/estimates do not become incurred cost/)).toBeVisible();
+  await expect(page.getByText(/Estimates are separate from actual charges/)).toBeVisible();
   await page.locator('select[name="policy[route_choice]"]').selectOption('registered_reviewer');
   await page.getByLabel('Registered route reviewer').selectOption('owner');
-  await page.getByRole('button', {name: 'Append validated policy snapshot'}).click();
-  await expect(page.getByText(/Policy snapshot updated/)).toBeVisible();
+  await page.getByRole('button', {name: 'Save Run settings'}).click();
+  await expect(page.getByText(/Run settings saved/)).toBeVisible();
 
   const presetName = `Browser preset ${runId}`;
   await page.getByLabel('Preset name').fill(presetName);
   await page.getByRole('button', {name: 'Save current policy'}).click();
-  await expect(page.getByText(`Saved host preset ${presetName} v1.`)).toBeVisible();
+  await expect(page.getByText(`Saved preset ${presetName} v1.`)).toBeVisible();
   await page.getByLabel('Preset name').fill(presetName);
   await page.getByRole('button', {name: 'Save current policy'}).click();
-  await expect(page.getByText(`Saved host preset ${presetName} v2.`)).toBeVisible();
+  await expect(page.getByText(`Saved preset ${presetName} v2.`)).toBeVisible();
 
   const investigate = page.locator('.action-card').filter({hasText: 'Investigate'});
   await expect(investigate).toContainText('unavailable through Run');
@@ -66,11 +66,11 @@ test('W01-W03 expose validated policy, closed actions and persistent exact-base 
 
   await selectTwoScenes(page, runId);
   await page.goto(`/runs/${runId}/setup`);
-  await expect(page.getByRole('heading', {name: 'Revision-bound workflow scope'})).toBeVisible();
+  await expect(page.getByRole('heading', {name: 'Selected screenplay material'})).toBeVisible();
   await page.getByLabel('Action').selectOption('pass');
   await page.getByLabel('Instruction').fill('Sharpen the selected dialogue without changing scope.');
   await page.getByRole('button', {name: 'Validate launch preview'}).click();
-  await expect(page.getByRole('heading', {name: 'Validated launch preview'})).toBeVisible();
+  await expect(page.getByRole('heading', {name: 'Review before starting'})).toBeVisible();
   await expect(page.getByText(/request_fingerprint/)).toBeVisible();
 });
 
@@ -86,7 +86,7 @@ test('W05 lifecycle buttons reflect durable permitted states and no restart surf
   await page.reload();
   await expect(page.getByText(/Run is paused; resume is the supported continuation/)).toBeVisible();
   await page.getByRole('button', {name: 'Resume'}).click();
-  await page.getByLabel('Confirm permanent stop and fencing').check();
+  await page.getByLabel('Confirm permanent stop').check();
   await page.getByRole('button', {name: 'Stop'}).click();
   await expect(page.getByText(/restart-from-stage is not supported/)).toBeVisible();
   await expect(page.getByRole('button', {name: 'Ensure worker is running'})).toBeDisabled();
@@ -112,7 +112,7 @@ test('W06-W07 supported export options, finite multi-launch, partial-safe identi
   await expect(page.getByRole('heading', {name: 'Runs'})).toBeVisible();
   expect(await page.locator('.run-registry tbody tr').count()).toBeLessThanOrEqual(50);
   for (const href of created) await expect(page.locator(`.run-registry a[href="${href}"]`)).toBeVisible();
-  await expect(page.getByRole('button', {name: 'Compare persisted facts'})).toBeVisible();
+  await expect(page.getByRole('button', {name: 'Compare results'})).toBeVisible();
 
   await page.goto(`/runs/${runId}/exports`);
   await expect(page.getByText(/Optional formats are only PDF and table-read/)).toBeVisible();
@@ -128,7 +128,7 @@ test('W04-W08 decision binding and notification resynchronize from persisted sta
   await page.goto(`/runs/${runId}/decisions`);
 
   await expect(page.getByText(/decision_required/)).toBeVisible({timeout: 60_000});
-  await expect(page.getByRole('heading', {name: 'Exact decision / approval binding'}).first()).toBeVisible();
+  await expect(page.getByRole('heading', {name: 'Version details for this decision'}).first()).toBeVisible();
   await expect(page.getByText(/Intelligence lineage/).first()).toBeVisible();
   const unread = page.getByText(/Session notifications · [1-9][0-9]* unread/);
   await expect(unread).toBeVisible();

@@ -15,7 +15,7 @@ defmodule FountWeb.Phase04ViewerIntegrationTest do
 
     base_revision = get_in(run, ["plan", "base_revision_id"])
     assert {:ok, _view, html} = live(conn, "/runs/#{run["id"]}/viewer")
-    assert html =~ "Read-only screenplay workspace"
+    assert html =~ "Screenplay reader"
     assert html =~ base_revision
     assert html =~ "Run base"
     assert html =~ "No Run-bound candidate is currently available"

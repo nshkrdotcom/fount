@@ -162,7 +162,7 @@ defmodule FountWeb.EditorLive do
             {:noreply,
              socket
              |> assign(:draft, draft)
-             |> assign(:notice, "Candidate #{candidate.id} saved. Canon is unchanged.")
+             |> assign(:notice, "Candidate #{candidate.id} saved. The approved screenplay is unchanged.")
              |> assign(:error, nil)
              |> assign(:save_state, "candidate-saved")}
 
@@ -198,7 +198,7 @@ defmodule FountWeb.EditorLive do
              |> assign(:draft, updated)
              |> assign(
                :notice,
-               "Exact candidate approval accepted; canonical head advanced. Open a new draft to continue editing."
+               "Revision approved and saved as the current screenplay. Open a new draft to continue editing."
              )
              |> assign(:error, nil)
              |> assign(:save_state, "accepted")}
@@ -232,7 +232,7 @@ defmodule FountWeb.EditorLive do
              socket
              |> put_flash(
                :info,
-               "AI assistance started through the durable Run path; canon remains unchanged."
+               "AI assistance started. The approved screenplay is unchanged."
              )
              |> push_navigate(to: ~p"/runs/#{result.run["id"]}/timeline")}
 
@@ -316,7 +316,7 @@ defmodule FountWeb.EditorLive do
          |> assign(:last_valid, if(preview.valid?, do: preview, else: socket.assigns.last_valid))
          |> assign(:dirty, false)
          |> assign(:conflict, nil)
-         |> assign(:notice, "Draft rebound to the current accepted base. Canon was not changed.")}
+         |> assign(:notice, "Draft rebound to the current accepted base. The approved screenplay was not changed.")}
 
       {:error, reason} ->
         {:noreply, assign(socket, :error, human_error(reason))}
@@ -337,7 +337,7 @@ defmodule FountWeb.EditorLive do
          socket
          |> assign(
            :notice,
-           "History restored into a new working draft; accepted canon was not rewound."
+           "History restored into a new draft. The approved screenplay is unchanged."
          )
          |> push_event("authoring:replace_source", %{
            source: draft["raw_source"],
@@ -401,7 +401,7 @@ defmodule FountWeb.EditorLive do
        |> assign(:history, history(socket.assigns.current_owner, draft["id"]))
        |> assign(
          :notice,
-         "Validated structural edit saved to the working draft; canon unchanged."
+         "Structure changes saved to the draft. The approved screenplay is unchanged."
        )
        |> assign(:error, nil)
        |> push_event("authoring:replace_source", %{
@@ -773,7 +773,7 @@ defmodule FountWeb.EditorLive do
     do: "The saved candidate no longer matches this draft version."
 
   defp human_error(:draft_limit_reached),
-    do: "The bounded recovery-draft limit is reached. Discard an older draft first."
+    do: "Draft history is full. Discard an older draft first."
 
   defp human_error(reason), do: "Authoring operation failed: #{inspect(reason)}"
 
@@ -812,7 +812,7 @@ defmodule FountWeb.EditorLive do
 
       <header class="workspace-header">
         <div>
-          <p class="eyebrow">Interactive Fountain authoring</p>
+          <p class="eyebrow">Screenplay editor</p>
           <h1>{@access["title"]}</h1>
           <p>
             Accepted base <code>{@draft["base_revision_id"]}</code>
@@ -829,9 +829,9 @@ defmodule FountWeb.EditorLive do
       <p class={"analysis-draft-marker #{if @dirty, do: "is-stale", else: "is-saved"}"} role="status">
         <strong>Analysis evidence:</strong>
         <%= if @dirty do %>
-          unsaved local draft is unanalyzed; saved packets remain bound only to their recorded revisions.
+          This unsaved draft has not been analyzed. Previous analysis applies to its original screenplay version.
         <% else %>
-          saved evidence remains revision-bound; inspect it in Intelligence before drawing conclusions.
+          Saved analysis applies to the version it examined. Open Intelligence to review it.
         <% end %>
       </p>
 
@@ -990,7 +990,7 @@ defmodule FountWeb.EditorLive do
         <FountWeb.CoreComponents.card>
           <h2>Recovery history</h2>
           <p>
-            History is bounded. Restoring creates a new working draft; it never rewinds accepted canon.
+            Recent drafts are kept in history. Restoring one creates a new draft and leaves the approved screenplay unchanged.
           </p>
           <ol class="draft-history">
             <li :for={item <- @history}>
@@ -1004,7 +1004,7 @@ defmodule FountWeb.EditorLive do
       </section>
 
       <p class="scope-note">
-        Candidate creation never advances canon. Canon changes only through the separate exact typed approval action above.
+        Saving a proposed revision leaves the approved screenplay unchanged. To replace it, use the approval action above.
       </p>
     </main>
     """

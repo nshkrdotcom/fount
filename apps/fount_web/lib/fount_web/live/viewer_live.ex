@@ -218,9 +218,9 @@ defmodule FountWeb.ViewerLive do
   defp revision_kind(%{kind: :base}), do: "Run base"
 
   defp revision_kind(%{kind: :candidate}),
-    do: "Candidate — canon unchanged unless separately accepted"
+    do: "Candidate — approval required to change the screenplay"
 
-  defp revision_kind(%{kind: :accepted}), do: "Accepted canonical revision"
+  defp revision_kind(%{kind: :accepted}), do: "Approved screenplay revision"
 
   defp revision_kind(%{kind: :evidence}),
     do: "Read-only analysis evidence revision — may be stale relative to current work"
@@ -258,7 +258,7 @@ defmodule FountWeb.ViewerLive do
 
       <header class="workspace-header">
         <div>
-          <p class="eyebrow">Read-only screenplay workspace</p>
+          <p class="eyebrow">Screenplay reader</p>
           <h1>{@access["title"]}</h1>
           <p>Run <code>{@run_id}</code> · screenplay <code>{@access["screenplay_id"]}</code></p>
         </div>
@@ -311,7 +311,7 @@ defmodule FountWeb.ViewerLive do
             <p>Duration estimate: <strong>{@index.estimates.duration.label}</strong>.</p>
           </FountWeb.CoreComponents.card>
           <p :if={!Enum.any?(@workspace.options, &(&1.kind == :candidate))} class="scope-note">
-            No Run-bound candidate is currently available; the viewer remains on persisted base/accepted identities only.
+            No proposed revision is available for this Run. You can read the saved original or approved screenplay.
           </p>
           <FountWeb.CoreComponents.button
             id="revision-identity-help"
@@ -343,13 +343,13 @@ defmodule FountWeb.ViewerLive do
         >
           <div class="workflow-scope-head">
             <div>
-              <p class="eyebrow">Phase 07 · Run input</p>
-              <h2 id="workflow-scope-title">Revision-bound workflow scope</h2>
+              <p class="eyebrow">Choose material</p>
+              <h2 id="workflow-scope-title">Selected screenplay material</h2>
             </div>
             <code>{get_in(@run, ["plan", "base_revision_id"])}</code>
           </div>
           <p>
-            Scope is validated against this exact owner-authorized Run base. Page estimates are display-only and never become durable target IDs. A changed or deleted target must be reselected.
+            Selections refer to this Run’s screenplay version. Page numbers are estimates. If selected material changes or is deleted, select it again.
           </p>
           <p :if={@scope_notice} role="status">{@scope_notice}</p>
           <form phx-submit="save_workflow_scope" class="scope-picker">

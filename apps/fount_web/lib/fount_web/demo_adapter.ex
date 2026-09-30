@@ -157,11 +157,14 @@ defmodule FountWeb.DemoAdapter do
 
     groups =
       case journey do
-        "reveal" -> reveal_groups(prompt, repair?)
+        "reveal" ->
+          reveal_groups(prompt, repair?)
+
         journey when journey in ["dialogue", "analysis"] ->
           [group("demo-change", "Dialogue change", [], dialogue_ops(prompt))]
 
-        _ -> [group("demo-change", "Opening change", [], opening_ops())]
+        _ ->
+          [group("demo-change", "Opening change", [], opening_ops())]
       end
 
     %{

@@ -148,7 +148,9 @@ defmodule FountWeb.ProjectLive do
                 Reveal move → protected beat repair → human exact approval
               </option>
               <option value="dialogue">Selected-scene dialogue → configured service approval</option>
-              <option value="analysis">Selected-scene dialogue → Observe-backed candidate (canon unchanged)</option>
+              <option value="analysis">
+                Selected-scene dialogue → Observe-backed candidate (canon unchanged)
+              </option>
             </select>
           </label>
           <label>

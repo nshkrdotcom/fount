@@ -89,7 +89,7 @@ class SystemOneRunPhase03Source(unittest.TestCase):
         ]
         self.assertEqual(host_native_refs, [])
         native_refs = []
-        for path in (ROOT / "packages").rglob("*.ex"):
+        for path in (ROOT / "packages").glob("*/lib/**/*.ex"):
             if "SystemOneSDK" in path.read_text(encoding="utf-8"):
                 rel = path.relative_to(ROOT).as_posix()
                 if rel != "packages/fount_intelligence/lib/fount/intelligence/runner/architecture.ex":

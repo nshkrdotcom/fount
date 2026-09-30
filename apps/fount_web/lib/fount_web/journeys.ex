@@ -42,67 +42,7 @@ defmodule FountWeb.Journeys do
     service = FountWeb.Actors.principal(:service)
 
     {workflow, selection, instruction, protected, completion, approver} =
-      case journey do
-        "opening" ->
-          {"develop", %{"whole_screenplay" => true},
-           "JOURNEY:opening Open on a visible choice that creates an immediate consequence.", [],
-           "candidate", nil}
-
-        "reveal" ->
-          protected_element =
-            root.ir.elements
-            |> Enum.find(fn element ->
-              element.type == :action and String.contains?(element.text, "departure board")
-            end)
-            |> then(
-              &(&1 || Enum.find(root.ir.elements, fn element -> element.type == :action end))
-            )
-
-          scene = Query.scene_for(root, protected_element.id)
-
-          late_action =
-            Enum.find(root.ir.elements, fn element ->
-              element.type == :action and String.contains?(element.text, "hands flat")
-            end)
-
-          marker =
-            "JOURNEY:reveal TARGET_PROTECTED:#{protected_element.id} TARGET_LATE_ACTION:#{late_action.id} AFTER_SCENE:#{scene.id}"
-
-          protected = [%{"element_id" => protected_element.id, "text" => protected_element.text}]
-
-          {"propagate", %{"whole_screenplay" => true},
-           marker <>
-             " Move the theft revelation late while preserving the train-platform beat and repair its consequence.",
-           protected, "accept", Principal.to_map(owner)}
-
-        "dialogue" ->
-          dialogue =
-            Enum.find(root.ir.elements, fn element ->
-              element.type == :dialogue and String.contains?(element.text, "didn't miss")
-            end)
-
-          scene = Query.scene_for(root, dialogue.id)
-          marker = "JOURNEY:dialogue TARGET_DIALOGUE:#{dialogue.id}"
-
-          {"pass", %{"targets" => [%{"kind" => "scene", "id" => scene.id}]},
-           marker <>
-             " Sharpen only the selected scene's dialogue; preserve out-of-scope action and protected lines.",
-           [], "accept", Principal.to_map(service)}
-
-        "analysis" ->
-          dialogue =
-            Enum.find(root.ir.elements, fn element ->
-              element.type == :dialogue and String.contains?(element.text, "didn't miss")
-            end)
-
-          scene = Query.scene_for(root, dialogue.id)
-          marker = "JOURNEY:analysis TARGET_DIALOGUE:#{dialogue.id}"
-
-          {"pass", %{"targets" => [%{"kind" => "scene", "id" => scene.id}]},
-           marker <>
-             " Revise the selected dialogue while exercising prewrite and revision semantic analysis.",
-           [], "candidate", nil}
-      end
+      journey_configuration(root, journey, owner, service)
 
     policy = %{
       "gates" => %{
@@ -138,6 +78,69 @@ defmodule FountWeb.Journeys do
     }
 
     %{workflow: workflow, request: request, protected_material: protected, policy: policy}
+  end
+
+  defp journey_configuration(root, journey, owner, service) do
+    case journey do
+      "opening" ->
+        {"develop", %{"whole_screenplay" => true},
+         "JOURNEY:opening Open on a visible choice that creates an immediate consequence.", [],
+         "candidate", nil}
+
+      "reveal" ->
+        protected_element = protected_reveal_element(root)
+
+        scene = Query.scene_for(root, protected_element.id)
+
+        late_action =
+          Enum.find(root.ir.elements, fn element ->
+            element.type == :action and String.contains?(element.text, "hands flat")
+          end)
+
+        marker =
+          "JOURNEY:reveal TARGET_PROTECTED:#{protected_element.id} TARGET_LATE_ACTION:#{late_action.id} AFTER_SCENE:#{scene.id}"
+
+        protected = [%{"element_id" => protected_element.id, "text" => protected_element.text}]
+
+        {"propagate", %{"whole_screenplay" => true},
+         marker <>
+           " Move the theft revelation late while preserving the train-platform beat and repair its consequence.",
+         protected, "accept", Principal.to_map(owner)}
+
+      "dialogue" ->
+        dialogue =
+          Enum.find(root.ir.elements, fn element ->
+            element.type == :dialogue and String.contains?(element.text, "didn't miss")
+          end)
+
+        scene = Query.scene_for(root, dialogue.id)
+        marker = "JOURNEY:dialogue TARGET_DIALOGUE:#{dialogue.id}"
+
+        {"pass", %{"targets" => [%{"kind" => "scene", "id" => scene.id}]},
+         marker <>
+           " Sharpen only the selected scene's dialogue; preserve out-of-scope action and protected lines.",
+         [], "accept", Principal.to_map(service)}
+
+      "analysis" ->
+        dialogue =
+          Enum.find(root.ir.elements, fn element ->
+            element.type == :dialogue and String.contains?(element.text, "didn't miss")
+          end)
+
+        scene = Query.scene_for(root, dialogue.id)
+        marker = "JOURNEY:analysis TARGET_DIALOGUE:#{dialogue.id}"
+
+        {"pass", %{"targets" => [%{"kind" => "scene", "id" => scene.id}]},
+         marker <>
+           " Revise the selected dialogue while exercising prewrite and revision semantic analysis.",
+         [], "candidate", nil}
+    end
+  end
+
+  defp protected_reveal_element(root) do
+    Enum.find(root.ir.elements, fn element ->
+      element.type == :action and String.contains?(element.text, "departure board")
+    end) || Enum.find(root.ir.elements, &(&1.type == :action))
   end
 
   defp options("develop"), do: %{"placement" => %{"kind" => "start"}}

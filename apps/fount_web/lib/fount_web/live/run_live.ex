@@ -241,8 +241,7 @@ defmodule FountWeb.RunLive do
         checks: checks,
         advisory_checks: Enum.filter(checks, &(&1["severity"] == "advisory")),
         required_run_checks: Enum.filter(checks, &(&1["severity"] == "required")),
-        other_checks:
-          Enum.reject(checks, &(&1["severity"] in ["advisory", "required"])),
+        other_checks: Enum.reject(checks, &(&1["severity"] in ["advisory", "required"])),
         pre_analysis: analysis.writer,
         revision_analysis: analysis.revision,
         provenance: candidate["provenance"] || %{},
@@ -311,15 +310,13 @@ defmodule FountWeb.RunLive do
         |> Enum.reverse()
         |> Enum.find(&(&1["stage"] in stages))
 
-      cond do
-        is_map(step) and step["status"] in ["failed", "error"] ->
-          %{
-            "status" => "failed",
-            "reason" => step["error_category"] || "stage_failed_before_analysis_summary"
-          }
-
-        true ->
-          %{"status" => "not_run", "reason" => "analysis_not_recorded"}
+      if is_map(step) and step["status"] in ["failed", "error"] do
+        %{
+          "status" => "failed",
+          "reason" => step["error_category"] || "stage_failed_before_analysis_summary"
+        }
+      else
+        %{"status" => "not_run", "reason" => "analysis_not_recorded"}
       end
     end
   end

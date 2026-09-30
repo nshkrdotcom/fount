@@ -2,7 +2,9 @@ import Config
 
 required_nonblank = fn name ->
   case System.get_env(name) do
-    nil -> raise "#{name} is required for the configured Fount Observe provider"
+    nil ->
+      raise "#{name} is required for the configured Fount Observe provider"
+
     value ->
       case String.trim(value) do
         "" -> raise "#{name} must be nonblank for the configured Fount Observe provider"
@@ -13,7 +15,9 @@ end
 
 optional_nonblank = fn name ->
   case System.get_env(name) do
-    nil -> nil
+    nil ->
+      nil
+
     value ->
       case String.trim(value) do
         "" -> raise "#{name} is set but blank; unset it or provide a nonblank value"
@@ -53,9 +57,11 @@ observe_mode =
   )
   |> String.trim()
 
+runtime_env = config_env()
+
 observe_config =
   case observe_mode do
-    "sandbox" when config_env() != :prod ->
+    "sandbox" when runtime_env != :prod ->
       [mode: :sandbox]
 
     "sandbox" ->
@@ -83,7 +89,12 @@ observe_config =
             [endpoint_kind: :typesafe, api_key: api_key, model: model]
             |> then(fn opts ->
               if base_url,
-                do: Keyword.put(opts, :base_url, validate_base_url.(base_url, "SYSTEM_ONE_BASE_URL")),
+                do:
+                  Keyword.put(
+                    opts,
+                    :base_url,
+                    validate_base_url.(base_url, "SYSTEM_ONE_BASE_URL")
+                  ),
                 else: opts
             end)
 
@@ -95,7 +106,9 @@ observe_config =
             api_key = optional_nonblank.("SYSTEM_ONE_API_KEY")
 
             [endpoint_kind: :endpoint, base_url: base_url, model: model]
-            |> then(fn opts -> if api_key, do: Keyword.put(opts, :api_key, api_key), else: opts end)
+            |> then(fn opts ->
+              if api_key, do: Keyword.put(opts, :api_key, api_key), else: opts
+            end)
         end
 
       [mode: :system_one, provider_opts: provider_opts]

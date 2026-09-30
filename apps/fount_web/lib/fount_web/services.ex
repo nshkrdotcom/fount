@@ -49,8 +49,12 @@ defmodule FountWeb.Services do
   @doc "Returns a secret-free UI summary of the analytical-host configuration."
   def analysis_service_summary do
     case analysis_mode() do
-      :sandbox -> %{"mode" => "sandbox", "label" => "Deterministic Sandbox", "configured" => true}
-      :system_one -> %{"mode" => "system_one", "label" => "System One", "configured" => true}
+      :sandbox ->
+        %{"mode" => "sandbox", "label" => "Deterministic Sandbox", "configured" => true}
+
+      :system_one ->
+        %{"mode" => "system_one", "label" => "System One", "configured" => true}
+
       :compatibility ->
         %{
           "mode" => "compatibility",
@@ -87,17 +91,23 @@ defmodule FountWeb.Services do
         ]
         |> maybe_put_observe(observe)
 
-      case get_in(run, ["policy", "policy", "approver", "type"]) do
-        type when type in ["agent", "service"] ->
-          kind = String.to_existing_atom(type)
-
-          with {:ok, context} <- FountWeb.Actors.automated_context(kind, owner_id, screenplay_id) do
-            {:ok, base ++ [approval_context: context, approval_callback: &automated_review/1]}
-          end
-
-        _ ->
-          {:ok, base}
+      with {:ok, approval_opts} <- approval_opts(owner_id, screenplay_id, run) do
+        {:ok, base ++ approval_opts}
       end
+    end
+  end
+
+  defp approval_opts(owner_id, screenplay_id, run) do
+    case get_in(run, ["policy", "policy", "approver", "type"]) do
+      type when type in ["agent", "service"] ->
+        kind = String.to_existing_atom(type)
+
+        with {:ok, context} <- FountWeb.Actors.automated_context(kind, owner_id, screenplay_id) do
+          {:ok, [approval_context: context, approval_callback: &automated_review/1]}
+        end
+
+      _ ->
+        {:ok, []}
     end
   end
 
@@ -106,18 +116,19 @@ defmodule FountWeb.Services do
 
   defp observe_config do
     case Application.fetch_env(:fount_web, :observe) do
-      {:ok, config} when is_list(config) ->
-        if Keyword.keyword?(config) do
-          case Keyword.get(config, :mode) do
-            mode when mode in [:sandbox, :system_one, :compatibility] -> {:ok, mode, config}
-            _ -> {:error, :invalid_mode}
-          end
-        else
-          {:error, :invalid_config}
-        end
+      {:ok, config} when is_list(config) -> validate_observe_config(config)
+      _ -> {:error, :missing_config}
+    end
+  end
 
-      _ ->
-        {:error, :missing_config}
+  defp validate_observe_config(config) do
+    if Keyword.keyword?(config) do
+      case Keyword.get(config, :mode) do
+        mode when mode in [:sandbox, :system_one, :compatibility] -> {:ok, mode, config}
+        _ -> {:error, :invalid_mode}
+      end
+    else
+      {:error, :invalid_config}
     end
   end
 

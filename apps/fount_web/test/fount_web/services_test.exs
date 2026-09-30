@@ -1,5 +1,6 @@
 defmodule FountWeb.ServicesTest do
   use ExUnit.Case, async: false
+  alias Fount.Observe.Provider
 
   setup do
     original = Application.get_env(:fount_web, :observe)
@@ -27,7 +28,7 @@ defmodule FountWeb.ServicesTest do
     )
 
     assert {:ok, provider} = FountWeb.Services.observe_provider(Fount.ID.v4(), %{})
-    assert Fount.Observe.Provider.sensor_id(provider) == "system_one"
+    assert Provider.sensor_id(provider) == "system_one"
     refute inspect(provider) =~ secret
     assert FountWeb.Services.analysis_service_summary()["mode"] == "system_one"
   end

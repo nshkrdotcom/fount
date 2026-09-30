@@ -121,8 +121,8 @@ class PhaseFifteenSourceTests(unittest.TestCase):
     def test_dependency_boundaries_are_unchanged(self) -> None:
         mix = self.read("packages/fount_workshop/mix.exs")
         self.assertNotIn(":system_one_sdk", mix)
-        self.assertIn('{:agent_session_manager, "~> 0.17.1"}', mix)
-        self.assertIn('{:inference, "~> 0.5.0"}', mix)
+        self.assertIn('{:agent_session_manager, "~> 0.17.3"}', mix)
+        self.assertIn('{:inference, "~> 0.5.1"}', mix)
 
 
 if __name__ == "__main__":

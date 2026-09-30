@@ -30,12 +30,12 @@ defmodule FountRun.MixProject do
       workspace_dep(:fount, "~> 0.1.0", "../fount"),
       workspace_dep(:fount_workshop, "~> 0.1.0", "../fount_workshop"),
       {:jason, "~> 1.4.5"},
-      {:ecto_sql, "~> 3.13"},
-      {:postgrex, "~> 0.20"},
-      {:telemetry, "~> 1.0"},
-      {:ex_doc, "~> 0.40", only: :dev, runtime: false},
-      {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
-      {:dialyxir, "~> 1.4", only: :dev, runtime: false}
+      {:ecto_sql, "~> 3.14.0"},
+      {:postgrex, "~> 0.22.4"},
+      {:telemetry, "~> 1.4.2"},
+      {:ex_doc, "~> 0.40.4", only: :dev, runtime: false},
+      {:credo, "~> 1.7.19", only: [:dev, :test], runtime: false},
+      {:dialyxir, "~> 1.4.8", only: :dev, runtime: false}
     ]
   end
 

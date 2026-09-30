@@ -24,7 +24,7 @@ The Phase 1 source includes request/error contracts, source projections, a deter
 
 ## Build against the supplied SDK
 
-The inspected SDK API is 0.6.0. Availability on Hex was not verified. To test the supplied checkout, set `FOUNT_SYSTEM_ONE_SDK_PATH` to its `packages/system_one_sdk` directory before `mix deps.get`. Runtime QC must reconcile actual dependency resolution and regenerate lockfiles; no resolved lock is fabricated by this overlay.
+SystemOneSDK 0.6.0 is published on Hex and is the default dependency. For local SDK development, set `FOUNT_SYSTEM_ONE_SDK_PATH` to a checkout’s `packages/system_one_sdk` directory before `mix deps.get`. Package builds always use the Hex dependency.
 
 ## Verification status
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## Dependency refresh - 2026-09-29
+
+- Resolve published SystemOneSDK 0.6.0 and SystemOneContracts 0.1.0 from Hex.
+- Update external Hex dependency requirements to current stable releases, including Inference 0.5.1 and AgentSessionManager 0.17.3, and refresh each project lockfile.
+- Default the development launcher to the Hex SDK while retaining explicit local checkout overrides.
+- Update dependency boundary checks and declare Intelligence fixture files for warning-free test discovery.
+
 ## Phase 03 runtime QC repairs
 
 - Correct production config evaluation and extend host status, reload, and credential-canary coverage.

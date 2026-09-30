@@ -30,11 +30,11 @@ Run from the repository root:
 ./scripts/dev.sh --help   # commands and options
 ```
 
-`./scripts/dev.sh` (or `up`) combines setup and start. No environment exports are required. The launcher finds the sibling `system_one_sdk/packages/system_one_sdk` checkout automatically, selects development mode and deterministic Sandbox providers, and scopes its settings to child processes. If the SDK lives elsewhere, use `--sdk-path /path/to/package`. Use `--port 4050` or `--database-url 'ecto://user:password@localhost/fount_dev'` when your local connection differs. PostgreSQL must already be running; setup creates a missing database and migrates it without dropping/resetting it.
+`./scripts/dev.sh` (or `up`) combines setup and start. No environment exports are required. The launcher uses `system_one_sdk ~> 0.6.0` from Hex, selects development mode and deterministic Sandbox providers, and scopes its settings to child processes. For local SDK development, use `--sdk-path /path/to/package`. Use `--port 4050` or `--database-url 'ecto://user:password@localhost/fount_dev'` when your local connection differs. PostgreSQL must already be running; setup creates a missing database and migrates it without dropping/resetting it.
 
 Open `http://127.0.0.1:4000/login` with the local demo token `fount-demo-owner-token`. `setup` leaves the server stopped; `start` never daemonizes it. Development setup installs the pinned Workshop PDF renderer dependency through npm, but does not install system PDF utilities.
 
-The SDK release required by this workspace is not currently available from Hex. The script supplies the supported local path to all Mix commands; running bare Mix commands without that build setting will still attempt Hex. Dependency selection belongs to build configuration in Observe's `mix.exs`. All host runtime environment reads are centralized in `config/runtime.exs`; `dev.exs` and `test.exs` contain static defaults. Application modules receive configuration/services rather than reading or mutating the process environment.
+SystemOneSDK 0.6.0 and its contracts dependency are published on Hex. Both the launcher and bare Mix commands resolve the published SDK by default; an explicit `--sdk-path` or `FOUNT_SYSTEM_ONE_SDK_PATH` selects a local checkout. Dependency selection belongs to build configuration in Observe's `mix.exs`. All host runtime environment reads are centralized in `config/runtime.exs`; `dev.exs` and `test.exs` contain static defaults. Application modules receive configuration/services rather than reading or mutating the process environment.
 
 The Hex and browser dependency locks were resolved during Phase 06 runtime QC and are committed.
 

@@ -14,7 +14,7 @@ Usage: ./scripts/dev.sh [up|setup|start|help] [options]
 
 Options:
   --sdk-path PATH      System One SDK package directory containing mix.exs.
-                       Defaults to ../system_one_sdk/packages/system_one_sdk.
+                       Optional override; defaults to system_one_sdk from Hex.
   --database-url URL   PostgreSQL URL (default: local fount_dev, postgres/postgres).
   --port PORT         Local HTTP port (default: 4000).
 
@@ -37,7 +37,7 @@ fail() { printf 'Error: %s\nRun %s --help for usage.\n' "$1" "$0" >&2; exit 2; }
 root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)
 action=up
 if (($#)) && [[ $1 != -* ]]; then action=$1; shift; fi
-sdk_path=${FOUNT_SYSTEM_ONE_SDK_PATH:-"$root/../system_one_sdk/packages/system_one_sdk"}
+sdk_path=${FOUNT_SYSTEM_ONE_SDK_PATH:-}
 database_url=${FOUNT_DATABASE_URL:-ecto://postgres:postgres@localhost/fount_dev}
 port=${PORT:-4000}
 while (($#)); do
@@ -58,8 +58,10 @@ done
 case $action in help) help; exit 0 ;; setup|start|up) ;; *) fail "Unknown command: $action" ;; esac
 [[ $port =~ ^[0-9]{1,5}$ ]] || fail 'Port must be a number between 1 and 65535'
 ((10#$port >= 1 && 10#$port <= 65535)) || fail 'Port must be between 1 and 65535'
-[[ -f $sdk_path/mix.exs ]] || fail 'SDK package not found. Use --sdk-path PATH to select the directory containing mix.exs.'
-sdk_path=$(cd -- "$sdk_path" && pwd -P)
+if [[ -n $sdk_path ]]; then
+  [[ -f $sdk_path/mix.exs ]] || fail 'SDK package not found. Use --sdk-path PATH to select the directory containing mix.exs.'
+  sdk_path=$(cd -- "$sdk_path" && pwd -P)
+fi
 command -v mix >/dev/null || fail 'Elixir/Mix is missing from PATH. Install the project toolchain first.'
 if [[ $action != start ]]; then
   command -v npm >/dev/null || fail 'npm is missing from PATH. Install Node.js/npm for development setup.'
@@ -67,7 +69,12 @@ fi
 
 # Process-local build/runtime inputs. Never source this script into your shell.
 export MIX_ENV=dev FOUNT_OBSERVE_MODE=sandbox
-export FOUNT_SYSTEM_ONE_SDK_PATH="$sdk_path" FOUNT_DATABASE_URL="$database_url" PORT="$port"
+export FOUNT_DATABASE_URL="$database_url" PORT="$port"
+if [[ -n $sdk_path ]]; then
+  export FOUNT_SYSTEM_ONE_SDK_PATH="$sdk_path"
+else
+  unset FOUNT_SYSTEM_ONE_SDK_PATH
+fi
 unset FOUNT_PACKAGE_BUILD
 app="$root/apps/fount_web"
 cd -- "$app"
@@ -85,7 +92,7 @@ run() {
     exit "$result"
   fi
 }
-printf 'Fount development | SDK: %s | port: %s | Sandbox analysis\n' "$sdk_path" "$port"
+printf 'Fount development | SDK: %s | port: %s | Sandbox analysis\n' "${sdk_path:-Hex system_one_sdk ~> 0.6.0}" "$port"
 if [[ $action != start ]]; then
   run 'Fetching Elixir dependencies' mix deps.get
   run 'Creating development database if missing' mix ecto.create -r Fount.Repo

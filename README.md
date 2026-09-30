@@ -11,7 +11,7 @@
 
 # Fount
 
-For the local Phoenix website, run `./scripts/dev.sh setup`, then `./scripts/dev.sh start`. Use `./scripts/dev.sh --help` for SDK, database, and port options. The launcher discovers the local SDK and handles development settings without shell exports. See [FountWeb](apps/fount_web/README.md).
+For the local Phoenix website, run `./scripts/dev.sh setup`, then `./scripts/dev.sh start`. Use `./scripts/dev.sh --help` for SDK, database, and port options. The launcher uses the published SDK from Hex and handles development settings without shell exports. Use `--sdk-path` for an explicit local SDK override. See [FountWeb](apps/fount_web/README.md).
 
 **A screenplay revision workshop for writers who want to experiment aggressively without losing control of the draft.**
 

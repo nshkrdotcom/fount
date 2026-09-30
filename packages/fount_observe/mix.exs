@@ -27,10 +27,10 @@ defmodule Fount.Observe.MixProject do
     [
       workspace_dep(:fount, "~> 0.1.0", "../fount"),
       system_one_dependency(),
-      {:jason, "~> 1.4"},
-      {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
-      {:dialyxir, "~> 1.4", only: :dev, runtime: false},
-      {:ex_doc, "~> 0.40", only: :dev, runtime: false}
+      {:jason, "~> 1.4.5"},
+      {:credo, "~> 1.7.19", only: [:dev, :test], runtime: false},
+      {:dialyxir, "~> 1.4.8", only: :dev, runtime: false},
+      {:ex_doc, "~> 0.40.4", only: :dev, runtime: false}
     ]
   end
 

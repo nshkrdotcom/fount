@@ -119,7 +119,7 @@ def audit() -> dict:
         "packages/fount/mix.exs": {":fount_observe": False, ":fount_intelligence": False, ":fount_workshop": False, ":fount_run": False, ":system_one_sdk": False, ":inference": False},
         "packages/fount_observe/mix.exs": {"system_one_dependency()": True, "workspace_dep(:fount": True, ":inference": False, ":fount_intelligence": False, ":fount_workshop": False},
         "packages/fount_intelligence/mix.exs": {"workspace_dep(:fount": True, "workspace_dep(:fount_observe": True, ":inference": False, ":fount_workshop": False},
-        "packages/fount_workshop/mix.exs": {"workspace_dep(:fount": True, "workspace_dep(:fount_intelligence": True, '{:inference, "~> 0.5.0"}': True, '{:agent_session_manager, "~> 0.17.1"}': True, ":system_one_sdk": False, ":fount_observe": False, ":fount_run": False},
+        "packages/fount_workshop/mix.exs": {"workspace_dep(:fount": True, "workspace_dep(:fount_intelligence": True, '{:inference, "~> 0.5.1"}': True, '{:agent_session_manager, "~> 0.17.3"}': True, ":system_one_sdk": False, ":fount_observe": False, ":fount_run": False},
         "packages/fount_run/mix.exs": {"workspace_dep(:fount": True, "workspace_dep(:fount_workshop": True, ":system_one_sdk": False, ":inference": False, ":agent_session_manager": False},
     }
     mix_failures = []

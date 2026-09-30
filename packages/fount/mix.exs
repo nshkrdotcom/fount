@@ -29,13 +29,13 @@ defmodule Fount.MixProject do
   defp deps do
     [
       {:jason, "~> 1.4.5"},
-      {:saxy, "~> 1.6"},
-      {:ecto_sql, "~> 3.13"},
-      {:postgrex, "~> 0.20"},
-      {:stream_data, "~> 1.4", only: :test},
-      {:ex_doc, "~> 0.40", only: :dev, runtime: false},
-      {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
-      {:dialyxir, "~> 1.4", only: :dev, runtime: false}
+      {:saxy, "~> 1.6.1"},
+      {:ecto_sql, "~> 3.14.0"},
+      {:postgrex, "~> 0.22.4"},
+      {:stream_data, "~> 1.4.0", only: :test},
+      {:ex_doc, "~> 0.40.4", only: :dev, runtime: false},
+      {:credo, "~> 1.7.19", only: [:dev, :test], runtime: false},
+      {:dialyxir, "~> 1.4.8", only: :dev, runtime: false}
     ]
   end
 

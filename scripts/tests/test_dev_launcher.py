@@ -53,13 +53,13 @@ if sys.argv[1:]==['deps.get'] and os.environ.get('DEV_TEST_FAIL'): sys.exit(7)
             self.assertIn(word, p.stdout)
         self.assertFalse(self.log.exists())
 
-    def test_setup_discovers_sdk_and_creates_before_migrating(self):
+    def test_setup_uses_hex_sdk_and_creates_before_migrating(self):
         p = self.run_script('setup')
         self.assertEqual(p.returncode, 0, p.stderr)
         r = self.records()
         self.assertEqual([x['args'] for x in r], [['deps.get'], ['ecto.create', '-r', 'Fount.Repo'], ['fount_web.migrate'], ['ci'], ['assets.setup'], ['assets.build']])
         self.assertTrue(all(x['mode']=='dev' and x['observe']=='sandbox' and x['package'] is None for x in r))
-        self.assertTrue(all(x['sdk']==str(self.root/'system_one_sdk/packages/system_one_sdk') for x in r))
+        self.assertTrue(all(x['sdk'] is None for x in r))
         self.assertFalse(any(x['args']==['phx.server'] for x in r))
 
     def test_up_starts_foreground_and_accepts_options(self):
@@ -67,6 +67,18 @@ if sys.argv[1:]==['deps.get'] and os.environ.get('DEV_TEST_FAIL'): sys.exit(7)
         self.assertEqual(p.returncode, 0, p.stderr)
         self.assertEqual(self.records()[-1]['args'], ['phx.server'])
         self.assertTrue(all(x['port']=='4057' and x['database']=='ecto://localhost/custom_dev' for x in self.records()))
+
+    def test_explicit_sdk_override_is_passed_to_mix(self):
+        sdk = self.root / 'system_one_sdk/packages/system_one_sdk'
+        p = self.run_script('setup', '--sdk-path', str(sdk))
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertTrue(all(x['sdk'] == str(sdk) for x in self.records()))
+
+    def test_setup_does_not_require_a_sibling_checkout(self):
+        shutil.rmtree(self.root / 'system_one_sdk')
+        p = self.run_script('setup')
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertTrue(all(x['sdk'] is None for x in self.records()))
 
     def test_bad_sdk_fails_before_mix(self):
         p = self.run_script('setup', '--sdk-path', str(self.root/'missing'))

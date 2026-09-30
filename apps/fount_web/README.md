@@ -89,4 +89,14 @@ Project creation also has an authenticated, CSRF-protected HTTP POST path, so an
 
 The viewer uses reusable `FountWeb.CoreComponents`, a pure HEEx screenplay renderer, the existing deterministic Core character/dialogue/location analyzers, stable scene anchors, and `Fount.Screenplay.diff/2`. The existing review page reuses the same diff component without changing its approval bindings. CSS remains the existing plain asset pipeline and includes light/dark, narrow-layout and reduced-motion behavior. Any page or duration number is explicitly labeled as a derived reading approximation rather than screenplay-layout truth.
 
-JavaScript is progressive enhancement for scene focus/scroll, keyboard navigation and dialog focus containment. Ordinary viewer links and revision selection are server-rendered GET navigation; no provider call is needed to inspect the selected revision. Browser and PostgreSQL-backed acceptance remain required runtime QC after applying the offline overlay.
+JavaScript is progressive enhancement for scene focus/scroll, keyboard navigation and dialog focus containment. Ordinary viewer links and revision selection are server-rendered GET navigation; no provider call is needed to inspect the selected revision. Browser and PostgreSQL-backed acceptance are executed by the automated runtime QC runner; its source identity and command results anchor the docset runtime report.
+
+## Automated UI runtime QC
+
+From the repository root, run:
+
+```bash
+python3 scripts/run_runtime_qc.py --phase 4 --output /tmp/fount-phase04-qc-new
+```
+
+The output directory must be new and outside the repository. The runner executes focused/complete host tests, the maintained browser suite, the workspace ladder and CI, affected package suites, five independent Hex builds and production assets. It uses deterministic Sandbox providers and separate ExUnit/browser PostgreSQL databases, creates missing databases without dropping existing data, and migrates Core → Run → host. Set `FOUNT_DATABASE_URL` and `FOUNT_BROWSER_DATABASE_URL` to distinct local test databases when overriding defaults. It records exact commands, exit codes, durations and source identities in `results.json`, with numbered logs. Any failed command or source change makes the run fail. The runtime agent owns diagnosis, repairs and complete final reruns; there is no human engineering review checkpoint. Phase 05–08 use their own focused suites and browser journeys with the same runner.

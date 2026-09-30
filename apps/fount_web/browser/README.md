@@ -9,3 +9,5 @@ The H03-H05 journey creates a candidate-only selected-scene revision and asserts
 ## Phase 04 viewer scenarios
 
 `browser/tests/phase04_viewer.spec.mjs` extends the maintained harness with the read-only Phase 04 workspace: escaped canonical IR/title/dual-dialogue rendering, analyzer-backed indices, stable scene anchors, dialog focus/Escape behavior, narrow/dark/reduced-motion layouts, Run-bound candidate/accepted revision selection, structural diff presentation, stale identity fallback, reload/reconnect persistence and owner isolation. These scenarios are runtime gates and must be executed locally; the offline overlay does not certify them.
+
+For a complete automated phase cycle, use repository `scripts/run_runtime_qc.py --phase NN --output /absolute/new/qc-directory`. It supplies the browser harness a separate local database from ExUnit, while retaining both Phase 04 and existing Phase 06 browser files. Scene selection, reduced-motion scrolling, keyboard input isolation and repeated dialog lifecycle assertions execute in the Phase 04 file. The agent repairs failures and retries without a human review step.

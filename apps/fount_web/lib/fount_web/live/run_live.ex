@@ -91,6 +91,18 @@ defmodule FountWeb.RunLive do
   def handle_event("stop", _params, socket),
     do: {:noreply, assign(socket, :error, "Confirm stop before fencing the Run.")}
 
+  def handle_event("submit_decision", %{"decision" => %{"choice" => "stop"} = params}, socket)
+      when not is_map_key(params, "confirm_stop"),
+      do: {:noreply, assign(socket, :error, "Confirm stop before fencing the Run.")}
+
+  def handle_event(
+        "submit_decision",
+        %{"decision" => %{"choice" => "stop", "confirm_stop" => value}},
+        socket
+      )
+      when value not in ["true", "on", "1"],
+      do: {:noreply, assign(socket, :error, "Confirm stop before fencing the Run.")}
+
   def handle_event("submit_decision", %{"decision" => params}, socket) do
     response =
       %{
@@ -1110,6 +1122,18 @@ defmodule FountWeb.RunLive do
               name="decision[choice]"
               value={option["id"] || option["value"] || option["choice"]}
             />
+            <label
+              :if={(option["id"] || option["value"] || option["choice"]) == "stop"}
+              class="inline-check"
+            >
+              <input
+                type="checkbox"
+                name="decision[confirm_stop]"
+                value="true"
+                required
+                disabled={!@live_connected}
+              /> Confirm permanent stop and fencing
+            </label>
             <label :if={(option["id"] || option["value"]) == "replace"}>
               Replacement Fountain <textarea
                 name="decision[replacement_fountain]"

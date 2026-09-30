@@ -3,6 +3,24 @@ defmodule FountWeb.Phase07WorkflowManagementIntegrationTest do
 
   alias FountWeb.WorkflowManagement, as: Workflow
 
+  test "W05 decision stop also requires explicit confirmation before durable submission", %{
+    conn: conn
+  } do
+    assert {:ok, %{run: run}} = create_run("unconfirmed-decision-stop")
+    conn = FountWeb.ConnCase.login(conn)
+    assert {:ok, view, _html} = live(conn, "/runs/#{run["id"]}/decisions")
+
+    for params <- [%{"choice" => "stop"}, %{"choice" => "stop", "confirm_stop" => "false"}] do
+      assert render_click(view, "submit_decision", %{"decision" => params}) =~
+               "Confirm stop before fencing the Run."
+    end
+
+    {:ok, context} = FountWeb.Actors.owner_context("test-owner", run["screenplay_id"])
+    assert {:ok, current} = FountRun.get_run(Fount.Repo, run["id"], context)
+    assert current["status"] == "queued"
+    assert is_nil(current["stop_requested_at"])
+  end
+
   defp create_run(suffix) do
     FountWeb.Launch.create("test-owner", %{
       "title" => "Phase 07 #{suffix}",

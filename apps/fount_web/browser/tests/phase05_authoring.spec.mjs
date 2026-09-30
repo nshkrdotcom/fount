@@ -122,9 +122,8 @@ test('E04-E06 candidate save leaves canon unchanged, AI uses Run, and acceptance
   await expect(page.getByRole('heading', {name: /Prewrite Intelligence/i})).toBeVisible();
   await page.goto(`/runs/${aiRunId}/decisions`);
   await expect(page.getByRole('button', {name: 'Rebase candidate onto current canon'})).toBeVisible();
-  await page.goto(`/runs/${aiRunId}/timeline`);
   await page.getByLabel('Confirm permanent stop and fencing').check();
-  await page.getByRole('button', {name: 'Stop', exact: true}).click();
+  await page.getByRole('button', {name: 'Stop this run'}).click();
   await expect(page.locator('p.status')).toContainText('stopped');
   await page.goto(`/runs/${runId}/viewer`);
   await expect(page.locator('.screenplay')).not.toContainText('blue departure board');

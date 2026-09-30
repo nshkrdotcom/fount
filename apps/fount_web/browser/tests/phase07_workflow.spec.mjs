@@ -35,6 +35,8 @@ async function selectTwoScenes(page, runId) {
   await expect(page.getByText(/Workflow scope saved against the exact Run base revision/)).toBeVisible();
   await page.reload();
   await expect(page.getByLabel('Selected workflow scope')).toContainText('fingerprint');
+  await expect(page.locator('input[name="scope[whole_screenplay]"]')).not.toBeChecked();
+  await expect(page.locator('input[name="scope[scene_ids][]"]:checked')).toHaveCount(2);
 }
 
 test('W01-W03 expose validated policy, closed actions and persistent exact-base visual scope', async ({page}) => {
@@ -87,11 +89,12 @@ test('W05 lifecycle buttons reflect durable permitted states and no restart surf
   await page.reload();
   await expect(page.getByText(/Run is paused; resume is the supported continuation/)).toBeVisible();
   await page.getByRole('button', {name: 'Resume'}).click();
+  await expect(page.getByRole('status')).toContainText('Resume recorded');
   await page.getByLabel('Confirm permanent stop').check();
   await page.getByRole('button', {name: 'Stop'}).click();
   await expect(page.getByText(/restart-from-stage is not supported/)).toBeVisible();
   await expect(page.getByRole('button', {name: 'Ensure worker is running'})).toBeDisabled();
-  await expect(page.getByText(/lock\/fencing version/)).toBeVisible();
+  await expect(page.getByText(/control version/)).toBeVisible();
 });
 
 test('W06-W07 supported export options, finite multi-launch, partial-safe identities and bounded registry are visible', async ({page}) => {
@@ -186,4 +189,33 @@ test('native intake retains edited journey and source across delayed LiveView co
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+\/setup$/);
   await expect(page.locator('textarea[name="plan[goal]"]')).toHaveValue('Move the reveal while preserving the protected train beat and approve exact checked pages');
   await context.close();
+});
+
+
+test('scene selection waits for connection and retains both scenes after reload', async ({page}) => {
+  await login(page);
+  const runId = await createRun(page, `scope-connect-${Date.now()}`);
+  let connect;
+  let hold = true;
+  await page.routeWebSocket('**/live/websocket**', socket => {
+    connect = () => socket.connectToServer();
+    if (!hold) connect();
+  });
+  await page.goto(`/runs/${runId}/viewer`);
+  const whole = page.locator('input[name="scope[whole_screenplay]"]');
+  await expect(whole).toBeDisabled();
+  await expect.poll(() => typeof connect).toBe('function');
+  connect();
+  await expect(whole).toBeEnabled();
+  await whole.uncheck();
+  const scenes = page.locator('input[name="scope[scene_ids][]"]');
+  await scenes.nth(0).check();
+  await scenes.nth(1).check();
+  await page.getByRole('button', {name: 'Save exact scope'}).click();
+  await expect(page.getByText(/Workflow scope saved/)).toBeVisible();
+  hold = false;
+  await page.reload();
+  await expect(whole).toBeEnabled();
+  await expect(whole).not.toBeChecked();
+  await expect(page.locator('input[name="scope[scene_ids][]"]:checked')).toHaveCount(2);
 });

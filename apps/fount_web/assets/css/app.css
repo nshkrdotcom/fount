@@ -593,3 +593,5 @@ tbody tr:hover { background: rgba(211,189,139,.025); }
 .ui-status--failed, .ui-status--error, .ui-status--stopped { color: var(--danger); }
 .ui-status--paused, .ui-status--partial { color: var(--warning); }
 .ui-status--complete, .ui-status--completed_candidate, .ui-status--completed_accepted, .ui-status--current { color: var(--success); }
+
+.live-form-controls { display: grid; gap: .3rem; border: 0; padding: 0; margin: 0; min-width: 0; }

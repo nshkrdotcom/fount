@@ -6,6 +6,7 @@ defmodule FountWeb.ViewerLive do
   @impl true
   def mount(%{"id" => run_id} = params, _session, socket) do
     owner = socket.assigns.current_owner
+    socket = assign(socket, :live_connected, connected?(socket))
 
     case FountWeb.Store.run_access(Fount.Repo, owner, run_id) do
       {:ok, access} ->
@@ -353,45 +354,47 @@ defmodule FountWeb.ViewerLive do
           </p>
           <p :if={@scope_notice} role="status">{@scope_notice}</p>
           <form phx-submit="save_workflow_scope" class="scope-picker">
-            <label class="scope-whole">
-              <input
-                type="checkbox"
-                name="scope[whole_screenplay]"
-                value="true"
-                checked={scope_whole?(@workflow_selection)}
-              /> Whole screenplay
-            </label>
-            <details open>
-              <summary>Scene targets ({length(@base_screenplay.ir.scenes)})</summary>
-              <div class="scope-target-grid">
-                <label :for={scene <- @base_screenplay.ir.scenes}>
-                  <input
-                    type="checkbox"
-                    name="scope[scene_ids][]"
-                    value={scene.id}
-                    checked={scope_target?(@workflow_selection, "scene", scene.id)}
-                  />
-                  <span>{scope_scene_label(@base_screenplay, scene)}</span>
-                  <code>{scene.id}</code>
-                </label>
-              </div>
-            </details>
-            <details>
-              <summary>Element targets ({length(@base_screenplay.ir.elements)})</summary>
-              <div class="scope-target-grid scope-elements">
-                <label :for={element <- @base_screenplay.ir.elements}>
-                  <input
-                    type="checkbox"
-                    name="scope[element_ids][]"
-                    value={element.id}
-                    checked={scope_target?(@workflow_selection, "element", element.id)}
-                  />
-                  <span>{element.type}: {String.slice(element.text || "", 0, 72)}</span>
-                  <code>{element.id}</code>
-                </label>
-              </div>
-            </details>
-            <FountWeb.CoreComponents.button type="submit">Save exact scope</FountWeb.CoreComponents.button>
+            <fieldset class="live-form-controls" disabled={!@live_connected}>
+              <label class="scope-whole">
+                <input
+                  type="checkbox"
+                  name="scope[whole_screenplay]"
+                  value="true"
+                  checked={scope_whole?(@workflow_selection)}
+                /> Whole screenplay
+              </label>
+              <details open>
+                <summary>Scene targets ({length(@base_screenplay.ir.scenes)})</summary>
+                <div class="scope-target-grid">
+                  <label :for={scene <- @base_screenplay.ir.scenes}>
+                    <input
+                      type="checkbox"
+                      name="scope[scene_ids][]"
+                      value={scene.id}
+                      checked={scope_target?(@workflow_selection, "scene", scene.id)}
+                    />
+                    <span>{scope_scene_label(@base_screenplay, scene)}</span>
+                    <code>{scene.id}</code>
+                  </label>
+                </div>
+              </details>
+              <details>
+                <summary>Element targets ({length(@base_screenplay.ir.elements)})</summary>
+                <div class="scope-target-grid scope-elements">
+                  <label :for={element <- @base_screenplay.ir.elements}>
+                    <input
+                      type="checkbox"
+                      name="scope[element_ids][]"
+                      value={element.id}
+                      checked={scope_target?(@workflow_selection, "element", element.id)}
+                    />
+                    <span>{element.type}: {String.slice(element.text || "", 0, 72)}</span>
+                    <code>{element.id}</code>
+                  </label>
+                </div>
+              </details>
+              <FountWeb.CoreComponents.button type="submit">Save exact scope</FountWeb.CoreComponents.button>
+            </fieldset>
           </form>
           <div :if={@workflow_selection} class="scope-preview" aria-label="Selected workflow scope">
             <strong>Selected scope</strong>

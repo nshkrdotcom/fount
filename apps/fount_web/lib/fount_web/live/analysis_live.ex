@@ -330,7 +330,7 @@ defmodule FountWeb.AnalysisLive do
                   <li :for={check <- @dashboard.checks.required_deterministic}>
                     <strong>{check["kind"] || check["constraint_id"]}</strong>
                     <span>{check["status"] || "unknown"}</span>
-                    <small>{check["message"] || "Persisted required check"}</small>
+                    <small>{check["message"] || "Saved required check"}</small>
                   </li>
                 </ul>
               </article>

@@ -66,8 +66,7 @@ defmodule FountWeb.RunLive do
          {:ok, _pid} <- normalize_started(FountWeb.WorkerSupervisor.start_run(access)) do
       FountWeb.RunEvents.notify(socket.assigns.run_id)
 
-      {:noreply,
-       socket |> assign(:notice, "Durable worker launched.") |> assign(:error, nil) |> refresh()}
+      {:noreply, socket |> assign(:notice, "Run started.") |> assign(:error, nil) |> refresh()}
     else
       {:error, reason} -> {:noreply, assign(socket, :error, inspect(reason))}
     end
@@ -132,7 +131,7 @@ defmodule FountWeb.RunLive do
          socket
          |> assign(
            :error,
-           "Decision conflict/stale form: #{inspect(reason)}. Durable state reloaded; review the current decision before resubmitting."
+           "This decision changed: #{inspect(reason)}. The latest saved state has loaded; review it before submitting again."
          )
          |> refresh()}
 

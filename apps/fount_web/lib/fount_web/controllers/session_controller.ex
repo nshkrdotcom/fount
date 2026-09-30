@@ -7,7 +7,7 @@ defmodule FountWeb.SessionController do
     case FountWeb.OwnerAuth.log_in(conn, token) do
       {:ok, authenticated_conn, _owner} ->
         authenticated_conn
-        |> put_flash(:info, "Owner session authenticated.")
+        |> put_flash(:info, "Signed in.")
         |> redirect(to: "/")
 
       {:error, _} ->

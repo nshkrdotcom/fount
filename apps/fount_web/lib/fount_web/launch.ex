@@ -335,7 +335,8 @@ defmodule FountWeb.Launch do
     }
   end
 
-  defp goal("opening"), do: "Produce a checked opening candidate without advancing canon"
+  defp goal("opening"),
+    do: "Propose an opening, check it and leave the approved screenplay unchanged"
 
   defp goal("reveal"),
     do:
@@ -345,7 +346,8 @@ defmodule FountWeb.Launch do
     do: "Revise selected-scene dialogue only and exercise configured automated approval"
 
   defp goal("analysis"),
-    do: "Produce an Observe-backed checked dialogue candidate without advancing canon"
+    do:
+      "Propose dialogue changes with analysis and required checks, leaving the approved screenplay unchanged"
 
   defp preset(%{"completion" => "candidate"}), do: "candidate"
   defp preset(%{"approver" => %{"type" => type}}), do: "accept:" <> type

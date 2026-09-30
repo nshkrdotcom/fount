@@ -329,7 +329,7 @@ defmodule FountWeb.ViewerLive do
             cancel_event="close_identity_dialog"
           >
             <p>
-              The viewer loads only revisions bound to this owner-authorized Run. Selecting a candidate never accepts it.
+              This viewer shows screenplay versions saved for this Run. Viewing proposed changes does not approve them.
             </p>
             <:actions>
               <FountWeb.CoreComponents.button type="button" phx-click="close_identity_dialog">Close</FountWeb.CoreComponents.button>

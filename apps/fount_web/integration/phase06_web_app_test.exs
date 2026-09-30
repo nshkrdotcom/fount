@@ -105,7 +105,7 @@ defmodule FountWeb.Phase06IntegrationTest do
     assert project["screenplay_id"] == run["screenplay_id"]
     assert get_in(run, ["policy", "policy", "completion"]) == "candidate"
     assert {:ok, _view, html} = live(conn, "/runs/#{run["id"]}/setup")
-    assert html =~ "Produce a checked opening candidate without advancing canon"
+    assert html =~ "Propose an opening, check it and leave the approved screenplay unchanged"
     assert html =~ "Proposed changes"
     assert html =~ "Proposed pages replace the approved screenplay only after your approval."
   end

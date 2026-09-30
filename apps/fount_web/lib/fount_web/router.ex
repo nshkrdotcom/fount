@@ -34,6 +34,7 @@ defmodule FountWeb.Router do
       live "/runs/:id/timeline", RunLive, :timeline
       live "/runs/:id/decisions", RunLive, :decisions
       live "/runs/:id/review", RunLive, :review
+      live "/runs/:id/viewer", ViewerLive, :show
       live "/runs/:id/exports", RunLive, :exports
     end
 

@@ -232,13 +232,10 @@ defmodule FountWeb.RunLive do
 
       %{
         base: Fount.Screenplay.to_fountain(base, mode: :spec),
+        base_model: base,
         candidate: Fount.Screenplay.to_fountain(candidate["screenplay"], mode: :spec),
+        candidate_model: candidate["screenplay"],
         candidate_id: candidate_id,
-        diff:
-          inspect(Fount.Screenplay.diff(base, candidate["screenplay"]),
-            pretty: true,
-            limit: :infinity
-          ),
         checks: checks,
         advisory_checks: Enum.filter(checks, &(&1["severity"] == "advisory")),
         required_run_checks: Enum.filter(checks, &(&1["severity"] == "required")),
@@ -255,9 +252,10 @@ defmodule FountWeb.RunLive do
       _ ->
         %{
           base: nil,
+          base_model: nil,
           candidate: nil,
+          candidate_model: nil,
           candidate_id: nil,
-          diff: nil,
           checks: [],
           advisory_checks: [],
           required_run_checks: [],
@@ -371,6 +369,7 @@ defmodule FountWeb.RunLive do
         <a href={~p"/runs/#{@run_id}/decisions"}>Decisions
         <span aria-label="pending decision count">({length(@pending_decisions)})</span></a>
         <a href={~p"/runs/#{@run_id}/review"}>Review</a>
+        <a href={~p"/runs/#{@run_id}/viewer"}>Viewer</a>
         <a href={~p"/runs/#{@run_id}/exports"}>Exports</a>
       </nav>
 
@@ -589,7 +588,16 @@ defmodule FountWeb.RunLive do
           </div>
         </div>
         <div :if={@review.candidate} class="card">
-          <h3>Actual structural diff</h3><pre><%= @review.diff %></pre>
+          <h3>Actual structural diff</h3>
+          <FountWeb.Components.DiffViewer.diff
+            before={@review.base_model}
+            after={@review.candidate_model}
+            before_label="Canonical base"
+            after_label="Candidate"
+            before_status="base"
+            after_status="candidate"
+            mode="side-by-side"
+          />
         </div>
         <div :if={@review.candidate} class="grid">
           <div class="card">

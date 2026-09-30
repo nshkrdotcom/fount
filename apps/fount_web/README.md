@@ -82,3 +82,11 @@ See `../../docs/implementation_handoff/PHASE_06_BUILD_AND_RELEASE.md` for the fi
 The test browser server (`PHX_SERVER=true`) uses the normal database connection pool so durable workers and LiveViews can share it without retaining Sandbox ownership. ExUnit continues to use SQL Sandbox. Run database suites and the browser harness sequentially against a disposable database.
 
 Project creation also has an authenticated, CSRF-protected HTTP POST path, so an unavailable LiveView connection cannot silently turn Create Run into a GET. Uploaded files keep the same 1 MiB limit. Live Run controls wait for a connection; Phoenix falls back to long polling when WebSockets fail. JavaScript is required for live controls.
+
+## Phase 04 read-only screenplay viewer
+
+`/runs/:id/viewer` is an owner-authorized reading workspace over persistent `Fount.Screenplay` revisions. It resolves the Run first, then offers only the Run-bound base, candidates referenced by durable Run state, and accepted revisions for the same Run/screenplay. Query parameters never act as arbitrary revision IDs. Candidate views are labeled non-canonical; choosing a candidate does not submit review or approval.
+
+The viewer uses reusable `FountWeb.CoreComponents`, a pure HEEx screenplay renderer, the existing deterministic Core character/dialogue/location analyzers, stable scene anchors, and `Fount.Screenplay.diff/2`. The existing review page reuses the same diff component without changing its approval bindings. CSS remains the existing plain asset pipeline and includes light/dark, narrow-layout and reduced-motion behavior. Any page or duration number is explicitly labeled as a derived reading approximation rather than screenplay-layout truth.
+
+JavaScript is progressive enhancement for scene focus/scroll, keyboard navigation and dialog focus containment. Ordinary viewer links and revision selection are server-rendered GET navigation; no provider call is needed to inspect the selected revision. Browser and PostgreSQL-backed acceptance remain required runtime QC after applying the offline overlay.

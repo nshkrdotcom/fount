@@ -52,9 +52,12 @@ test('W01-W03 expose validated policy, closed actions and persistent exact-base 
   await page.getByRole('button', {name: 'Append validated policy snapshot'}).click();
   await expect(page.getByText(/Policy snapshot updated/)).toBeVisible();
 
-  await page.getByLabel('Preset name').fill('Browser preset');
+  const presetName = `Browser preset ${runId}`;
+  await page.getByLabel('Preset name').fill(presetName);
   await page.getByRole('button', {name: 'Save current policy'}).click();
-  await expect(page.getByText(/Saved host preset Browser preset v1/)).toBeVisible();
+  await expect(page.getByText(`Saved host preset ${presetName} v1.`)).toBeVisible();
+  await page.getByRole('button', {name: 'Save current policy'}).click();
+  await expect(page.getByText(`Saved host preset ${presetName} v2.`)).toBeVisible();
 
   const investigate = page.locator('.action-card').filter({hasText: 'Investigate'});
   await expect(investigate).toContainText('unavailable through Run');

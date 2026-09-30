@@ -3,7 +3,7 @@ import "phoenix_html"
 import {Socket} from "phoenix"
 import {LiveSocket} from "phoenix_live_view"
 
-const editable = (element) => element?.matches?.("input, textarea, select, [contenteditable='true']")
+const editable = (element) => element?.closest?.("input, textarea, select, [contenteditable]:not([contenteditable='false'])")
 
 const SceneNavigator = {
   mounted() {
@@ -53,10 +53,16 @@ const SceneNavigator = {
       if (link.dataset.sceneLink === sceneId) link.setAttribute("aria-current", "location")
       else link.removeAttribute("aria-current")
     })
+    this.el.querySelectorAll(".screenplay-element[data-node-type='scene_heading']").forEach((scene) => {
+      scene.classList.toggle("is-selected-scene", scene.id === `scene-${sceneId}`)
+    })
     target.focus({preventScroll: true})
     const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches
     target.scrollIntoView({behavior: reducedMotion ? "auto" : "smooth", block: "start"})
-    history.replaceState(null, "", `#scene-${sceneId}`)
+    const url = new URL(window.location.href)
+    url.searchParams.set("scene", sceneId)
+    url.hash = `scene-${sceneId}`
+    history.replaceState(null, "", url)
   }
 }
 

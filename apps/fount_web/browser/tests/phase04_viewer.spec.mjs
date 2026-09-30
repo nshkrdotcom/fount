@@ -52,6 +52,14 @@ test('U01-U05 viewer renders escaped IR, analyzer indices, stable scenes and dia
   await firstSceneLink.click();
   await expect(page.locator(`#scene-${firstSceneId}`)).toBeFocused();
   await expect(firstSceneLink).toHaveAttribute('aria-current', 'location');
+  await expect(page.locator(`#scene-${firstSceneId}`)).toHaveClass(/is-selected-scene/);
+  await page.reload();
+  await expect(firstSceneLink).toHaveAttribute('aria-current', 'location');
+  const secondLink = page.locator('#scene-outline [data-scene-link]').nth(1);
+  const secondSceneId = await secondLink.getAttribute('data-scene-link');
+  await secondLink.click();
+  await expect(page.locator(`#scene-${secondSceneId}`)).toHaveClass(/is-selected-scene/);
+  await expect(page.locator(`#scene-${firstSceneId}`)).not.toHaveClass(/is-selected-scene/);
   const outline = page.locator('#scene-outline');
   await outline.locator('summary').click();
   await expect(outline).toHaveAttribute('data-collapsed', 'true');

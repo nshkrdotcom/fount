@@ -76,8 +76,8 @@ defmodule FountWeb.ProjectLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <main>
-      <nav aria-label="Primary">
+    <main class="project-shell">
+      <nav class="context-nav project-nav" aria-label="Primary">
         <a href={~p"/"}>Projects</a>
         <a href={~p"/projects/new"}>New project</a>
         <form action={~p"/logout"} method="post">
@@ -87,14 +87,14 @@ defmodule FountWeb.ProjectLive do
         </form>
       </nav>
 
-      <section :if={@live_action == :index}>
-        <h1>Fount projects</h1>
+      <section :if={@live_action == :index} class="project-index">
+        <header class="project-mast"><p class="eyebrow">Story workspace registry</p><h1>Fount projects</h1></header>
         <p>
           Authenticated owner: <strong><%= @current_owner %></strong>. Canon changes remain explicit Run decisions.
         </p>
         <p :if={@projects == []}>No projects yet.</p>
-        <div class="grid">
-          <article :for={project <- @projects} class="card">
+        <div class="project-grid">
+          <article :for={project <- @projects} class="card project-card">
             <h2>{project["title"]}</h2>
             <p><code>{project["key"]}</code></p>
             <p>Screenplay <code>{project["screenplay_id"]}</code></p>
@@ -119,8 +119,8 @@ defmodule FountWeb.ProjectLive do
         </div>
       </section>
 
-      <section :if={@live_action == :new}>
-        <h1>New screenplay Run</h1>
+      <section :if={@live_action == :new} class="project-create">
+        <header class="project-mast"><p class="eyebrow">Genesis + durable Run</p><h1>New screenplay Run</h1></header>
         <p>
           The supplied screenplay becomes the explicit genesis revision. Generated pages are candidates until the configured exact approval path accepts them.
         </p>

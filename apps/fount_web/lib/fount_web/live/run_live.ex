@@ -246,7 +246,8 @@ defmodule FountWeb.RunLive do
         lineage: candidate["lineage"] || [],
         required_checks: candidate["required_checks"] || [],
         check_set_fingerprint: candidate["check_set_fingerprint"],
-        result_revision_id: candidate["result_revision_id"]
+        result_revision_id: candidate["result_revision_id"],
+        analysis_binding: FountWeb.AnalysisDashboard.review_binding(Fount.Repo, run, progress)
       }
     else
       _ ->
@@ -266,7 +267,8 @@ defmodule FountWeb.RunLive do
           lineage: [],
           required_checks: [],
           check_set_fingerprint: nil,
-          result_revision_id: nil
+          result_revision_id: nil,
+          analysis_binding: FountWeb.AnalysisDashboard.review_binding(Fount.Repo, run, progress)
         }
     end
   end
@@ -360,15 +362,16 @@ defmodule FountWeb.RunLive do
     assigns = assign(assigns, :current_plan, current_plan(assigns.run))
 
     ~H"""
-    <main>
+    <main class="run-shell">
       <p :if={!@live_connected} role="status">Connecting live controls…</p>
-      <nav aria-label="Run">
+      <nav class="context-nav" aria-label="Run">
         <a href={~p"/"}>Projects</a>
         <a href={~p"/runs/#{@run_id}/setup"}>Setup</a>
         <a href={~p"/runs/#{@run_id}/timeline"}>Timeline</a>
         <a href={~p"/runs/#{@run_id}/decisions"}>Decisions
         <span aria-label="pending decision count">({length(@pending_decisions)})</span></a>
         <a href={~p"/runs/#{@run_id}/review"}>Review</a>
+        <a href={~p"/runs/#{@run_id}/analysis"}>Intelligence</a>
         <a href={~p"/runs/#{@run_id}/viewer"}>Viewer</a>
         <a href={~p"/runs/#{@run_id}/edit"}>Editor</a>
         <a href={~p"/runs/#{@run_id}/exports"}>Exports</a>
@@ -588,6 +591,24 @@ defmodule FountWeb.RunLive do
             <h3>Candidate <code>{@review.candidate_id}</code></h3><pre class="script"><%= @review.candidate %></pre>
           </div>
         </div>
+        <div :if={@review.candidate} class="card intelligence-binding-card">
+          <div>
+            <p class="eyebrow">Exact evidence binding</p>
+            <h3>Revision intelligence beside the candidate</h3>
+          </div>
+          <dl class="binding-ledger">
+            <div><dt>Base revision</dt><dd><code>{@review.analysis_binding["base_revision_id"] || "—"}</code></dd></div>
+            <div><dt>Candidate</dt><dd><code>{@review.analysis_binding["candidate_id"] || "—"}</code></dd></div>
+            <div><dt>Candidate revision</dt><dd><code>{@review.analysis_binding["candidate_revision_id"] || "—"}</code></dd></div>
+            <div><dt>Packet</dt><dd><code>{@review.analysis_binding["packet_id"] || "missing"}</code></dd></div>
+            <div><dt>Analysis run</dt><dd><code>{@review.analysis_binding["analysis_run_id"] || "missing"}</code></dd></div>
+            <div><dt>Freshness</dt><dd>{@review.analysis_binding["freshness"]}</dd></div>
+            <div><dt>Required-check fingerprint</dt><dd><code>{@review.analysis_binding["check_set_fingerprint"] || "—"}</code></dd></div>
+          </dl>
+          <p>Advisory confidence never changes required checks or approval authority. Missing or stale evidence stays visible rather than being treated as a pass.</p>
+          <a class="inline-action" href={~p"/runs/#{@run_id}/analysis"}>Inspect saved intelligence evidence</a>
+        </div>
+
         <div :if={@review.candidate} class="card">
           <h3>Actual structural diff</h3>
           <FountWeb.Components.DiffViewer.diff

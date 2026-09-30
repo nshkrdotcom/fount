@@ -800,12 +800,13 @@ defmodule FountWeb.EditorLive do
       data-dirty={to_string(@dirty)}
       data-draft-status={@draft["status"]}
     >
-      <nav aria-label="Run">
+      <nav class="context-nav" aria-label="Run">
         <a href={~p"/"}>Projects</a>
         <a href={~p"/runs/#{@run_id}/timeline"}>Timeline</a>
         <a href={~p"/runs/#{@run_id}/viewer"}>Viewer</a>
         <a href={~p"/runs/#{@run_id}/edit"} aria-current="page">Editor</a>
         <a href={~p"/runs/#{@run_id}/review"}>Review</a>
+        <a href={~p"/runs/#{@run_id}/analysis"}>Intelligence</a>
       </nav>
 
       <header class="workspace-header">
@@ -823,6 +824,15 @@ defmodule FountWeb.EditorLive do
           <span>{if @dirty, do: "Unsaved local changes", else: "Draft synchronized"}</span>
         </div>
       </header>
+
+      <p class={"analysis-draft-marker #{if @dirty, do: "is-stale", else: "is-saved"}"} role="status">
+        <strong>Analysis evidence:</strong>
+        <%= if @dirty do %>
+          unsaved local draft is unanalyzed; saved packets remain bound only to their recorded revisions.
+        <% else %>
+          saved evidence remains revision-bound; inspect it in Intelligence before drawing conclusions.
+        <% end %>
+      </p>
 
       <FountWeb.CoreComponents.alert :if={@error} kind="warning" title="Authoring notice">
         {@error}

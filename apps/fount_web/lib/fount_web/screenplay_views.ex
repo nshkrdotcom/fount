@@ -5,6 +5,7 @@ defmodule FountWeb.ScreenplayViews do
   alias Fount.Persistence
 
   @accepted_limit 20
+  @evidence_limit 40
 
   def options(repo, access, run, progress)
       when is_map(access) and is_map(run) and is_map(progress) do
@@ -12,7 +13,8 @@ defmodule FountWeb.ScreenplayViews do
       base = base_option(run)
       candidates = candidate_options(repo, run, progress)
       accepted = accepted_options(repo, run)
-      {:ok, [base | candidates ++ accepted] |> Enum.reject(&is_nil/1)}
+      evidence = evidence_options(repo, run, progress)
+      {:ok, [base | candidates ++ accepted ++ evidence] |> Enum.reject(&is_nil/1)}
     end
   end
 
@@ -32,6 +34,9 @@ defmodule FountWeb.ScreenplayViews do
     do: "candidate:#{candidate_id}:#{revision_id}"
 
   def token(%{kind: :accepted, revision_id: revision_id}), do: "accepted:#{revision_id}"
+
+  def token(%{kind: :evidence, analysis_run_id: analysis_run_id, revision_id: revision_id}),
+    do: "evidence:#{analysis_run_id}:#{revision_id}"
 
   defp verify_run_binding(%{"screenplay_id" => screenplay_id}, %{"screenplay_id" => screenplay_id}),
        do: :ok
@@ -117,6 +122,57 @@ defmodule FountWeb.ScreenplayViews do
     end
   end
 
+  defp evidence_options(repo, run, progress) do
+    lineage = FountWeb.AnalysisDashboard.lineage(progress, run)
+
+    statement = """
+    SELECT id::text,revision_id::text,session_id::text,candidate_id::text,status,playbook
+    FROM analysis_runs
+    WHERE screenplay_id=$1::text::uuid
+      AND (
+        id::text = ANY($2::text[]) OR
+        session_id::text = ANY($3::text[]) OR
+        candidate_id::text = ANY($4::text[]) OR
+        (session_id IS NULL AND candidate_id IS NULL AND revision_id::text = ANY($5::text[]))
+      )
+    ORDER BY inserted_at DESC,id DESC
+    LIMIT $6
+    """
+
+    case SQL.query(
+           repo,
+           statement,
+           [
+             run["screenplay_id"],
+             lineage.analysis_run_ids,
+             lineage.session_ids,
+             lineage.candidate_ids,
+             lineage.revision_ids,
+             @evidence_limit
+           ],
+           log: false
+         ) do
+      {:ok, result} ->
+        result
+        |> rows()
+        |> Enum.map(fn row ->
+          %{
+            kind: :evidence,
+            analysis_run_id: row["id"],
+            revision_id: row["revision_id"],
+            candidate_id: row["candidate_id"],
+            session_id: row["session_id"],
+            label: "Analysis evidence · #{row["playbook"] || "unknown playbook"}",
+            status: row["status"] || "evidence"
+          }
+          |> put_token()
+        end)
+
+      {:error, _} ->
+        []
+    end
+  end
+
   defp step_candidate_ids(progress) do
     progress
     |> Map.get("steps", [])
@@ -151,6 +207,27 @@ defmodule FountWeb.ScreenplayViews do
   end
 
   defp selected_option(_, _), do: {:error, :stale_or_unbound_revision}
+
+  defp load_selected(repo, screenplay_id, %{kind: :evidence} = selected) do
+    statement =
+      "SELECT 1 FROM analysis_runs WHERE id=$1::text::uuid AND screenplay_id=$2::text::uuid AND revision_id=$3::text::uuid"
+
+    case SQL.query(
+           repo,
+           statement,
+           [selected.analysis_run_id, screenplay_id, selected.revision_id],
+           log: false
+         ) do
+      {:ok, %{rows: [[1]]}} ->
+        case Persistence.load_revision(repo, screenplay_id, selected.revision_id) do
+          {:ok, screenplay} -> {:ok, screenplay}
+          {:error, :not_found} -> {:error, :revision_not_found}
+        end
+
+      _ ->
+        {:error, :stale_or_unbound_revision}
+    end
+  end
 
   defp load_selected(repo, screenplay_id, %{kind: :candidate} = selected) do
     with {:ok, candidate} <- Persistence.candidate(repo, selected.candidate_id),

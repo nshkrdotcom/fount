@@ -148,16 +148,20 @@ defmodule FountWeb.ViewerLive do
 
   defp revision_kind(%{kind: :accepted}), do: "Accepted canonical revision"
 
+  defp revision_kind(%{kind: :evidence}),
+    do: "Read-only analysis evidence revision — may be stale relative to current work"
+
   @impl true
   def render(assigns) do
     ~H"""
     <main id={"viewer-#{@run_id}"} class="workspace-shell" phx-hook="SceneNavigator">
-      <nav aria-label="Run">
+      <nav class="context-nav" aria-label="Run">
         <a href={~p"/"}>Projects</a>
         <a href={~p"/runs/#{@run_id}/setup"}>Setup</a>
         <a href={~p"/runs/#{@run_id}/timeline"}>Timeline</a>
         <a href={~p"/runs/#{@run_id}/decisions"}>Decisions</a>
         <a href={~p"/runs/#{@run_id}/review"}>Review</a>
+        <a href={~p"/runs/#{@run_id}/analysis"}>Intelligence</a>
         <a href={~p"/runs/#{@run_id}/viewer"} aria-current="page">Viewer</a>
         <a href={~p"/runs/#{@run_id}/edit"}>Editor</a>
         <a href={~p"/runs/#{@run_id}/exports"}>Exports</a>

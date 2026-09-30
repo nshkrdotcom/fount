@@ -4,15 +4,25 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="csrf-token" content={get_csrf_token()} />
-    <title>Fount</title>
+    <meta name="theme-color" content="#090c12" />
+    <title>Fount · Screenplay Systems</title>
     <link phx-track-static rel="stylesheet" href={~p"/assets/app.css"} />
-    <script defer phx-track-static type="text/javascript" src={~p"/assets/app.js"}>
-    </script>
+    <script defer phx-track-static type="text/javascript" src={~p"/assets/app.js"}></script>
   </head>
-  <body>
-    <noscript><p role="status">
+  <body class="fount-body">
+    <a class="skip-link" href="#fount-content">Skip to workspace</a>
+    <div class="fount-atmosphere" aria-hidden="true"></div>
+    <header class="system-rail" aria-label="Fount workspace identity">
+      <a class="system-mark" href={~p"/"} aria-label="Fount projects">
+        <span class="system-mark__glyph" aria-hidden="true">ƒ</span>
+        <span>FOUNT</span>
+      </a>
+      <span class="system-rail__mode">screenplay systems / evidence-aware workspace</span>
+      <span class="system-rail__state"><i aria-hidden="true"></i> durable local host</span>
+    </header>
+    <noscript><p class="noscript-note" role="status">
       JavaScript is disabled. You can create a Run, but enable JavaScript to use live Run controls.
     </p></noscript>
-    {@inner_content}
+    <div id="fount-content" class="app-stage">{@inner_content}</div>
   </body>
 </html>

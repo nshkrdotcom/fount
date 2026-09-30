@@ -1,0 +1,536 @@
+defmodule FountWeb.AnalysisLive do
+  use FountWeb, :live_view
+
+  @impl true
+  def mount(%{"id" => run_id} = params, _session, socket) do
+    if connected?(socket), do: Phoenix.PubSub.subscribe(FountWeb.PubSub, FountWeb.RunEvents.topic(run_id))
+
+    {:ok,
+     socket
+     |> assign(:run_id, run_id)
+     |> assign(:params, selection_params(params))
+     |> assign(:dashboard, nil)
+     |> assign(:error, nil)
+     |> refresh()}
+  end
+
+  @impl true
+  def handle_params(params, _uri, socket) do
+    {:noreply, socket |> assign(:params, selection_params(params)) |> refresh()}
+  end
+
+  @impl true
+  def handle_info({:run_changed, run_id}, %{assigns: %{run_id: run_id}} = socket),
+    do: {:noreply, refresh(socket)}
+
+  def handle_info(_, socket), do: {:noreply, socket}
+
+  defp refresh(socket) do
+    case FountWeb.AnalysisDashboard.load(
+           Fount.Repo,
+           socket.assigns.current_owner,
+           socket.assigns.run_id,
+           socket.assigns.params
+         ) do
+      {:ok, dashboard} -> assign(socket, dashboard: dashboard, error: nil)
+      {:error, :not_found} -> socket |> put_flash(:error, "Run not found for this owner.") |> redirect(to: ~p"/")
+      {:error, reason} -> assign(socket, :error, "Analysis evidence unavailable: #{inspect(reason)}")
+    end
+  end
+
+  defp selection_params(params) do
+    Map.take(params, ~w(packet left right target))
+  end
+
+  defp graph_height(graph) do
+    graph.nodes
+    |> Enum.map(& &1.y)
+    |> Enum.max(fn -> 250 end)
+    |> Kernel.+(72)
+    |> max(300)
+  end
+
+  defp graph_edges(graph) do
+    positions = Map.new(graph.nodes, &{&1.id, &1})
+
+    Enum.flat_map(graph.edges, fn edge ->
+      with %{x: x1, y: y1} <- positions[edge.from],
+           %{x: x2, y: y2} <- positions[edge.to] do
+        [Map.merge(edge, %{x1: x1, y1: y1, x2: x2, y2: y2})]
+      else
+        _ -> []
+      end
+    end)
+  end
+
+  defp packet_label(row) do
+    status = row["display_status"] || row["status"] || "not_run"
+    playbook = row["playbook"] || "unknown playbook"
+    revision = short(row["revision_id"])
+    "#{status} · #{playbook} · rev #{revision}"
+  end
+
+  defp short(nil), do: "—"
+  defp short(value) when is_binary(value) and byte_size(value) > 12, do: String.slice(value, 0, 12)
+  defp short(value), do: to_string(value)
+
+  defp status_tone(status) when status in ["complete", "current"], do: "complete"
+  defp status_tone(status) when status in ["partial", "stale"], do: "partial"
+  defp status_tone("failed"), do: "failed"
+  defp status_tone(_), do: "not_run"
+
+  defp evidence_id(item), do: item["evidence_id"] || item["id"] || "unidentified evidence"
+
+  defp evidence_target(item) do
+    case item["target"] do
+      %{} = target -> "#{target["kind"] || "target"}:#{target["id"] || "unknown"}"
+      _ -> "target unavailable"
+    end
+  end
+
+  defp evidence_href(run_id, selected, item) do
+    revision_id = item["revision_id"] || get_in(item, ["target", "revision_id"]) || selected.run["revision_id"]
+    analysis_run_id = selected.run["id"]
+    target = item["target"] || %{}
+    anchor = target_anchor(target)
+    token = "evidence:#{analysis_run_id}:#{revision_id}"
+    "/runs/#{run_id}/viewer?" <> URI.encode_query(%{"view" => token}) <> anchor
+  end
+
+  defp target_anchor(%{"kind" => "scene", "id" => id}) when is_binary(id), do: "#scene-#{id}"
+  defp target_anchor(%{"id" => id}) when is_binary(id), do: "#node-#{id}"
+  defp target_anchor(_), do: ""
+
+  defp evidence_focus_href(run_id, selected, item) do
+    query =
+      %{
+        "packet" => selected.run && selected.run["id"],
+        "target" => evidence_id(item)
+      }
+      |> Enum.reject(fn {_key, value} -> is_nil(value) end)
+      |> Map.new()
+
+    "/runs/#{run_id}/analysis?" <> URI.encode_query(query) <> "#evidence-register"
+  end
+
+  defp clear_focus_href(run_id, selected) do
+    query =
+      case selected.run && selected.run["id"] do
+        nil -> ""
+        analysis_run_id -> "?" <> URI.encode_query(%{"packet" => analysis_run_id})
+      end
+
+    "/runs/#{run_id}/analysis" <> query
+  end
+
+  defp cost_label(%{currencies: currencies, unknown_rows: unknown} = item) do
+    case currencies do
+      [] ->
+        "cost unavailable / unitless"
+
+      [currency] when unknown == 0 ->
+        "#{currency} #{item.consumed_cost_microunits} µ settled"
+
+      [currency] ->
+        "#{currency} #{item.consumed_cost_microunits} µ known settled; #{unknown} unresolved row(s)"
+
+      _ ->
+        "mixed currencies; no combined cost total"
+    end
+  end
+
+  defp graph_evidence(node) do
+    case List.wrap(node.evidence_ids) do
+      [] -> "—"
+      ids -> Enum.join(ids, ", ")
+    end
+  end
+
+  defp lineage_label("analysis_run"), do: "direct Run packet"
+  defp lineage_label("session"), do: "Run session"
+  defp lineage_label("candidate"), do: "Run candidate"
+  defp lineage_label("legacy_revision"), do: "legacy Run revision"
+  defp lineage_label(_), do: "unbound"
+
+  defp value_preview(value) when is_binary(value), do: value
+  defp value_preview(value) when is_number(value) or is_boolean(value), do: to_string(value)
+  defp value_preview(value), do: Jason.encode!(value || %{}, pretty: true)
+
+  @impl true
+  def render(assigns) do
+    assigns =
+      if assigns.dashboard do
+        assigns
+        |> assign(:graph_height, graph_height(assigns.dashboard.graph))
+        |> assign(:graph_edges, graph_edges(assigns.dashboard.graph))
+      else
+        assigns |> assign(:graph_height, 300) |> assign(:graph_edges, [])
+      end
+
+    ~H"""
+    <main id={"analysis-#{@run_id}"} class="analysis-shell">
+      <nav class="context-nav" aria-label="Run">
+        <a href={~p"/"}>Projects</a>
+        <a href={~p"/runs/#{@run_id}/setup"}>Setup</a>
+        <a href={~p"/runs/#{@run_id}/timeline"}>Timeline</a>
+        <a href={~p"/runs/#{@run_id}/decisions"}>Decisions</a>
+        <a href={~p"/runs/#{@run_id}/review"}>Review</a>
+        <a href={~p"/runs/#{@run_id}/analysis"} aria-current="page">Intelligence</a>
+        <a href={~p"/runs/#{@run_id}/viewer"}>Viewer</a>
+        <a href={~p"/runs/#{@run_id}/edit"}>Editor</a>
+        <a href={~p"/runs/#{@run_id}/exports"}>Exports</a>
+      </nav>
+
+      <FountWeb.CoreComponents.alert :if={@error} kind="error" title="Analysis dashboard">
+        {@error}
+      </FountWeb.CoreComponents.alert>
+
+      <%= if @dashboard do %>
+        <header class="analysis-mast">
+          <div class="analysis-mast__title">
+            <p class="eyebrow">Persisted evidence console</p>
+            <h1>{@dashboard.access["title"]}</h1>
+            <p>
+              Run <code>{@run_id}</code> · screenplay <code>{@dashboard.access["screenplay_id"]}</code>
+            </p>
+          </div>
+          <div class="analysis-mast__signals" aria-label="Evidence status">
+            <FountWeb.CoreComponents.status_badge
+              status={status_tone(@dashboard.selected.state)}
+              label={@dashboard.selected.state}
+            />
+            <span class="signal-chip">{@dashboard.selected.stored_status || "no stored packet"}</span>
+            <span class="signal-chip">rev {short(@dashboard.selected.run && @dashboard.selected.run["revision_id"])}</span>
+          </div>
+        </header>
+
+        <section class="analysis-strip" aria-label="Analysis identity and state">
+          <div>
+            <span class="micro-label">packet</span>
+            <strong>{short(@dashboard.selected.packet && @dashboard.selected.packet["id"])}</strong>
+          </div>
+          <div>
+            <span class="micro-label">analysis run</span>
+            <strong>{short(@dashboard.selected.run && @dashboard.selected.run["id"])}</strong>
+          </div>
+          <div>
+            <span class="micro-label">playbook</span>
+            <strong>{@dashboard.selected.run && @dashboard.selected.run["playbook"] || "—"}</strong>
+          </div>
+          <div>
+            <span class="micro-label">candidate binding</span>
+            <strong>{short(@dashboard.review["candidate_id"])}</strong>
+          </div>
+          <div>
+            <span class="micro-label">check fingerprint</span>
+            <strong>{short(@dashboard.review["check_set_fingerprint"])}</strong>
+          </div>
+        </section>
+
+        <p class="analysis-state-note">{@dashboard.selected.reason}</p>
+
+        <section :if={@dashboard.target.id} class={"target-context #{if @dashboard.target.unresolved, do: "target-context--unresolved", else: ""}"} aria-live="polite">
+          <div>
+            <span class="micro-label">finding navigation context</span>
+            <strong>{if @dashboard.target.unresolved, do: "Recorded target unresolved", else: evidence_id(@dashboard.target.evidence)}</strong>
+          </div>
+          <p :if={@dashboard.target.unresolved}>
+            The requested target is not present in this selected saved packet. No evidence was rebound to another revision or element.
+          </p>
+          <p :if={!@dashboard.target.unresolved}>
+            Bound revision <code>{@dashboard.target.revision_id || @dashboard.selected.run["revision_id"]}</code> · {evidence_target(@dashboard.target.evidence)}
+          </p>
+          <a href={clear_focus_href(@run_id, @dashboard.selected)}>Clear focus</a>
+        </section>
+
+        <section class="analysis-layout">
+          <aside class="analysis-rail" aria-label="Saved analysis packets">
+            <div class="rail-heading">
+              <span>Saved evidence</span>
+              <strong>{length(@dashboard.history)}</strong>
+            </div>
+            <form action={~p"/runs/#{@run_id}/analysis"} method="get" class="compact-form">
+              <label for="analysis-packet">Packet</label>
+              <select id="analysis-packet" name="packet">
+                <option :for={row <- @dashboard.history} value={row["id"]} selected={@dashboard.selected.run && row["id"] == @dashboard.selected.run["id"]}>
+                  {packet_label(row)}
+                </option>
+              </select>
+              <button type="submit">Inspect</button>
+            </form>
+
+            <dl class="identity-ledger" :if={@dashboard.selected.run}>
+              <div><dt>Revision</dt><dd><code>{@dashboard.selected.run["revision_id"]}</code></dd></div>
+              <div><dt>Candidate</dt><dd><code>{@dashboard.selected.run["candidate_id"] || "—"}</code></dd></div>
+              <div><dt>Session</dt><dd><code>{@dashboard.selected.run["session_id"] || "—"}</code></dd></div>
+              <div><dt>Run lineage</dt><dd>{lineage_label(@dashboard.selected.run["lineage_kind"])}</dd></div>
+              <div><dt>Output contract</dt><dd>{@dashboard.selected.run["output_contract_id"] || "legacy / unavailable"}</dd></div>
+            </dl>
+
+            <div class="rail-note">
+              Inspection reads saved rows only. Reloading, reconnecting, selecting packets, graph navigation and comparisons perform no provider dispatch or budget reservation.
+            </div>
+          </aside>
+
+          <div class="analysis-main">
+            <section class="analysis-grid analysis-grid--status" aria-label="Check categories">
+              <article class="evidence-card evidence-card--required">
+                <header><span class="micro-label">deterministic authority</span><h2>Authoritative required checks</h2></header>
+                <p :if={@dashboard.checks.required_deterministic == []}>No required Run checks are recorded yet.</p>
+                <ul class="check-list">
+                  <li :for={check <- @dashboard.checks.required_deterministic}>
+                    <strong>{check["kind"] || check["constraint_id"]}</strong>
+                    <span>{check["status"] || "unknown"}</span>
+                    <small>{check["message"] || "Persisted required check"}</small>
+                  </li>
+                </ul>
+              </article>
+
+              <article class="evidence-card evidence-card--application">
+                <header><span class="micro-label">Workshop application</span><h2>Workshop application checks</h2></header>
+                <p :if={@dashboard.checks.workshop_application == []}>No Workshop application checks are recorded.</p>
+                <ul class="check-list">
+                  <li :for={check <- @dashboard.checks.workshop_application}>
+                    <strong>{check["kind"] || check["constraint_id"]}</strong>
+                    <span>{check["status"] || "unknown"}</span>
+                    <small>{check["message"] || check["evaluation"] || "deterministic application check"}</small>
+                  </li>
+                </ul>
+              </article>
+
+              <article class="evidence-card evidence-card--advisory">
+                <header><span class="micro-label">semantic advice</span><h2>Semantic advisory findings</h2></header>
+                <p :if={@dashboard.checks.semantic_advisory == []}>No semantic advisory checks are recorded.</p>
+                <ul class="check-list">
+                  <li :for={check <- @dashboard.checks.semantic_advisory}>
+                    <strong>{check["kind"] || check["constraint_id"]}</strong>
+                    <span>{check["status"] || "unknown"}</span>
+                    <small>Advisory only; never an approval or deterministic pass.</small>
+                  </li>
+                </ul>
+              </article>
+            </section>
+
+            <section class="analysis-grid analysis-grid--packet">
+              <article class="evidence-card evidence-card--wide">
+                <header><span class="micro-label">writer packet</span><h2>Finding & diagnosis</h2></header>
+                <p class="lead-finding">{@dashboard.selected.packet && @dashboard.selected.packet["finding"] || "No saved writer finding."}</p>
+                <div class="diagnosis-stack">
+                  <details :for={diagnosis <- @dashboard.selected.diagnoses} class="evidence-detail">
+                    <summary>{diagnosis["hypothesis"] || diagnosis["id"] || "Diagnosis"}</summary>
+                    <dl>
+                      <div><dt>Concern</dt><dd>{value_preview(diagnosis["concern"])}</dd></div>
+                      <div><dt>Support</dt><dd>{value_preview(diagnosis["support"] || [])}</dd></div>
+                      <div><dt>Counterevidence</dt><dd>{value_preview(diagnosis["counterevidence"] || [])}</dd></div>
+                      <div><dt>Uncertainty</dt><dd>{value_preview(diagnosis["uncertainty"] || "not recorded")}</dd></div>
+                    </dl>
+                  </details>
+                  <p :if={@dashboard.selected.diagnoses == []}>No diagnosis entries are present in this saved packet.</p>
+                </div>
+              </article>
+
+              <article class="evidence-card">
+                <header><span class="micro-label">uncertainty</span><h2>Unknowns remain visible</h2></header>
+                <ul class="plain-list">
+                  <li :for={item <- @dashboard.selected.uncertainty}>{value_preview(item)}</li>
+                  <li :for={item <- @dashboard.selected.missing_evidence}>Missing: {value_preview(item)}</li>
+                </ul>
+                <p :if={@dashboard.selected.uncertainty == [] and @dashboard.selected.missing_evidence == []}>No uncertainty fields were persisted in this packet.</p>
+              </article>
+            </section>
+
+            <section class="evidence-card" id="evidence-register">
+              <header class="section-heading">
+                <div><span class="micro-label">source register</span><h2>Evidence references</h2></div>
+                <span>{length(@dashboard.selected.evidence)} references</span>
+              </header>
+              <p :if={@dashboard.selected.evidence == []}>No source evidence references were persisted with this packet.</p>
+              <div class="evidence-register">
+                <article :for={item <- @dashboard.selected.evidence} class="evidence-row">
+                  <div>
+                    <strong>{evidence_id(item)}</strong>
+                    <span>{evidence_target(item)}</span>
+                  </div>
+                  <blockquote>{item["excerpt"] || "Excerpt not stored in this packet."}</blockquote>
+                  <div class="evidence-actions">
+                    <a href={evidence_focus_href(@run_id, @dashboard.selected, item)}>Focus provenance here</a>
+                    <a href={evidence_href(@run_id, @dashboard.selected, item)}>Open exact recorded revision target</a>
+                  </div>
+                </article>
+              </div>
+            </section>
+
+            <section class="evidence-card graph-card" aria-labelledby="graph-title">
+              <header class="section-heading">
+                <div><span class="micro-label">stored story records</span><h2 id="graph-title">Evidence graph</h2></div>
+                <div class="graph-toolbar" aria-label="Graph zoom controls">
+                  <button type="button" data-graph-zoom-out aria-label="Zoom graph out">−</button>
+                  <button type="button" data-graph-reset>Reset</button>
+                  <button type="button" data-graph-zoom-in aria-label="Zoom graph in">+</button>
+                </div>
+              </header>
+              <p>{@dashboard.graph.explanation}</p>
+              <div class="graph-legend" aria-label="Evidence graph legend">
+                <span><i class="legend-dot legend-dot--entity"></i>entity / subject</span>
+                <span><i class="legend-dot legend-dot--event"></i>event</span>
+                <span><i class="legend-dot legend-dot--relation"></i>recorded relation</span>
+                <span><i class="legend-line"></i>stored reference</span>
+              </div>
+              <p :if={@dashboard.graph.truncated} class="warning">
+                View bounded to {@dashboard.graph.node_limit} nodes and {@dashboard.graph.edge_limit} links; stored totals are {@dashboard.graph.total_nodes} nodes / {@dashboard.graph.total_edges} links.
+              </p>
+              <div :if={@dashboard.graph.nodes != []} class="graph-viewport" data-analysis-graph-wrapper>
+                <svg
+                  id="analysis-evidence-graph"
+                  phx-hook="AnalysisGraph"
+                  tabindex="0"
+                  role="img"
+                  aria-label="Stored semantic evidence graph. Use plus and minus controls or arrow keys to pan."
+                  viewBox={"0 0 840 #{@graph_height}"}
+                >
+                  <g data-graph-viewport>
+                    <line
+                      :for={edge <- @graph_edges}
+                      x1={edge.x1}
+                      y1={edge.y1}
+                      x2={edge.x2}
+                      y2={edge.y2}
+                      class="graph-edge"
+                    />
+                    <g :for={node <- @dashboard.graph.nodes} class={"graph-node graph-node--#{node.kind}"} transform={"translate(#{node.x} #{node.y})"}>
+                      <circle r="18" />
+                      <text x="28" y="5">{String.slice(node.label || node.id, 0, 44)}</text>
+                    </g>
+                  </g>
+                </svg>
+              </div>
+              <FountWeb.CoreComponents.empty_state
+                :if={@dashboard.graph.nodes == []}
+                title="No stored graph records"
+                detail="This packet has no persisted story-world records. The UI does not invent graph structure from prose findings."
+              />
+
+              <details class="evidence-detail" open>
+                <summary>Accessible graph list</summary>
+                <table class="compact-table">
+                  <thead><tr><th>Type</th><th>Node</th><th>Recorded target</th><th>Revision</th><th>Evidence</th><th>Observation</th></tr></thead>
+                  <tbody>
+                    <tr :for={node <- @dashboard.graph.nodes}>
+                      <td>{node.kind}</td>
+                      <td>{node.label}</td>
+                      <td>{value_preview(node.target || %{})}</td>
+                      <td><code>{short(node.revision_id)}</code></td>
+                      <td>{graph_evidence(node)}</td>
+                      <td><code>{short(node.observation_id)}</code></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </details>
+
+              <div class="event-sequence">
+                <h3>Recorded event order</h3>
+                <p>Order reflects persisted record order only; it is not a causal chain.</p>
+                <ol>
+                  <li :for={event <- @dashboard.graph.events}>
+                    <span>{event.order}</span>
+                    <strong>{event.label}</strong>
+                    <small>rev {short(event.revision_id)} · evidence {if event.evidence_ids == [], do: "—", else: Enum.join(event.evidence_ids, ", ")} · {event.uncertainty || "uncertainty not recorded"}</small>
+                  </li>
+                </ol>
+                <p :if={@dashboard.graph.events == []}>No event records were persisted for this packet.</p>
+              </div>
+            </section>
+
+            <section class="analysis-grid analysis-grid--resources">
+              <article class="evidence-card evidence-card--wide">
+                <header><span class="micro-label">Run accounting</span><h2>Usage & reservations</h2></header>
+                <div class="resource-ledger">
+                  <div :for={item <- @dashboard.usage.totals} class="resource-row">
+                    <strong>{item.resource}</strong>
+                    <span>consumed {item.consumed}</span>
+                    <span>reserved/open {item.outstanding_reserved}</span>
+                    <span>unknown rows {item.unknown_rows}</span>
+                    <span>{cost_label(item)}</span>
+                  </div>
+                </div>
+                <p>{@dashboard.usage.note}</p>
+              </article>
+              <article class="evidence-card">
+                <header><span class="micro-label">authoritative resource state</span><h2>Backend ceilings</h2></header>
+                <dl class="metric-list">
+                  <div :for={{resource, value} <- @dashboard.usage.authoritative_resources}>
+                    <dt>{resource}</dt>
+                    <dd>consumed {value["consumed"]} / limit {value["limit"] || "unlimited / unknown"} · remaining {value["remaining"] || "unknown"} · {if value["exhausted"], do: "exhausted", else: "available"}</dd>
+                  </div>
+                </dl>
+                <details :if={map_size(@dashboard.usage.policy_limits) > 0} class="evidence-detail">
+                  <summary>Stored policy limits</summary>
+                  <dl class="metric-list">
+                    <div :for={{key, value} <- @dashboard.usage.policy_limits}><dt>{key}</dt><dd>{value_preview(value)}</dd></div>
+                  </dl>
+                </details>
+                <p>Indicators are informational. Backend policy enforcement remains authoritative.</p>
+              </article>
+            </section>
+
+            <section class="evidence-card" id="analysis-comparison">
+              <header class="section-heading">
+                <div><span class="micro-label">saved evidence history</span><h2>Comparable analysis delta</h2></div>
+                <span>No quality ranking</span>
+              </header>
+              <form action={~p"/runs/#{@run_id}/analysis#analysis-comparison"} method="get" class="comparison-form">
+                <input type="hidden" name="packet" value={@dashboard.selected.run && @dashboard.selected.run["id"]} />
+                <label>Earlier / A
+                  <select name="left">
+                    <option value="">Choose saved run</option>
+                    <option :for={row <- @dashboard.history} value={row["id"]} selected={@params["left"] == row["id"]}>{packet_label(row)}</option>
+                  </select>
+                </label>
+                <label>Later / B
+                  <select name="right">
+                    <option value="">Choose saved run</option>
+                    <option :for={row <- @dashboard.history} value={row["id"]} selected={@params["right"] == row["id"]}>{packet_label(row)}</option>
+                  </select>
+                </label>
+                <button type="submit">Compare stored evidence</button>
+              </form>
+
+              <div class="comparison-state" data-comparison-state={@dashboard.comparison.state}>
+                <strong>{to_string(@dashboard.comparison.state)}</strong>
+                <ul :if={@dashboard.comparison.reasons != []}>
+                  <li :for={reason <- @dashboard.comparison.reasons}>{reason}</li>
+                </ul>
+              </div>
+              <div :if={@dashboard.comparison.state == :comparable} class="comparison-uncertainty">
+                <div><span class="micro-label">A uncertainty</span><p>{value_preview(@dashboard.comparison.uncertainty.left)}</p></div>
+                <div><span class="micro-label">B uncertainty</span><p>{value_preview(@dashboard.comparison.uncertainty.right)}</p></div>
+              </div>
+              <table :if={@dashboard.comparison.state == :comparable and @dashboard.comparison.deltas != []} class="compact-table">
+                <thead><tr><th>Recorded numeric field</th><th>A</th><th>B</th><th>Delta</th></tr></thead>
+                <tbody>
+                  <tr :for={delta <- @dashboard.comparison.deltas}>
+                    <td><code>{delta.path}</code></td><td>{delta.before}</td><td>{delta.after}</td><td>{delta.delta}</td>
+                  </tr>
+                </tbody>
+              </table>
+              <p :if={@dashboard.comparison.state == :comparable and @dashboard.comparison.deltas == []}>
+                The identities align, but no shared numeric packet fields are available for a factual delta.
+              </p>
+            </section>
+
+            <section class="evidence-card evidence-card--quiet">
+              <header><span class="micro-label">limits & provenance</span><h2>What this page does not claim</h2></header>
+              <ul class="plain-list">
+                <li>Analysis confidence and advisory findings never grant approval.</li>
+                <li>Generation success does not establish analysis completeness.</li>
+                <li>Graph links do not invent causality; unresolved targets stay tied to their recorded revision.</li>
+                <li>Manual or unsaved drafts without a persisted packet remain unanalyzed.</li>
+              </ul>
+            </section>
+          </div>
+        </section>
+      <% end %>
+    </main>
+    """
+  end
+end

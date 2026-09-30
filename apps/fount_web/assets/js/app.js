@@ -319,11 +319,96 @@ const AuthoringEditor = {
   }
 }
 
+const AnalysisGraph = {
+  mounted() {
+    this.viewport = this.el.querySelector("[data-graph-viewport]")
+    this.card = this.el.closest(".graph-card")
+    this.scale = 1
+    this.x = 0
+    this.y = 0
+    this.drag = null
+
+    this.clampScale = (value) => Math.max(.55, Math.min(2.25, value))
+    this.renderTransform = () => {
+      if (!this.viewport) return
+      this.viewport.setAttribute("transform", `translate(${this.x} ${this.y}) scale(${this.scale})`)
+      this.el.dataset.graphScale = this.scale.toFixed(2)
+    }
+    this.zoom = (delta) => {
+      this.scale = this.clampScale(this.scale + delta)
+      this.renderTransform()
+    }
+    this.reset = () => {
+      this.scale = 1
+      this.x = 0
+      this.y = 0
+      this.renderTransform()
+    }
+
+    this.onControls = (event) => {
+      const control = event.target.closest("[data-graph-zoom-in], [data-graph-zoom-out], [data-graph-reset]")
+      if (!control || !this.card?.contains(control)) return
+      if (control.matches("[data-graph-zoom-in]")) this.zoom(.15)
+      if (control.matches("[data-graph-zoom-out]")) this.zoom(-.15)
+      if (control.matches("[data-graph-reset]")) this.reset()
+    }
+    this.onKeydown = (event) => {
+      const amount = event.shiftKey ? 42 : 18
+      let handled = true
+      if (event.key === "ArrowLeft") this.x += amount
+      else if (event.key === "ArrowRight") this.x -= amount
+      else if (event.key === "ArrowUp") this.y += amount
+      else if (event.key === "ArrowDown") this.y -= amount
+      else if (event.key === "+" || event.key === "=") return this.zoom(.15)
+      else if (event.key === "-" || event.key === "_") return this.zoom(-.15)
+      else if (event.key === "Home") return this.reset()
+      else handled = false
+      if (handled) {
+        event.preventDefault()
+        this.renderTransform()
+      }
+    }
+    this.onPointerDown = (event) => {
+      if (event.button !== 0) return
+      this.drag = {id: event.pointerId, x: event.clientX, y: event.clientY, baseX: this.x, baseY: this.y}
+      this.el.setPointerCapture?.(event.pointerId)
+    }
+    this.onPointerMove = (event) => {
+      if (!this.drag || this.drag.id !== event.pointerId) return
+      this.x = this.drag.baseX + (event.clientX - this.drag.x)
+      this.y = this.drag.baseY + (event.clientY - this.drag.y)
+      this.renderTransform()
+    }
+    this.onPointerUp = (event) => {
+      if (!this.drag || this.drag.id !== event.pointerId) return
+      this.el.releasePointerCapture?.(event.pointerId)
+      this.drag = null
+    }
+
+    this.card?.addEventListener("click", this.onControls)
+    this.el.addEventListener("keydown", this.onKeydown)
+    this.el.addEventListener("pointerdown", this.onPointerDown)
+    this.el.addEventListener("pointermove", this.onPointerMove)
+    this.el.addEventListener("pointerup", this.onPointerUp)
+    this.el.addEventListener("pointercancel", this.onPointerUp)
+    this.renderTransform()
+  },
+
+  destroyed() {
+    this.card?.removeEventListener("click", this.onControls)
+    this.el.removeEventListener("keydown", this.onKeydown)
+    this.el.removeEventListener("pointerdown", this.onPointerDown)
+    this.el.removeEventListener("pointermove", this.onPointerMove)
+    this.el.removeEventListener("pointerup", this.onPointerUp)
+    this.el.removeEventListener("pointercancel", this.onPointerUp)
+  }
+}
+
 let csrfToken = document.querySelector("meta[name='csrf-token']")?.getAttribute("content")
 let liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
   params: {_csrf_token: csrfToken},
-  hooks: {SceneNavigator, AccessibleDialog, AuthoringEditor}
+  hooks: {SceneNavigator, AccessibleDialog, AuthoringEditor, AnalysisGraph}
 })
 liveSocket.connect()
 window.liveSocket = liveSocket

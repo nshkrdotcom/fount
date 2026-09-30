@@ -186,6 +186,7 @@ test('U08 accepted revision is separately labeled after exact approval and outsi
   await page.goto(`/runs/${runId}/decisions`);
   const approve = page.getByRole('button', {name: /Accept candidate|approve/i}).first();
   await expect(approve).toBeVisible({timeout: 60_000});
+  await expect(page.locator('.phx-connected')).toBeVisible();
   await approve.click();
   await page.goto(`/runs/${runId}/timeline`);
   await expect(page.locator('pre').filter({hasText: '"outcome": "accepted"'})).toBeVisible({timeout: 60_000});

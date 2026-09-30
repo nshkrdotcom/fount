@@ -296,6 +296,23 @@ defmodule FountWeb.Phase08ProductionToolsIntegrationTest do
     assert id == read["id"]
   end
 
+  test "S05 a same-owner read from another Run cannot be selected", %{conn: conn} do
+    {:ok, %{run: first_run}} = create_run("read-first")
+    {:ok, workspace} = ProductionTools.workspace(Fount.Repo, "test-owner", first_run["id"])
+
+    {:ok, read} =
+      ProductionTools.create_table_read(Fount.Repo, "test-owner", workspace, %{
+        "whole_screenplay" => true
+      })
+
+    {:ok, %{run: other_run}} = create_run("read-other")
+    conn = FountWeb.ConnCase.login(conn)
+    {:ok, view, _html} = live(conn, "/runs/#{other_run["id"]}/tools?section=read")
+    html = render_click(view, "select_table_read", %{"id" => read["id"]})
+    assert html =~ "Run identity mismatch"
+    refute has_element?(view, "#table-read-workspace")
+  end
+
   test "S06 usefulness persistence keeps human response separate from engineering facts, kept-original is valid, export/delete are owner-scoped",
        %{conn: conn} do
     {:ok, %{project: project, run: run}} = create_run("usefulness")

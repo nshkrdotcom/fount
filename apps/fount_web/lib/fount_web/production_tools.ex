@@ -4,8 +4,8 @@ defmodule FountWeb.ProductionTools do
   alias Fount.{Persistence, Query, Screenplay, Search, Target}
   alias Fount.Screenplay.Model
   alias Fount.Writing.{Approval, Authority, CanonicalJSON, Principal}
-  alias FountWorkshop.{TableRead, Usefulness}
   alias FountWeb.{ProductionStore, ScreenplayIndex, ScreenplayViews, Store}
+  alias FountWorkshop.{TableRead, Usefulness}
 
   @search_types ~w(action character dialogue parenthetical transition centered lyric section synopsis page_break note boneyard blank scene_heading)
   @completed_statuses ~w(completed_candidate completed_accepted)
@@ -316,18 +316,16 @@ defmodule FountWeb.ProductionTools do
 
   def create_table_read(repo, owner, workspace, selection)
       when is_map(workspace) and is_map(selection) do
-    with {:ok, packet} <- TableRead.packet(workspace.screenplay, selection),
-         {:ok, row} <-
-           ProductionStore.create_table_read(repo, %{
-             owner_id: owner,
-             project_id: workspace.project["id"],
-             run_id: workspace.run["id"],
-             screenplay_id: workspace.screenplay.id,
-             revision_id: workspace.screenplay.revision.id,
-             packet_id: packet["id"],
-             packet: packet
-           }) do
-      {:ok, row}
+    with {:ok, packet} <- TableRead.packet(workspace.screenplay, selection) do
+      ProductionStore.create_table_read(repo, %{
+        owner_id: owner,
+        project_id: workspace.project["id"],
+        run_id: workspace.run["id"],
+        screenplay_id: workspace.screenplay.id,
+        revision_id: workspace.screenplay.revision.id,
+        packet_id: packet["id"],
+        packet: packet
+      })
     end
   end
 
@@ -391,19 +389,17 @@ defmodule FountWeb.ProductionTools do
       "engineering" => engineering_facts(workspace)
     }
 
-    with {:ok, record} <- Usefulness.record(record_attrs),
-         {:ok, row} <-
-           ProductionStore.create_usefulness(repo, %{
-             owner_id: owner,
-             project_id: workspace.project["id"],
-             run_id: workspace.run["id"],
-             screenplay_id: workspace.screenplay.id,
-             revision_id: workspace.screenplay.revision.id,
-             task_id: record["task_id"],
-             condition: record["condition"],
-             record: record
-           }) do
-      {:ok, row}
+    with {:ok, record} <- Usefulness.record(record_attrs) do
+      ProductionStore.create_usefulness(repo, %{
+        owner_id: owner,
+        project_id: workspace.project["id"],
+        run_id: workspace.run["id"],
+        screenplay_id: workspace.screenplay.id,
+        revision_id: workspace.screenplay.revision.id,
+        task_id: record["task_id"],
+        condition: record["condition"],
+        record: record
+      })
     end
   end
 
@@ -440,42 +436,52 @@ defmodule FountWeb.ProductionTools do
       latest_run = Enum.find(runs, &(get_in(&1, ["project", "project_id"]) == project["id"]))
       activity = ProductionStore.recent_activity(repo, owner, project["id"], limit: 6)
 
-      %{
+      Map.merge(project_counts(head, index), %{
         project: project,
-        revision_id: head && head.revision.id,
-        scene_count: index && length(index.scenes),
-        cast_count: head && map_size(head.cast),
-        note_count: head && length(Query.authored_items(head, :note)),
-        page_estimate: index && index.estimates.pages.label,
         latest_run: latest_run,
-        recent_activity: if(is_list(activity), do: activity, else: []),
+        recent_activity: list_or_empty(activity),
         import_fidelity: project["import_fidelity"] || %{}
-      }
+      })
     end)
   end
+
+  defp project_counts(nil, _index),
+    do: %{
+      revision_id: nil,
+      scene_count: nil,
+      cast_count: nil,
+      note_count: nil,
+      page_estimate: nil
+    }
+
+  defp project_counts(head, index) do
+    %{
+      revision_id: head.revision.id,
+      scene_count: length(index.scenes),
+      cast_count: map_size(head.cast),
+      note_count: length(Query.authored_items(head, :note)),
+      page_estimate: index.estimates.pages.label
+    }
+  end
+
+  defp list_or_empty(value) when is_list(value), do: value
+  defp list_or_empty(_), do: []
 
   def filter_cards(cards, query, sort) do
     query = query |> to_string() |> String.trim() |> String.downcase()
 
-    cards =
-      Enum.filter(cards, fn card ->
-        project = card.project
-
-        query == "" or
-          String.contains?(
-            String.downcase(
-              (project["title"] || "") <>
-                " " <> (project["key"] || "") <> " " <> (project["synopsis"] || "")
-            ),
-            query
-          )
-      end)
+    cards = Enum.filter(cards, &card_matches?(&1, query))
 
     case sort do
       "title" -> Enum.sort_by(cards, &String.downcase(&1.project["title"] || ""))
       "scenes" -> Enum.sort_by(cards, &{-(&1.scene_count || 0), &1.project["title"] || ""})
       _ -> cards
     end
+  end
+
+  defp card_matches?(card, query) do
+    text = Enum.map_join(~w(title key synopsis), " ", &(card.project[&1] || ""))
+    String.contains?(String.downcase(text), query)
   end
 
   defp search_opts(screenplay, attrs) do
@@ -505,12 +511,14 @@ defmodule FountWeb.ProductionTools do
       scene_ids =
         case scopes do
           [] -> nil
-          [first | rest] -> Enum.reduce(rest, first, &Enum.filter(&2, fn id -> id in &1 end))
+          [first | rest] -> Enum.reduce(rest, first, &intersect_scene_ids/2)
         end
 
       {:ok, scene_ids}
     end
   end
+
+  defp intersect_scene_ids(scope, ids), do: Enum.filter(ids, &(&1 in scope))
 
   defp scene_filter(_screenplay, value) when value in [nil, ""], do: {:ok, nil}
 
@@ -673,17 +681,19 @@ defmodule FountWeb.ProductionTools do
   defp note_target_state(_model, %{"status" => "unresolved"}), do: "unresolved"
 
   defp note_target_state(model, item) do
-    with {:ok, _} <- Target.resolve(model, item["target"]) do
-      expected = get_in(item, ["value", "target_sha256"])
-      current = target_fingerprint(model, item["target"])
+    case Target.resolve(model, item["target"]) do
+      {:ok, _} ->
+        expected = get_in(item, ["value", "target_sha256"])
+        current = target_fingerprint(model, item["target"])
 
-      cond do
-        is_nil(expected) -> "active_untracked"
-        expected == current -> "active"
-        true -> "stale_changed"
-      end
-    else
-      _ -> "unresolved"
+        cond do
+          is_nil(expected) -> "active_untracked"
+          expected == current -> "active"
+          true -> "stale_changed"
+        end
+
+      _ ->
+        "unresolved"
     end
   end
 
@@ -699,11 +709,13 @@ defmodule FountWeb.ProductionTools do
       })
 
   defp target_fingerprint(model, %{"kind" => "scene"} = target) do
-    with {:ok, scene} <- Target.resolve(model, target) do
-      elements = Enum.map(scene.element_ids, &Query.node(model, &1))
-      CanonicalJSON.hash(%{"scene" => Model.plain(scene), "elements" => Model.plain(elements)})
-    else
-      _ -> nil
+    case Target.resolve(model, target) do
+      {:ok, scene} ->
+        elements = Enum.map(scene.element_ids, &Query.node(model, &1))
+        CanonicalJSON.hash(%{"scene" => Model.plain(scene), "elements" => Model.plain(elements)})
+
+      _ ->
+        nil
     end
   end
 
@@ -852,22 +864,26 @@ defmodule FountWeb.ProductionTools do
     if String.length(text) <= max_chars do
       text
     else
-      case Regex.run(Regex.compile!(Regex.escape(phrase), "iu"), text, return: :index) do
-        [{byte_offset, byte_length}] ->
-          prefix_chars = text |> binary_part(0, byte_offset) |> String.length()
-          match_chars = text |> binary_part(byte_offset, byte_length) |> String.length()
-          width = min(max(max_chars, match_chars + 40), 500)
-          start_char = max(prefix_chars - div(max(width - match_chars, 0), 2), 0)
-          body = String.slice(text, start_char, width)
-          leading = if start_char > 0, do: "…", else: ""
-          trailing = if start_char + String.length(body) < String.length(text), do: "…", else: ""
-          leading <> body <> trailing
-
-        _ ->
-          String.slice(text, 0, max_chars) <> "…"
-      end
+      long_snippet(text, phrase, max_chars)
     end
   end
 
   defp snippet(text, _phrase), do: to_string(text)
+
+  defp long_snippet(text, phrase, max_chars) do
+    case Regex.run(Regex.compile!(Regex.escape(phrase), "iu"), text, return: :index) do
+      [{byte_offset, byte_length}] ->
+        prefix_chars = text |> binary_part(0, byte_offset) |> String.length()
+        match_chars = text |> binary_part(byte_offset, byte_length) |> String.length()
+        width = min(max(max_chars, match_chars + 40), 500)
+        start_char = max(prefix_chars - div(max(width - match_chars, 0), 2), 0)
+        body = String.slice(text, start_char, width)
+        leading = if start_char > 0, do: "…", else: ""
+        trailing = if start_char + String.length(body) < String.length(text), do: "…", else: ""
+        leading <> body <> trailing
+
+      _ ->
+        String.slice(text, 0, max_chars) <> "…"
+    end
+  end
 end

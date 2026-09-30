@@ -60,7 +60,6 @@ defmodule FountWeb.ProjectLive do
     end
   end
 
-
   def handle_event("filter_projects", %{"projects" => attrs}, socket) do
     query = Map.get(attrs, "query", "")
     sort = Map.get(attrs, "sort", "recent")
@@ -178,10 +177,18 @@ defmodule FountWeb.ProjectLive do
         <p>
           Authenticated owner: <strong><%= @current_owner %></strong>. Canon changes remain explicit Run decisions.
         </p>
-        <p class="muted">Showing at most the 24 most recent owner-visible projects; filter and sort operate inside that bounded set.</p>
+        <p class="muted">
+          Showing at most the 24 most recent owner-visible projects; filter and sort operate inside that bounded set.
+        </p>
         <form phx-change="filter_projects" class="project-filter inline-form">
-          <label>Filter projects <input name="projects[query]" value={@project_filter} placeholder="title, key or supplied synopsis" /></label>
-          <label>Sort
+          <label>Filter projects
+          <input
+            name="projects[query]"
+            value={@project_filter}
+            placeholder="title, key or supplied synopsis"
+          /></label>
+          <label>
+            Sort
             <select name="projects[sort]">
               <option value="recent" selected={@project_sort == "recent"}>Recent</option>
               <option value="title" selected={@project_sort == "title"}>Title</option>
@@ -197,15 +204,32 @@ defmodule FountWeb.ProjectLive do
             <h2>{project["title"]}</h2>
             <p><code>{project["key"]}</code></p>
             <p :if={project["synopsis"]}>{project["synopsis"]}</p>
-            <p :if={project["thumbnail_ref"]}>Thumbnail reference: <code>{project["thumbnail_ref"]}</code></p>
-            <p>Screenplay <code>{project["screenplay_id"]}</code> · accepted revision <code>{card.revision_id || "unavailable"}</code></p>
+            <p :if={project["thumbnail_ref"]}>
+              Thumbnail reference: <code>{project["thumbnail_ref"]}</code>
+            </p>
+            <p>
+              Screenplay <code>{project["screenplay_id"]}</code>
+              · accepted revision <code>{card.revision_id || "unavailable"}</code>
+            </p>
             <dl class="project-facts">
-              <div><dt>Scenes</dt><dd>{card.scene_count || "—"}</dd></div>
-              <div><dt>Cast</dt><dd>{card.cast_count || "—"}</dd></div>
-              <div><dt>Notes</dt><dd>{card.note_count || "—"}</dd></div>
+              <div>
+                <dt>Scenes</dt><dd>{card.scene_count || "—"}</dd>
+              </div>
+              <div>
+                <dt>Cast</dt><dd>{card.cast_count || "—"}</dd>
+              </div>
+              <div>
+                <dt>Notes</dt><dd>{card.note_count || "—"}</dd>
+              </div>
             </dl>
             <p>{card.page_estimate || "Page estimate unavailable"}</p>
-            <p>Import: {project["import_format"] || "legacy / unknown"} · losses {card.import_fidelity["loss_count"] || "unknown"} · source preserved unchanged {to_string(card.import_fidelity["original_bytes_preserved_when_unchanged"] || false)}</p>
+            <p>
+              Import: {project["import_format"] || "legacy / unknown"} · losses {card.import_fidelity[
+                "loss_count"
+              ] || "unknown"} · source preserved unchanged {to_string(
+                card.import_fidelity["original_bytes_preserved_when_unchanged"] || false
+              )}
+            </p>
             <p>
               Starting here reloads the current accepted head; it does not create or accept generated pages.
             </p>
@@ -216,7 +240,11 @@ defmodule FountWeb.ProjectLive do
             </div>
             <details :if={card.recent_activity != []}>
               <summary>Recent persisted activity</summary>
-              <ul><li :for={item <- card.recent_activity}>{item["kind"]}: {item["detail"]} · {item["resource_id"]}</li></ul>
+              <ul>
+                <li :for={item <- card.recent_activity}>
+                  {item["kind"]}: {item["detail"]} · {item["resource_id"]}
+                </li>
+              </ul>
             </details>
             <form phx-submit="create_existing" class="stack">
               <input type="hidden" name="run[project_id]" value={project["id"]} />
@@ -371,10 +399,14 @@ defmodule FountWeb.ProjectLive do
               </option>
             </select>
           </label>
-          <label>Supplied synopsis (optional; never generated from the script)
-            <textarea name="project[synopsis]" maxlength="4000"></textarea>
+          <label>
+            Supplied synopsis (optional; never generated from the script) <textarea
+              name="project[synopsis]"
+              maxlength="4000"
+            ></textarea>
           </label>
-          <label>Supplied thumbnail reference (optional; stored as text, never fetched)
+          <label>
+            Supplied thumbnail reference (optional; stored as text, never fetched)
             <input name="project[thumbnail_ref]" maxlength="2048" />
           </label>
           <label>
@@ -384,7 +416,9 @@ defmodule FountWeb.ProjectLive do
           <label>
             Or Fountain source <textarea name="project[source]"><%= @fixture_source %></textarea>
           </label>
-          <p role="status">Import is synchronous. The next page appears only after parsing, genesis persistence and durable Run creation succeed.</p>
+          <p role="status">
+            Import is synchronous. The next page appears only after parsing, genesis persistence and durable Run creation succeed.
+          </p>
           <button type="submit" phx-disable-with="Importing + creating Run…">Create Run</button>
         </form>
       </section>

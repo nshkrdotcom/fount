@@ -162,7 +162,7 @@ defmodule Fount.Persistence do
 
             %{
               id: artifact["id"],
-              format: String.to_existing_atom(artifact["format"]),
+              format: decode_import_format(artifact["format"]),
               bytes: artifact["original_bytes"],
               render_hash: artifact["render_hash"],
               losses: artifact["fidelity"]["losses"] || [],
@@ -1261,4 +1261,7 @@ defmodule Fount.Persistence do
 
   defp rollback(repo, reason), do: repo.rollback(reason)
   defp transaction(repo, fun), do: repo.transaction(fun)
+  defp decode_import_format("fountain"), do: :fountain
+  defp decode_import_format("fdx"), do: :fdx
+  defp decode_import_format("json"), do: :json
 end

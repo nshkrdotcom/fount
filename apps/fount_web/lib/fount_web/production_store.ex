@@ -93,7 +93,11 @@ defmodule FountWeb.ProductionStore do
   end
 
   def table_read(repo, owner, id) do
-    one_query(repo, "SELECT * FROM fount_web_table_reads WHERE owner_id=$1 AND id=$2::text::uuid", [owner, id])
+    one_query(
+      repo,
+      "SELECT * FROM fount_web_table_reads WHERE owner_id=$1 AND id=$2::text::uuid",
+      [owner, id]
+    )
   end
 
   def list_table_reads(repo, owner, project_id, opts \\ []) do
@@ -112,9 +116,7 @@ defmodule FountWeb.ProductionStore do
     mode = value(attrs, :scroll_mode) || "manual"
     packet = value(attrs, :packet)
 
-    if mode not in ~w(manual auto paused) do
-      {:error, :invalid_scroll_mode}
-    else
+    if mode in ~w(manual auto paused) do
       statement =
         if is_map(packet) do
           """
@@ -142,6 +144,8 @@ defmodule FountWeb.ProductionStore do
         {:ok, _} -> stale_or_missing_read(repo, owner, id)
         {:error, reason} -> {:error, storage_reason(reason)}
       end
+    else
+      {:error, :invalid_scroll_mode}
     end
   end
 

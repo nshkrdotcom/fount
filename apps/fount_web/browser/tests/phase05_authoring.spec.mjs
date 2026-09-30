@@ -76,6 +76,7 @@ test('E05 two tabs produce recoverable conflict instead of last-write-wins', asy
 
   const second = await context.newPage();
   await second.goto(`/runs/${runId}/edit`);
+  await expect(second.locator('.phx-connected')).toBeVisible();
 
   await first.getByLabel('Fountain screenplay source').fill(fixture.replace('departure board', 'departure display'));
   await first.getByRole('button', {name: 'Save draft'}).click();
@@ -220,6 +221,7 @@ test('E05/E07 lost acknowledgement retry, newer-server recovery and invalid inte
   await expect(source).toBeVisible();
   const second = await context.newPage();
   await second.goto(`/runs/${runId}/edit`);
+  await expect(second.locator('.phx-connected')).toBeVisible();
   await expect(second.getByLabel('Fountain screenplay source')).toBeVisible();
   await page.evaluate(() => window.addEventListener('phx:authoring:mark_saved', event => event.stopImmediatePropagation(), {once: true, capture: true}));
   const invalid = fixture + '\n[[unfinished';

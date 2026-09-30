@@ -64,20 +64,31 @@ test('S04 note changes are durable candidates, separate from annotations, and ex
 
   await expect(page.getByText(/Measured annotations are separate evidence/)).toBeVisible();
   await page.getByLabel('Title').first().fill('Continuity');
-  await page.getByLabel('Note').fill('Keep the receipt visible.');
+  await page.getByRole('textbox', {name: 'Note', exact: true}).fill('Keep the receipt visible.');
   await page.getByRole('button', {name: 'Save note candidate'}).click();
   await expect(page.getByText(/Canon is unchanged until exact approval/)).toBeVisible();
   await expect(page.getByRole('heading', {name: 'Pending production-tool candidates'})).toBeVisible();
   await page.getByRole('button', {name: 'Exact approve'}).click();
   await expect(page.getByText(/Candidate accepted as revision/)).toBeVisible();
-  await expect(page.getByText('Keep the receipt visible.')).toBeVisible();
-  await expect(page.getByText('active', {exact: true}).first()).toBeVisible();
+  await expect(page.getByRole('paragraph').filter({hasText: /^Keep the receipt visible\.$/})).toBeVisible();
+  await expect(page.locator('.note-card[data-note-state="active"] code').first()).toBeVisible();
 
   const exportLink = page.getByRole('link', {name: /Export notes JSON/});
   const href = await exportLink.getAttribute('href');
   const body = await page.evaluate(async url => (await fetch(url, {credentials: 'same-origin'})).json(), href);
   expect(body.kind).toBe('fount.authored_notes_export');
   expect(body.notes.some(note => note.text === 'Keep the receipt visible.')).toBeTruthy();
+
+  const searchUrl = new URL(page.url());
+  searchUrl.searchParams.set('section', 'search');
+  await page.goto(searchUrl.toString());
+  await page.getByLabel('Literal phrase').fill('receipt');
+  await page.getByRole('button', {name: 'Search selected revision'}).click();
+  await expect(page.locator('.search-hits li').first()).toBeVisible();
+  const base = await page.getByRole('combobox', {name: /^Exact revision/}).locator('option').filter({hasText: 'Run base'}).getAttribute('value');
+  await page.getByRole('combobox', {name: /^Exact revision/}).selectOption(base);
+  await expect(page.getByText('Search cleared because the exact revision changed.')).toBeVisible();
+  await expect(page.locator('.search-hits li')).toHaveCount(0);
 });
 
 test('S05-S06 human table read state and descriptive usefulness evidence persist without quality scoring', async ({page}) => {
@@ -155,6 +166,7 @@ test('S07 dashboard preserves supplied metadata and reports Fountain/FDX fidelit
   await expect(fdxCard).toContainText(/Import: fdx/);
   await expect(fdxCard).toContainText(/accepted revision/);
 
+  await expect(page.locator('.phx-connected')).toBeVisible();
   await page.getByLabel('Filter projects').fill(fdxKey);
   await expect(page.locator('.project-card')).toHaveCount(1);
   await page.getByLabel('Sort').selectOption('scenes');
@@ -194,4 +206,35 @@ test('S08 reduced motion disables automatic table-read scrolling while manual co
   await read.locator('[data-read-turn]').first().focus();
   await page.keyboard.press('Enter');
   await expect(read.locator('[data-read-turn]').first()).toHaveClass(/is-active-read-turn/);
+});
+
+
+test('S05 two tabs recover persisted table-read state after an optimistic conflict', async ({page, context}) => {
+  await login(page);
+  const runId = await createRun(page, `s05-conflict-${Date.now()}`);
+  await openSection(page, runId, 'read');
+  await page.getByRole('button', {name: 'Save read packet'}).click();
+  const firstRead = page.locator('#table-read-workspace');
+  await expect(firstRead).toBeVisible();
+  const second = await context.newPage();
+  await openSection(second, runId, 'read');
+  const secondRead = second.locator('#table-read-workspace');
+  await expect(second.locator('.phx-connected')).toBeVisible();
+  await expect(secondRead).toHaveAttribute('data-version', '1');
+
+  await firstRead.locator('[data-read-turn]').nth(1).focus();
+  await page.keyboard.press('Enter');
+  await firstRead.getByRole('button', {name: 'Bookmark active turn'}).click();
+  await expect(firstRead).toHaveAttribute('data-version', '2');
+  await secondRead.getByRole('button', {name: 'Bookmark active turn'}).click();
+  await expect(second.getByText('Table-read state changed in another tab; reloaded persisted state.')).toBeVisible();
+  await expect(secondRead).toHaveAttribute('data-version', '2');
+  await expect(secondRead).toHaveAttribute('data-bookmark', '1');
+  await secondRead.locator('[data-read-turn]').nth(2).focus();
+  await second.keyboard.press('Enter');
+  await secondRead.getByRole('button', {name: 'Bookmark active turn'}).click();
+  await expect(secondRead).toHaveAttribute('data-version', '3');
+  await second.reload();
+  await expect(secondRead).toHaveAttribute('data-bookmark', '2');
+  await second.close();
 });

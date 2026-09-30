@@ -599,3 +599,5 @@ tbody tr:hover { background: rgba(121,242,207,.025); }
 .project-facts dd { margin: .1rem 0 0; font-weight: 800; }
 .project-links { display: flex; flex-wrap: wrap; gap: .5rem; margin: .35rem 0; }
 @media (max-width: 480px) { .project-facts { grid-template-columns: 1fr; } }
+
+.production-connection { border: 0; padding: 0; margin: 0; min-width: 0; }

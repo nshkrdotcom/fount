@@ -33,19 +33,17 @@ defmodule FountWeb.ProjectController do
   defp source(attrs, %Plug.Upload{path: path, filename: filename}) do
     extension = filename |> Path.extname() |> String.downcase()
 
-    cond do
-      extension not in [".fountain", ".fdx"] ->
-        {:error, :unsupported_screenplay_format}
-
-      true ->
-        with {:ok, stat} <- File.stat(path),
-             true <- stat.size <= @max_upload,
-             {:ok, bytes} <- File.read(path) do
-          {:ok, Map.merge(attrs, %{"source" => bytes, "filename" => filename})}
-        else
-          false -> {:error, :upload_too_large}
-          _ -> {:error, :upload_unreadable}
-        end
+    if extension in [".fountain", ".fdx"] do
+      with {:ok, stat} <- File.stat(path),
+           true <- stat.size <= @max_upload,
+           {:ok, bytes} <- File.read(path) do
+        {:ok, Map.merge(attrs, %{"source" => bytes, "filename" => filename})}
+      else
+        false -> {:error, :upload_too_large}
+        _ -> {:error, :upload_unreadable}
+      end
+    else
+      {:error, :unsupported_screenplay_format}
     end
   end
 

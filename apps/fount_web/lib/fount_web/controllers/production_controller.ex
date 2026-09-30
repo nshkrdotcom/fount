@@ -4,22 +4,18 @@ defmodule FountWeb.ProductionController do
   alias FountWeb.{ProductionStore, ProductionTools}
 
   def notes(conn, %{"run_id" => run_id} = params) do
-    with {:ok, workspace} <-
-           ProductionTools.workspace(
-             Fount.Repo,
-             conn.assigns.current_owner,
-             run_id,
-             params["view"]
-           ) do
-      json(conn, %{
-        "kind" => "fount.authored_notes_export",
-        "screenplay_id" => workspace.screenplay.id,
-        "revision_id" => workspace.screenplay.revision.id,
-        "view" => FountWeb.ScreenplayViews.token(workspace.selection),
-        "notes" => Enum.map(ProductionTools.notes(workspace.screenplay), &plain/1)
-      })
-    else
-      {:error, reason} -> unavailable(conn, reason)
+    case ProductionTools.workspace(Fount.Repo, conn.assigns.current_owner, run_id, params["view"]) do
+      {:ok, workspace} ->
+        json(conn, %{
+          "kind" => "fount.authored_notes_export",
+          "screenplay_id" => workspace.screenplay.id,
+          "revision_id" => workspace.screenplay.revision.id,
+          "view" => FountWeb.ScreenplayViews.token(workspace.selection),
+          "notes" => Enum.map(ProductionTools.notes(workspace.screenplay), &plain/1)
+        })
+
+      {:error, reason} ->
+        unavailable(conn, reason)
     end
   end
 

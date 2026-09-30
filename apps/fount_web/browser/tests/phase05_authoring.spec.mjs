@@ -242,3 +242,27 @@ test('E05/E07 lost acknowledgement retry, newer-server recovery and invalid inte
   await expect(second.locator('[data-authoring-preview]')).toContainText('I can revise this.');
   await context.close();
 });
+
+test('E05/E06 immediate unsaved AI and acceptance clicks cannot race preview debounce', async ({page}) => {
+  await login(page);
+  const runId = await createRun(page, `authoring-action-race-${Date.now()}`);
+  await page.goto(`/runs/${runId}/edit`);
+  await page.getByRole('button', {name: 'Save candidate'}).click();
+  await expect(page.getByText(/Canon is unchanged/)).toBeVisible();
+  for (const id of ['ai-assist', 'candidate-accept']) {
+    await page.evaluate(action => {
+      const source = document.querySelector('[data-authoring-source]');
+      source.value += '\nUnsaved immediate action.';
+      source.dispatchEvent(new Event('input', {bubbles: true}));
+      document.getElementById(action).click();
+    }, id);
+    await expect(page).toHaveURL(new RegExp(`/runs/${runId}/edit$`));
+    await expect(page.getByText(id === 'ai-assist' ? /Save the draft and candidate before starting/ : /Unsaved text cannot be accepted/)).toBeVisible();
+    await page.getByRole('button', {name: 'Save draft'}).click();
+    await expect(page.locator('.authoring-status')).toContainText('Draft synchronized');
+    await page.getByRole('button', {name: 'Save candidate'}).click();
+    await expect(page.locator('.authoring-status')).toContainText('candidate-saved');
+  }
+  await page.goto(`/runs/${runId}/viewer`);
+  await expect(page.locator('.screenplay')).not.toContainText('Unsaved immediate action.');
+});

@@ -176,6 +176,7 @@ defmodule FountWeb.Authoring do
   @doc "Exact typed human approval of the draft-bound candidate. This is the only authoring path that advances canon."
   def accept_candidate(owner, draft_id, candidate_id, approval_id) do
     with {:ok, draft} <- AuthoringStore.get(Fount.Repo, owner, draft_id),
+         :ok <- active_draft(draft),
          true <- draft["saved_candidate_id"] == candidate_id,
          true <- draft["saved_candidate_version"] == draft["version"],
          {:ok, candidate} <- Fount.Persistence.candidate(Fount.Repo, candidate_id),
@@ -200,6 +201,7 @@ defmodule FountWeb.Authoring do
   @doc "Starts AI assistance only from a valid, durably saved manual candidate via the existing FountRun path."
   def start_ai_assist(owner, draft_id, command_id) do
     with {:ok, draft} <- AuthoringStore.get(Fount.Repo, owner, draft_id),
+         :ok <- active_draft(draft),
          candidate_id when is_binary(candidate_id) <- draft["saved_candidate_id"],
          true <- draft["saved_candidate_version"] == draft["version"],
          {:ok, result} <-

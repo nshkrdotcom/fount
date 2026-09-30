@@ -211,6 +211,18 @@ const AuthoringEditor = {
     }
 
     this.onClick = (event) => {
+      const boundary = event.target.closest("#ai-assist, #candidate-accept")
+      if (boundary && this.el.contains(boundary)) {
+        event.preventDefault()
+        event.stopPropagation()
+        clearTimeout(this.timer)
+        this.preview()
+        this.pushEvent(boundary.id === "ai-assist" ? "start_ai_assist" : "accept_candidate", {
+          source: this.source.value,
+          client_seq: this.seq
+        })
+        return
+      }
       const save = event.target.closest("[data-authoring-save]")
       if (save && this.el.contains(save)) {
         event.preventDefault()

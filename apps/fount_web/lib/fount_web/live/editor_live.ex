@@ -171,11 +171,11 @@ defmodule FountWeb.EditorLive do
     end
   end
 
-  def handle_event("accept_candidate", _params, socket) do
+  def handle_event("accept_candidate", params, socket) do
     candidate_id = socket.assigns.draft["saved_candidate_id"]
 
     cond do
-      socket.assigns.dirty ->
+      unsaved_source?(socket, params) ->
         {:noreply,
          assign(socket, :error, "Unsaved text cannot be accepted. Save a candidate first.")}
 
@@ -208,9 +208,9 @@ defmodule FountWeb.EditorLive do
     end
   end
 
-  def handle_event("start_ai_assist", _params, socket) do
+  def handle_event("start_ai_assist", params, socket) do
     cond do
-      socket.assigns.dirty ->
+      unsaved_source?(socket, params) ->
         {:noreply,
          assign(socket, :error, "Save the draft and candidate before starting AI assistance.")}
 
@@ -571,6 +571,11 @@ defmodule FountWeb.EditorLive do
       [] ->
         {:noreply, socket}
     end
+  end
+
+  defp unsaved_source?(socket, params) do
+    socket.assigns.dirty or
+      Map.get(params, "source", socket.assigns.raw_source) != socket.assigns.draft["raw_source"]
   end
 
   defp preview_save_state(raw, draft),

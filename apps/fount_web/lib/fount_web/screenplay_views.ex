@@ -58,10 +58,11 @@ defmodule FountWeb.ScreenplayViews do
     end
   end
 
-
   defp project_head_option(repo, access, base) do
+    screenplay_id = access["screenplay_id"]
+
     case Persistence.load(repo, access["key"]) do
-      {:ok, screenplay} when screenplay.id == access["screenplay_id"] ->
+      {:ok, screenplay} when screenplay.id == screenplay_id ->
         if base && screenplay.revision.id == base.revision_id do
           nil
         else

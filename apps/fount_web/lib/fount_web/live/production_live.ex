@@ -37,22 +37,43 @@ defmodule FountWeb.ProductionLive do
     token = Map.get(params, "view")
     section = normalize_section(Map.get(params, "section"))
 
-    case ProductionTools.workspace(Fount.Repo, socket.assigns.current_owner, socket.assigns.run_id, token) do
+    case ProductionTools.workspace(
+           Fount.Repo,
+           socket.assigns.current_owner,
+           socket.assigns.run_id,
+           token
+         ) do
       {:ok, workspace} ->
         actual_token = FountWeb.ScreenplayViews.token(workspace.selection)
-        previous_revision = socket.assigns.workspace && socket.assigns.workspace.screenplay.revision.id
-        revision_changed? = is_binary(previous_revision) and previous_revision != workspace.screenplay.revision.id
+
+        previous_revision =
+          socket.assigns.workspace && socket.assigns.workspace.screenplay.revision.id
+
+        revision_changed? =
+          is_binary(previous_revision) and previous_revision != workspace.screenplay.revision.id
 
         {:noreply,
          socket
          |> assign(:section, section)
          |> assign(:view_token, actual_token)
          |> assign(:workspace, workspace)
-         |> assign(:search_result, if(revision_changed?, do: nil, else: socket.assigns.search_result))
-         |> assign(:search_notice, if(revision_changed?, do: "Search cleared because the exact revision changed.", else: nil))
+         |> assign(
+           :search_result,
+           if(revision_changed?, do: nil, else: socket.assigns.search_result)
+         )
+         |> assign(
+           :search_notice,
+           if(revision_changed?,
+             do: "Search cleared because the exact revision changed.",
+             else: nil
+           )
+         )
          |> assign(:characters, ProductionTools.character_profiles(workspace.screenplay))
          |> assign(:locations, ProductionTools.location_profiles(workspace.screenplay))
-         |> assign(:measured_annotations, ProductionTools.measured_annotations(workspace.screenplay))
+         |> assign(
+           :measured_annotations,
+           ProductionTools.measured_annotations(workspace.screenplay)
+         )
          |> assign(:target_options, ProductionTools.target_options(workspace.screenplay))
          |> assign(:error, nil)
          |> reload_human_records()}
@@ -66,7 +87,8 @@ defmodule FountWeb.ProductionLive do
   def handle_event("change_view", %{"revision" => %{"view" => token}}, socket) do
     {:noreply,
      push_patch(socket,
-       to: ~p"/runs/#{socket.assigns.run_id}/tools?#{[view: token, section: socket.assigns.section]}"
+       to:
+         ~p"/runs/#{socket.assigns.run_id}/tools?#{[view: token, section: socket.assigns.section]}"
      )}
   end
 
@@ -75,7 +97,8 @@ defmodule FountWeb.ProductionLive do
 
     {:noreply,
      push_patch(socket,
-       to: ~p"/runs/#{socket.assigns.run_id}/tools?#{[view: socket.assigns.view_token, section: section]}"
+       to:
+         ~p"/runs/#{socket.assigns.run_id}/tools?#{[view: socket.assigns.view_token, section: section]}"
      )}
   end
 
@@ -115,7 +138,10 @@ defmodule FountWeb.ProductionLive do
       {:ok, %{candidate: candidate}} ->
         {:noreply,
          socket
-         |> put_flash(:info, "Note candidate #{short(candidate.id)} saved. Canon is unchanged until exact approval.")
+         |> put_flash(
+           :info,
+           "Note candidate #{short(candidate.id)} saved. Canon is unchanged until exact approval."
+         )
          |> assign(:error, nil)
          |> reload_human_records()}
 
@@ -137,7 +163,10 @@ defmodule FountWeb.ProductionLive do
       {:ok, %{candidate: candidate}} ->
         {:noreply,
          socket
-         |> put_flash(:info, "Deletion candidate #{short(candidate.id)} saved. Canon is unchanged.")
+         |> put_flash(
+           :info,
+           "Deletion candidate #{short(candidate.id)} saved. Canon is unchanged."
+         )
          |> assign(:error, nil)
          |> reload_human_records()}
 
@@ -187,7 +216,10 @@ defmodule FountWeb.ProductionLive do
 
         {:noreply,
          socket
-         |> put_flash(:info, "Candidate accepted as revision #{accepted.revision.id}. Reloading exact accepted head.")
+         |> put_flash(
+           :info,
+           "Candidate accepted as revision #{accepted.revision.id}. Reloading exact accepted head."
+         )
          |> push_patch(
            to:
              ~p"/runs/#{socket.assigns.run_id}/tools?#{[view: accepted_token, section: socket.assigns.section]}"
@@ -224,8 +256,11 @@ defmodule FountWeb.ProductionLive do
 
   def handle_event("select_table_read", %{"id" => id}, socket) do
     case ProductionStore.table_read(Fount.Repo, socket.assigns.current_owner, id) do
-      {:ok, row} -> {:noreply, assign(socket, :selected_read, row)}
-      {:error, reason} -> {:noreply, assign(socket, :error, "Table read unavailable: #{inspect(reason)}")}
+      {:ok, row} ->
+        {:noreply, assign(socket, :selected_read, row)}
+
+      {:error, reason} ->
+        {:noreply, assign(socket, :error, "Table read unavailable: #{inspect(reason)}")}
     end
   end
 
@@ -246,13 +281,18 @@ defmodule FountWeb.ProductionLive do
                scroll_mode: params["scroll_mode"] || "paused"
              }
            ) do
-      {:reply, %{status: "saved", version: saved["version"]}, socket |> assign(:selected_read, saved) |> reload_human_records(saved["id"])}
+      {:reply, %{status: "saved", version: saved["version"]},
+       socket |> assign(:selected_read, saved) |> reload_human_records(saved["id"])}
     else
       {:error, {:stale_table_read, row}} ->
-        {:reply, %{status: "stale", version: row["version"]}, socket |> assign(:selected_read, row) |> assign(:error, "Table-read state changed in another tab; reloaded persisted state.")}
+        {:reply, %{status: "stale", version: row["version"]},
+         socket
+         |> assign(:selected_read, row)
+         |> assign(:error, "Table-read state changed in another tab; reloaded persisted state.")}
 
       {:error, reason} ->
-        {:reply, %{status: "error"}, assign(socket, :error, "Table-read state not saved: #{inspect(reason)}")}
+        {:reply, %{status: "error"},
+         assign(socket, :error, "Table-read state not saved: #{inspect(reason)}")}
     end
   end
 
@@ -272,7 +312,8 @@ defmodule FountWeb.ProductionLive do
        |> assign(:selected_read, saved)
        |> reload_human_records(saved["id"])}
     else
-      {:error, reason} -> {:noreply, assign(socket, :error, "Reaction not saved: #{inspect(reason)}")}
+      {:error, reason} ->
+        {:noreply, assign(socket, :error, "Reaction not saved: #{inspect(reason)}")}
     end
   end
 
@@ -286,7 +327,10 @@ defmodule FountWeb.ProductionLive do
       {:ok, _row} ->
         {:noreply,
          socket
-         |> put_flash(:info, "Descriptive human usefulness evidence saved; no ranking was calculated.")
+         |> put_flash(
+           :info,
+           "Descriptive human usefulness evidence saved; no ranking was calculated."
+         )
          |> reload_human_records()}
 
       {:error, reason} ->
@@ -296,8 +340,12 @@ defmodule FountWeb.ProductionLive do
 
   def handle_event("delete_usefulness", %{"id" => id}, socket) do
     case ProductionTools.delete_usefulness(Fount.Repo, socket.assigns.current_owner, id) do
-      :ok -> {:noreply, socket |> put_flash(:info, "Usefulness record deleted.") |> reload_human_records()}
-      {:error, reason} -> {:noreply, assign(socket, :error, "Record not deleted: #{inspect(reason)}")}
+      :ok ->
+        {:noreply,
+         socket |> put_flash(:info, "Usefulness record deleted.") |> reload_human_records()}
+
+      {:error, reason} ->
+        {:noreply, assign(socket, :error, "Record not deleted: #{inspect(reason)}")}
     end
   end
 
@@ -316,9 +364,14 @@ defmodule FountWeb.ProductionLive do
 
       selected_read =
         cond do
-          is_binary(selected_read_id) -> Enum.find(reads, &(&1["id"] == selected_read_id))
-          socket.assigns[:selected_read] -> Enum.find(reads, &(&1["id"] == socket.assigns.selected_read["id"]))
-          true -> List.first(reads)
+          is_binary(selected_read_id) ->
+            Enum.find(reads, &(&1["id"] == selected_read_id))
+
+          socket.assigns[:selected_read] ->
+            Enum.find(reads, &(&1["id"] == socket.assigns.selected_read["id"]))
+
+          true ->
+            List.first(reads)
         end
 
       report =
@@ -387,8 +440,9 @@ defmodule FountWeb.ProductionLive do
             <p class="eyebrow">Revision-scoped writer workspace</p>
             <h1>{@workspace.project["title"]}</h1>
             <p>
-              Screenplay <code>{@workspace.screenplay.id}</code> · revision
-              <code>{@workspace.screenplay.revision.id}</code> · {@workspace.selection.label}
+              Screenplay <code>{@workspace.screenplay.id}</code>
+              · revision <code>{@workspace.screenplay.revision.id}</code>
+              · {@workspace.selection.label}
             </p>
             <p :if={!@workspace.editable?} class="warning">
               This selected revision is inspection-only. Note/cast changes require the current accepted head.
@@ -398,7 +452,11 @@ defmodule FountWeb.ProductionLive do
             <label>
               Exact revision
               <select name="revision[view]">
-                <option :for={option <- @workspace.options} value={option.token} selected={option.token == @view_token}>
+                <option
+                  :for={option <- @workspace.options}
+                  value={option.token}
+                  selected={option.token == @view_token}
+                >
                   {option.label} · {String.slice(option.revision_id, 0, 8)}
                 </option>
               </select>
@@ -407,21 +465,33 @@ defmodule FountWeb.ProductionLive do
         </header>
 
         <nav class="tool-tabs" aria-label="Production tool sections">
-          <button :for={tab <- ~w(search cast locations notes read usefulness)} type="button" phx-click="change_section" phx-value-section={tab} aria-current={if(@section == tab, do: "page", else: nil)}>
+          <button
+            :for={tab <- ~w(search cast locations notes read usefulness)}
+            type="button"
+            phx-click="change_section"
+            phx-value-section={tab}
+            aria-current={if(@section == tab, do: "page", else: nil)}
+          >
             {String.capitalize(tab)}
           </button>
         </nav>
 
         <section :if={@section == "search"} class="tool-grid" aria-labelledby="search-title">
           <article class="card stack tool-controls">
-            <p class="eyebrow">S01 · literal retrieval</p><h2 id="search-title">Search this exact revision</h2>
+            <p class="eyebrow">S01 · literal retrieval</p><h2 id="search-title">
+              Search this exact revision
+            </h2>
             <form phx-submit="search" class="stack">
               <label>Literal phrase <input name="search[query]" value={@search_query} required /></label>
               <label>
                 Scene
                 <select name="search[scene_id]">
                   <option value="">All active scenes</option>
-                  <option :for={scene <- FountWeb.ScreenplayIndex.scene_index(@workspace.screenplay)} value={scene.id} selected={@search_attrs["scene_id"] == scene.id}>
+                  <option
+                    :for={scene <- FountWeb.ScreenplayIndex.scene_index(@workspace.screenplay)}
+                    value={scene.id}
+                    selected={@search_attrs["scene_id"] == scene.id}
+                  >
                     {scene.ordinal} · {scene.heading}
                   </option>
                 </select>
@@ -430,7 +500,11 @@ defmodule FountWeb.ProductionLive do
                 Character facet
                 <select name="search[character_id]">
                   <option value="">Any resolved character</option>
-                  <option :for={character <- @characters} value={character.id} selected={@search_attrs["character_id"] == character.id}>
+                  <option
+                    :for={character <- @characters}
+                    value={character.id}
+                    selected={@search_attrs["character_id"] == character.id}
+                  >
                     {character.display_name}
                   </option>
                 </select>
@@ -439,7 +513,11 @@ defmodule FountWeb.ProductionLive do
                 Location facet
                 <select name="search[location]">
                   <option value="">Any resolved location</option>
-                  <option :for={location <- @locations} value={location.location} selected={@search_attrs["location"] == location.location}>
+                  <option
+                    :for={location <- @locations}
+                    value={location.location}
+                    selected={@search_attrs["location"] == location.location}
+                  >
                     {location.location}
                   </option>
                 </select>
@@ -448,18 +526,48 @@ defmodule FountWeb.ProductionLive do
                 Element type
                 <select name="search[element_type]">
                   <option value="">All supported types</option>
-                  <option :for={type <- FountWeb.ProductionTools.search_types()} value={type} selected={@search_attrs["element_type"] == type}>{type}</option>
+                  <option
+                    :for={type <- FountWeb.ProductionTools.search_types()}
+                    value={type}
+                    selected={@search_attrs["element_type"] == type}
+                  >
+                    {type}
+                  </option>
                 </select>
               </label>
-              <label>Limit <input type="number" min="1" max="200" name="search[limit]" value={@search_attrs["limit"] || "50"} /></label>
+              <label>Limit
+              <input
+                type="number"
+                min="1"
+                max="200"
+                name="search[limit]"
+                value={@search_attrs["limit"] || "50"}
+              /></label>
               <div class="check-row">
-                <label><input type="checkbox" name="search[include_omitted]" value="true" checked={@search_attrs["include_omitted"] == "true"} /> omitted</label>
-                <label><input type="checkbox" name="search[include_notes]" value="true" checked={@search_attrs["include_notes"] == "true"} /> Fountain notes</label>
-                <label><input type="checkbox" name="search[include_boneyards]" value="true" checked={@search_attrs["include_boneyards"] == "true"} /> boneyards</label>
+                <label><input
+                  type="checkbox"
+                  name="search[include_omitted]"
+                  value="true"
+                  checked={@search_attrs["include_omitted"] == "true"}
+                /> omitted</label>
+                <label><input
+                  type="checkbox"
+                  name="search[include_notes]"
+                  value="true"
+                  checked={@search_attrs["include_notes"] == "true"}
+                /> Fountain notes</label>
+                <label><input
+                  type="checkbox"
+                  name="search[include_boneyards]"
+                  value="true"
+                  checked={@search_attrs["include_boneyards"] == "true"}
+                /> boneyards</label>
               </div>
               <button type="submit">Search selected revision</button>
             </form>
-            <p class="muted">Literal phrase matching only. No cross-project index and no provider dispatch.</p>
+            <p class="muted">
+              Literal phrase matching only. No cross-project index and no provider dispatch.
+            </p>
             <p :if={@search_notice} class="warning" role="status">{@search_notice}</p>
           </article>
 
@@ -473,33 +581,56 @@ defmodule FountWeb.ProductionLive do
               <p :if={@search_result.hits == []}>No literal matches in this revision/filter scope.</p>
               <ol class="search-hits">
                 <li :for={hit <- @search_result.hits}>
-                  <div><code>{hit.type}</code> · scene {hit.scene_ordinal || "—"} {hit.scene_heading || ""}</div>
+                  <div>
+                    <code>{hit.type}</code>
+                    · scene {hit.scene_ordinal || "—"} {hit.scene_heading || ""}
+                  </div>
                   <p><code>{hit.element_id}</code></p>
                   <p>{hit.excerpt}</p>
                   <a href={source_link(@run_id, @view_token, hit.anchor)}>Open exact source element</a>
                 </li>
               </ol>
             <% else %>
-              <p>Search results will report exact revision identity, inspected count, returned count and truncation.</p>
+              <p>
+                Search results will report exact revision identity, inspected count, returned count and truncation.
+              </p>
             <% end %>
           </article>
         </section>
 
         <section :if={@section == "cast"} class="stack" aria-labelledby="cast-title">
-          <div class="section-heading"><p class="eyebrow">S02 · cast evidence</p><h2 id="cast-title">Character profiles</h2></div>
+          <div class="section-heading">
+            <p class="eyebrow">S02 · cast evidence</p><h2 id="cast-title">Character profiles</h2>
+          </div>
           <div class="dense-card-grid">
             <article :for={character <- @characters} class="card character-card">
               <h3>{character.display_name}</h3>
               <p><code>{character.id}</code></p>
-              <p>Aliases: {if(character.aliases == [], do: "none recorded", else: Enum.join(character.aliases, ", "))}</p>
+              <p>
+                Aliases: {if(character.aliases == [],
+                  do: "none recorded",
+                  else: Enum.join(character.aliases, ", ")
+                )}
+              </p>
               <dl class="fact-grid">
-                <div><dt>Confirmed mentions</dt><dd>{character.confirmed_mentions}</dd></div>
-                <div><dt>Appearances</dt><dd>{character.appearance_count}</dd></div>
-                <div><dt>Dialogue blocks</dt><dd>{character.dialogue_block_count}</dd></div>
-                <div><dt>Dialogue words</dt><dd>{character.dialogue_word_count}</dd></div>
+                <div>
+                  <dt>Confirmed mentions</dt><dd>{character.confirmed_mentions}</dd>
+                </div>
+                <div>
+                  <dt>Appearances</dt><dd>{character.appearance_count}</dd>
+                </div>
+                <div>
+                  <dt>Dialogue blocks</dt><dd>{character.dialogue_block_count}</dd>
+                </div>
+                <div>
+                  <dt>Dialogue words</dt><dd>{character.dialogue_word_count}</dd>
+                </div>
               </dl>
               <p>
-                Relationship evidence: {if(character.relationship_evidence == [], do: "none recorded", else: "recorded evidence available")}
+                Relationship evidence: {if(character.relationship_evidence == [],
+                  do: "none recorded",
+                  else: "recorded evidence available"
+                )}
               </p>
               <form :if={@workspace.editable?} phx-submit="rename_character" class="inline-form">
                 <input type="hidden" name="cast[character_id]" value={character.id} />
@@ -508,27 +639,49 @@ defmodule FountWeb.ProductionLive do
               </form>
             </article>
           </div>
-          <p class="muted">Counts are descriptive source facts; they do not infer biography, emotional arc or screenplay quality.</p>
+          <p class="muted">
+            Counts are descriptive source facts; they do not infer biography, emotional arc or screenplay quality.
+          </p>
         </section>
 
         <section :if={@section == "locations"} class="stack" aria-labelledby="locations-title">
-          <div class="section-heading"><p class="eyebrow">S03 · parsed scene headings</p><h2 id="locations-title">Locations and scene order</h2></div>
+          <div class="section-heading">
+            <p class="eyebrow">S03 · parsed scene headings</p><h2 id="locations-title">
+              Locations and scene order
+            </h2>
+          </div>
           <article :for={location <- @locations} class="card stack location-card">
             <h3>{location.location}</h3><p>{location.scene_count} associated scene(s)</p>
             <div class="table-scroll">
               <table>
-                <thead><tr><th>Order</th><th>Heading</th><th>INT/EXT</th><th>Time</th><th>Source</th></tr></thead>
+                <thead>
+                  <tr>
+                    <th>Order</th><th>Heading</th><th>INT/EXT</th><th>Time</th><th>Source</th>
+                  </tr>
+                </thead>
                 <tbody>
                   <tr :for={entry <- location.entries}>
-                    <td>{entry.ordinal || "—"}</td><td>{entry.heading || entry.raw}</td><td>{entry.parsed_context}</td><td>{entry.parsed_time}</td>
-                    <td><a href={source_link(@run_id, @view_token, "scene-#{entry.scene_id}")}>Exact revision</a></td>
+                    <td>{entry.ordinal || "—"}</td><td>{entry.heading || entry.raw}</td><td>
+                      {entry.parsed_context}
+                    </td><td>{entry.parsed_time}</td>
+                    <td>
+                      <a href={source_link(@run_id, @view_token, "scene-#{entry.scene_id}")}>Exact revision</a>
+                    </td>
                   </tr>
                 </tbody>
               </table>
             </div>
           </article>
-          <p>Whole-script estimates: {@workspace.screenplay |> FountWeb.ScreenplayIndex.estimates() |> get_in([:pages, :label])}; {@workspace.screenplay |> FountWeb.ScreenplayIndex.estimates() |> get_in([:duration, :label])}.</p>
-          <p class="muted">Unknown parse values stay unknown; these are not shooting schedules or production plans.</p>
+          <p>
+            Whole-script estimates: {@workspace.screenplay
+            |> FountWeb.ScreenplayIndex.estimates()
+            |> get_in([:pages, :label])}; {@workspace.screenplay
+            |> FountWeb.ScreenplayIndex.estimates()
+            |> get_in([:duration, :label])}.
+          </p>
+          <p class="muted">
+            Unknown parse values stay unknown; these are not shooting schedules or production plans.
+          </p>
         </section>
 
         <section :if={@section == "notes"} class="tool-grid" aria-labelledby="notes-title">
@@ -536,74 +689,131 @@ defmodule FountWeb.ProductionLive do
             <p class="eyebrow">S04 · authored provenance</p><h2 id="notes-title">Authored notes</h2>
             <form phx-change="filter_notes" class="stack">
               <label>Filter <input name="notes[query]" value={@note_filter["query"] || ""} /></label>
-              <label>Status
+              <label>
+                Status
                 <select name="notes[status]">
                   <option value="">All</option>
-                  <option :for={status <- ~w(active active_untracked stale_changed unresolved)} value={status} selected={@note_filter["status"] == status}>{status}</option>
+                  <option
+                    :for={status <- ~w(active active_untracked stale_changed unresolved)}
+                    value={status}
+                    selected={@note_filter["status"] == status}
+                  >
+                    {status}
+                  </option>
                 </select>
               </label>
             </form>
             <form :if={@workspace.editable?} phx-submit="save_note" class="stack">
               <h3>Create note candidate</h3>
               <label>Title <input name="note[title]" /></label>
-              <label>Target
+              <label>
+                Target
                 <select name="note[target]">
-                  <option :for={option <- @target_options} value={option.value}>{option.label}</option>
+                  <option :for={option <- @target_options} value={option.value}>
+                    {option.label}
+                  </option>
                 </select>
               </label>
-              <label>Exact target override (optional) <input name="note[target_override]" placeholder="element:&lt;uuid&gt;" /></label>
+              <label>Exact target override (optional)
+              <input name="note[target_override]" placeholder="element:&lt;uuid&gt;" /></label>
               <label>Note <textarea name="note[text]" required></textarea></label>
               <button type="submit" phx-disable-with="Saving candidate…">Save note candidate</button>
             </form>
-            <p class="muted">Target picker includes the screenplay, all scenes/cast entries, and at most the first 250 nonblank elements. Larger scripts require choosing a scene/cast target here or using an exact element already surfaced by the workspace.</p>
-            <p :if={!@workspace.editable?} class="warning">Select the current accepted head to create, edit, remap or delete notes.</p>
+            <p class="muted">
+              Target picker includes the screenplay, all scenes/cast entries, and at most the first 250 nonblank elements. Larger scripts require choosing a scene/cast target here or using an exact element already surfaced by the workspace.
+            </p>
+            <p :if={!@workspace.editable?} class="warning">
+              Select the current accepted head to create, edit, remap or delete notes.
+            </p>
             <a href={~p"/production/#{@run_id}/notes.json?#{[view: @view_token]}"}>Export notes JSON for this exact revision</a>
           </article>
 
           <article class="stack tool-results">
             <article :for={note <- @notes} class="card note-card" data-note-state={note.target_state}>
-              <header><h3>{note.title || "Untitled note"}</h3><code>{note.target_state}</code></header>
+              <header>
+                <h3>{note.title || "Untitled note"}</h3><code>{note.target_state}</code>
+              </header>
               <p>{note.text}</p>
               <p>Target: <code>{note.target["kind"]}:{note.target["id"]}</code></p>
-              <p>Producer: {note.provenance["producer"] || "unknown"} · bound revision {short(note.bound_revision_id)}</p>
+              <p>
+                Producer: {note.provenance["producer"] || "unknown"} · bound revision {short(
+                  note.bound_revision_id
+                )}
+              </p>
               <form :if={@workspace.editable?} phx-submit="save_note" class="stack">
                 <input type="hidden" name="note[id]" value={note.id} />
                 <label>Title <input name="note[title]" value={note.title} /></label>
-                <label>Explicit remap target
+                <label>
+                  Explicit remap target
                   <select name="note[target]">
-                    <option :if={note.target_state == "unresolved"} value="" selected disabled>Choose an explicit replacement target</option>
-                    <option :for={option <- @target_options} value={option.value} selected={option.value == "#{note.target["kind"]}:#{note.target["id"]}"}>{option.label}</option>
+                    <option :if={note.target_state == "unresolved"} value="" selected disabled>
+                      Choose an explicit replacement target
+                    </option>
+                    <option
+                      :for={option <- @target_options}
+                      value={option.value}
+                      selected={option.value == "#{note.target["kind"]}:#{note.target["id"]}"}
+                    >
+                      {option.label}
+                    </option>
                   </select>
                 </label>
-                <label>Exact target override (optional) <input name="note[target_override]" placeholder="element:&lt;uuid&gt;" /></label>
+                <label>Exact target override (optional)
+                <input name="note[target_override]" placeholder="element:&lt;uuid&gt;" /></label>
                 <label>Text <textarea name="note[text]" required><%= note.text %></textarea></label>
                 <button type="submit" phx-disable-with="Saving candidate…">Save edited/remapped candidate</button>
               </form>
-              <button :if={@workspace.editable?} type="button" phx-click="delete_note" phx-value-id={note.id}>Save deletion candidate</button>
+              <button
+                :if={@workspace.editable?}
+                type="button"
+                phx-click="delete_note"
+                phx-value-id={note.id}
+              >Save deletion candidate</button>
             </article>
             <article class="card stack annotation-provenance">
               <h3>Measured annotations are separate evidence</h3>
-              <p class="muted">These recorded annotations are derived evidence with producer provenance. They are not writer-authored notes and are not accepted screenplay text.</p>
-              <p :if={@measured_annotations == []}>No measured annotations are stored on this revision.</p>
+              <p class="muted">
+                These recorded annotations are derived evidence with producer provenance. They are not writer-authored notes and are not accepted screenplay text.
+              </p>
+              <p :if={@measured_annotations == []}>
+                No measured annotations are stored on this revision.
+              </p>
               <details :for={annotation <- Enum.take(@measured_annotations, 24)}>
                 <summary>{annotation.namespace} · {annotation.kind}</summary>
-                <p>Annotation <code>{annotation.id}</code> · source revision <code>{short(annotation.source_revision)}</code></p>
-                <p>Producer: {get_in(annotation, [:provenance, "producer"]) || get_in(annotation, [:provenance, :producer]) || "unknown"}</p>
+                <p>
+                  Annotation <code>{annotation.id}</code>
+                  · source revision <code>{short(annotation.source_revision)}</code>
+                </p>
+                <p>
+                  Producer: {get_in(annotation, [:provenance, "producer"]) ||
+                    get_in(annotation, [:provenance, :producer]) || "unknown"}
+                </p>
               </details>
-              <p :if={length(@measured_annotations) > 24}>Showing the first 24 stored annotations for this exact revision.</p>
+              <p :if={length(@measured_annotations) > 24}>
+                Showing the first 24 stored annotations for this exact revision.
+              </p>
             </article>
           </article>
         </section>
 
-        <section :if={@section in ["notes", "cast"] and @tool_candidates != []} class="card stack candidate-registry">
+        <section
+          :if={@section in ["notes", "cast"] and @tool_candidates != []}
+          class="card stack candidate-registry"
+        >
           <h2>Pending production-tool candidates</h2>
           <p>Saving a candidate never advances canon. Exact human approval is a separate action.</p>
           <div class="table-scroll">
             <table>
-              <thead><tr><th>Kind</th><th>Candidate</th><th>Base</th><th>Decision</th><th>Action</th></tr></thead>
+              <thead>
+                <tr>
+                  <th>Kind</th><th>Candidate</th><th>Base</th><th>Decision</th><th>Action</th>
+                </tr>
+              </thead>
               <tbody>
                 <tr :for={candidate <- @tool_candidates}>
-                  <td>{candidate["kind"]}</td><td><code>{candidate["candidate_id"]}</code></td><td><code>{short(candidate["base_revision_id"])}</code></td><td>{candidate["decision"]}</td>
+                  <td>{candidate["kind"]}</td><td><code>{candidate["candidate_id"]}</code></td><td>
+                    <code>{short(candidate["base_revision_id"])}</code>
+                  </td><td>{candidate["decision"]}</td>
                   <td>
                     <form :if={candidate["decision"] == "proposed"} phx-submit="accept_candidate">
                       <input type="hidden" name="candidate[id]" value={candidate["candidate_id"]} />
@@ -621,26 +831,51 @@ defmodule FountWeb.ProductionLive do
           <article class="card stack tool-controls">
             <p class="eyebrow">S05 · provider-free human read</p><h2 id="read-title">Table read</h2>
             <form phx-submit="create_table_read" class="stack">
-              <label>Material
+              <label>
+                Material
                 <select name="read[scene_id]">
                   <option value="">Whole screenplay</option>
-                  <option :for={scene <- FountWeb.ScreenplayIndex.scene_index(@workspace.screenplay)} value={scene.id}>{scene.ordinal} · {scene.heading}</option>
+                  <option
+                    :for={scene <- FountWeb.ScreenplayIndex.scene_index(@workspace.screenplay)}
+                    value={scene.id}
+                  >
+                    {scene.ordinal} · {scene.heading}
+                  </option>
                 </select>
               </label>
               <button type="submit" phx-disable-with="Saving packet…">Save read packet</button>
             </form>
             <p>{@tts.label}</p>
-            <p class="muted">Automatic scrolling is finite, pauseable and disabled when the browser requests reduced motion. No microphone capture and no automatic performance or quality scoring.</p>
+            <p class="muted">
+              Automatic scrolling is finite, pauseable and disabled when the browser requests reduced motion. No microphone capture and no automatic performance or quality scoring.
+            </p>
             <h3>Saved reads</h3>
-            <button :for={read <- @table_reads} type="button" phx-click="select_table_read" phx-value-id={read["id"]}>
+            <button
+              :for={read <- @table_reads}
+              type="button"
+              phx-click="select_table_read"
+              phx-value-id={read["id"]}
+            >
               {read["packet_id"]} · {short(read["revision_id"])}
             </button>
           </article>
 
-          <article :if={@selected_read} class="card stack table-read-workspace" id="table-read-workspace" phx-hook="TableReadWorkspace" data-read-id={@selected_read["id"]} data-version={@selected_read["version"]} data-bookmark={@selected_read["bookmark_index"]} data-elapsed-ms={@selected_read["elapsed_ms"]}>
+          <article
+            :if={@selected_read}
+            class="card stack table-read-workspace"
+            id="table-read-workspace"
+            phx-hook="TableReadWorkspace"
+            data-read-id={@selected_read["id"]}
+            data-version={@selected_read["version"]}
+            data-bookmark={@selected_read["bookmark_index"]}
+            data-elapsed-ms={@selected_read["elapsed_ms"]}
+          >
             <header>
               <h2>{@selected_read["packet_id"]}</h2>
-              <p>Revision <code>{@selected_read["revision_id"]}</code> · saved state v{@selected_read["version"]}</p>
+              <p>
+                Revision <code>{@selected_read["revision_id"]}</code>
+                · saved state v{@selected_read["version"]}
+              </p>
             </header>
             <div class="read-controls" role="group" aria-label="Table read controls">
               <button type="button" data-read-start>Auto-scroll</button>
@@ -649,8 +884,15 @@ defmodule FountWeb.ProductionLive do
               <span>Elapsed <output data-read-elapsed>{@selected_read["elapsed_ms"]}</output> ms</span>
             </div>
             <div class="read-turns" data-read-turns tabindex="0">
-              <article :for={{turn, index} <- Enum.with_index(@selected_read["packet"]["turns"] || [])} class="read-turn" data-read-turn data-index={index} tabindex="0">
-                <strong>{turn["cue"] || turn["character"] || turn["character_name"] || turn["character_id"] || "Reader"}</strong>
+              <article
+                :for={{turn, index} <- Enum.with_index(@selected_read["packet"]["turns"] || [])}
+                class="read-turn"
+                data-read-turn
+                data-index={index}
+                tabindex="0"
+              >
+                <strong>{turn["cue"] || turn["character"] || turn["character_name"] ||
+                  turn["character_id"] || "Reader"}</strong>
                 <p>{turn["dialogue"] || turn["text"]}</p>
               </article>
             </div>
@@ -661,25 +903,38 @@ defmodule FountWeb.ProductionLive do
               <label>Listening conditions <input name="reaction[listening_conditions]" /></label>
               <button type="submit" phx-disable-with="Saving reaction…">Save human reaction</button>
             </form>
-            <ul><li :for={reaction <- @selected_read["packet"]["reactions"] || []}>{reaction["reader_id"] || "human"}: {reaction["reaction"]}</li></ul>
-            <a href={~p"/production/#{@run_id}/table-reads/#{@selected_read["id"]}.json"}>Export saved read JSON</a>
+            <ul>
+              <li :for={reaction <- @selected_read["packet"]["reactions"] || []}>
+                {reaction["reader_id"] || "human"}: {reaction["reaction"]}
+              </li>
+            </ul>
+            <a href={~p"/production/#{@run_id}/table-reads/#{@selected_read["id"]}/export.json"}>Export saved read JSON</a>
           </article>
         </section>
 
         <section :if={@section == "usefulness"} class="tool-grid" aria-labelledby="usefulness-title">
           <article class="card stack tool-controls">
-            <p class="eyebrow">S06 · descriptive human evidence</p><h2 id="usefulness-title">Usefulness records</h2>
+            <p class="eyebrow">S06 · descriptive human evidence</p><h2 id="usefulness-title">
+              Usefulness records
+            </h2>
             <form phx-submit="save_usefulness" class="stack">
               <label>Task ID <input name="usefulness[task_id]" required /></label>
-              <label>Condition
+              <label>
+                Condition
                 <select name="usefulness[condition]">
-                  <option :for={condition <- FountWorkshop.Usefulness.conditions()} value={condition}>{condition}</option>
+                  <option :for={condition <- FountWorkshop.Usefulness.conditions()} value={condition}>
+                    {condition}
+                  </option>
                 </select>
               </label>
-              <label>Outcome
-                <select name="usefulness[outcome]"><option value="positive">positive</option><option value="neutral">neutral</option><option value="negative">negative</option></select>
+              <label>
+                Outcome
+                <select name="usefulness[outcome]"><option value="positive">positive</option><option value="neutral">
+                  neutral
+                </option><option value="negative">negative</option></select>
               </label>
-              <label><input type="checkbox" name="usefulness[kept_original]" value="true" /> Kept original</label>
+              <label><input type="checkbox" name="usefulness[kept_original]" value="true" />
+              Kept original</label>
               <label>Preference (optional) <input name="usefulness[preference]" /></label>
               <fieldset class="stack">
                 <legend>Optional human-response dimensions (kept separate; not aggregated)</legend>
@@ -687,9 +942,12 @@ defmodule FountWeb.ProductionLive do
                 <label>Next decision <input name="usefulness[dimensions][next_decision]" /></label>
                 <label>Agency <input name="usefulness[dimensions][agency]" /></label>
                 <label>Voice retention <input name="usefulness[dimensions][voice_retention]" /></label>
-                <label>Alternative diversity <input name="usefulness[dimensions][alternative_diversity]" /></label>
-                <label>Consequence usefulness <input name="usefulness[dimensions][consequence_usefulness]" /></label>
-                <label>Rejection time (ms) <input type="number" min="0" name="usefulness[dimensions][rejection_time_ms]" /></label>
+                <label>Alternative diversity
+                <input name="usefulness[dimensions][alternative_diversity]" /></label>
+                <label>Consequence usefulness
+                <input name="usefulness[dimensions][consequence_usefulness]" /></label>
+                <label>Rejection time (ms)
+                <input type="number" min="0" name="usefulness[dimensions][rejection_time_ms]" /></label>
               </fieldset>
               <label>Output refs, one per line <textarea name="usefulness[output_refs]"></textarea></label>
               <label>Friction, one item per line <textarea name="usefulness[friction]"></textarea></label>
@@ -704,10 +962,13 @@ defmodule FountWeb.ProductionLive do
               <p>{@usefulness_report["sample_label"]}</p>
               <p>{@usefulness_report["missing_data_label"]}</p>
               <p>Conditions present: {Enum.join(@usefulness_report["conditions_present"], ", ")}</p>
-              <p>No aggregate screenplay score, winner, expert endorsement or representative-sample claim is made.</p>
+              <p>
+                No aggregate screenplay score, winner, expert endorsement or representative-sample claim is made.
+              </p>
             <% end %>
             <article :for={row <- @usefulness_rows} class="evidence-row">
-              <strong>{row["task_id"]}</strong> · {row["condition"]} · {get_in(row, ["record", "human_response", "outcome"])}
+              <strong>{row["task_id"]}</strong>
+              · {row["condition"]} · {get_in(row, ["record", "human_response", "outcome"])}
               <span :if={get_in(row, ["record", "human_response", "kept_original"])}> · kept original</span>
               <button type="button" phx-click="delete_usefulness" phx-value-id={row["id"]}>Delete</button>
             </article>

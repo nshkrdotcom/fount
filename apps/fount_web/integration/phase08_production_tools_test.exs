@@ -9,7 +9,9 @@ defmodule FountWeb.Phase08ProductionToolsIntegrationTest do
     assert {:ok, workspace} = ProductionTools.workspace(Fount.Repo, "test-owner", run["id"])
     assert workspace.screenplay.revision.id == get_in(run, ["plan", "base_revision_id"])
 
-    assert {:ok, result} = ProductionTools.search(workspace.screenplay, "coffee", %{"limit" => "10"})
+    assert {:ok, result} =
+             ProductionTools.search(workspace.screenplay, "coffee", %{"limit" => "10"})
+
     assert result.revision_id == workspace.screenplay.revision.id
     assert result.returned_hit_count > 0
     assert Enum.all?(result.hits, &String.starts_with?(&1.anchor, "node-"))
@@ -48,7 +50,9 @@ defmodule FountWeb.Phase08ProductionToolsIntegrationTest do
     assert unchanged.authored_items == base.authored_items
     assert {:ok, pointer} = ProductionStore.candidate(Fount.Repo, "test-owner", candidate.id)
     assert pointer["resource_id"] == note_id
-    assert {:error, :not_found} = ProductionStore.candidate(Fount.Repo, "other-owner", candidate.id)
+
+    assert {:error, :not_found} =
+             ProductionStore.candidate(Fount.Repo, "other-owner", candidate.id)
 
     assert {:ok, accepted} =
              ProductionTools.accept_tool_candidate(
@@ -76,7 +80,9 @@ defmodule FountWeb.Phase08ProductionToolsIntegrationTest do
                project["key"],
                changed,
                expected_revision: accepted_head.revision.id,
-               operations: [Fount.Edit.replace_text(action.id, "MARA moves the coffee maker to the window.")]
+               operations: [
+                 Fount.Edit.replace_text(action.id, "MARA moves the coffee maker to the window.")
+               ]
              )
 
     assert {:ok, _changed_accepted} = accept_direct(changed_candidate, "test-owner")
@@ -120,7 +126,12 @@ defmodule FountWeb.Phase08ProductionToolsIntegrationTest do
              )
 
     assert {:ok, remapped} =
-             ProductionTools.accept_tool_candidate(Fount.Repo, "test-owner", remap_candidate.id, Fount.ID.v4())
+             ProductionTools.accept_tool_candidate(
+               Fount.Repo,
+               "test-owner",
+               remap_candidate.id,
+               Fount.ID.v4()
+             )
 
     assert [%{id: ^note_id, target_state: "active", target: %{"id" => replacement_id}}] =
              ProductionTools.notes(remapped)
@@ -136,22 +147,46 @@ defmodule FountWeb.Phase08ProductionToolsIntegrationTest do
     target = "screenplay:#{base.id}"
 
     assert {:ok, %{candidate: first}} =
-             ProductionTools.save_note_candidate(Fount.Repo, "test-owner", project["id"], base.revision.id, %{
-               "title" => "A",
-               "text" => "First candidate",
-               "target" => target
-             })
+             ProductionTools.save_note_candidate(
+               Fount.Repo,
+               "test-owner",
+               project["id"],
+               base.revision.id,
+               %{
+                 "title" => "A",
+                 "text" => "First candidate",
+                 "target" => target
+               }
+             )
 
     assert {:ok, %{candidate: second}} =
-             ProductionTools.save_note_candidate(Fount.Repo, "test-owner", project["id"], base.revision.id, %{
-               "title" => "B",
-               "text" => "Second candidate",
-               "target" => target
-             })
+             ProductionTools.save_note_candidate(
+               Fount.Repo,
+               "test-owner",
+               project["id"],
+               base.revision.id,
+               %{
+                 "title" => "B",
+                 "text" => "Second candidate",
+                 "target" => target
+               }
+             )
 
-    assert {:ok, _} = ProductionTools.accept_tool_candidate(Fount.Repo, "test-owner", first.id, Fount.ID.v4())
+    assert {:ok, _} =
+             ProductionTools.accept_tool_candidate(
+               Fount.Repo,
+               "test-owner",
+               first.id,
+               Fount.ID.v4()
+             )
+
     assert {:error, :candidate_base_stale} =
-             ProductionTools.accept_tool_candidate(Fount.Repo, "test-owner", second.id, Fount.ID.v4())
+             ProductionTools.accept_tool_candidate(
+               Fount.Repo,
+               "test-owner",
+               second.id,
+               Fount.ID.v4()
+             )
   end
 
   test "S02 cast rename is candidate-only and records suggested mentions without accepting them" do
@@ -174,11 +209,20 @@ defmodule FountWeb.Phase08ProductionToolsIntegrationTest do
     refute Enum.any?(Map.values(head.cast), &(&1.display_name == "RENAMED"))
 
     assert {:ok, _accepted} =
-             ProductionTools.accept_tool_candidate(Fount.Repo, "test-owner", candidate.id, Fount.ID.v4())
+             ProductionTools.accept_tool_candidate(
+               Fount.Repo,
+               "test-owner",
+               candidate.id,
+               Fount.ID.v4()
+             )
 
     assert {:ok, renamed} = Fount.Persistence.load(Fount.Repo, project["key"])
     assert renamed.cast[character.id].display_name == "RENAMED"
-    assert Enum.any?(renamed.ir.elements, &(&1.type == :character and String.starts_with?(&1.text, "RENAMED")))
+
+    assert Enum.any?(
+             renamed.ir.elements,
+             &(&1.type == :character and String.starts_with?(&1.text, "RENAMED"))
+           )
   end
 
   test "S05 table reads persist exact packet/revision state, reactions, conflicts and owner isolation" do
@@ -196,7 +240,9 @@ defmodule FountWeb.Phase08ProductionToolsIntegrationTest do
     assert read["revision_id"] == workspace.screenplay.revision.id
     assert read["packet"]["kind"] == "fount.human_table_read"
     assert read["packet"]["turns"] != []
-    assert get_in(read, ["packet", "claims", "synthesized_voice_is_performance_validation"]) == false
+
+    assert get_in(read, ["packet", "claims", "synthesized_voice_is_performance_validation"]) ==
+             false
 
     assert {:ok, state} =
              ProductionTools.update_table_read(Fount.Repo, "test-owner", read["id"], 1, %{
@@ -209,11 +255,17 @@ defmodule FountWeb.Phase08ProductionToolsIntegrationTest do
     assert state["bookmark_index"] == 1
 
     assert {:error, :bookmark_out_of_range} =
-             ProductionTools.update_table_read(Fount.Repo, "test-owner", read["id"], state["version"], %{
-               bookmark_index: 99_999,
-               elapsed_ms: 1_500,
-               scroll_mode: "paused"
-             })
+             ProductionTools.update_table_read(
+               Fount.Repo,
+               "test-owner",
+               read["id"],
+               state["version"],
+               %{
+                 bookmark_index: 99_999,
+                 elapsed_ms: 1_500,
+                 scroll_mode: "paused"
+               }
+             )
 
     assert {:error, {:stale_table_read, current}} =
              ProductionTools.update_table_read(Fount.Repo, "test-owner", read["id"], 1, %{
@@ -236,7 +288,10 @@ defmodule FountWeb.Phase08ProductionToolsIntegrationTest do
     assert [reaction] = reacted["packet"]["reactions"]
     assert reaction["observer"] == "human"
     assert reaction["source"]["revision_id"] == workspace.screenplay.revision.id
-    assert {:error, :not_found} = ProductionStore.table_read(Fount.Repo, "other-owner", read["id"])
+
+    assert {:error, :not_found} =
+             ProductionStore.table_read(Fount.Repo, "other-owner", read["id"])
+
     assert [%{"id" => id}] = ProductionTools.table_reads(Fount.Repo, "test-owner", project["id"])
     assert id == read["id"]
   end
@@ -263,19 +318,24 @@ defmodule FountWeb.Phase08ProductionToolsIntegrationTest do
              })
 
     assert get_in(row, ["record", "human_response", "kept_original"]) == true
+
     assert get_in(row, ["record", "human_response", "dimensions"]) == %{
              "task_completion" => "completed with original",
              "agency" => "high",
              "rejection_time_ms" => 375
            }
+
     assert get_in(row, ["record", "engineering", "resource_usage", "run_id"]) == run["id"]
 
-    assert {:ok, report} = ProductionTools.usefulness_report(Fount.Repo, "test-owner", project["id"])
+    assert {:ok, report} =
+             ProductionTools.usefulness_report(Fount.Repo, "test-owner", project["id"])
+
     assert report["sample_size"] == 1
     assert report["claims"]["automatic_winner"] == false
     assert report["sample_label"] =~ "no representativeness claim"
 
-    assert {:error, :not_found} = ProductionTools.delete_usefulness(Fount.Repo, "other-owner", row["id"])
+    assert {:error, :not_found} =
+             ProductionTools.delete_usefulness(Fount.Repo, "other-owner", row["id"])
 
     conn = FountWeb.ConnCase.login(conn)
     response = get(conn, "/production/#{run["id"]}/usefulness.json")
@@ -284,7 +344,10 @@ defmodule FountWeb.Phase08ProductionToolsIntegrationTest do
     assert response.resp_body =~ "kept_original"
 
     assert :ok = ProductionTools.delete_usefulness(Fount.Repo, "test-owner", row["id"])
-    assert {:ok, empty_report} = ProductionTools.usefulness_report(Fount.Repo, "test-owner", project["id"])
+
+    assert {:ok, empty_report} =
+             ProductionTools.usefulness_report(Fount.Repo, "test-owner", project["id"])
+
     assert empty_report["sample_size"] == 0
   end
 
@@ -331,7 +394,10 @@ defmodule FountWeb.Phase08ProductionToolsIntegrationTest do
 
     assert project["import_format"] == "fdx"
     assert is_list(project["import_fidelity"]["adapter_losses"])
-    assert project["import_fidelity"]["loss_count"] == length(project["import_fidelity"]["adapter_losses"])
+
+    assert project["import_fidelity"]["loss_count"] ==
+             length(project["import_fidelity"]["adapter_losses"])
+
     assert project["import_fidelity"]["original_bytes_preserved_when_unchanged"] == true
 
     assert {:ok, head} = Fount.Persistence.load(Fount.Repo, project["key"])
@@ -362,13 +428,25 @@ defmodule FountWeb.Phase08ProductionToolsIntegrationTest do
                %{"text" => "Export me", "title" => "Export", "target" => "element:#{action.id}"}
              )
 
-    assert {:ok, accepted} = ProductionTools.accept_tool_candidate(Fount.Repo, "test-owner", candidate.id, Fount.ID.v4())
+    assert {:ok, accepted} =
+             ProductionTools.accept_tool_candidate(
+               Fount.Repo,
+               "test-owner",
+               candidate.id,
+               Fount.ID.v4()
+             )
+
     token = "accepted:#{accepted.revision.id}"
-    assert {:ok, accepted_workspace} = ProductionTools.workspace(Fount.Repo, "test-owner", run["id"], token)
+
+    assert {:ok, accepted_workspace} =
+             ProductionTools.workspace(Fount.Repo, "test-owner", run["id"], token)
+
     assert accepted_workspace.editable?
 
     assert {:ok, read} =
-             ProductionTools.create_table_read(Fount.Repo, "test-owner", accepted_workspace, %{"whole_screenplay" => true})
+             ProductionTools.create_table_read(Fount.Repo, "test-owner", accepted_workspace, %{
+               "whole_screenplay" => true
+             })
 
     conn = FountWeb.ConnCase.login(conn)
     notes = get(conn, "/production/#{run["id"]}/notes.json?view=#{URI.encode_www_form(token)}")
@@ -376,7 +454,7 @@ defmodule FountWeb.Phase08ProductionToolsIntegrationTest do
     assert notes.resp_body =~ accepted.revision.id
     assert notes.resp_body =~ "Export me"
 
-    read_export = get(conn, "/production/#{run["id"]}/table-reads/#{read["id"]}.json")
+    read_export = get(conn, "/production/#{run["id"]}/table-reads/#{read["id"]}/export.json")
     assert read_export.status == 200
     assert read_export.resp_body =~ accepted.revision.id
     assert read_export.resp_body =~ read["packet_id"]
@@ -397,7 +475,10 @@ defmodule FountWeb.Phase08ProductionToolsIntegrationTest do
          {:ok, stored} <- Fount.Persistence.candidate(Fount.Repo, candidate.id),
          {:ok, authority} <- Authority.new(principal, stored["screenplay"].id, [:approve]),
          {:ok, approval} <- Approval.direct(stored, principal, Fount.ID.v4()) do
-      Fount.Persistence.accept_candidate(Fount.Repo, candidate.id, approval: approval, authority: authority)
+      Fount.Persistence.accept_candidate(Fount.Repo, candidate.id,
+        approval: approval,
+        authority: authority
+      )
     end
   end
 end

@@ -5,7 +5,12 @@ defmodule FountWeb.ProductionController do
 
   def notes(conn, %{"run_id" => run_id} = params) do
     with {:ok, workspace} <-
-           ProductionTools.workspace(Fount.Repo, conn.assigns.current_owner, run_id, params["view"]) do
+           ProductionTools.workspace(
+             Fount.Repo,
+             conn.assigns.current_owner,
+             run_id,
+             params["view"]
+           ) do
       json(conn, %{
         "kind" => "fount.authored_notes_export",
         "screenplay_id" => workspace.screenplay.id,
@@ -19,12 +24,17 @@ defmodule FountWeb.ProductionController do
   end
 
   def table_read(conn, %{"run_id" => run_id, "id" => id}) do
-    with {:ok, access} <- FountWeb.Store.run_access(Fount.Repo, conn.assigns.current_owner, run_id),
+    with {:ok, access} <-
+           FountWeb.Store.run_access(Fount.Repo, conn.assigns.current_owner, run_id),
          {:ok, row} <- ProductionStore.table_read(Fount.Repo, conn.assigns.current_owner, id),
          true <- row["run_id"] == run_id and row["project_id"] == access["project_id"] do
       json(conn, %{
         "kind" => "fount.saved_table_read",
-        "identity" => Map.take(row, ~w(id owner_id project_id run_id screenplay_id revision_id packet_id bookmark_index elapsed_ms scroll_mode version inserted_at updated_at)),
+        "identity" =>
+          Map.take(
+            row,
+            ~w(id owner_id project_id run_id screenplay_id revision_id packet_id bookmark_index elapsed_ms scroll_mode version inserted_at updated_at)
+          ),
         "packet" => row["packet"]
       })
     else
@@ -34,7 +44,8 @@ defmodule FountWeb.ProductionController do
   end
 
   def usefulness(conn, %{"run_id" => run_id}) do
-    with {:ok, access} <- FountWeb.Store.run_access(Fount.Repo, conn.assigns.current_owner, run_id),
+    with {:ok, access} <-
+           FountWeb.Store.run_access(Fount.Repo, conn.assigns.current_owner, run_id),
          {:ok, report} <-
            ProductionTools.usefulness_report(
              Fount.Repo,
@@ -67,8 +78,14 @@ defmodule FountWeb.ProductionController do
     |> json(%{"error" => "production_resource_unavailable", "reason" => inspect(reason)})
   end
 
+  defp plain(%DateTime{} = value), do: DateTime.to_iso8601(value)
+  defp plain(%NaiveDateTime{} = value), do: NaiveDateTime.to_iso8601(value)
+
   defp plain(value) when is_struct(value), do: value |> Map.from_struct() |> plain()
-  defp plain(value) when is_map(value), do: Map.new(value, fn {key, item} -> {to_string(key), plain(item)} end)
+
+  defp plain(value) when is_map(value),
+    do: Map.new(value, fn {key, item} -> {to_string(key), plain(item)} end)
+
   defp plain(value) when is_list(value), do: Enum.map(value, &plain/1)
   defp plain(value) when is_atom(value), do: Atom.to_string(value)
   defp plain(value), do: value

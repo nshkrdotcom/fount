@@ -42,7 +42,7 @@ defmodule FountWeb.Router do
     end
 
     get "/production/:run_id/notes.json", ProductionController, :notes
-    get "/production/:run_id/table-reads/:id.json", ProductionController, :table_read
+    get "/production/:run_id/table-reads/:id/export.json", ProductionController, :table_read
     get "/production/:run_id/usefulness.json", ProductionController, :usefulness
 
     get "/artifacts/:run_id/:delivery_id/preview", ArtifactController, :preview

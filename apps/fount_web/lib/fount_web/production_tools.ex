@@ -54,12 +54,13 @@ defmodule FountWeb.ProductionTools do
           })
         end)
 
-      {:ok, %{result | hits: hits, filters: search_filter_summary(attrs)}}
+      {:ok, Map.merge(result, %{hits: hits, filters: search_filter_summary(attrs)})}
     end
   end
 
   def character_profiles(%Screenplay{} = screenplay) do
-    scene_ordinals = screenplay.ir.scenes |> Enum.with_index(1) |> Map.new(fn {s, n} -> {s.id, n} end)
+    scene_ordinals =
+      screenplay.ir.scenes |> Enum.with_index(1) |> Map.new(fn {s, n} -> {s.id, n} end)
 
     screenplay.cast
     |> Map.values()
@@ -115,6 +116,7 @@ defmodule FountWeb.ProductionTools do
     |> Enum.map(&note_projection(screenplay, &1))
     |> Enum.filter(fn note ->
       text = String.downcase((note.title || "") <> " " <> (note.text || ""))
+
       (query == "" or String.contains?(text, query)) and
         (wanted_status in [nil, ""] or note.target_state == wanted_status)
     end)
@@ -153,7 +155,9 @@ defmodule FountWeb.ProductionTools do
       |> Enum.reject(&(&1.type in [:blank]))
       |> Enum.take(250)
       |> Enum.map(fn element ->
-        excerpt = element.text |> to_string() |> String.replace(~r/\s+/u, " ") |> String.slice(0, 80)
+        excerpt =
+          element.text |> to_string() |> String.replace(~r/\s+/u, " ") |> String.slice(0, 80)
+
         %{value: "element:#{element.id}", label: "#{element.type} · #{excerpt}"}
       end)
 
@@ -171,7 +175,8 @@ defmodule FountWeb.ProductionTools do
          {:ok, base} <- current_editable_base(repo, project, base_revision_id),
          {:ok, target} <- parse_target(base, note_target(attrs)),
          {:ok, operation} <- note_operation(base, owner, target, attrs),
-         {:ok, candidate_screenplay, _changes} <- Screenplay.apply(base, [operation], actor: "writer:#{owner}"),
+         {:ok, candidate_screenplay, _changes} <-
+           Screenplay.apply(base, [operation], actor: "writer:#{owner}"),
          note_id <- resulting_note_id(base, candidate_screenplay, attrs["id"]),
          {:ok, candidate} <-
            Persistence.save_edit_candidate(repo, project["key"], candidate_screenplay,
@@ -198,8 +203,12 @@ defmodule FountWeb.ProductionTools do
     with {:ok, project} <- Store.project(repo, owner, project_id),
          {:ok, base} <- current_editable_base(repo, project, base_revision_id),
          %{} <- Map.get(base.authored_items, note_id) || {:error, :note_not_found},
-         operation <- %{"kind" => "delete_authored_item", "target" => %{"kind" => "authored_item", "id" => note_id}},
-         {:ok, candidate_screenplay, _changes} <- Screenplay.apply(base, [operation], actor: "writer:#{owner}"),
+         operation <- %{
+           "kind" => "delete_authored_item",
+           "target" => %{"kind" => "authored_item", "id" => note_id}
+         },
+         {:ok, candidate_screenplay, _changes} <-
+           Screenplay.apply(base, [operation], actor: "writer:#{owner}"),
          {:ok, candidate} <-
            Persistence.save_edit_candidate(repo, project["key"], candidate_screenplay,
              expected_revision: base.revision.id,
@@ -223,7 +232,14 @@ defmodule FountWeb.ProductionTools do
     end
   end
 
-  def save_cast_rename_candidate(repo, owner, project_id, base_revision_id, character_id, new_name) do
+  def save_cast_rename_candidate(
+        repo,
+        owner,
+        project_id,
+        base_revision_id,
+        character_id,
+        new_name
+      ) do
     new_name = if is_binary(new_name), do: String.trim(new_name), else: ""
 
     with true <- new_name != "" or {:error, :character_name_required},
@@ -235,7 +251,8 @@ defmodule FountWeb.ProductionTools do
            "target" => %{"kind" => "character", "id" => character_id},
            "value" => %{"name" => new_name, "mention_ids" => []}
          },
-         {:ok, candidate_screenplay, _changes} <- Screenplay.apply(base, [operation], actor: "writer:#{owner}"),
+         {:ok, candidate_screenplay, _changes} <-
+           Screenplay.apply(base, [operation], actor: "writer:#{owner}"),
          {:ok, candidate} <-
            Persistence.save_edit_candidate(repo, project["key"], candidate_screenplay,
              expected_revision: base.revision.id,
@@ -270,14 +287,23 @@ defmodule FountWeb.ProductionTools do
          {:ok, project} <- Store.project(repo, owner, pointer["project_id"]),
          {:ok, head} <- Persistence.load(repo, project["key"]),
          true <- head.id == pointer["screenplay_id"] or {:error, :candidate_screenplay_mismatch},
-         true <- head.revision.id == pointer["base_revision_id"] or {:error, :candidate_base_stale},
+         true <-
+           head.revision.id == pointer["base_revision_id"] or {:error, :candidate_base_stale},
          {:ok, candidate} <- Persistence.candidate(repo, candidate_id),
-         true <- candidate["screenplay_id"] == pointer["screenplay_id"] or {:error, :candidate_screenplay_mismatch},
-         true <- candidate["base_revision_id"] == pointer["base_revision_id"] or {:error, :candidate_base_mismatch},
+         true <-
+           candidate["screenplay_id"] == pointer["screenplay_id"] or
+             {:error, :candidate_screenplay_mismatch},
+         true <-
+           candidate["base_revision_id"] == pointer["base_revision_id"] or
+             {:error, :candidate_base_mismatch},
          {:ok, principal} <- Principal.new(:human, owner),
          {:ok, authority} <- Authority.new(principal, pointer["screenplay_id"], [:approve]),
          {:ok, approval} <- Approval.direct(candidate, principal, approval_id),
-         {:ok, accepted} <- Persistence.accept_candidate(repo, candidate_id, approval: approval, authority: authority) do
+         {:ok, accepted} <-
+           Persistence.accept_candidate(repo, candidate_id,
+             approval: approval,
+             authority: authority
+           ) do
       {:ok, accepted}
     else
       false -> {:error, :candidate_identity_mismatch}
@@ -288,7 +314,8 @@ defmodule FountWeb.ProductionTools do
   def list_tool_candidates(repo, owner, project_id),
     do: ProductionStore.list_candidates(repo, owner, project_id, limit: 30)
 
-  def create_table_read(repo, owner, workspace, selection) when is_map(workspace) and is_map(selection) do
+  def create_table_read(repo, owner, workspace, selection)
+      when is_map(workspace) and is_map(selection) do
     with {:ok, packet} <- TableRead.packet(workspace.screenplay, selection),
          {:ok, row} <-
            ProductionStore.create_table_read(repo, %{
@@ -312,7 +339,6 @@ defmodule FountWeb.ProductionTools do
          :ok <- validate_bookmark(row, bookmark) do
       ProductionStore.update_table_read(repo, owner, id, expected_version, attrs)
     else
-      false -> {:error, :stale_table_read}
       {:error, _} = error -> error
     end
   end
@@ -328,7 +354,6 @@ defmodule FountWeb.ProductionTools do
         scroll_mode: row["scroll_mode"]
       })
     else
-      false -> {:error, :stale_table_read}
       {:error, _} = error -> error
     end
   end
@@ -341,9 +366,14 @@ defmodule FountWeb.ProductionTools do
     executable = System.find_executable("espeak")
 
     cond do
-      not enabled? -> %{available?: false, label: "Unavailable — optional TTS is not configured."}
-      is_nil(executable) -> %{available?: false, label: "Unavailable — configured TTS executable was not found."}
-      true -> %{available?: true, label: "Available — local espeak renderer configured."}
+      not enabled? ->
+        %{available?: false, label: "Unavailable — optional TTS is not configured."}
+
+      is_nil(executable) ->
+        %{available?: false, label: "Unavailable — configured TTS executable was not found."}
+
+      true ->
+        %{available?: true, label: "Available — local espeak renderer configured."}
     end
   end
 
@@ -430,8 +460,15 @@ defmodule FountWeb.ProductionTools do
     cards =
       Enum.filter(cards, fn card ->
         project = card.project
+
         query == "" or
-          String.contains?(String.downcase((project["title"] || "") <> " " <> (project["key"] || "") <> " " <> (project["synopsis"] || "")), query)
+          String.contains?(
+            String.downcase(
+              (project["title"] || "") <>
+                " " <> (project["key"] || "") <> " " <> (project["synopsis"] || "")
+            ),
+            query
+          )
       end)
 
     case sort do
@@ -460,7 +497,8 @@ defmodule FountWeb.ProductionTools do
 
   defp search_scene_scope(screenplay, attrs) do
     with {:ok, explicit} <- scene_filter(screenplay, Map.get(attrs, "scene_id", "")),
-         {:ok, character} <- character_scene_filter(screenplay, Map.get(attrs, "character_id", "")),
+         {:ok, character} <-
+           character_scene_filter(screenplay, Map.get(attrs, "character_id", "")),
          {:ok, location} <- location_scene_filter(screenplay, Map.get(attrs, "location", "")) do
       scopes = Enum.reject([explicit, character, location], &is_nil/1)
 
@@ -518,7 +556,10 @@ defmodule FountWeb.ProductionTools do
   defp integer_limit(_), do: {:error, :invalid_limit}
 
   defp search_filter_summary(attrs) do
-    Map.take(attrs, ~w(scene_id character_id location element_type include_omitted include_notes include_boneyards limit))
+    Map.take(
+      attrs,
+      ~w(scene_id character_id location element_type include_omitted include_notes include_boneyards limit)
+    )
   end
 
   defp editable_revision?(repo, project, screenplay) do
@@ -531,10 +572,11 @@ defmodule FountWeb.ProductionTools do
   defp current_editable_base(repo, project, expected_revision_id) do
     with {:ok, head} <- Persistence.load(repo, project["key"]),
          true <- head.id == project["screenplay_id"] or {:error, :project_screenplay_mismatch},
-         true <- head.revision.id == expected_revision_id or {:error, {:stale_revision, head.revision.id}} do
+         true <-
+           head.revision.id == expected_revision_id or
+             {:error, {:stale_revision, head.revision.id}} do
       {:ok, head}
     else
-      false -> {:error, :project_screenplay_mismatch}
       {:error, _} = error -> error
     end
   end
@@ -555,7 +597,10 @@ defmodule FountWeb.ProductionTools do
         {:error, :note_not_found}
 
       true ->
-        identity = if id, do: %{"id" => id}, else: %{"local_id" => "new:note-#{String.slice(Fount.ID.v4(), 0, 8)}"}
+        identity =
+          if id,
+            do: %{"id" => id},
+            else: %{"local_id" => "new:note-#{String.slice(Fount.ID.v4(), 0, 8)}"}
 
         value = %{
           "title" => title,
@@ -591,8 +636,10 @@ defmodule FountWeb.ProductionTools do
 
   defp parse_target(model, raw) when is_binary(raw) do
     case String.split(raw, ":", parts: 2) do
-      [kind, id] when kind in ~w(screenplay scene element character dialogue_block) and id != "" ->
+      [kind, id]
+      when kind in ~w(screenplay scene element character dialogue_block) and id != "" ->
         target = %{"kind" => kind, "id" => id}
+
         case Target.resolve(model, target) do
           {:ok, _} -> {:ok, target}
           {:error, _} -> {:error, :missing_target}
@@ -644,9 +691,14 @@ defmodule FountWeb.ProductionTools do
     do: CanonicalJSON.hash(%{"kind" => "screenplay", "id" => id})
 
   defp target_fingerprint(model, %{"kind" => "revision", "id" => id}),
-    do: CanonicalJSON.hash(%{"kind" => "revision", "id" => id, "current" => model.revision.id == id})
+    do:
+      CanonicalJSON.hash(%{
+        "kind" => "revision",
+        "id" => id,
+        "current" => model.revision.id == id
+      })
 
-  defp target_fingerprint(model, %{"kind" => "scene", "id" => id} = target) do
+  defp target_fingerprint(model, %{"kind" => "scene"} = target) do
     with {:ok, scene} <- Target.resolve(model, target) do
       elements = Enum.map(scene.element_ids, &Query.node(model, &1))
       CanonicalJSON.hash(%{"scene" => Model.plain(scene), "elements" => Model.plain(elements)})
@@ -667,9 +719,11 @@ defmodule FountWeb.ProductionTools do
     |> Map.values()
     |> Enum.filter(fn annotation ->
       kind = to_string(annotation.kind)
+
       kind in ["relationship", "character_relationship"] and
         Enum.any?(annotation.dependencies || [], fn dependency ->
-          dependency == character_id or dependency == %{"kind" => "character", "id" => character_id}
+          dependency == character_id or
+            dependency == %{"kind" => "character", "id" => character_id}
         end)
     end)
     |> Enum.map(&Model.plain/1)
@@ -710,12 +764,15 @@ defmodule FountWeb.ProductionTools do
 
   defp sample_label([]), do: "No human response records have been saved."
   defp sample_label([_]), do: "1 saved human response; no representativeness claim."
-  defp sample_label(records), do: "#{length(records)} saved human responses; no representativeness claim."
+
+  defp sample_label(records),
+    do: "#{length(records)} saved human responses; no representativeness claim."
 
   defp missing_data_label(records) do
     missing =
       Enum.count(records, fn record ->
         response = record["human_response"] || %{}
+
         is_nil(response["preference"]) and response["notes"] in [nil, []] and
           response["dimensions"] in [nil, %{}]
       end)
@@ -750,7 +807,8 @@ defmodule FountWeb.ProductionTools do
 
   defp normalize_dimensions(_), do: %{}
 
-  defp normalize_dimension("rejection_time_ms", value) when is_integer(value) and value >= 0, do: value
+  defp normalize_dimension("rejection_time_ms", value) when is_integer(value) and value >= 0,
+    do: value
 
   defp normalize_dimension("rejection_time_ms", value) when is_binary(value) do
     case Integer.parse(String.trim(value)) do
@@ -772,7 +830,10 @@ defmodule FountWeb.ProductionTools do
   defp split_lines(nil), do: []
 
   defp split_lines(value) when is_binary(value) do
-    value |> String.split(~r/[\r\n]+/u, trim: true) |> Enum.map(&String.trim/1) |> Enum.reject(&(&1 == ""))
+    value
+    |> String.split(~r/[\r\n]+/u, trim: true)
+    |> Enum.map(&String.trim/1)
+    |> Enum.reject(&(&1 == ""))
   end
 
   defp split_lines(value) when is_list(value), do: value

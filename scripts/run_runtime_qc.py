@@ -92,6 +92,8 @@ def main():
                          for p in (app / directory).rglob(f'*phase{args.phase:02d}*.exs'))
     if not focused:
         raise RuntimeError('Implement the selected phase focused suite before certification')
+    if not list((app / 'browser/tests').glob(f'phase{args.phase:02d}*.spec.mjs')):
+        raise RuntimeError('Implement the selected phase browser journeys before certification')
     run(['mix', 'test', *focused], app, {'MIX_ENV': 'test'})
     run(['mix', 'test', 'test', 'integration'], app, {'MIX_ENV': 'test'})
     if migrated:

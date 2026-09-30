@@ -60,7 +60,7 @@ defmodule FountWeb.Phase06AnalysisContractTest do
     assert graph.truncated
     assert length(graph.nodes) <= 3
     assert length(graph.edges) <= 2
-    assert graph.explanation =~ "causality is never inferred"
+    assert graph.explanation =~ "does not establish cause and effect"
     assert AnalysisDashboard.graph_from_observations([]).nodes == []
 
     dense_records =
@@ -162,7 +162,7 @@ defmodule FountWeb.Phase06AnalysisContractTest do
     for state <- ~w(complete partial failed stale not_run), do: assert(live =~ state)
     assert review =~ "Analysis for this revision"
     assert review =~ "check_set_fingerprint"
-    assert editor =~ "unsaved local draft is unanalyzed"
+    assert editor =~ "This unsaved draft has not been analyzed"
     assert views =~ "def token(%{kind: :evidence"
     assert views =~ "do: \"evidence:"
     assert views =~ "analysis_run_id"

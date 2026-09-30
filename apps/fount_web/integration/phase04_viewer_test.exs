@@ -18,7 +18,7 @@ defmodule FountWeb.Phase04ViewerIntegrationTest do
     assert html =~ "Screenplay reader"
     assert html =~ base_revision
     assert html =~ "Run base"
-    assert html =~ "No Run-bound candidate is currently available"
+    assert html =~ "No proposed revision is available for this Run"
 
     arbitrary = Fount.ID.v4()
 

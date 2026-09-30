@@ -214,7 +214,7 @@ defmodule FountWeb.AnalysisLive do
               status={status_tone(@dashboard.selected.state)}
               label={@dashboard.selected.state}
             />
-            <span class="signal-chip">{@dashboard.selected.stored_status || "no stored packet"}</span>
+            <span class="signal-chip">{@dashboard.selected.stored_status || "no saved report"}</span>
             <span class="signal-chip">rev {short(
               @dashboard.selected.run && @dashboard.selected.run["revision_id"]
             )}</span>
@@ -271,7 +271,7 @@ defmodule FountWeb.AnalysisLive do
         <section class="analysis-layout">
           <aside class="analysis-rail" aria-label="Saved analysis packets">
             <div class="rail-heading">
-              <span>Saved evidence</span>
+              <span>Saved analysis</span>
               <strong>{length(@dashboard.history)}</strong>
             </div>
             <form action={~p"/runs/#{@run_id}/analysis"} method="get" class="compact-form">
@@ -510,7 +510,7 @@ defmodule FountWeb.AnalysisLive do
               </div>
               <FountWeb.CoreComponents.empty_state
                 :if={@dashboard.graph.nodes == []}
-                title="No stored graph records"
+                title="No saved story connections"
                 detail="No story connections are saved in this report."
               />
 

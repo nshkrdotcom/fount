@@ -815,7 +815,9 @@ defmodule FountWeb.ProductionLive do
             class="card stack candidate-registry"
           >
             <h2>Pending production-tool candidates</h2>
-            <p>Saving proposed changes leaves the approved screenplay unchanged. Review and approve them separately.</p>
+            <p>
+              Saving proposed changes leaves the approved screenplay unchanged. Review and approve them separately.
+            </p>
             <div class="table-scroll">
               <table>
                 <thead>

@@ -13,7 +13,7 @@ defmodule FountWeb.Phase06AnalysisIntegrationTest do
     conn = FountWeb.ConnCase.login(conn)
     assert {:ok, _view, empty_html} = live(conn, "/runs/#{run["id"]}/analysis")
     assert empty_html =~ "not_run"
-    assert empty_html =~ "No stored graph records"
+    assert empty_html =~ "No saved story connections"
     complete = persist_packet(base, "complete", "complete")
     partial = persist_packet(base, "partial", "partial")
     failed = persist_packet(base, "failed", "failed")
@@ -106,7 +106,7 @@ defmodule FountWeb.Phase06AnalysisIntegrationTest do
 
     assert legacy_dashboard.selected.state == "not_run"
     assert html =~ "legacy / unavailable"
-    assert html =~ "Inspection reads saved rows only"
+    assert html =~ "This page shows saved analysis"
 
     assert {:ok, _reconnected, reloaded} =
              live(conn, "/runs/#{run["id"]}/analysis?packet=#{saved.id}&target=evidence-stored")
@@ -203,7 +203,7 @@ defmodule FountWeb.Phase06AnalysisIntegrationTest do
     assert hd(dashboard.graph.events).revision_id == base.revision.id
     assert hd(dashboard.graph.events).evidence_ids == ["evidence-graph"]
     assert Enum.all?(dashboard.graph.nodes, &is_binary(&1.observation_id))
-    assert dashboard.graph.explanation =~ "causality is never inferred"
+    assert dashboard.graph.explanation =~ "does not establish cause and effect"
 
     empty = AnalysisDashboard.graph_from_observations([])
     assert empty.nodes == []

@@ -162,7 +162,10 @@ defmodule FountWeb.EditorLive do
             {:noreply,
              socket
              |> assign(:draft, draft)
-             |> assign(:notice, "Candidate #{candidate.id} saved. The approved screenplay is unchanged.")
+             |> assign(
+               :notice,
+               "Candidate #{candidate.id} saved. The approved screenplay is unchanged."
+             )
              |> assign(:error, nil)
              |> assign(:save_state, "candidate-saved")}
 
@@ -316,7 +319,10 @@ defmodule FountWeb.EditorLive do
          |> assign(:last_valid, if(preview.valid?, do: preview, else: socket.assigns.last_valid))
          |> assign(:dirty, false)
          |> assign(:conflict, nil)
-         |> assign(:notice, "Draft rebound to the current accepted base. The approved screenplay was not changed.")}
+         |> assign(
+           :notice,
+           "Draft rebound to the current accepted base. The approved screenplay was not changed."
+         )}
 
       {:error, reason} ->
         {:noreply, assign(socket, :error, human_error(reason))}

@@ -62,6 +62,7 @@ test('W01-W03 expose validated policy, closed actions and persistent exact-base 
 
   const investigate = page.locator('.action-card').filter({hasText: 'Investigate'});
   await expect(investigate).toContainText('unavailable through Run');
+  await investigate.getByText('Action details', {exact: true}).click();
   await expect(investigate).toContainText('not promoted to a Run action');
 
   await selectTwoScenes(page, runId);

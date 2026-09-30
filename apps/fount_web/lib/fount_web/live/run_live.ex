@@ -919,10 +919,14 @@ defmodule FountWeb.RunLive do
                 Status:
                 <strong>{if(action["enabled"], do: "enabled", else: "unavailable through Run")}</strong>
               </p>
-              <p>Mode: {action["mode"]}</p>
-              <p>{action["request"]}</p>
-              <p>{action["handler"]}</p>
-              <p>{action["preconditions"]}</p>
+              <p :if={!action["enabled"]}>This action is unavailable in this workspace.</p>
+              <details>
+                <summary>Action details</summary>
+                <p>Mode: {action["mode"]}</p>
+                <p>{action["request"]}</p>
+                <p>{action["handler"]}</p>
+                <p>{action["preconditions"]}</p>
+              </details>
             </article>
           </div>
         </div>
@@ -1016,7 +1020,7 @@ defmodule FountWeb.RunLive do
           >Ensure worker is running</button>
           <p><strong>Permitted-state summary:</strong> {@lifecycle["reason"]}</p>
           <p>
-            Plan v{@run["current_plan_version"]} · policy v{@run["current_policy_version"]} · lock/fencing version {@run[
+            Plan v{@run["current_plan_version"]} · policy v{@run["current_policy_version"]} · control version {@run[
               "lock_version"
             ] || "—"}. Repeated commands remain subject to backend idempotency and conflict checks.
           </p>

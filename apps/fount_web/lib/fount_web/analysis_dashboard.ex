@@ -170,7 +170,7 @@ defmodule FountWeb.AnalysisDashboard do
       edge_limit: edge_limit,
       truncated: length(nodes) > node_limit or length(edges) > edge_limit,
       explanation:
-        "Nodes and links come only from persisted story-world records and recorded references. Only an explicitly typed causal_relation renders a causal edge; causality is never inferred from order, proximity, or prose."
+        "Connections come from saved story records and source references. A causal link appears only when explicitly recorded; proximity or event order does not establish cause and effect."
     }
   end
 
@@ -290,7 +290,7 @@ defmodule FountWeb.AnalysisDashboard do
     %{
       state: "not_run",
       stored_status: nil,
-      reason: "No persisted analysis packet is available for this owner-authorized screenplay.",
+      reason: "No saved analysis is available for this screenplay.",
       run: nil,
       packet: nil,
       observations: [],
@@ -371,25 +371,25 @@ defmodule FountWeb.AnalysisDashboard do
   defp normalize_status(_), do: "not_run"
 
   defp status_reason(_row, _packet, true),
-    do: "This packet is bound to a different persisted revision than the current review target."
+    do: "This report examines a different screenplay version from the one under review."
 
   defp status_reason(%{"status" => "failed"}, packet, false),
     do:
       packet["reason"] || get_in(packet, ["summary", "reason"]) ||
-        "The stored analysis run failed."
+        "The analysis failed."
 
   defp status_reason(%{"status" => "partial"}, packet, false) do
     case List.wrap(packet["errors"]) do
-      [] -> "The stored packet is partial; inspect coverage, uncertainty, and missing evidence."
-      errors -> "The stored packet is partial with #{length(errors)} recorded error(s)."
+      [] -> "This analysis is incomplete. Review its coverage, unknowns and missing sources."
+      errors -> "This analysis is incomplete with #{length(errors)} recorded error(s)."
     end
   end
 
   defp status_reason(%{"status" => "complete"}, _packet, false),
     do:
-      "The stored packet completed for its recorded revision. Completeness is not screenplay quality."
+      "Analysis is complete for the recorded screenplay version. This does not rate screenplay quality."
 
-  defp status_reason(_, _, false), do: "No completed stored analysis packet is available."
+  defp status_reason(_, _, false), do: "No completed analysis report is available."
 
   defp check_categories(progress) do
     checks = latest_checks(progress)
@@ -437,7 +437,7 @@ defmodule FountWeb.AnalysisDashboard do
       authoritative_resources: progress["resources"] || %{},
       policy_limits: get_in(run, ["policy", "policy", "limits"]) || %{},
       note:
-        "Ledger rows show this Run's persisted reservations and settlements. Backend resource status is the authoritative recursive Run-lineage ceiling/consumption view. measurement_states are semantic states, not HTTP request counts; replay/cache identity does not create synthetic usage."
+        "Usage shows recorded reservations and actual charges for this Run and its related work. Measurement states describe recorded work, not HTTP request counts. Reopening cached results does not add usage."
     }
   end
 
@@ -523,7 +523,7 @@ defmodule FountWeb.AnalysisDashboard do
       is_nil(left) or is_nil(right) ->
         %{
           state: :unavailable,
-          reasons: ["Choose two saved analysis runs from this Run lineage."],
+          reasons: ["Choose two saved analyses from this Run."],
           deltas: [],
           uncertainty: %{left: [], right: []}
         }

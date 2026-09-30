@@ -106,8 +106,8 @@ defmodule FountWeb.Phase06IntegrationTest do
     assert get_in(run, ["policy", "policy", "completion"]) == "candidate"
     assert {:ok, _view, html} = live(conn, "/runs/#{run["id"]}/setup")
     assert html =~ "Produce a checked opening candidate without advancing canon"
-    assert html =~ "Candidate only"
-    assert html =~ "accepted pages can change canon" or html =~ "Accepted pages can change canon"
+    assert html =~ "Proposed changes"
+    assert html =~ "Proposed pages replace the approved screenplay only after your approval."
   end
 
   test "U04 wrong run id and wrong owner are denied rather than widened", %{conn: conn} do

@@ -10,7 +10,7 @@ defmodule FountWeb.Phase05AuthoringIntegrationTest do
     assert {:ok, view, html} = live(conn, "/runs/#{run["id"]}/edit")
     assert html =~ "Screenplay editor"
     assert html =~ "Fountain syntax assistance"
-    assert html =~ "Candidate creation never advances canon"
+    assert html =~ "Saving a proposed revision leaves the approved screenplay unchanged"
 
     invalid = FountWeb.Journeys.fixture_fountain() <> "\n[[unfinished"
 

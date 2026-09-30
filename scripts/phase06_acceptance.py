@@ -63,8 +63,8 @@ def audit() -> dict:
     project_live = text(APP / "lib/fount_web/live/project_live.ex")
     check("bounded_upload", "1_048_576" in project_live and "source_too_large" in launch)
     check("existing_accepted_base_can_start_successor_run", "create_from_project" in launch and "Persistence.load" in launch and "Use current accepted base" in project_live)
-    check("setup_surfaces_plan_policy_and_unknown_estimate", all(token in run_live for token in ("Protected passages", "Effective limits and estimates", "Estimated cost: unknown")))
-    check("decision_review_delivery_context_visible", all(token in run_live for token in ("Available choices and consequences", "Exact evidence binding", "Provenance and lineage", "Content identity")))
+    check("setup_surfaces_plan_policy_and_unknown_estimate", all(token in run_live for token in ("Protected passages", "Effective limits and estimates", "Estimated cost is shown only when available")))
+    check("decision_review_delivery_context_visible", all(token in run_live for token in ("Available choices and consequences", "Analysis for this revision", "Revision history", "Content identity")))
     check("artifact_path_and_checksum_revalidated", "Path.expand" in artifact and "outside_root" in artifact and "checksum" in artifact and "send_download" in artifact)
 
     migrate = text(APP / "lib/mix/tasks/fount_web.migrate.ex")

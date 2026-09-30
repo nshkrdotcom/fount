@@ -59,7 +59,7 @@ test('A01-A07 saved intelligence is inspectable, bounded, accessible and revisio
     await expect(graph).toHaveAttribute('data-graph-scale', '1.00');
     await expect(page.getByText('Accessible graph list')).toBeVisible();
   } else {
-    await expect(page.getByText(/No stored graph records/)).toBeVisible();
+    await expect(page.getByText(/No saved story connections/)).toBeVisible();
   }
 
   const evidenceLink = page.getByRole('link', {name: 'Open exact recorded revision target'}).first();
@@ -122,11 +122,11 @@ test('stored fixtures prove all states, finite graph controls, comparable histor
   await expect(page.locator('.analysis-mast__signals')).toContainText('stale');
   await inspect("00000000-0000-4000-8000-000000000000");
   await expect(page.locator(".analysis-mast__signals")).toContainText("not_run");
-  await expect(page.getByText("No stored graph records", {exact: true})).toBeVisible();
+  await expect(page.getByText("No saved story connections", {exact: true})).toBeVisible();
   await inspect(f.legacy);
   await expect(page.getByText('legacy / unavailable', {exact: true})).toBeVisible();
   await inspect(f.empty);
-  await expect(page.getByText('No stored graph records', {exact: true})).toBeVisible();
+  await expect(page.getByText('No saved story connections', {exact: true})).toBeVisible();
   await expect(page.locator('#analysis-evidence-graph')).toHaveCount(0);
   await inspect(f.complete);
   const graph = page.locator('#analysis-evidence-graph');

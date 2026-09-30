@@ -179,6 +179,6 @@ test('native intake retains edited journey and source across delayed LiveView co
   await expect(page.getByLabel('Or Fountain source')).toHaveValue(source);
   await page.getByRole('button', {name: 'Create Run', exact: true}).click();
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+\/setup$/);
-  await expect(page.getByLabel('Goal', {exact: true})).toHaveValue('Move the reveal while preserving the protected train beat and approve exact checked pages');
+  await expect(page.locator('textarea[name="plan[goal]"]')).toHaveValue('Move the reveal while preserving the protected train beat and approve exact checked pages');
   await context.close();
 });

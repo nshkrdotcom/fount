@@ -1,7 +1,7 @@
 import {test, expect} from '@playwright/test';
 
 const token = process.env.FOUNT_OWNER_TOKEN || 'browser-owner-token';
-const fixture = `Title: Phase 04 Viewer <Fixture>\nAuthor: Zoë\n\n# ACT ONE\nINT. CAFÉ - MORNING #1#\n\nMARA sets an envelope beside the coffee maker. <script>not executable</script>\n\nMARA\nI said I would wait.\n\nOWEN ^\nAnd I said the train would not.\n\n[[private note]]\n\nEXT. TRAIN PLATFORM - NIGHT #2#\n\nNORA waits under the departure board.\n\nNORA\nThe train is late.\n`;
+const fixture = `Title: Phase 04 Viewer <Fixture>\nAuthor: Zoë\n\n# ACT ONE\n\nINT. CAFÉ - MORNING #1#\n\nMARA sets an envelope beside the coffee maker. <script>not executable</script>\n\nMARA\nI said I would wait.\n\nOWEN ^\nAnd I said the train would not.\n\n[[private note]]\n\nEXT. TRAIN PLATFORM - NIGHT #2#\n\nNORA waits under the departure board.\n\nNORA\nThe train is late.\n\nINT. INTERVIEW ROOM - LATER\n\nNora keeps her hands flat on the table.\n\nNORA\nI didn't miss anything.\n`;
 
 async function login(page) {
   await page.goto('/login');
@@ -16,7 +16,7 @@ async function createRun(page, key, journey = 'opening', source = fixture) {
   await page.getByLabel('Project key').fill(key);
   await page.getByLabel('Journey').selectOption(journey);
   await page.getByLabel('Or Fountain source').fill(source);
-  await page.getByRole('button', {name: 'Create Run'}).click();
+  await page.getByRole('button', {name: 'Create Run'}).press('Enter');
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+\/setup$/);
   return page.url().match(/\/runs\/([0-9a-f-]+)\/setup$/)[1];
 }
@@ -51,6 +51,12 @@ test('U01-U05 viewer renders escaped IR, analyzer indices, stable scenes and dia
   const firstSceneId = await firstSceneLink.getAttribute('data-scene-link');
   await firstSceneLink.click();
   await expect(page.locator(`#scene-${firstSceneId}`)).toBeFocused();
+  await expect(firstSceneLink).toHaveAttribute('aria-current', 'location');
+  const outline = page.locator('#scene-outline');
+  await outline.locator('summary').click();
+  await expect(outline).toHaveAttribute('data-collapsed', 'true');
+  await outline.locator('summary').click();
+  await expect(outline).toHaveAttribute('data-collapsed', 'false');
   await firstSceneLink.focus();
   await page.keyboard.press('ArrowDown');
   await expect(page.locator('#scene-outline [data-scene-link]').nth(1)).toBeFocused();
@@ -79,7 +85,30 @@ test('U02/U07 narrow, dark, reduced-motion and reload retain the explicitly sele
   const bg = await page.locator('body').evaluate((node) => getComputedStyle(node).backgroundColor);
   expect(bg).not.toBe('rgba(0, 0, 0, 0)');
 
+  await expect(page.locator('.workspace-grid')).toHaveCSS('grid-template-columns', /[0-9.]+px/);
+  const contrast = await page.locator('body').evaluate((node) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 1;
+    const context = canvas.getContext('2d');
+    const luminance = (color) => {
+      context.clearRect(0, 0, 1, 1);
+      context.fillStyle = color;
+      context.fillRect(0, 0, 1, 1);
+      const channels = [...context.getImageData(0, 0, 1, 1).data].slice(0, 3)
+        .map((value) => { const n = value / 255; return n <= .04045 ? n / 12.92 : ((n + .055) / 1.055) ** 2.4; });
+      return channels[0] * .2126 + channels[1] * .7152 + channels[2] * .0722;
+    };
+    const style = getComputedStyle(node);
+    const values = [luminance(style.color), luminance(style.backgroundColor)].sort((a, b) => a - b);
+    return (values[1] + .05) / (values[0] + .05);
+  });
+  expect(contrast).toBeGreaterThanOrEqual(4.5);
+  await expect(page.locator('html')).toHaveCSS('scroll-behavior', 'auto');
+  await expect(page.locator('.screenplay')).toHaveCSS('font-family', /Courier/);
   const selected = await page.getByLabel('Displayed revision').inputValue();
+  await page.getByLabel('Filter character index').fill('MARA');
+  await page.getByLabel('Filter character index').press('j');
+  await expect(page.getByLabel('Filter character index')).toBeFocused();
   await page.getByLabel('Filter character index').fill('MARA');
   await page.getByRole('button', {name: 'Apply view'}).click();
   await expect(page).toHaveURL(/view=/);
@@ -88,6 +117,24 @@ test('U02/U07 narrow, dark, reduced-motion and reload retain the explicitly sele
   await page.reload();
   await expect(page.getByLabel('Displayed revision')).toHaveValue(selected);
   await expect(page.getByText('MARA', {exact: true}).first()).toBeVisible();
+  await page.evaluate(() => {
+    window.sceneScrollCalls = [];
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function(options) {
+      window.sceneScrollCalls.push(options?.behavior);
+      return original.call(this, options);
+    };
+  });
+  await page.locator('#scene-outline [data-scene-link]').first().click();
+  expect(await page.evaluate(() => window.sceneScrollCalls)).toEqual(['auto']);
+  for (let n = 0; n < 2; n++) {
+    await page.getByRole('button', {name: 'Revision identity details'}).click();
+    await expect(page.getByRole('dialog', {name: 'Revision identity'})).toBeVisible();
+    await page.keyboard.press('Shift+Tab');
+    await expect(page.getByRole('dialog').locator('button')).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+  }
 });
 
 test('U06/U08 candidate diff is Run-bound and stale arbitrary IDs fall back truthfully', async ({page}) => {
@@ -127,10 +174,12 @@ test('U08 accepted revision is separately labeled after exact approval and outsi
   const approve = page.getByRole('button', {name: /Accept candidate|approve/i}).first();
   await expect(approve).toBeVisible({timeout: 60_000});
   await approve.click();
+  await page.goto(`/runs/${runId}/timeline`);
+  await expect(page.locator('pre').filter({hasText: '"outcome": "accepted"'})).toBeVisible({timeout: 60_000});
 
   await page.goto(`/runs/${runId}/viewer`);
   const accepted = page.getByLabel('Displayed revision').locator('option', {hasText: 'Accepted revision'}).first();
-  await expect(accepted).toBeVisible({timeout: 60_000});
+  await expect(accepted).toHaveCount(1, {timeout: 60_000});
   const acceptedToken = await accepted.getAttribute('value');
   await page.getByLabel('Displayed revision').selectOption(acceptedToken);
   await page.getByRole('button', {name: 'Apply view'}).click();

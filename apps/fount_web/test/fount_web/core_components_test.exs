@@ -18,7 +18,9 @@ defmodule FountWeb.CoreComponentsTest do
         options={[{"A", "a"}, {"B", "b"}]}
       />
       <FountWeb.CoreComponents.status_badge status="partial" />
-      <FountWeb.CoreComponents.alert kind="warning" title="Warning">Check this.</FountWeb.CoreComponents.alert>
+      <FountWeb.CoreComponents.alert kind="warning" title="Warning">
+        Check this.
+      </FountWeb.CoreComponents.alert>
       <FountWeb.CoreComponents.loading_state detail="Loading revision" />
       <FountWeb.CoreComponents.empty_state detail="No scenes" />
       <FountWeb.CoreComponents.error_state detail="Storage unavailable" />
@@ -44,7 +46,7 @@ defmodule FountWeb.CoreComponentsTest do
   test "disabled, error, busy and non-color status states render accessibly" do
     html = render_component(&Harness.states/1, %{})
 
-    assert html =~ ~r/id="busy"[^>]*disabled/
+    assert html =~ ~r/<button(?=[^>]*id="busy")(?=[^>]*disabled)[^>]*>/
     assert html =~ ~s(aria-busy="true")
     assert html =~ ~s(aria-invalid="true")
     assert html =~ ~s(aria-describedby="title-error")

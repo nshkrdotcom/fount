@@ -12,7 +12,9 @@ defmodule FountWeb.ViewerLive do
         with {:ok, context} <- FountWeb.Actors.owner_context(owner, access["screenplay_id"]),
              {:ok, run} <- FountRun.get_run(Fount.Repo, run_id, context),
              {:ok, progress} <- FountRun.progress(Fount.Repo, run_id, context) do
-          {:ok, load_workspace(socket, run_id, access, run, progress, params) |> assign(:identity_dialog_open, false)}
+          {:ok,
+           load_workspace(socket, run_id, access, run, progress, params)
+           |> assign(:identity_dialog_open, false)}
         else
           {:error, reason} ->
             {:ok,
@@ -48,15 +50,24 @@ defmodule FountWeb.ViewerLive do
 
     {workspace, error} =
       case ScreenplayViews.load(Fount.Repo, access, run, progress, token) do
-        {:ok, workspace} -> {workspace, nil}
+        {:ok, workspace} ->
+          {workspace, nil}
+
         {:error, reason} ->
           case ScreenplayViews.load(Fount.Repo, access, run, progress, nil) do
-            {:ok, fallback} -> {fallback, human_view_error(reason) <> " Showing the bound Run base instead."}
-            {:error, fallback_reason} -> {nil, human_view_error(fallback_reason)}
+            {:ok, fallback} ->
+              {fallback, human_view_error(reason) <> " Showing the bound Run base instead."}
+
+            {:error, fallback_reason} ->
+              {nil, human_view_error(fallback_reason)}
           end
       end
 
-    index = if workspace, do: ScreenplayIndex.build(workspace.screenplay, character_filter: filter), else: empty_index()
+    index =
+      if workspace,
+        do: ScreenplayIndex.build(workspace.screenplay, character_filter: filter),
+        else: empty_index()
+
     requested_scene = Map.get(params, "scene")
     selected_scene_id = valid_scene_id(index.scenes, requested_scene)
 
@@ -95,7 +106,9 @@ defmodule FountWeb.ViewerLive do
     if Enum.any?(scenes, &(&1.id == scene_id)), do: scene_id, else: nil
   end
 
-  defp bounded_filter(filter) when is_binary(filter), do: filter |> String.slice(0, 80) |> String.trim()
+  defp bounded_filter(filter) when is_binary(filter),
+    do: filter |> String.slice(0, 80) |> String.trim()
+
   defp bounded_filter(_), do: ""
 
   defp empty_index, do: %{scenes: [], characters: [], dialogue: [], locations: []}
@@ -105,12 +118,17 @@ defmodule FountWeb.ViewerLive do
 
   defp human_view_error(:revision_not_found), do: "The bound revision no longer exists."
   defp human_view_error(:candidate_not_found), do: "The bound candidate no longer exists."
-  defp human_view_error(:candidate_identity_mismatch), do: "Candidate identity does not match this Run screenplay."
-  defp human_view_error(:run_screenplay_mismatch), do: "Run and project screenplay identities do not match."
-  defp human_view_error(:no_bound_revision), do: "This Run has no bound screenplay revision to display."
-  defp human_view_error(reason), do: "Viewer unavailable: #{inspect(reason)}"
 
-  defp view_path(run_id, token, scene_id \\ nil, filter \\ nil) do
+  defp human_view_error(:candidate_identity_mismatch),
+    do: "Candidate identity does not match this Run screenplay."
+
+  defp human_view_error(:run_screenplay_mismatch),
+    do: "Run and project screenplay identities do not match."
+
+  defp human_view_error(:no_bound_revision),
+    do: "This Run has no bound screenplay revision to display."
+
+  defp view_path(run_id, token, scene_id, filter) do
     query =
       %{"view" => token}
       |> maybe_put("scene", scene_id)
@@ -124,7 +142,10 @@ defmodule FountWeb.ViewerLive do
   defp maybe_put(map, key, value), do: Map.put(map, key, value)
 
   defp revision_kind(%{kind: :base}), do: "Run base"
-  defp revision_kind(%{kind: :candidate}), do: "Candidate — canon unchanged unless separately accepted"
+
+  defp revision_kind(%{kind: :candidate}),
+    do: "Candidate — canon unchanged unless separately accepted"
+
   defp revision_kind(%{kind: :accepted}), do: "Accepted canonical revision"
 
   @impl true
@@ -183,7 +204,9 @@ defmodule FountWeb.ViewerLive do
           <FountWeb.CoreComponents.card>
             <p><strong>{revision_kind(@workspace.selection)}</strong></p>
             <p>Revision <code>{@workspace.selection.revision_id}</code></p>
-            <p :if={@workspace.selection[:candidate_id]}>Candidate <code>{@workspace.selection.candidate_id}</code></p>
+            <p :if={@workspace.selection[:candidate_id]}>
+              Candidate <code>{@workspace.selection.candidate_id}</code>
+            </p>
             <p>Page estimate: <strong>{@index.estimates.pages.label}</strong>.</p>
             <p>Duration estimate: <strong>{@index.estimates.duration.label}</strong>.</p>
           </FountWeb.CoreComponents.card>
@@ -204,7 +227,9 @@ defmodule FountWeb.ViewerLive do
             return_focus="revision-identity-help"
             cancel_event="close_identity_dialog"
           >
-            <p>The viewer loads only revisions bound to this owner-authorized Run. Selecting a candidate never accepts it.</p>
+            <p>
+              The viewer loads only revisions bound to this owner-authorized Run. Selecting a candidate never accepts it.
+            </p>
             <:actions>
               <FountWeb.CoreComponents.button type="button" phx-click="close_identity_dialog">Close</FountWeb.CoreComponents.button>
             </:actions>
@@ -233,7 +258,9 @@ defmodule FountWeb.ViewerLive do
 
             <details class="workspace-panel" open>
               <summary>Characters ({length(@index.characters)})</summary>
-              <p class="scope-note">Literal cue summaries only; repeated cue spelling is not cast-entity proof.</p>
+              <p class="scope-note">
+                Literal cue summaries only; repeated cue spelling is not cast-entity proof.
+              </p>
               <ul class="index-list">
                 <li :for={character <- @index.characters}>
                   <strong>{character.name}</strong>
@@ -269,7 +296,11 @@ defmodule FountWeb.ViewerLive do
                 <li :for={turn <- @index.dialogue}>
                   <strong>{turn.character || "Unknown cue"}</strong>
                   <span>{turn.words} words{if turn.dual?, do: " · dual", else: ""}</span>
-                  <a :if={turn.scene_id} href={"#scene-#{turn.scene_id}"} data-scene-link={turn.scene_id}>Scene</a>
+                  <a
+                    :if={turn.scene_id}
+                    href={"#scene-#{turn.scene_id}"}
+                    data-scene-link={turn.scene_id}
+                  >Scene</a>
                 </li>
               </ul>
             </details>

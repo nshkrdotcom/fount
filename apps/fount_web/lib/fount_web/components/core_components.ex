@@ -31,7 +31,7 @@ defmodule FountWeb.CoreComponents do
   attr :type, :string, default: "text"
   attr :error, :string, default: nil
   attr :disabled, :boolean, default: false
-  attr :rest, :global
+  attr :rest, :global, include: ~w(placeholder autocomplete maxlength minlength pattern required)
 
   def input(assigns) do
     ~H"""
@@ -73,7 +73,11 @@ defmodule FountWeb.CoreComponents do
         aria-describedby={if @error, do: "#{@id}-error", else: nil}
         {@rest}
       >
-        <option :for={{label, value} <- @options} value={value} selected={to_string(value) == to_string(@value)}>
+        <option
+          :for={{label, value} <- @options}
+          value={value}
+          selected={to_string(value) == to_string(@value)}
+        >
           {label}
         </option>
       </select>
@@ -109,7 +113,10 @@ defmodule FountWeb.CoreComponents do
 
   def alert(assigns) do
     ~H"""
-    <div class={["ui-alert", "ui-alert--#{@kind}"]} role={if @kind == "error", do: "alert", else: "status"}>
+    <div
+      class={["ui-alert", "ui-alert--#{@kind}"]}
+      role={if @kind == "error", do: "alert", else: "status"}
+    >
       <strong :if={@title}>{@title}</strong>
       <div>{render_slot(@inner_block)}</div>
     </div>
@@ -171,7 +178,13 @@ defmodule FountWeb.CoreComponents do
       data-return-focus={@return_focus}
       data-cancel-event={@cancel_event}
     >
-      <section class="ui-dialog" role="dialog" aria-modal="true" aria-labelledby={"#{@id}-title"} tabindex="-1">
+      <section
+        class="ui-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={"#{@id}-title"}
+        tabindex="-1"
+      >
         <h2 id={"#{@id}-title"}>{@title}</h2>
         <div>{render_slot(@inner_block)}</div>
         <footer :if={@actions != []} class="ui-dialog__actions">{render_slot(@actions)}</footer>

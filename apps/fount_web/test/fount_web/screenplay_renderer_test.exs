@@ -26,7 +26,10 @@ defmodule FountWeb.ScreenplayRendererTest do
       Author: Zoë
 
       # ACT ONE
+
       INT. CAFÉ - NIGHT #7#
+
+      An action beat.
 
       [[private <script>alert(1)</script> note]]
 
@@ -60,7 +63,9 @@ defmodule FountWeb.ScreenplayRendererTest do
     assert html =~ "private &lt;script&gt;alert(1)&lt;/script&gt; note"
     refute html =~ "<script>alert(1)</script>"
     assert html =~ "CUT TO:"
-    for css <- ~w(action character dialogue parenthetical transition centered lyric section synopsis note boneyard page-break) do
+
+    for css <-
+          ~w(action character dialogue parenthetical transition centered lyric section synopsis note boneyard page-break) do
       assert html =~ "screenplay-element--#{css}"
     end
 

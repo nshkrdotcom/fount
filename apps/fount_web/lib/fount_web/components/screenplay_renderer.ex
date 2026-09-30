@@ -2,7 +2,6 @@ defmodule FountWeb.Components.ScreenplayRenderer do
   @moduledoc "Pure HEEx renderer for the canonical screenplay IR."
   use Phoenix.Component
 
-  alias Fount.IR.DialogueBlock
   alias Fount.Query
 
   attr :screenplay, :any, required: true
@@ -18,7 +17,11 @@ defmodule FountWeb.Components.ScreenplayRenderer do
       |> assign(:scene_by_heading, scene_by_heading(screenplay))
 
     ~H"""
-    <article class="screenplay" data-screenplay-id={@screenplay.id} data-revision-id={@screenplay.revision.id}>
+    <article
+      class="screenplay"
+      data-screenplay-id={@screenplay.id}
+      data-revision-id={@screenplay.revision.id}
+    >
       <header :if={@title_entries != []} class="screenplay-title-page" aria-label="Title page">
         <dl>
           <div :for={entry <- @title_entries} class="screenplay-title-entry">
@@ -36,7 +39,11 @@ defmodule FountWeb.Components.ScreenplayRenderer do
 
       <div class="screenplay-body">
         <%= for item <- @render_items do %>
-          <.render_item item={item} scene_by_heading={@scene_by_heading} selected_scene_id={@selected_scene_id} />
+          <.render_item
+            item={item}
+            scene_by_heading={@scene_by_heading}
+            selected_scene_id={@selected_scene_id}
+          />
         <% end %>
       </div>
     </article>
@@ -60,7 +67,10 @@ defmodule FountWeb.Components.ScreenplayRenderer do
 
   defp render_item(%{item: {:dialogue, block}} = assigns) do
     assigns = assign(assigns, block: block)
-    ~H"""<.dialogue_block block={@block} />"""
+
+    ~H"""
+    <.dialogue_block block={@block} />
+    """
   end
 
   defp render_item(%{item: {:element, element}} = assigns) do
@@ -160,8 +170,11 @@ defmodule FountWeb.Components.ScreenplayRenderer do
         partner = by_id[block.dual_with]
 
         if partner && !MapSet.member?(seen, partner.id) do
-          {left, right} = dual_order(block_payload(screenplay, block), block_payload(screenplay, partner))
-          {items ++ [{:dual, left, right}], seen |> MapSet.put(block.id) |> MapSet.put(partner.id)}
+          {left, right} =
+            dual_order(block_payload(screenplay, block), block_payload(screenplay, partner))
+
+          {items ++ [{:dual, left, right}],
+           seen |> MapSet.put(block.id) |> MapSet.put(partner.id)}
         else
           {items ++ [{:dialogue, block_payload(screenplay, block)}], MapSet.put(seen, block.id)}
         end

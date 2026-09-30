@@ -6,7 +6,8 @@ defmodule FountWeb.ScreenplayViews do
 
   @accepted_limit 20
 
-  def options(repo, access, run, progress) when is_map(access) and is_map(run) and is_map(progress) do
+  def options(repo, access, run, progress)
+      when is_map(access) and is_map(run) and is_map(progress) do
     with :ok <- verify_run_binding(access, run) do
       base = base_option(run)
       candidates = candidate_options(repo, run, progress)
@@ -32,7 +33,9 @@ defmodule FountWeb.ScreenplayViews do
 
   def token(%{kind: :accepted, revision_id: revision_id}), do: "accepted:#{revision_id}"
 
-  defp verify_run_binding(%{"screenplay_id" => screenplay_id}, %{"screenplay_id" => screenplay_id}), do: :ok
+  defp verify_run_binding(%{"screenplay_id" => screenplay_id}, %{"screenplay_id" => screenplay_id}),
+       do: :ok
+
   defp verify_run_binding(_, _), do: {:error, :run_screenplay_mismatch}
 
   defp base_option(run) do
@@ -47,6 +50,7 @@ defmodule FountWeb.ScreenplayViews do
 
   defp candidate_options(repo, run, progress) do
     selected_id = run["selected_candidate_id"]
+    screenplay_id = run["screenplay_id"]
 
     candidate_ids =
       [selected_id]
@@ -56,27 +60,35 @@ defmodule FountWeb.ScreenplayViews do
       |> Enum.filter(&is_binary/1)
       |> Enum.uniq()
 
-    Enum.flat_map(candidate_ids, fn candidate_id ->
-      case Persistence.candidate(repo, candidate_id) do
-        {:ok, candidate} when candidate["screenplay_id"] == run["screenplay_id"] ->
-          label = if candidate_id == selected_id, do: "Selected candidate", else: "Run candidate"
+    Enum.flat_map(candidate_ids, &candidate_option(repo, &1, screenplay_id, selected_id))
+  end
 
-          [
-            %{
-              kind: :candidate,
-              candidate_id: candidate_id,
-              revision_id: candidate["result_revision_id"],
-              label: label,
-              status: candidate["status"] || "candidate",
-              base_revision_id: candidate["base_revision_id"]
-            }
-            |> put_token()
-          ]
+  defp candidate_option(repo, candidate_id, screenplay_id, selected_id) do
+    case SQL.query(
+           repo,
+           "SELECT result_revision_id::text,base_revision_id::text FROM writing_candidates WHERE id=$1::text::uuid AND screenplay_id=$2::text::uuid",
+           [candidate_id, screenplay_id],
+           log: false
+         ) do
+      {:ok, %{rows: [_]} = result} ->
+        [candidate] = rows(result)
+        label = if candidate_id == selected_id, do: "Selected candidate", else: "Run candidate"
 
-        _ ->
-          []
-      end
-    end)
+        [
+          %{
+            kind: :candidate,
+            candidate_id: candidate_id,
+            revision_id: candidate["result_revision_id"],
+            label: label,
+            status: candidate["status"] || "candidate",
+            base_revision_id: candidate["base_revision_id"]
+          }
+          |> put_token()
+        ]
+
+      _ ->
+        []
+    end
   end
 
   defp accepted_options(repo, run) do
@@ -122,7 +134,8 @@ defmodule FountWeb.ScreenplayViews do
     do: progress |> Map.get("deliveries", []) |> List.wrap() |> Enum.map(& &1["candidate_id"])
 
   defp option(kind, revision_id, label) do
-    %{kind: kind, revision_id: revision_id, label: label, status: Atom.to_string(kind)} |> put_token()
+    %{kind: kind, revision_id: revision_id, label: label, status: Atom.to_string(kind)}
+    |> put_token()
   end
 
   defp put_token(option), do: Map.put(option, :token, token(option))
@@ -147,7 +160,6 @@ defmodule FountWeb.ScreenplayViews do
     else
       false -> {:error, :candidate_identity_mismatch}
       {:error, :not_found} -> {:error, :candidate_not_found}
-      {:error, _} -> {:error, :candidate_unavailable}
     end
   end
 
@@ -155,7 +167,6 @@ defmodule FountWeb.ScreenplayViews do
     case Persistence.load_revision(repo, screenplay_id, revision_id) do
       {:ok, screenplay} -> {:ok, screenplay}
       {:error, :not_found} -> {:error, :revision_not_found}
-      {:error, _} -> {:error, :revision_unavailable}
     end
   end
 

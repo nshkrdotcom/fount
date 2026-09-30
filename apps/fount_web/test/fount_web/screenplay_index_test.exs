@@ -1,6 +1,7 @@
 defmodule FountWeb.ScreenplayIndexTest do
   use ExUnit.Case, async: true
 
+  alias Fount.Analyzers.{Characters, Dialogue, Locations}
   alias FountWeb.ScreenplayIndex
 
   defp model do
@@ -24,29 +25,41 @@ defmodule FountWeb.ScreenplayIndexTest do
   end
 
   defp analyzer_subject(screenplay),
-    do: %{id: screenplay.id, revision: screenplay.revision, ir: screenplay.ir, index: screenplay.index}
+    do: %{
+      id: screenplay.id,
+      revision: screenplay.revision,
+      ir: screenplay.ir,
+      index: screenplay.index
+    }
 
   test "projects deterministic Core analyzer values and literal cue identity limits" do
     screenplay = model()
     index = ScreenplayIndex.build(screenplay)
     subject = analyzer_subject(screenplay)
 
-    {:ok, character_annotations} = Fount.Analyzers.Characters.analyze(subject, [])
-    {:ok, dialogue_annotations} = Fount.Analyzers.Dialogue.analyze(subject, [])
-    {:ok, location_annotations} = Fount.Analyzers.Locations.analyze(subject, [])
+    {:ok, character_annotations} = Characters.analyze(subject, [])
+    {:ok, dialogue_annotations} = Dialogue.analyze(subject, [])
+    {:ok, location_annotations} = Locations.analyze(subject, [])
 
     assert Enum.map(index.characters, &{&1.name, &1.cue_count}) ==
              character_annotations
              |> Enum.map(&{&1.value.name, &1.value.cue_count})
              |> Enum.sort_by(fn {name, count} -> {-count, name} end)
 
-    assert Enum.map(index.dialogue, &Map.take(&1, [:character, :words, :characters, :parentheticals, :dual?, :side])) ==
+    assert Enum.map(
+             index.dialogue,
+             &Map.take(&1, [:character, :words, :characters, :parentheticals, :dual?, :side])
+           ) ==
              Enum.map(dialogue_annotations, & &1.value)
 
     assert Enum.sort(Enum.map(index.locations, & &1.location)) ==
              location_annotations |> Enum.map(& &1.value.location) |> Enum.uniq() |> Enum.sort()
 
-    assert Enum.all?(index.characters, &String.contains?(&1.identity_note, "does not prove a cast entity relationship"))
+    assert Enum.all?(
+             index.characters,
+             &String.contains?(&1.identity_note, "does not prove a cast entity relationship")
+           )
+
     assert Enum.all?(index.characters, &(&1.analyzer_kind == :character_cue_summary))
   end
 
@@ -62,5 +75,12 @@ defmodule FountWeb.ScreenplayIndexTest do
     assert empty.estimates.pages.value == 0
     assert empty.estimates.duration.value == 0
     assert empty.estimates.duration.label =~ "0 minutes"
+
+    unknown = ScreenplayIndex.estimates(%{ir: %{elements: nil}})
+    assert unknown.duration.value == nil
+    assert unknown.duration.label =~ "unknown"
+
+    assert Enum.map(ScreenplayIndex.scene_index(screenplay), & &1.id) ==
+             Enum.map(screenplay.ir.scenes, & &1.id)
   end
 end

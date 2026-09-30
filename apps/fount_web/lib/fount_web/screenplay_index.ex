@@ -72,7 +72,8 @@ defmodule FountWeb.ScreenplayIndex do
         dialogue_block_ids: Enum.map(blocks, & &1.id),
         dialogue_block_count: length(blocks),
         analyzer_kind: annotation.kind,
-        identity_note: "Literal cue summary from Fount.Analyzers.Characters; repeated cue spelling does not prove a cast entity relationship."
+        identity_note:
+          "Literal cue summary from Fount.Analyzers.Characters; repeated cue spelling does not prove a cast entity relationship."
       }
     end)
     |> Enum.filter(fn character ->

@@ -13,7 +13,7 @@ defmodule FountWeb.Components.DiffViewer do
   def diff(assigns) do
     case diff_payload(assigns.before, assigns.after) do
       {:ok, payload} ->
-        assigns = assign(assigns, :payload, payload)
+        assigns = assigns |> assign(:payload, payload) |> assign(:after_model, assigns.after)
 
         ~H"""
         <section class={["diff-viewer", "diff-viewer--#{@mode}"]} aria-label="Screenplay diff">
@@ -26,12 +26,15 @@ defmodule FountWeb.Components.DiffViewer do
             <div>
               <strong>{@after_label}</strong>
               <FountWeb.CoreComponents.status_badge status={@after_status} label={@after_status} />
-              <code>{@after.revision.id}</code>
+              <code>{@after_model.revision.id}</code>
             </div>
           </header>
           <p :if={@payload.entries == []} class="diff-viewer__unchanged">No structural changes.</p>
           <div :if={@payload.entries != []} class="diff-viewer__entries">
-            <article :for={entry <- @payload.entries} class={["diff-entry", "diff-entry--#{entry.change}"]}>
+            <article
+              :for={entry <- @payload.entries}
+              class={["diff-entry", "diff-entry--#{entry.change}"]}
+            >
               <span class="diff-entry__label">{change_label(entry.change)}</span>
               <code>{entry.id}</code>
               <div class="diff-entry__content">
@@ -68,7 +71,13 @@ defmodule FountWeb.Components.DiffViewer do
 
     moved_entries =
       Enum.map(structural.scenes.moved, fn scene_id ->
-        %{id: scene_id, kind: :scene, change: :moved, before: "Earlier scene position", after: "New scene position"}
+        %{
+          id: scene_id,
+          kind: :scene,
+          change: :moved,
+          before: "Earlier scene position",
+          after: "New scene position"
+        }
       end)
 
     {:ok, %{structural: structural, entries: element_entries ++ moved_entries}}
@@ -97,7 +106,11 @@ defmodule FountWeb.Components.DiffViewer do
   defp change_label(:changed), do: "Changed"
   defp change_label(:moved), do: "Moved"
 
-  defp diff_error(:different_screenplay), do: "The selected revisions belong to different screenplay identities."
-  defp diff_error(:screenplay_required), do: "Persistent Fount.Screenplay revisions are required for this diff."
+  defp diff_error(:different_screenplay),
+    do: "The selected revisions belong to different screenplay identities."
+
+  defp diff_error(:screenplay_required),
+    do: "Persistent Fount.Screenplay revisions are required for this diff."
+
   defp diff_error(reason), do: inspect(reason)
 end

@@ -99,7 +99,9 @@ def main():
     if migrated:
         run(['mix', 'ecto.create', '-r', 'Fount.Repo'], app,
             {'MIX_ENV': 'test', 'FOUNT_DATABASE_URL': browser_url})
-        run(['scripts/run_phase06_browser.sh'], overrides={'FOUNT_DATABASE_URL': browser_url})
+        run(['scripts/run_phase06_browser.sh'], overrides={'FOUNT_DATABASE_URL': browser_url,
+            'FOUNT_ARTIFACT_ROOT': str(output / 'browser-artifacts'),
+            'FOUNT_BROWSER_SERVER_LOG': str(output / 'browser-server.log')})
     for command in LADDER:
         run(command)
     for package in PACKAGES:

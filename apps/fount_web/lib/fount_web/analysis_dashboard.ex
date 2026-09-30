@@ -36,37 +36,33 @@ defmodule FountWeb.AnalysisDashboard do
     base_revision_id = get_in(run, ["plan", "base_revision_id"])
     candidate_id = selected_candidate_id(run, progress)
 
-    candidate =
-      case candidate_id do
-        id when is_binary(id) ->
-          case Fount.Persistence.candidate(repo, id) do
-            {:ok, stored} -> stored
-            _ -> nil
-          end
-
-        _ ->
-          nil
-      end
-
-    revision_packet =
-      case candidate do
-        %{} -> get_in(candidate, ["provenance", "revision_intelligence"])
-        _ -> nil
-      end
+    candidate = stored_candidate(repo, candidate_id)
+    revision_packet = candidate |> field("provenance") |> field("revision_intelligence")
 
     %{
       "base_revision_id" => base_revision_id,
       "candidate_id" => candidate_id,
-      "candidate_revision_id" => candidate && candidate["result_revision_id"],
-      "candidate_status" => candidate && candidate["status"],
-      "check_set_fingerprint" => candidate && candidate["check_set_fingerprint"],
-      "packet_id" => revision_packet && revision_packet["id"],
-      "analysis_run_id" => revision_packet && get_in(revision_packet, ["provenance", "analysis_run_id"]),
-      "packet_source_revision_id" => revision_packet && revision_packet["source_revision"],
-      "packet_status" => revision_packet && revision_packet["status"],
+      "candidate_revision_id" => field(candidate, "result_revision_id"),
+      "candidate_status" => field(candidate, "status"),
+      "check_set_fingerprint" => field(candidate, "check_set_fingerprint"),
+      "packet_id" => field(revision_packet, "id"),
+      "analysis_run_id" => revision_packet |> field("provenance") |> field("analysis_run_id"),
+      "packet_source_revision_id" => field(revision_packet, "source_revision"),
+      "packet_status" => field(revision_packet, "status"),
       "freshness" => review_freshness(candidate, revision_packet)
     }
   end
+
+  defp stored_candidate(repo, id) when is_binary(id) do
+    case Fount.Persistence.candidate(repo, id) do
+      {:ok, stored} -> stored
+      _ -> nil
+    end
+  end
+
+  defp stored_candidate(_repo, _id), do: nil
+  defp field(nil, _key), do: nil
+  defp field(map, key), do: map[key]
 
   @doc "Returns the bounded persisted identities that are reachable from this Run."
   def lineage(progress, run) when is_map(progress) and is_map(run) do
@@ -95,6 +91,7 @@ defmodule FountWeb.AnalysisDashboard do
            Enum.map(analysis, & &1["candidate_id"]) ++
            Enum.flat_map(steps, fn step ->
              result = step["result"] || %{}
+
              [step["input_candidate_id"], step["output_candidate_id"], result["candidate_id"]] ++
                List.wrap(result["candidate_ids"])
            end) ++
@@ -158,7 +155,9 @@ defmodule FountWeb.AnalysisDashboard do
 
     visible_edges =
       edges
-      |> Enum.filter(&(MapSet.member?(visible_ids, &1.from) and MapSet.member?(visible_ids, &1.to)))
+      |> Enum.filter(
+        &(MapSet.member?(visible_ids, &1.from) and MapSet.member?(visible_ids, &1.to))
+      )
       |> Enum.take(edge_limit)
 
     %{
@@ -184,7 +183,9 @@ defmodule FountWeb.AnalysisDashboard do
       |> augment_lineage(review)
 
     history = analysis_runs(repo, access["screenplay_id"], run_lineage)
-    fingerprints = observation_fingerprints(repo, access["screenplay_id"], Enum.map(history, & &1["id"]))
+
+    fingerprints =
+      observation_fingerprints(repo, access["screenplay_id"], Enum.map(history, & &1["id"]))
 
     history =
       Enum.map(history, fn row ->
@@ -279,8 +280,10 @@ defmodule FountWeb.AnalysisDashboard do
   defp select_run([], _requested, _fallback), do: nil
 
   defp select_run(history, requested, fallback) do
-    id = requested || fallback
-    Enum.find(history, &(&1["id"] == id)) || List.first(history)
+    case requested do
+      id when is_binary(id) and id != "" -> Enum.find(history, &(&1["id"] == id))
+      _ -> Enum.find(history, &(&1["id"] == fallback)) || List.first(history)
+    end
   end
 
   defp packet_view(nil, _review, _observations, _lineage) do
@@ -294,7 +297,10 @@ defmodule FountWeb.AnalysisDashboard do
       evidence: [],
       diagnoses: [],
       uncertainty: [],
-      limitations: []
+      limitations: [],
+      missing_evidence: [],
+      protected_strengths: [],
+      next_investigations: []
     }
   end
 
@@ -303,7 +309,7 @@ defmodule FountWeb.AnalysisDashboard do
     stale = stale?(row, review)
 
     %{
-      state: if(stale, do: "stale", else: normalize_status(row["status"])),
+      state: if(stale, do: "stale", else: packet_status(row)),
       stored_status: normalize_status(row["status"]),
       reason: status_reason(row, packet, stale),
       run: history_row(row, review, lineage),
@@ -328,7 +334,7 @@ defmodule FountWeb.AnalysisDashboard do
       "playbook" => row["playbook"],
       "playbook_sha256" => row["playbook_sha256"],
       "status" => normalize_status(row["status"]),
-      "display_status" => if(stale?(row, review), do: "stale", else: normalize_status(row["status"])),
+      "display_status" => if(stale?(row, review), do: "stale", else: packet_status(row)),
       "scope" => row["scope"] || %{},
       "output_contract_id" => row["output_contract_id"],
       "output_contract_sha256" => row["output_contract_sha256"],
@@ -354,6 +360,12 @@ defmodule FountWeb.AnalysisDashboard do
     if packet["source_revision"] == candidate["result_revision_id"], do: "current", else: "stale"
   end
 
+  defp packet_status(%{"status" => "failed"}), do: "failed"
+
+  defp packet_status(row) do
+    if row["result"] in [nil, %{}], do: "not_run", else: normalize_status(row["status"])
+  end
+
   defp normalize_status(status) when status in ["complete", "partial", "failed"], do: status
   defp normalize_status("running"), do: "not_run"
   defp normalize_status(_), do: "not_run"
@@ -362,7 +374,9 @@ defmodule FountWeb.AnalysisDashboard do
     do: "This packet is bound to a different persisted revision than the current review target."
 
   defp status_reason(%{"status" => "failed"}, packet, false),
-    do: packet["reason"] || get_in(packet, ["summary", "reason"]) || "The stored analysis run failed."
+    do:
+      packet["reason"] || get_in(packet, ["summary", "reason"]) ||
+        "The stored analysis run failed."
 
   defp status_reason(%{"status" => "partial"}, packet, false) do
     case List.wrap(packet["errors"]) do
@@ -372,7 +386,8 @@ defmodule FountWeb.AnalysisDashboard do
   end
 
   defp status_reason(%{"status" => "complete"}, _packet, false),
-    do: "The stored packet completed for its recorded revision. Completeness is not screenplay quality."
+    do:
+      "The stored packet completed for its recorded revision. Completeness is not screenplay quality."
 
   defp status_reason(_, _, false), do: "No completed stored analysis packet is available."
 
@@ -433,6 +448,7 @@ defmodule FountWeb.AnalysisDashboard do
       consumed: 0,
       outstanding_reserved: 0,
       unknown_rows: 0,
+      unknown_cost_rows: 0,
       reserved_cost_microunits: 0,
       consumed_cost_microunits: 0,
       currencies: []
@@ -443,23 +459,47 @@ defmodule FountWeb.AnalysisDashboard do
     reserved = integer_or_zero(row["reserved_quantity"])
     settled = row["settled_quantity"]
     released = row["reconciliation_state"] == "released"
-    known = row["knowledge_state"] == "known" and is_integer(settled)
-    settled_value = if known and not released, do: settled, else: 0
+    known = known_settlement?(row) and not released
+    settled_value = if known, do: settled, else: 0
     reservation_value = if released, do: 0, else: reserved
 
     total
     |> Map.update!(:reserved, &(&1 + reservation_value))
     |> Map.update!(:consumed, &(&1 + settled_value))
     |> Map.update!(:outstanding_reserved, fn value ->
-      value + if(known, do: max(reservation_value - settled_value, 0), else: reservation_value)
+      value + open_reservation(row)
     end)
     |> Map.update!(:unknown_rows, &(&1 + if(known or released, do: 0, else: 1)))
-    |> Map.update!(:reserved_cost_microunits, &(&1 + if(released, do: 0, else: integer_or_zero(row["reserved_cost_microunits"]))))
-    |> Map.update!(:consumed_cost_microunits, fn value ->
-      value + if(known and not released, do: integer_or_zero(row["settled_cost_microunits"]), else: 0)
-    end)
+    |> add_cost_usage(row, released)
     |> add_currency(row["currency"])
   end
+
+  defp add_cost_usage(total, row, released) do
+    known_cost = known_cost?(row) and not released
+
+    total
+    |> Map.update!(
+      :reserved_cost_microunits,
+      &(&1 + if(released, do: 0, else: integer_or_zero(row["reserved_cost_microunits"])))
+    )
+    |> Map.update!(:unknown_cost_rows, &(&1 + if(known_cost or released, do: 0, else: 1)))
+    |> Map.update!(:consumed_cost_microunits, fn value ->
+      value + if(known_cost, do: row["settled_cost_microunits"], else: 0)
+    end)
+  end
+
+  defp open_reservation(%{"reconciliation_state" => "reserved"} = row),
+    do: integer_or_zero(row["reserved_quantity"])
+
+  defp open_reservation(_), do: 0
+
+  defp known_cost?(row),
+    do: is_integer(row["settled_cost_microunits"]) and nonempty_identity?(row["currency"])
+
+  defp known_settlement?(row),
+    do:
+      row["reconciliation_state"] == "settled" and row["knowledge_state"] == "known" and
+        is_integer(row["settled_quantity"])
 
   defp add_currency(total, nil), do: total
 
@@ -472,7 +512,8 @@ defmodule FountWeb.AnalysisDashboard do
   defp integer_or_zero(value) when is_integer(value), do: value
   defp integer_or_zero(_), do: 0
 
-  defp comparison(_history, nil, nil), do: %{state: :unselected, reasons: [], deltas: [], uncertainty: %{left: [], right: []}}
+  defp comparison(_history, nil, nil),
+    do: %{state: :unselected, reasons: [], deltas: [], uncertainty: %{left: [], right: []}}
 
   defp comparison(history, left_id, right_id) do
     left = Enum.find(history, &(&1["id"] == left_id))
@@ -480,10 +521,20 @@ defmodule FountWeb.AnalysisDashboard do
 
     cond do
       is_nil(left) or is_nil(right) ->
-        %{state: :unavailable, reasons: ["Choose two saved analysis runs from this Run lineage."], deltas: [], uncertainty: %{left: [], right: []}}
+        %{
+          state: :unavailable,
+          reasons: ["Choose two saved analysis runs from this Run lineage."],
+          deltas: [],
+          uncertainty: %{left: [], right: []}
+        }
 
       left["id"] == right["id"] ->
-        %{state: :incomparable, reasons: ["Choose two distinct saved analysis runs."], deltas: [], uncertainty: %{left: [], right: []}}
+        %{
+          state: :incomparable,
+          reasons: ["Choose two distinct saved analysis runs."],
+          deltas: [],
+          uncertainty: %{left: [], right: []}
+        }
 
       true ->
         compare_runs(left, right)
@@ -493,15 +544,44 @@ defmodule FountWeb.AnalysisDashboard do
   defp compatibility(left, right) do
     reasons =
       []
-      |> mismatch(left["output_contract_id"], right["output_contract_id"], "output contract differs")
-      |> mismatch(left["output_contract_sha256"], right["output_contract_sha256"], "output contract definition differs")
-      |> mismatch(CanonicalJSON.hash(left["scope"] || %{}), CanonicalJSON.hash(right["scope"] || %{}), "analysis scope differs")
-      |> mismatch(measurement_identity(left), measurement_identity(right), "measurement definition differs or is unavailable")
-      |> mismatch(provider_fingerprint(left), provider_fingerprint(right), "provider/model fingerprint differs or is unavailable")
-      |> mismatch(evidence_identity(left), evidence_identity(right), "evidence identity differs or is unavailable")
+      |> mismatch(
+        left["output_contract_id"],
+        right["output_contract_id"],
+        "output contract differs"
+      )
+      |> mismatch(
+        left["output_contract_sha256"],
+        right["output_contract_sha256"],
+        "output contract definition differs"
+      )
+      |> mismatch(
+        scope_identity(left),
+        scope_identity(right),
+        "analysis scope differs"
+      )
+      |> mismatch(
+        measurement_identity(left),
+        measurement_identity(right),
+        "measurement definition differs or is unavailable"
+      )
+      |> mismatch(
+        provider_fingerprint(left),
+        provider_fingerprint(right),
+        "provider/model fingerprint differs or is unavailable"
+      )
+      |> mismatch(
+        evidence_identity(left),
+        evidence_identity(right),
+        "evidence identity differs or is unavailable"
+      )
 
     %{reasons: Enum.reverse(reasons)}
   end
+
+  defp scope_identity(%{"scope" => scope}) when is_map(scope) and map_size(scope) > 0,
+    do: CanonicalJSON.hash(scope)
+
+  defp scope_identity(_), do: nil
 
   defp mismatch(reasons, nil, _right, message), do: [message | reasons]
   defp mismatch(reasons, _left, nil, message), do: [message | reasons]
@@ -525,8 +605,17 @@ defmodule FountWeb.AnalysisDashboard do
 
   defp provider_fingerprint(row) do
     values = row["_provider_fingerprints"] || []
-    if values == [], do: nil, else: CanonicalJSON.hash(values)
+
+    if values != [] and Enum.all?(values, &valid_provider_identity?/1),
+      do: CanonicalJSON.hash(Enum.sort_by(values, &CanonicalJSON.hash/1)),
+      else: nil
   end
+
+  defp valid_provider_identity?(value) when is_map(value),
+    do: nonempty_identity?(value["provider"]) and nonempty_identity?(value["model"])
+
+  defp valid_provider_identity?(_), do: false
+  defp nonempty_identity?(value), do: is_binary(value) and String.trim(value) != ""
 
   defp evidence_identity(row) do
     evidence = get_in(row, ["result", "evidence"]) || []
@@ -536,11 +625,21 @@ defmodule FountWeb.AnalysisDashboard do
         %{
           "id" => item["evidence_id"] || item["id"],
           "target" => item["target"],
+          "revision_id" => item["revision_id"] || get_in(item, ["target", "revision_id"]),
           "excerpt_sha256" => item["excerpt_sha256"]
         }
       end)
 
-    if identities == [], do: nil, else: CanonicalJSON.hash(identities)
+    if identities != [] and Enum.all?(identities, &valid_evidence_identity?/1),
+      do: CanonicalJSON.hash(identities),
+      else: nil
+  end
+
+  defp valid_evidence_identity?(identity) do
+    nonempty_identity?(identity["id"]) and nonempty_identity?(identity["revision_id"]) and
+      is_map(identity["target"]) and
+      nonempty_identity?(identity["target"]["id"]) and
+      nonempty_identity?(identity["excerpt_sha256"])
   end
 
   defp numeric_deltas(left, right) do
@@ -624,7 +723,8 @@ defmodule FountWeb.AnalysisDashboard do
            Enum.map(inline_evidence, &(&1["evidence_id"] || &1["id"])))
         |> compact_ids()
 
-      target = first_target(evidence_ids, evidence) || Enum.find_value(inline_evidence, & &1["target"])
+      target =
+        first_target(evidence_ids, evidence) || Enum.find_value(inline_evidence, & &1["target"])
 
       provenance = %{
         observation_id: wrapped.observation_id,
@@ -650,7 +750,13 @@ defmodule FountWeb.AnalysisDashboard do
       subject_nodes =
         Enum.map(subjects, fn subject ->
           provenance
-          |> Map.merge(%{id: "subject:" <> subject, label: subject, kind: "entity", target: target, record_id: id})
+          |> Map.merge(%{
+            id: "subject:" <> subject,
+            label: subject,
+            kind: "entity",
+            target: target,
+            record_id: id
+          })
         end)
 
       subject_edges =
@@ -687,19 +793,37 @@ defmodule FountWeb.AnalysisDashboard do
           []
         end
 
-      {[record_node | subject_nodes ++ relation_nodes] ++ nodes, subject_edges ++ relation_edges ++ edges, events ++ event_rows}
+      {[record_node | subject_nodes ++ relation_nodes] ++ nodes,
+       subject_edges ++ relation_edges ++ edges, events ++ event_rows}
     end)
     |> then(fn {nodes, edges, events} -> {Enum.reverse(nodes), Enum.reverse(edges), events} end)
   end
 
-  defp explicit_relation("causal_relation", %{"from" => from, "to" => to} = record, record_id, provenance)
+  defp explicit_relation(
+         "causal_relation",
+         %{"from" => from, "to" => to} = record,
+         record_id,
+         provenance
+       )
        when is_binary(from) and is_binary(to) do
     from_id = "reference:" <> from
     to_id = "reference:" <> to
 
     nodes = [
-      Map.merge(provenance, %{id: from_id, label: from, kind: "event", target: nil, record_id: record_id}),
-      Map.merge(provenance, %{id: to_id, label: to, kind: "event", target: nil, record_id: record_id})
+      Map.merge(provenance, %{
+        id: from_id,
+        label: from,
+        kind: "event",
+        target: nil,
+        record_id: record_id
+      }),
+      Map.merge(provenance, %{
+        id: to_id,
+        label: to,
+        kind: "event",
+        target: nil,
+        record_id: record_id
+      })
     ]
 
     edges = [
@@ -723,7 +847,10 @@ defmodule FountWeb.AnalysisDashboard do
 
   defp graph_kind(kind) when kind in ["event", "events"], do: "event"
   defp graph_kind(kind) when kind in ["entity"], do: "entity"
-  defp graph_kind(kind) when kind in ["relationships", "relation", "causal_relation"], do: "relation"
+
+  defp graph_kind(kind) when kind in ["relationships", "relation", "causal_relation"],
+    do: "relation"
+
   defp graph_kind(_), do: "record"
 
   defp first_target(evidence_ids, registry) do
@@ -752,13 +879,15 @@ defmodule FountWeb.AnalysisDashboard do
     evidence =
       selected.evidence
       |> Enum.find(fn item ->
-        get_in(item, ["target", "id"]) == target_id or (item["evidence_id"] || item["id"]) == target_id
+        get_in(item, ["target", "id"]) == target_id or
+          (item["evidence_id"] || item["id"]) == target_id
       end)
 
     %{
       id: target_id,
       evidence: evidence,
-      revision_id: evidence && (evidence["revision_id"] || get_in(evidence, ["target", "revision_id"])),
+      revision_id:
+        evidence && (evidence["revision_id"] || get_in(evidence, ["target", "revision_id"])),
       target: evidence && evidence["target"],
       unresolved: is_binary(target_id) and is_nil(evidence)
     }
@@ -776,18 +905,36 @@ defmodule FountWeb.AnalysisDashboard do
     |> Map.update!(:analysis_run_ids, &compact_ids([review["analysis_run_id"] | &1]))
     |> Map.update!(:candidate_ids, &compact_ids([review["candidate_id"] | &1]))
     |> Map.update!(:revision_ids, fn ids ->
-      compact_ids([review["base_revision_id"], review["candidate_revision_id"], review["packet_source_revision_id"] | ids])
+      compact_ids([
+        review["base_revision_id"],
+        review["candidate_revision_id"],
+        review["packet_source_revision_id"] | ids
+      ])
     end)
   end
 
   defp lineage_kind(row, lineage) do
     cond do
-      row["id"] in lineage.analysis_run_ids -> "analysis_run"
-      is_binary(row["session_id"]) and row["session_id"] in lineage.session_ids -> "session"
-      is_binary(row["candidate_id"]) and row["candidate_id"] in lineage.candidate_ids -> "candidate"
-      is_nil(row["session_id"]) and is_nil(row["candidate_id"]) and row["revision_id"] in lineage.revision_ids -> "legacy_revision"
-      true -> "unbound"
+      row["id"] in lineage.analysis_run_ids ->
+        "analysis_run"
+
+      is_binary(row["session_id"]) and row["session_id"] in lineage.session_ids ->
+        "session"
+
+      is_binary(row["candidate_id"]) and row["candidate_id"] in lineage.candidate_ids ->
+        "candidate"
+
+      legacy_revision?(row, lineage) ->
+        "legacy_revision"
+
+      true ->
+        "unbound"
     end
+  end
+
+  defp legacy_revision?(row, lineage) do
+    is_nil(row["session_id"]) and is_nil(row["candidate_id"]) and
+      row["revision_id"] in lineage.revision_ids
   end
 
   defp compact_ids(values) do

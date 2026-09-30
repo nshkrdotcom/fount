@@ -17,7 +17,9 @@ mkdir -p "$FOUNT_ARTIFACT_ROOT"
 cd "$APP"
 mix fount_web.migrate
 mix assets.build
-mix phx.server >"$ROOT/_phase06_browser_server.log" 2>&1 &
+mix run priv/phase06_browser_fixtures.exs
+FOUNT_BROWSER_SERVER_LOG="${FOUNT_BROWSER_SERVER_LOG:-$ROOT/_phase06_browser_server.log}"
+mix phx.server >"$FOUNT_BROWSER_SERVER_LOG" 2>&1 &
 SERVER_PID=$!
 trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT INT TERM
 
@@ -25,7 +27,7 @@ n=0
 until curl -fsS "$FOUNT_WEB_BASE_URL/login" >/dev/null 2>&1; do
   n=$((n + 1))
   if [ "$n" -ge 60 ]; then
-    cat "$ROOT/_phase06_browser_server.log" >&2 || true
+    cat "$FOUNT_BROWSER_SERVER_LOG" >&2 || true
     exit 1
   fi
   sleep 1

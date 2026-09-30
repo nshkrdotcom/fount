@@ -2,11 +2,19 @@
   <section class="login-identity" aria-labelledby="login-title">
     <p class="eyebrow">Private writer control room</p>
     <h1 id="login-title">Fount</h1>
-    <p class="login-deck">A dense, evidence-aware workspace for screenplay inspection, revision and controlled authoring.</p>
+    <p class="login-deck">
+      A dense, evidence-aware workspace for screenplay inspection, revision and controlled authoring.
+    </p>
     <dl class="login-signals">
-      <div><dt>authority</dt><dd>human acceptance</dd></div>
-      <div><dt>analysis</dt><dd>revision-bound</dd></div>
-      <div><dt>canon</dt><dd>explicit only</dd></div>
+      <div>
+        <dt>authority</dt><dd>human acceptance</dd>
+      </div>
+      <div>
+        <dt>analysis</dt><dd>revision-bound</dd>
+      </div>
+      <div>
+        <dt>canon</dt><dd>explicit only</dd>
+      </div>
     </dl>
   </section>
   <section class="login-panel">
@@ -18,7 +26,8 @@
     <p :if={@error} class="ui-alert ui-alert--error" role="alert">{@error}</p>
     <form action={~p"/login"} method="post" class="stack">
       <input type="hidden" name="_csrf_token" value={get_csrf_token()} />
-      <label>Owner token
+      <label>
+        Owner token
         <input name="session[token]" type="password" autocomplete="current-password" required />
       </label>
       <button type="submit">Sign in to Fount</button>

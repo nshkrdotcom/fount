@@ -91,7 +91,7 @@ defmodule FountWeb.Components.ScreenplayRenderer do
       class={[
         "screenplay-element",
         "screenplay-element--#{@css_type}",
-        @scene_id == @selected_scene_id && "is-selected-scene",
+        @scene_id && @scene_id == @selected_scene_id && "is-selected-scene",
         !@known && "screenplay-element--fallback"
       ]}
       data-node-id={@element.id}

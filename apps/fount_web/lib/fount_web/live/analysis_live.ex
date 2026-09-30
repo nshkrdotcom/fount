@@ -3,7 +3,8 @@ defmodule FountWeb.AnalysisLive do
 
   @impl true
   def mount(%{"id" => run_id} = params, _session, socket) do
-    if connected?(socket), do: Phoenix.PubSub.subscribe(FountWeb.PubSub, FountWeb.RunEvents.topic(run_id))
+    if connected?(socket),
+      do: Phoenix.PubSub.subscribe(FountWeb.PubSub, FountWeb.RunEvents.topic(run_id))
 
     {:ok,
      socket
@@ -32,9 +33,14 @@ defmodule FountWeb.AnalysisLive do
            socket.assigns.run_id,
            socket.assigns.params
          ) do
-      {:ok, dashboard} -> assign(socket, dashboard: dashboard, error: nil)
-      {:error, :not_found} -> socket |> put_flash(:error, "Run not found for this owner.") |> redirect(to: ~p"/")
-      {:error, reason} -> assign(socket, :error, "Analysis evidence unavailable: #{inspect(reason)}")
+      {:ok, dashboard} ->
+        assign(socket, dashboard: dashboard, error: nil)
+
+      {:error, :not_found} ->
+        socket |> put_flash(:error, "Run not found for this owner.") |> redirect(to: ~p"/")
+
+      {:error, reason} ->
+        assign(socket, :error, "Analysis evidence unavailable: #{inspect(reason)}")
     end
   end
 
@@ -71,7 +77,10 @@ defmodule FountWeb.AnalysisLive do
   end
 
   defp short(nil), do: "—"
-  defp short(value) when is_binary(value) and byte_size(value) > 12, do: String.slice(value, 0, 12)
+
+  defp short(value) when is_binary(value) and byte_size(value) > 12,
+    do: String.slice(value, 0, 12)
+
   defp short(value), do: to_string(value)
 
   defp status_tone(status) when status in ["complete", "current"], do: "complete"
@@ -89,12 +98,17 @@ defmodule FountWeb.AnalysisLive do
   end
 
   defp evidence_href(run_id, selected, item) do
-    revision_id = item["revision_id"] || get_in(item, ["target", "revision_id"]) || selected.run["revision_id"]
+    revision_id =
+      item["revision_id"] || get_in(item, ["target", "revision_id"]) ||
+        selected.run["revision_id"]
+
     analysis_run_id = selected.run["id"]
     target = item["target"] || %{}
     anchor = target_anchor(target)
     token = "evidence:#{analysis_run_id}:#{revision_id}"
-    "/runs/#{run_id}/viewer?" <> URI.encode_query(%{"view" => token}) <> anchor
+    query = %{"view" => token, "target" => target["id"] || "unresolved"}
+    query = if target["kind"] == "scene", do: Map.put(query, "scene", target["id"]), else: query
+    "/runs/#{run_id}/viewer?" <> URI.encode_query(query) <> anchor
   end
 
   defp target_anchor(%{"kind" => "scene", "id" => id}) when is_binary(id), do: "#scene-#{id}"
@@ -123,7 +137,7 @@ defmodule FountWeb.AnalysisLive do
     "/runs/#{run_id}/analysis" <> query
   end
 
-  defp cost_label(%{currencies: currencies, unknown_rows: unknown} = item) do
+  defp cost_label(%{currencies: currencies, unknown_cost_rows: unknown} = item) do
     case currencies do
       [] ->
         "cost unavailable / unitless"
@@ -132,7 +146,7 @@ defmodule FountWeb.AnalysisLive do
         "#{currency} #{item.consumed_cost_microunits} µ settled"
 
       [currency] ->
-        "#{currency} #{item.consumed_cost_microunits} µ known settled; #{unknown} unresolved row(s)"
+        "#{currency} #{item.consumed_cost_microunits} µ known settled; cost unknown for #{unknown} row(s)"
 
       _ ->
         "mixed currencies; no combined cost total"
@@ -191,7 +205,8 @@ defmodule FountWeb.AnalysisLive do
             <p class="eyebrow">Persisted evidence console</p>
             <h1>{@dashboard.access["title"]}</h1>
             <p>
-              Run <code>{@run_id}</code> · screenplay <code>{@dashboard.access["screenplay_id"]}</code>
+              Run <code>{@run_id}</code>
+              · screenplay <code>{@dashboard.access["screenplay_id"]}</code>
             </p>
           </div>
           <div class="analysis-mast__signals" aria-label="Evidence status">
@@ -200,7 +215,9 @@ defmodule FountWeb.AnalysisLive do
               label={@dashboard.selected.state}
             />
             <span class="signal-chip">{@dashboard.selected.stored_status || "no stored packet"}</span>
-            <span class="signal-chip">rev {short(@dashboard.selected.run && @dashboard.selected.run["revision_id"])}</span>
+            <span class="signal-chip">rev {short(
+              @dashboard.selected.run && @dashboard.selected.run["revision_id"]
+            )}</span>
           </div>
         </header>
 
@@ -215,7 +232,7 @@ defmodule FountWeb.AnalysisLive do
           </div>
           <div>
             <span class="micro-label">playbook</span>
-            <strong>{@dashboard.selected.run && @dashboard.selected.run["playbook"] || "—"}</strong>
+            <strong>{(@dashboard.selected.run && @dashboard.selected.run["playbook"]) || "—"}</strong>
           </div>
           <div>
             <span class="micro-label">candidate binding</span>
@@ -229,16 +246,24 @@ defmodule FountWeb.AnalysisLive do
 
         <p class="analysis-state-note">{@dashboard.selected.reason}</p>
 
-        <section :if={@dashboard.target.id} class={"target-context #{if @dashboard.target.unresolved, do: "target-context--unresolved", else: ""}"} aria-live="polite">
+        <section
+          :if={@dashboard.target.id}
+          class={"target-context #{if @dashboard.target.unresolved, do: "target-context--unresolved", else: ""}"}
+          aria-live="polite"
+        >
           <div>
             <span class="micro-label">finding navigation context</span>
-            <strong>{if @dashboard.target.unresolved, do: "Recorded target unresolved", else: evidence_id(@dashboard.target.evidence)}</strong>
+            <strong>{if @dashboard.target.unresolved,
+              do: "Recorded target unresolved",
+              else: evidence_id(@dashboard.target.evidence)}</strong>
           </div>
           <p :if={@dashboard.target.unresolved}>
             The requested target is not present in this selected saved packet. No evidence was rebound to another revision or element.
           </p>
           <p :if={!@dashboard.target.unresolved}>
-            Bound revision <code>{@dashboard.target.revision_id || @dashboard.selected.run["revision_id"]}</code> · {evidence_target(@dashboard.target.evidence)}
+            Bound revision
+            <code>{@dashboard.target.revision_id || @dashboard.selected.run["revision_id"]}</code>
+            · {evidence_target(@dashboard.target.evidence)}
           </p>
           <a href={clear_focus_href(@run_id, @dashboard.selected)}>Clear focus</a>
         </section>
@@ -252,19 +277,37 @@ defmodule FountWeb.AnalysisLive do
             <form action={~p"/runs/#{@run_id}/analysis"} method="get" class="compact-form">
               <label for="analysis-packet">Packet</label>
               <select id="analysis-packet" name="packet">
-                <option :for={row <- @dashboard.history} value={row["id"]} selected={@dashboard.selected.run && row["id"] == @dashboard.selected.run["id"]}>
+                <option
+                  :for={row <- @dashboard.history}
+                  value={row["id"]}
+                  selected={@dashboard.selected.run && row["id"] == @dashboard.selected.run["id"]}
+                >
                   {packet_label(row)}
                 </option>
               </select>
               <button type="submit">Inspect</button>
             </form>
 
-            <dl class="identity-ledger" :if={@dashboard.selected.run}>
-              <div><dt>Revision</dt><dd><code>{@dashboard.selected.run["revision_id"]}</code></dd></div>
-              <div><dt>Candidate</dt><dd><code>{@dashboard.selected.run["candidate_id"] || "—"}</code></dd></div>
-              <div><dt>Session</dt><dd><code>{@dashboard.selected.run["session_id"] || "—"}</code></dd></div>
-              <div><dt>Run lineage</dt><dd>{lineage_label(@dashboard.selected.run["lineage_kind"])}</dd></div>
-              <div><dt>Output contract</dt><dd>{@dashboard.selected.run["output_contract_id"] || "legacy / unavailable"}</dd></div>
+            <dl :if={@dashboard.selected.run} class="identity-ledger">
+              <div>
+                <dt>Revision</dt><dd><code>{@dashboard.selected.run["revision_id"]}</code></dd>
+              </div>
+              <div>
+                <dt>Candidate</dt><dd>
+                  <code>{@dashboard.selected.run["candidate_id"] || "—"}</code>
+                </dd>
+              </div>
+              <div>
+                <dt>Session</dt><dd><code>{@dashboard.selected.run["session_id"] || "—"}</code></dd>
+              </div>
+              <div>
+                <dt>Run lineage</dt><dd>{lineage_label(@dashboard.selected.run["lineage_kind"])}</dd>
+              </div>
+              <div>
+                <dt>Output contract</dt><dd>
+                  {@dashboard.selected.run["output_contract_id"] || "legacy / unavailable"}
+                </dd>
+              </div>
             </dl>
 
             <div class="rail-note">
@@ -275,8 +318,14 @@ defmodule FountWeb.AnalysisLive do
           <div class="analysis-main">
             <section class="analysis-grid analysis-grid--status" aria-label="Check categories">
               <article class="evidence-card evidence-card--required">
-                <header><span class="micro-label">deterministic authority</span><h2>Authoritative required checks</h2></header>
-                <p :if={@dashboard.checks.required_deterministic == []}>No required Run checks are recorded yet.</p>
+                <header>
+                  <span class="micro-label">deterministic authority</span><h2>
+                    Authoritative required checks
+                  </h2>
+                </header>
+                <p :if={@dashboard.checks.required_deterministic == []}>
+                  No required Run checks are recorded yet.
+                </p>
                 <ul class="check-list">
                   <li :for={check <- @dashboard.checks.required_deterministic}>
                     <strong>{check["kind"] || check["constraint_id"]}</strong>
@@ -287,20 +336,31 @@ defmodule FountWeb.AnalysisLive do
               </article>
 
               <article class="evidence-card evidence-card--application">
-                <header><span class="micro-label">Workshop application</span><h2>Workshop application checks</h2></header>
-                <p :if={@dashboard.checks.workshop_application == []}>No Workshop application checks are recorded.</p>
+                <header>
+                  <span class="micro-label">Workshop application</span><h2>
+                    Workshop application checks
+                  </h2>
+                </header>
+                <p :if={@dashboard.checks.workshop_application == []}>
+                  No Workshop application checks are recorded.
+                </p>
                 <ul class="check-list">
                   <li :for={check <- @dashboard.checks.workshop_application}>
                     <strong>{check["kind"] || check["constraint_id"]}</strong>
                     <span>{check["status"] || "unknown"}</span>
-                    <small>{check["message"] || check["evaluation"] || "deterministic application check"}</small>
+                    <small>{check["message"] || check["evaluation"] ||
+                      "deterministic application check"}</small>
                   </li>
                 </ul>
               </article>
 
               <article class="evidence-card evidence-card--advisory">
-                <header><span class="micro-label">semantic advice</span><h2>Semantic advisory findings</h2></header>
-                <p :if={@dashboard.checks.semantic_advisory == []}>No semantic advisory checks are recorded.</p>
+                <header>
+                  <span class="micro-label">semantic advice</span><h2>Semantic advisory findings</h2>
+                </header>
+                <p :if={@dashboard.checks.semantic_advisory == []}>
+                  No semantic advisory checks are recorded.
+                </p>
                 <ul class="check-list">
                   <li :for={check <- @dashboard.checks.semantic_advisory}>
                     <strong>{check["kind"] || check["constraint_id"]}</strong>
@@ -313,38 +373,69 @@ defmodule FountWeb.AnalysisLive do
 
             <section class="analysis-grid analysis-grid--packet">
               <article class="evidence-card evidence-card--wide">
-                <header><span class="micro-label">writer packet</span><h2>Finding & diagnosis</h2></header>
-                <p class="lead-finding">{@dashboard.selected.packet && @dashboard.selected.packet["finding"] || "No saved writer finding."}</p>
+                <header>
+                  <span class="micro-label">writer packet</span><h2>Finding & diagnosis</h2>
+                </header>
+                <p class="lead-finding">
+                  {(@dashboard.selected.packet && @dashboard.selected.packet["finding"]) ||
+                    "No saved writer finding."}
+                </p>
                 <div class="diagnosis-stack">
                   <details :for={diagnosis <- @dashboard.selected.diagnoses} class="evidence-detail">
                     <summary>{diagnosis["hypothesis"] || diagnosis["id"] || "Diagnosis"}</summary>
                     <dl>
-                      <div><dt>Concern</dt><dd>{value_preview(diagnosis["concern"])}</dd></div>
-                      <div><dt>Support</dt><dd>{value_preview(diagnosis["support"] || [])}</dd></div>
-                      <div><dt>Counterevidence</dt><dd>{value_preview(diagnosis["counterevidence"] || [])}</dd></div>
-                      <div><dt>Uncertainty</dt><dd>{value_preview(diagnosis["uncertainty"] || "not recorded")}</dd></div>
+                      <div>
+                        <dt>Concern</dt><dd>{value_preview(diagnosis["concern"])}</dd>
+                      </div>
+                      <div>
+                        <dt>Support</dt><dd>{value_preview(diagnosis["support"] || [])}</dd>
+                      </div>
+                      <div>
+                        <dt>Counterevidence</dt><dd>
+                          {value_preview(diagnosis["counterevidence"] || [])}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Uncertainty</dt><dd>
+                          {value_preview(diagnosis["uncertainty"] || "not recorded")}
+                        </dd>
+                      </div>
                     </dl>
                   </details>
-                  <p :if={@dashboard.selected.diagnoses == []}>No diagnosis entries are present in this saved packet.</p>
+                  <p :if={@dashboard.selected.diagnoses == []}>
+                    No diagnosis entries are present in this saved packet.
+                  </p>
                 </div>
               </article>
 
               <article class="evidence-card">
-                <header><span class="micro-label">uncertainty</span><h2>Unknowns remain visible</h2></header>
+                <header>
+                  <span class="micro-label">uncertainty</span><h2>Unknowns remain visible</h2>
+                </header>
                 <ul class="plain-list">
                   <li :for={item <- @dashboard.selected.uncertainty}>{value_preview(item)}</li>
-                  <li :for={item <- @dashboard.selected.missing_evidence}>Missing: {value_preview(item)}</li>
+                  <li :for={item <- @dashboard.selected.missing_evidence}>
+                    Missing: {value_preview(item)}
+                  </li>
                 </ul>
-                <p :if={@dashboard.selected.uncertainty == [] and @dashboard.selected.missing_evidence == []}>No uncertainty fields were persisted in this packet.</p>
+                <p :if={
+                  @dashboard.selected.uncertainty == [] and @dashboard.selected.missing_evidence == []
+                }>
+                  No uncertainty fields were persisted in this packet.
+                </p>
               </article>
             </section>
 
             <section class="evidence-card" id="evidence-register">
               <header class="section-heading">
-                <div><span class="micro-label">source register</span><h2>Evidence references</h2></div>
+                <div>
+                  <span class="micro-label">source register</span><h2>Evidence references</h2>
+                </div>
                 <span>{length(@dashboard.selected.evidence)} references</span>
               </header>
-              <p :if={@dashboard.selected.evidence == []}>No source evidence references were persisted with this packet.</p>
+              <p :if={@dashboard.selected.evidence == []}>
+                No source evidence references were persisted with this packet.
+              </p>
               <div class="evidence-register">
                 <article :for={item <- @dashboard.selected.evidence} class="evidence-row">
                   <div>
@@ -362,7 +453,11 @@ defmodule FountWeb.AnalysisLive do
 
             <section class="evidence-card graph-card" aria-labelledby="graph-title">
               <header class="section-heading">
-                <div><span class="micro-label">stored story records</span><h2 id="graph-title">Evidence graph</h2></div>
+                <div>
+                  <span class="micro-label">stored story records</span><h2 id="graph-title">
+                    Evidence graph
+                  </h2>
+                </div>
                 <div class="graph-toolbar" aria-label="Graph zoom controls">
                   <button type="button" data-graph-zoom-out aria-label="Zoom graph out">−</button>
                   <button type="button" data-graph-reset>Reset</button>
@@ -379,7 +474,11 @@ defmodule FountWeb.AnalysisLive do
               <p :if={@dashboard.graph.truncated} class="warning">
                 View bounded to {@dashboard.graph.node_limit} nodes and {@dashboard.graph.edge_limit} links; stored totals are {@dashboard.graph.total_nodes} nodes / {@dashboard.graph.total_edges} links.
               </p>
-              <div :if={@dashboard.graph.nodes != []} class="graph-viewport" data-analysis-graph-wrapper>
+              <div
+                :if={@dashboard.graph.nodes != []}
+                class="graph-viewport"
+                data-analysis-graph-wrapper
+              >
                 <svg
                   id="analysis-evidence-graph"
                   phx-hook="AnalysisGraph"
@@ -396,8 +495,13 @@ defmodule FountWeb.AnalysisLive do
                       x2={edge.x2}
                       y2={edge.y2}
                       class="graph-edge"
+                      data-edge-kind={edge.kind}
                     />
-                    <g :for={node <- @dashboard.graph.nodes} class={"graph-node graph-node--#{node.kind}"} transform={"translate(#{node.x} #{node.y})"}>
+                    <g
+                      :for={node <- @dashboard.graph.nodes}
+                      class={"graph-node graph-node--#{node.kind}"}
+                      transform={"translate(#{node.x} #{node.y})"}
+                    >
                       <circle r="18" />
                       <text x="28" y="5">{String.slice(node.label || node.id, 0, 44)}</text>
                     </g>
@@ -413,7 +517,13 @@ defmodule FountWeb.AnalysisLive do
               <details class="evidence-detail" open>
                 <summary>Accessible graph list</summary>
                 <table class="compact-table">
-                  <thead><tr><th>Type</th><th>Node</th><th>Recorded target</th><th>Revision</th><th>Evidence</th><th>Observation</th></tr></thead>
+                  <thead>
+                    <tr>
+                      <th>Type</th><th>Node</th><th>Recorded target</th><th>Revision</th><th>
+                        Evidence
+                      </th><th>Observation</th>
+                    </tr>
+                  </thead>
                   <tbody>
                     <tr :for={node <- @dashboard.graph.nodes}>
                       <td>{node.kind}</td>
@@ -422,6 +532,21 @@ defmodule FountWeb.AnalysisLive do
                       <td><code>{short(node.revision_id)}</code></td>
                       <td>{graph_evidence(node)}</td>
                       <td><code>{short(node.observation_id)}</code></td>
+                    </tr>
+                  </tbody>
+                </table>
+                <table class="compact-table" aria-label="Recorded graph links">
+                  <thead>
+                    <tr>
+                      <th>Relation</th><th>From</th><th>To</th><th>Evidence</th><th>Observation</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr :for={edge <- @dashboard.graph.edges}>
+                      <td>{edge.label}</td><td>{edge.from}</td><td>{edge.to}</td>
+                      <td>{graph_evidence(edge)}</td><td>
+                        <code>{short(edge.observation_id)}</code>
+                      </td>
                     </tr>
                   </tbody>
                 </table>
@@ -434,16 +559,23 @@ defmodule FountWeb.AnalysisLive do
                   <li :for={event <- @dashboard.graph.events}>
                     <span>{event.order}</span>
                     <strong>{event.label}</strong>
-                    <small>rev {short(event.revision_id)} · evidence {if event.evidence_ids == [], do: "—", else: Enum.join(event.evidence_ids, ", ")} · {event.uncertainty || "uncertainty not recorded"}</small>
+                    <small>rev {short(event.revision_id)} · evidence {if event.evidence_ids == [],
+                      do: "—",
+                      else: Enum.join(event.evidence_ids, ", ")} · {event.uncertainty ||
+                      "uncertainty not recorded"}</small>
                   </li>
                 </ol>
-                <p :if={@dashboard.graph.events == []}>No event records were persisted for this packet.</p>
+                <p :if={@dashboard.graph.events == []}>
+                  No event records were persisted for this packet.
+                </p>
               </div>
             </section>
 
             <section class="analysis-grid analysis-grid--resources">
               <article class="evidence-card evidence-card--wide">
-                <header><span class="micro-label">Run accounting</span><h2>Usage & reservations</h2></header>
+                <header>
+                  <span class="micro-label">Run accounting</span><h2>Usage & reservations</h2>
+                </header>
                 <div class="resource-ledger">
                   <div :for={item <- @dashboard.usage.totals} class="resource-row">
                     <strong>{item.resource}</strong>
@@ -456,17 +588,27 @@ defmodule FountWeb.AnalysisLive do
                 <p>{@dashboard.usage.note}</p>
               </article>
               <article class="evidence-card">
-                <header><span class="micro-label">authoritative resource state</span><h2>Backend ceilings</h2></header>
+                <header>
+                  <span class="micro-label">authoritative resource state</span><h2>
+                    Backend ceilings
+                  </h2>
+                </header>
                 <dl class="metric-list">
                   <div :for={{resource, value} <- @dashboard.usage.authoritative_resources}>
                     <dt>{resource}</dt>
-                    <dd>consumed {value["consumed"]} / limit {value["limit"] || "unlimited / unknown"} · remaining {value["remaining"] || "unknown"} · {if value["exhausted"], do: "exhausted", else: "available"}</dd>
+                    <dd>
+                      consumed {value["consumed"]} / limit {value["limit"] || "unlimited / unknown"} · remaining {value[
+                        "remaining"
+                      ] || "unknown"} · {if value["exhausted"], do: "exhausted", else: "available"}
+                    </dd>
                   </div>
                 </dl>
                 <details :if={map_size(@dashboard.usage.policy_limits) > 0} class="evidence-detail">
                   <summary>Stored policy limits</summary>
                   <dl class="metric-list">
-                    <div :for={{key, value} <- @dashboard.usage.policy_limits}><dt>{key}</dt><dd>{value_preview(value)}</dd></div>
+                    <div :for={{key, value} <- @dashboard.usage.policy_limits}>
+                      <dt>{key}</dt><dd>{value_preview(value)}</dd>
+                    </div>
                   </dl>
                 </details>
                 <p>Indicators are informational. Backend policy enforcement remains authoritative.</p>
@@ -475,21 +617,47 @@ defmodule FountWeb.AnalysisLive do
 
             <section class="evidence-card" id="analysis-comparison">
               <header class="section-heading">
-                <div><span class="micro-label">saved evidence history</span><h2>Comparable analysis delta</h2></div>
+                <div>
+                  <span class="micro-label">saved evidence history</span><h2>
+                    Comparable analysis delta
+                  </h2>
+                </div>
                 <span>No quality ranking</span>
               </header>
-              <form action={~p"/runs/#{@run_id}/analysis#analysis-comparison"} method="get" class="comparison-form">
-                <input type="hidden" name="packet" value={@dashboard.selected.run && @dashboard.selected.run["id"]} />
-                <label>Earlier / A
+              <form
+                action={~p"/runs/#{@run_id}/analysis#analysis-comparison"}
+                method="get"
+                class="comparison-form"
+              >
+                <input
+                  type="hidden"
+                  name="packet"
+                  value={@dashboard.selected.run && @dashboard.selected.run["id"]}
+                />
+                <label>
+                  Earlier / A
                   <select name="left">
                     <option value="">Choose saved run</option>
-                    <option :for={row <- @dashboard.history} value={row["id"]} selected={@params["left"] == row["id"]}>{packet_label(row)}</option>
+                    <option
+                      :for={row <- @dashboard.history}
+                      value={row["id"]}
+                      selected={@params["left"] == row["id"]}
+                    >
+                      {packet_label(row)}
+                    </option>
                   </select>
                 </label>
-                <label>Later / B
+                <label>
+                  Later / B
                   <select name="right">
                     <option value="">Choose saved run</option>
-                    <option :for={row <- @dashboard.history} value={row["id"]} selected={@params["right"] == row["id"]}>{packet_label(row)}</option>
+                    <option
+                      :for={row <- @dashboard.history}
+                      value={row["id"]}
+                      selected={@params["right"] == row["id"]}
+                    >
+                      {packet_label(row)}
+                    </option>
                   </select>
                 </label>
                 <button type="submit">Compare stored evidence</button>
@@ -502,28 +670,55 @@ defmodule FountWeb.AnalysisLive do
                 </ul>
               </div>
               <div :if={@dashboard.comparison.state == :comparable} class="comparison-uncertainty">
-                <div><span class="micro-label">A uncertainty</span><p>{value_preview(@dashboard.comparison.uncertainty.left)}</p></div>
-                <div><span class="micro-label">B uncertainty</span><p>{value_preview(@dashboard.comparison.uncertainty.right)}</p></div>
+                <div>
+                  <span class="micro-label">A uncertainty</span><p>
+                    {value_preview(@dashboard.comparison.uncertainty.left)}
+                  </p>
+                </div>
+                <div>
+                  <span class="micro-label">B uncertainty</span><p>
+                    {value_preview(@dashboard.comparison.uncertainty.right)}
+                  </p>
+                </div>
               </div>
-              <table :if={@dashboard.comparison.state == :comparable and @dashboard.comparison.deltas != []} class="compact-table">
-                <thead><tr><th>Recorded numeric field</th><th>A</th><th>B</th><th>Delta</th></tr></thead>
+              <table
+                :if={
+                  @dashboard.comparison.state == :comparable and @dashboard.comparison.deltas != []
+                }
+                class="compact-table"
+              >
+                <thead>
+                  <tr>
+                    <th>Recorded numeric field</th><th>A</th><th>B</th><th>Delta</th>
+                  </tr>
+                </thead>
                 <tbody>
                   <tr :for={delta <- @dashboard.comparison.deltas}>
-                    <td><code>{delta.path}</code></td><td>{delta.before}</td><td>{delta.after}</td><td>{delta.delta}</td>
+                    <td><code>{delta.path}</code></td><td>{delta.before}</td><td>{delta.after}</td><td>
+                      {delta.delta}
+                    </td>
                   </tr>
                 </tbody>
               </table>
-              <p :if={@dashboard.comparison.state == :comparable and @dashboard.comparison.deltas == []}>
+              <p :if={
+                @dashboard.comparison.state == :comparable and @dashboard.comparison.deltas == []
+              }>
                 The identities align, but no shared numeric packet fields are available for a factual delta.
               </p>
             </section>
 
             <section class="evidence-card evidence-card--quiet">
-              <header><span class="micro-label">limits & provenance</span><h2>What this page does not claim</h2></header>
+              <header>
+                <span class="micro-label">limits & provenance</span><h2>
+                  What this page does not claim
+                </h2>
+              </header>
               <ul class="plain-list">
                 <li>Analysis confidence and advisory findings never grant approval.</li>
                 <li>Generation success does not establish analysis completeness.</li>
-                <li>Graph links do not invent causality; unresolved targets stay tied to their recorded revision.</li>
+                <li>
+                  Graph links do not invent causality; unresolved targets stay tied to their recorded revision.
+                </li>
                 <li>Manual or unsaved drafts without a persisted packet remain unanalyzed.</li>
               </ul>
             </section>

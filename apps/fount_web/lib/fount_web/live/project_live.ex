@@ -88,7 +88,9 @@ defmodule FountWeb.ProjectLive do
       </nav>
 
       <section :if={@live_action == :index} class="project-index">
-        <header class="project-mast"><p class="eyebrow">Story workspace registry</p><h1>Fount projects</h1></header>
+        <header class="project-mast">
+          <p class="eyebrow">Story workspace registry</p><h1>Fount projects</h1>
+        </header>
         <p>
           Authenticated owner: <strong><%= @current_owner %></strong>. Canon changes remain explicit Run decisions.
         </p>
@@ -120,7 +122,9 @@ defmodule FountWeb.ProjectLive do
       </section>
 
       <section :if={@live_action == :new} class="project-create">
-        <header class="project-mast"><p class="eyebrow">Genesis + durable Run</p><h1>New screenplay Run</h1></header>
+        <header class="project-mast">
+          <p class="eyebrow">Genesis + durable Run</p><h1>New screenplay Run</h1>
+        </header>
         <p>
           The supplied screenplay becomes the explicit genesis revision. Generated pages are candidates until the configured exact approval path accepts them.
         </p>

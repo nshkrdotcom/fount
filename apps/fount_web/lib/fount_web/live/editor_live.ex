@@ -16,6 +16,7 @@ defmodule FountWeb.EditorLive do
 
       {:ok,
        socket
+       |> assign(:live_connected, connected?(socket))
        |> assign(:run_id, run_id)
        |> assign(:access, access)
        |> assign(:project, workspace.project)
@@ -891,7 +892,8 @@ defmodule FountWeb.EditorLive do
           type="button"
           phx-click="start_ai_assist"
           disabled={
-            @dirty or @draft["status"] != "active" or not is_binary(@draft["saved_candidate_id"])
+            not @live_connected or @dirty or @draft["status"] != "active" or
+              not is_binary(@draft["saved_candidate_id"])
           }
         >AI assist via Run</button>
         <button
@@ -899,7 +901,8 @@ defmodule FountWeb.EditorLive do
           type="button"
           phx-click="accept_candidate"
           disabled={
-            @dirty or @draft["status"] != "active" or not is_binary(@draft["saved_candidate_id"])
+            not @live_connected or @dirty or @draft["status"] != "active" or
+              not is_binary(@draft["saved_candidate_id"])
           }
         >Accept exact candidate</button>
       </section>

@@ -123,10 +123,12 @@ defmodule FountWeb.ScreenplayViews do
   end
 
   defp evidence_options(repo, run, progress) do
+    bound_revisions = candidate_options(repo, run, progress) |> Enum.map(& &1.revision_id)
     lineage = FountWeb.AnalysisDashboard.lineage(progress, run)
+    lineage = Map.update!(lineage, :revision_ids, &Enum.uniq(&1 ++ bound_revisions))
 
     statement = """
-    SELECT id::text,revision_id::text,session_id::text,candidate_id::text,status,playbook
+    SELECT id::text,revision_id::text,session_id::text,candidate_id::text,status,playbook,result
     FROM analysis_runs
     WHERE screenplay_id=$1::text::uuid
       AND (
@@ -155,22 +157,44 @@ defmodule FountWeb.ScreenplayViews do
       {:ok, result} ->
         result
         |> rows()
-        |> Enum.map(fn row ->
-          %{
-            kind: :evidence,
-            analysis_run_id: row["id"],
-            revision_id: row["revision_id"],
-            candidate_id: row["candidate_id"],
-            session_id: row["session_id"],
-            label: "Analysis evidence · #{row["playbook"] || "unknown playbook"}",
-            status: row["status"] || "evidence"
-          }
-          |> put_token()
-        end)
+        |> Enum.flat_map(&evidence_row_options(&1, run["screenplay_id"]))
 
       {:error, _} ->
         []
     end
+  end
+
+  defp evidence_row_options(row, screenplay_id) do
+    Enum.map(recorded_evidence_revisions(row, screenplay_id), fn revision_id ->
+      %{
+        kind: :evidence,
+        analysis_run_id: row["id"],
+        revision_id: revision_id,
+        candidate_id: row["candidate_id"],
+        session_id: row["session_id"],
+        label: "Analysis evidence · #{row["playbook"] || "unknown playbook"}",
+        status: row["status"] || "evidence"
+      }
+      |> put_token()
+    end)
+  end
+
+  defp recorded_evidence_revisions(row, screenplay_id) do
+    references =
+      row
+      |> get_in(["result", "evidence"])
+      |> List.wrap()
+      |> Enum.filter(&evidence_screenplay?(&1, screenplay_id))
+      |> Enum.map(fn evidence ->
+        evidence["revision_id"] || get_in(evidence, ["target", "revision_id"])
+      end)
+
+    [row["revision_id"] | references] |> Enum.filter(&is_binary/1) |> Enum.uniq()
+  end
+
+  defp evidence_screenplay?(evidence, screenplay_id) do
+    recorded = evidence["screenplay_id"] || get_in(evidence, ["target", "screenplay_id"])
+    recorded in [nil, screenplay_id]
   end
 
   defp step_candidate_ids(progress) do
@@ -212,20 +236,15 @@ defmodule FountWeb.ScreenplayViews do
     statement =
       "SELECT 1 FROM analysis_runs WHERE id=$1::text::uuid AND screenplay_id=$2::text::uuid AND revision_id=$3::text::uuid"
 
-    case SQL.query(
-           repo,
-           statement,
-           [selected.analysis_run_id, screenplay_id, selected.revision_id],
-           log: false
-         ) do
-      {:ok, %{rows: [[1]]}} ->
-        case Persistence.load_revision(repo, screenplay_id, selected.revision_id) do
-          {:ok, screenplay} -> {:ok, screenplay}
-          {:error, :not_found} -> {:error, :revision_not_found}
-        end
+    direct =
+      SQL.query(repo, statement, [selected.analysis_run_id, screenplay_id, selected.revision_id],
+        log: false
+      )
 
-      _ ->
-        {:error, :stale_or_unbound_revision}
+    if match?({:ok, %{rows: [[1]]}}, direct) or recorded_revision?(repo, screenplay_id, selected) do
+      load_evidence_revision(repo, screenplay_id, selected.revision_id)
+    else
+      {:error, :stale_or_unbound_revision}
     end
   end
 
@@ -241,6 +260,29 @@ defmodule FountWeb.ScreenplayViews do
   end
 
   defp load_selected(repo, screenplay_id, %{revision_id: revision_id}) do
+    case Persistence.load_revision(repo, screenplay_id, revision_id) do
+      {:ok, screenplay} -> {:ok, screenplay}
+      {:error, :not_found} -> {:error, :revision_not_found}
+    end
+  end
+
+  defp recorded_revision?(repo, screenplay_id, selected) do
+    case SQL.query(
+           repo,
+           "SELECT revision_id::text,result FROM analysis_runs WHERE id=$1::text::uuid AND screenplay_id=$2::text::uuid",
+           [selected.analysis_run_id, screenplay_id],
+           log: false
+         ) do
+      {:ok, %{rows: [_]} = result} ->
+        [row] = rows(result)
+        selected.revision_id in recorded_evidence_revisions(row, screenplay_id)
+
+      _ ->
+        false
+    end
+  end
+
+  defp load_evidence_revision(repo, screenplay_id, revision_id) do
     case Persistence.load_revision(repo, screenplay_id, revision_id) do
       {:ok, screenplay} -> {:ok, screenplay}
       {:error, :not_found} -> {:error, :revision_not_found}

@@ -76,6 +76,7 @@ defmodule FountWeb.ViewerLive do
         do: "The requested scene is not present in this selected revision.",
         else: nil
 
+    target_error = evidence_target_error(workspace, params["target"])
     base_screenplay = load_base_screenplay(run, access)
 
     socket
@@ -88,8 +89,20 @@ defmodule FountWeb.ViewerLive do
     |> assign(:character_filter, filter)
     |> assign(:selected_scene_id, selected_scene_id)
     |> assign(:base_screenplay, base_screenplay)
-    |> assign(:error, Enum.find([error, scene_error], &is_binary/1))
+    |> assign(:error, Enum.find([error, target_error, scene_error], &is_binary/1))
   end
+
+  defp evidence_target_error(%{selection: %{kind: :evidence}, screenplay: screenplay}, target_id)
+       when is_binary(target_id) do
+    targets = screenplay.ir.scenes ++ screenplay.ir.elements
+
+    if Enum.any?(targets, &(&1.id == target_id)),
+      do: nil,
+      else:
+        "Recorded target unresolved in this exact analysis evidence revision. Provenance remains bound; no current draft target was substituted."
+  end
+
+  defp evidence_target_error(_workspace, _target), do: nil
 
   defp load_base_screenplay(run, access) do
     revision_id = get_in(run, ["plan", "base_revision_id"])
@@ -188,7 +201,13 @@ defmodule FountWeb.ViewerLive do
 
       <%= if @workspace do %>
         <section class="workspace-controls" aria-label="Viewer controls">
-          <form action={~p"/runs/#{@run_id}/viewer"} method="get" class="workspace-control-form">
+          <form
+            id="viewer-controls-form"
+            phx-update="ignore"
+            action={~p"/runs/#{@run_id}/viewer"}
+            method="get"
+            class="workspace-control-form"
+          >
             <FountWeb.CoreComponents.select
               id="viewer-revision"
               name="view"

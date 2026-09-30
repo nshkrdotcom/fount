@@ -597,15 +597,43 @@ defmodule FountWeb.RunLive do
             <h3>Revision intelligence beside the candidate</h3>
           </div>
           <dl class="binding-ledger">
-            <div><dt>Base revision</dt><dd><code>{@review.analysis_binding["base_revision_id"] || "—"}</code></dd></div>
-            <div><dt>Candidate</dt><dd><code>{@review.analysis_binding["candidate_id"] || "—"}</code></dd></div>
-            <div><dt>Candidate revision</dt><dd><code>{@review.analysis_binding["candidate_revision_id"] || "—"}</code></dd></div>
-            <div><dt>Packet</dt><dd><code>{@review.analysis_binding["packet_id"] || "missing"}</code></dd></div>
-            <div><dt>Analysis run</dt><dd><code>{@review.analysis_binding["analysis_run_id"] || "missing"}</code></dd></div>
-            <div><dt>Freshness</dt><dd>{@review.analysis_binding["freshness"]}</dd></div>
-            <div><dt>Required-check fingerprint</dt><dd><code>{@review.analysis_binding["check_set_fingerprint"] || "—"}</code></dd></div>
+            <div>
+              <dt>Base revision</dt><dd>
+                <code>{@review.analysis_binding["base_revision_id"] || "—"}</code>
+              </dd>
+            </div>
+            <div>
+              <dt>Candidate</dt><dd>
+                <code>{@review.analysis_binding["candidate_id"] || "—"}</code>
+              </dd>
+            </div>
+            <div>
+              <dt>Candidate revision</dt><dd>
+                <code>{@review.analysis_binding["candidate_revision_id"] || "—"}</code>
+              </dd>
+            </div>
+            <div>
+              <dt>Packet</dt><dd>
+                <code>{@review.analysis_binding["packet_id"] || "missing"}</code>
+              </dd>
+            </div>
+            <div>
+              <dt>Analysis run</dt><dd>
+                <code>{@review.analysis_binding["analysis_run_id"] || "missing"}</code>
+              </dd>
+            </div>
+            <div>
+              <dt>Freshness</dt><dd>{@review.analysis_binding["freshness"]}</dd>
+            </div>
+            <div>
+              <dt>Required-check fingerprint</dt><dd>
+                <code>{@review.analysis_binding["check_set_fingerprint"] || "—"}</code>
+              </dd>
+            </div>
           </dl>
-          <p>Advisory confidence never changes required checks or approval authority. Missing or stale evidence stays visible rather than being treated as a pass.</p>
+          <p>
+            Advisory confidence never changes required checks or approval authority. Missing or stale evidence stays visible rather than being treated as a pass.
+          </p>
           <a class="inline-action" href={~p"/runs/#{@run_id}/analysis"}>Inspect saved intelligence evidence</a>
         </div>
 

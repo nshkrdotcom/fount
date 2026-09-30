@@ -62,6 +62,39 @@ defmodule FountWeb.Phase06AnalysisContractTest do
     assert length(graph.edges) <= 2
     assert graph.explanation =~ "causality is never inferred"
     assert AnalysisDashboard.graph_from_observations([]).nodes == []
+
+    dense_records =
+      for n <- 1..5 do
+        %{
+          "id" => "dense-#{n}",
+          "record_type" => "event",
+          "subjects" => Enum.map(1..30, &"subject-#{&1}")
+        }
+      end
+
+    dense =
+      put_in(observation, ["payload", "result", "value", "story_world_records"], dense_records)
+
+    bounded = AnalysisDashboard.graph_from_observations([dense])
+    assert length(bounded.nodes) == 35
+    assert bounded.total_edges == 150
+    assert length(bounded.edges) == 96
+    assert bounded.truncated
+    refute Enum.any?(bounded.edges, &(&1.kind == "recorded_causal_relation"))
+
+    causal =
+      put_in(observation, ["payload", "result", "value", "story_world_records"], [
+        %{
+          "id" => "cause",
+          "record_type" => "causal_relation",
+          "from" => "event-a",
+          "to" => "event-b",
+          "evidence_ids" => ["e1"]
+        }
+      ])
+
+    assert [%{kind: "recorded_causal_relation", evidence_ids: ["e1"]}] =
+             AnalysisDashboard.graph_from_observations([causal]).edges
   end
 
   test "A06 comparisons require aligned definitions, provider fingerprints, scope and evidence" do
@@ -76,6 +109,7 @@ defmodule FountWeb.Phase06AnalysisContractTest do
         "evidence" => [
           %{
             "evidence_id" => "e1",
+            "revision_id" => "revision-1",
             "target" => %{"kind" => "scene", "id" => "s1"},
             "excerpt_sha256" => String.duplicate("c", 64)
           }
@@ -89,10 +123,34 @@ defmodule FountWeb.Phase06AnalysisContractTest do
     assert Enum.any?(deltas, &(&1.path == "coverage.observed" and &1.delta == 1))
 
     incompatible = Map.put(right, "_provider_fingerprints", [%{"provider" => "other"}])
+
     assert %{state: :incomparable, reasons: reasons, deltas: []} =
              AnalysisDashboard.compare_runs(base, incompatible)
 
     assert Enum.any?(reasons, &String.contains?(&1, "provider/model fingerprint"))
+
+    for missing <- [
+          Map.delete(right, "scope"),
+          Map.delete(right, "output_contract_sha256"),
+          put_in(right, ["result", "provenance"], %{}),
+          Map.put(right, "_provider_fingerprints", [%{}]),
+          put_in(right, ["result", "evidence"], [%{}])
+        ] do
+      assert %{state: :incomparable, deltas: []} = AnalysisDashboard.compare_runs(base, missing)
+    end
+
+    for mismatch <- [
+          Map.put(right, "scope", %{"scene_ids" => ["other"]}),
+          Map.put(right, "output_contract_sha256", String.duplicate("d", 64)),
+          put_in(
+            right,
+            ["result", "provenance", "measurement_spec_sha256"],
+            String.duplicate("e", 64)
+          ),
+          put_in(right, ["result", "evidence"], [%{"evidence_id" => "different"}])
+        ] do
+      assert %{state: :incomparable, deltas: []} = AnalysisDashboard.compare_runs(base, mismatch)
+    end
   end
 
   test "A01/A03/A07 UI preserves status, exact binding and stale-draft language" do

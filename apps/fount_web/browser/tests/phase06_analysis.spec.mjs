@@ -96,6 +96,7 @@ test('site-wide signal-room layout is dense, responsive and does not overflow na
   await page.getByLabel('Project key').fill(key);
   await page.getByLabel('Or Fountain source').fill(fixture);
   await page.getByRole('button', {name: 'Create Run'}).click();
+  await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+\/setup$/);
   const runId = page.url().match(/\/runs\/([0-9a-f-]+)\/setup$/)[1];
   await page.goto(`/runs/${runId}/edit`);
   await expect(page.locator('.authoring-grid')).toBeVisible();

@@ -23,8 +23,7 @@ defmodule FountWorkshop.PhaseTwelveSceneExplorationTest do
       )
 
     action = Enum.find(base.ir.elements, &(&1.type == :action))
-    {:ok, repo} = ContinuationStore.start_link(base)
-    on_exit(fn -> if Process.alive?(repo), do: Agent.stop(repo) end)
+    repo = start_supervised!(%{id: make_ref(), start: {ContinuationStore, :start_link, [base]}})
     store = %Store{repo: repo, module: ContinuationStore}
 
     treatments = [
@@ -66,38 +65,39 @@ defmodule FountWorkshop.PhaseTwelveSceneExplorationTest do
 
     strategies = strategy_response()
 
-    {:ok, script} =
-      Agent.start_link(fn ->
-        [
-          fn _ -> %{"strategies" => strategies} end,
-          fn _ ->
-            proposal(
-              base,
-              action.id,
-              "conceal",
-              "Evan folds the hotel stamp inward before Nora can read it."
-            )
-          end,
-          fn _ ->
-            proposal(
-              base,
-              action.id,
-              "volunteer",
-              "Nora opens the map to the hotel stamp. She tells Evan where she found it."
-            )
-          end,
-          fn _ ->
-            proposal(
-              base,
-              action.id,
-              "accident",
-              "The wet map tears. A hotel receipt skitters between them."
-            )
-          end
-        ]
-      end)
-
-    on_exit(fn -> if Process.alive?(script), do: Agent.stop(script) end)
+    script =
+      start_supervised!(
+        {Agent,
+         fn ->
+           [
+             fn _ -> %{"strategies" => strategies} end,
+             fn _ ->
+               proposal(
+                 base,
+                 action.id,
+                 "conceal",
+                 "Evan folds the hotel stamp inward before Nora can read it."
+               )
+             end,
+             fn _ ->
+               proposal(
+                 base,
+                 action.id,
+                 "volunteer",
+                 "Nora opens the map to the hotel stamp. She tells Evan where she found it."
+               )
+             end,
+             fn _ ->
+               proposal(
+                 base,
+                 action.id,
+                 "accident",
+                 "The wet map tears. A hotel receipt skitters between them."
+               )
+             end
+           ]
+         end}
+      )
 
     inference = Inference.Client.new!(adapter: ScriptedCompletion, adapter_opts: [script: script])
     services = %{store: store, inference: inference}
@@ -174,8 +174,6 @@ defmodule FountWorkshop.PhaseTwelveSceneExplorationTest do
 
   test "a three-confession paraphrase fixture cannot masquerade as the requested treatment axes" do
     base = Screenplay.new()
-    {:ok, repo} = ContinuationStore.start_link(base)
-    on_exit(fn -> if Process.alive?(repo), do: Agent.stop(repo) end)
 
     request = %{
       "version" => 1,
@@ -210,12 +208,14 @@ defmodule FountWorkshop.PhaseTwelveSceneExplorationTest do
         )
       end)
 
-    {:ok, script} =
-      Agent.start_link(fn ->
-        [fn _ -> %{"strategies" => bad} end, fn _ -> %{"strategies" => bad} end]
-      end)
+    script =
+      start_supervised!(
+        {Agent,
+         fn ->
+           [fn _ -> %{"strategies" => bad} end, fn _ -> %{"strategies" => bad} end]
+         end}
+      )
 
-    on_exit(fn -> if Process.alive?(script), do: Agent.stop(script) end)
     client = Inference.Client.new!(adapter: ScriptedCompletion, adapter_opts: [script: script])
 
     context = %{data: %{"selected_pages" => [], "inspections" => []}, evidence: []}

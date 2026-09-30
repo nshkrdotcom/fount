@@ -183,7 +183,7 @@ for (const viewport of [
     await login(page);
     const runId = await createRun(page, `s08-${viewport.name}-${Date.now()}`);
     await openSection(page, runId, 'search');
-    await page.evaluate(() => { document.documentElement.style.fontSize = '200%'; });
+    await page.evaluate(() => { document.documentElement.style.zoom = '2'; });
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     expect(overflow).toBeLessThanOrEqual(3);
     await page.keyboard.press('Tab');
@@ -191,6 +191,18 @@ for (const viewport of [
     await page.evaluate(() => window.liveSocket.disconnect());
     await page.evaluate(() => window.liveSocket.connect());
     await expect(page.getByRole('heading', {name: 'Search this exact revision'})).toBeVisible();
+
+    await openSection(page, runId, 'read');
+    await page.getByRole('button', {name: 'Save read packet'}).click();
+    const read = page.locator('#table-read-workspace');
+    await expect(read).toBeVisible();
+    await page.evaluate(() => { document.documentElement.style.zoom = '2'; });
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(3);
+    const clipped = await read.locator('button').evaluateAll(nodes => nodes.some(node => {
+      const rect = node.getBoundingClientRect();
+      return rect.left < -2 || rect.right > document.documentElement.clientWidth + 2;
+    }));
+    expect(clipped).toBeFalsy();
   });
 }
 

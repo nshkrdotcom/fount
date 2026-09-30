@@ -310,6 +310,9 @@ defmodule FountWeb.Phase05AuthoringIntegrationTest do
                Fount.ID.v4()
              )
 
+    {:ok, reopened} = Authoring.open_workspace("test-owner", access["project_id"])
+    assert reopened.base.revision.id == draft["base_revision_id"]
+    assert reopened.preview.screenplay.revision.parent_id == draft["base_revision_id"]
     assert {:error, _} = Authoring.start_ai_assist("test-owner", bound["id"], Fount.ID.v4())
 
     assert {:error, _} =

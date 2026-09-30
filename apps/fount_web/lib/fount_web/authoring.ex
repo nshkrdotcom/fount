@@ -12,12 +12,13 @@ defmodule FountWeb.Authoring do
          {:ok, base} <- Fount.Persistence.load(Fount.Repo, project["key"]),
          true <- base.id == project["screenplay_id"],
          {:ok, draft} <- AuthoringStore.open(Fount.Repo, owner, project, base),
+         {:ok, bound_base} <- load_bound_base(draft),
          {:ok, preview} <-
-           preview(base, draft["raw_source"],
+           preview(bound_base, draft["raw_source"],
              prior_source: draft["last_valid_source"],
              identity_anchors: draft["identity_anchors"] || []
            ) do
-      {:ok, %{project: project, base: base, draft: draft, preview: preview}}
+      {:ok, %{project: project, base: bound_base, draft: draft, preview: preview}}
     else
       false -> {:error, :project_screenplay_mismatch}
       {:error, _} = error -> error

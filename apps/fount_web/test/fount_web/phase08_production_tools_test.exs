@@ -46,19 +46,35 @@ defmodule FountWeb.Phase08ProductionToolsTest do
     assert scene_id == first_scene.id
 
     alice = Enum.find(ProductionTools.character_profiles(model), &(&1.display_name == "ALICE"))
-    assert {:ok, scoped} = ProductionTools.search(model, "café", %{"scene_id" => first_scene.id, "character_id" => alice.id})
+
+    assert {:ok, scoped} =
+             ProductionTools.search(model, "café", %{
+               "scene_id" => first_scene.id,
+               "character_id" => alice.id
+             })
+
     assert Enum.all?(scoped.hits, &(&1.scene_id == first_scene.id))
     assert scoped.filters["scene_id"] == first_scene.id
     assert scoped.filters["character_id"] == alice.id
 
-    assert {:ok, location_scoped} = ProductionTools.search(model, "café", %{"location" => "TRAIN PLATFORM"})
+    assert {:ok, location_scoped} =
+             ProductionTools.search(model, "café", %{"location" => "TRAIN PLATFORM"})
+
     assert Enum.all?(location_scoped.hits, &(&1.scene_id != first_scene.id))
 
     assert {:error, :empty_query} = ProductionTools.search(model, "   ")
-    assert {:error, :unknown_scene} = ProductionTools.search(model, "café", %{"scene_id" => Fount.ID.v4()})
-    assert {:error, :unknown_character} = ProductionTools.search(model, "café", %{"character_id" => Fount.ID.v4()})
-    assert {:error, :unknown_location} = ProductionTools.search(model, "café", %{"location" => "NOWHERE"})
-    assert {:error, :invalid_element_types} = ProductionTools.search(model, "café", %{"element_type" => "made_up"})
+
+    assert {:error, :unknown_scene} =
+             ProductionTools.search(model, "café", %{"scene_id" => Fount.ID.v4()})
+
+    assert {:error, :unknown_character} =
+             ProductionTools.search(model, "café", %{"character_id" => Fount.ID.v4()})
+
+    assert {:error, :unknown_location} =
+             ProductionTools.search(model, "café", %{"location" => "NOWHERE"})
+
+    assert {:error, :invalid_element_types} =
+             ProductionTools.search(model, "café", %{"element_type" => "made_up"})
   end
 
   test "S02 cast profiles use real cast IDs, aliases, confirmed mentions, appearances and dialogue counts" do
@@ -109,11 +125,16 @@ defmodule FountWeb.Phase08ProductionToolsTest do
     }
 
     assert {:ok, with_note, _} = Screenplay.apply(base, [operation])
-    assert [%{target_state: "stale_changed", text: "Human note"}] = ProductionTools.notes(with_note)
+
+    assert [%{target_state: "stale_changed", text: "Human note"}] =
+             ProductionTools.notes(with_note)
 
     note_id = Map.keys(with_note.authored_items) |> List.first()
+
     assert {:ok, without_target, _} =
-             Screenplay.apply(with_note, [%{"kind" => "delete_elements", "value" => %{"ids" => [element.id]}}])
+             Screenplay.apply(with_note, [
+               %{"kind" => "delete_elements", "value" => %{"ids" => [element.id]}}
+             ])
 
     assert [%{id: ^note_id, target_state: "unresolved"}] = ProductionTools.notes(without_target)
   end
@@ -155,18 +176,28 @@ defmodule FountWeb.Phase08ProductionToolsTest do
 
   test "S07 dashboard card filtering/sorting is descriptive and bounded-input only" do
     cards = [
-      %{project: %{"title" => "Beta", "key" => "beta", "synopsis" => "writer supplied"}, scene_count: 2},
+      %{
+        project: %{"title" => "Beta", "key" => "beta", "synopsis" => "writer supplied"},
+        scene_count: 2
+      },
       %{project: %{"title" => "Alpha", "key" => "alpha", "synopsis" => nil}, scene_count: 5}
     ]
 
-    assert [%{project: %{"key" => "beta"}}] = ProductionTools.filter_cards(cards, "writer", "recent")
-    assert Enum.map(ProductionTools.filter_cards(cards, "", "title"), & &1.project["key"]) == ["alpha", "beta"]
+    assert [%{project: %{"key" => "beta"}}] =
+             ProductionTools.filter_cards(cards, "writer", "recent")
+
+    assert Enum.map(ProductionTools.filter_cards(cards, "", "title"), & &1.project["key"]) == [
+             "alpha",
+             "beta"
+           ]
+
     assert Enum.map(ProductionTools.filter_cards(cards, "", "scenes"), & &1.scene_count) == [5, 2]
   end
 
   test "S04 writer notes remain distinct from measured annotation provenance" do
     base = fixture()
     action = Enum.find(base.ir.elements, &(&1.type == :action))
+
     annotation = %Fount.Annotation{
       id: Fount.ID.v4(),
       namespace: "fount.core",
@@ -179,10 +210,13 @@ defmodule FountWeb.Phase08ProductionToolsTest do
       },
       dependencies: [action.id]
     }
+
     model = %{base | annotations: Fount.Annotations.put(base.annotations, annotation)}
     annotations = ProductionTools.measured_annotations(model)
 
-    assert [%{namespace: "fount.core", kind: :measured_example, source_revision: revision}] = annotations
+    assert [%{namespace: "fount.core", kind: :measured_example, source_revision: revision}] =
+             annotations
+
     assert revision == base.revision.id
     refute Enum.any?(annotations, &(&1.namespace == "fount.writer"))
     assert ProductionTools.notes(model) == []

@@ -22,7 +22,17 @@ defmodule FountWeb.Store do
              id,owner_id,screenplay_id,key,title,synopsis,thumbnail_ref,import_format,import_fidelity,inserted_at,updated_at
            ) VALUES($1::text::uuid,$2,$3::text::uuid,$4,$5,$6,$7,$8,$9::jsonb,now(),now()) RETURNING *
            """,
-           [id, owner, screenplay_id, key, title, synopsis, thumbnail_ref, import_format, import_fidelity],
+           [
+             id,
+             owner,
+             screenplay_id,
+             key,
+             title,
+             synopsis,
+             thumbnail_ref,
+             import_format,
+             import_fidelity
+           ],
            log: false
          ) do
       {:ok, result} -> {:ok, one(result)}

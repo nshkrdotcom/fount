@@ -258,7 +258,7 @@ def audit() -> dict:
             "completed six-phase Fount Run program",
             "Fount System One Run reintegration",
             "Phase 03",
-            "offline-implemented",
+            "Phase 03 host integration",
             "runtime QC",
         )
     )

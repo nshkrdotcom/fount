@@ -2,7 +2,7 @@
 
 # Fount Intelligence
 
-> **Current workspace status (Run Phase 06):** Intelligence remains the evidence-grounded interpretation library. It does not become a web/runtime host and has no Phoenix dependency; `apps/fount_web` delegates durable work through FountRun. Phase 06 source is offline-implemented and runtime QC is pending.
+> **Current workspace status (Run Phase 06):** Intelligence remains the evidence-grounded interpretation library. It does not become a web/runtime host and has no Phoenix dependency; `apps/fount_web` delegates durable work through FountRun. The six-phase Run program is complete. System One reintegration runtime QC and its exact certified commits are recorded in the operational docset.
 
 **Investigate a screenplay problem before deciding how to rewrite it.**
 

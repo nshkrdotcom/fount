@@ -13,7 +13,7 @@
 
 The first-party FountWeb host now supplies Observe in its normal worker composition, so its deterministic acceptance journey exercises Workshop's existing prewrite Intelligence and candidate Revision Intelligence integration. This does not make Observe mandatory for standalone Workshop callers: omitting `services.observe` preserves the generation-only lane and records analysis as `not_run`. Inference remains the generative service; Observe remains semantic measurement; Core remains the only canonical acceptance authority.
 
-> **Current workspace status:** Workshop keeps all existing generation, revision, rebase, review, PDF and table-read capabilities. The six-phase Run program is complete; System One reintegration Phases 01 and 02 are runtime-certified, while Phase 03 host integration is offline-implemented and awaits runtime QC. The external `apps/fount_web` host invokes Workshop through FountRun, and Workshop remains Phoenix-free and usable without Observe.
+> **Current workspace status:** Workshop keeps all existing generation, revision, rebase, review, PDF and table-read capabilities. The six-phase Run program is complete; System One reintegration Phases 01 and 02 are runtime-certified, while Phase 03 host integration is implemented; runtime QC and final certification are recorded in the operational docset. The external `apps/fount_web` host invokes Workshop through FountRun, and Workshop remains Phoenix-free and usable without Observe.
 
 **Write alternate pages, compare them to your draft, and decide what becomes canon.**
 

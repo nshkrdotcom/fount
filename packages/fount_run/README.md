@@ -1,6 +1,6 @@
 # FountRun
 
-> **Current workspace status:** FountRun remains the headless durable orchestration boundary. The six-phase Run program is already complete; System One reintegration Phases 01 and 02 are runtime-certified, while Phase 03 host integration is offline-implemented and awaits runtime QC. The Phoenix host remains `apps/fount_web`; it supplies authenticated identity, Repo/services and supervision without moving Run state, System One SDK types, or approval semantics into Run/LiveView.
+> **Current workspace status:** FountRun remains the headless durable orchestration boundary. The six-phase Run program is already complete; System One reintegration Phases 01 and 02 are runtime-certified, while Phase 03 host integration is implemented; runtime QC and final certification are recorded in the operational docset. The Phoenix host remains `apps/fount_web`; it supplies authenticated identity, Repo/services and supervision without moving Run state, System One SDK types, or approval semantics into Run/LiveView.
 
 > **System One Run reintegration:** the first-party host now constructs an Observe provider and passes it through the existing `:observe` service key. Run remains provider-neutral: it does not depend on, import, construct, persist or call native System One SDK types. Deterministic host acceptance uses Sandbox; configured production uses the Observe provider factory; explicit host compatibility mode omits Observe and therefore leaves analysis `not_run`.
 

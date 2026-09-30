@@ -11,7 +11,7 @@
 
 # Fount
 
-> **Current workspace status (Run Phase 06):** Fount remains the canonical screenplay/acceptance library in the five-library workspace. `apps/fount_web` is an external host; Fount has no Phoenix dependency and its typed acceptance APIs remain the only canon-changing implementation. Phase 06 source is offline-implemented and runtime QC is pending.
+> **Current workspace status (Run Phase 06):** Fount remains the canonical screenplay/acceptance library in the five-library workspace. `apps/fount_web` is an external host; Fount has no Phoenix dependency and its typed acceptance APIs remain the only canon-changing implementation. The six-phase Run program is complete. System One reintegration runtime QC and its exact certified commits are recorded in the operational docset.
 
 **The headless screenplay engine and relational authoring platform for Elixir.**
 

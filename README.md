@@ -439,11 +439,11 @@ Existing live Workshop workflows remain in `packages/fount_workshop/examples/liv
 
 The repository now contains **five headless libraries plus one Phoenix host application**: `fount`, `fount_observe`, `fount_intelligence`, `fount_workshop`, `fount_run`, and `apps/fount_web`. The libraries retain their existing dependency boundaries; Phoenix/LiveView is host-only.
 
-The completed six-phase Fount Run program supplied the headless pipeline and web host baseline. A separate three-phase **Fount System One Run reintegration** now reconnects the first-party host to the already-existing Observe/Intelligence lane without changing canonical authority. Phases 01 and 02 are runtime-certified on their recorded commits; Phase 03 host integration is offline-implemented in this delivery and awaits local runtime QC.
+The completed six-phase Fount Run program supplied the headless pipeline and web host baseline. A separate three-phase **Fount System One Run reintegration** now reconnects the first-party host to the already-existing Observe/Intelligence lane without changing canonical authority. Phases 01 and 02 are runtime-certified on their recorded commits; Phase 03 host integration is implemented; runtime QC and final certification are recorded in the operational docset.
 
 In the integrated host path, deterministic development/test composes scripted Inference with credential-free Observe Sandbox measurements. Configured production constructs System One only through `Fount.Observe.provider/1`; FountWeb does not import native SDK types, Run remains provider-neutral, Workshop remains the Inference boundary, and Core remains the only authority that can advance canon. The explicit production `compatibility` mode omits Observe and surfaces analysis as `not_run` rather than success.
 
-Elixir compilation, PostgreSQL migrations, application execution, package builds, production assets, PDF rendering, and Playwright browser journeys are not certified by this offline Phase 03 source pass. The operational Fount System One Run docset and Phase 03 runtime-QC handoff are authoritative for the remaining verification work.
+The operational Fount System One Run docset and Phase 03 runtime QC report record executed Elixir compilation, PostgreSQL migrations, application tests, package builds, production assets, PDF delivery regressions, and Playwright browser journeys. Consult its state and exact verified code commit for certification; deterministic tests do not certify screenplay quality or live provider behavior.
 
 ---
 

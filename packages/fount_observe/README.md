@@ -2,7 +2,7 @@
 
 # Fount Observe
 
-> **Current workspace status:** Observe remains the neutral measurement/System One boundary in the five-library workspace. The six-phase Run program is complete; System One reintegration Phases 01 and 02 are runtime-certified, while Phase 03 host integration is offline-implemented and awaits runtime QC. The Phoenix host lives only at `apps/fount_web`; Observe has no Phoenix dependency and remains the sole owner of native System One SDK construction.
+> **Current workspace status:** Observe remains the neutral measurement/System One boundary in the five-library workspace. The six-phase Run program is complete; System One reintegration Phases 01 and 02 are runtime-certified, while Phase 03 host integration is implemented; runtime QC and final certification are recorded in the operational docset. The Phoenix host lives only at `apps/fount_web`; Observe has no Phoenix dependency and remains the sole owner of native System One SDK construction.
 
 **Measure what is on the page without letting an answer rewrite the screenplay.**
 

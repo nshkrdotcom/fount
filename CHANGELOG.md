@@ -1,5 +1,11 @@
 # Changelog
 
+## Phase 03 runtime QC repairs
+
+- Correct production config evaluation and extend host status, reload, and credential-canary coverage.
+- Use ordinary pooled database connections for the test browser server; retain SQL Sandbox for ExUnit so restored workers cannot starve LiveView reads.
+- Record exact final runtime certification in the operational docset.
+
 ## Unreleased - Fount System One Run Phase 03 host integration (offline implementation)
 
 - Make the first-party Phoenix worker composition supply Observe in the normal path: deterministic demo/test uses `Fount.Observe.Sandbox`, while configured production uses the existing `Fount.Observe.provider/1` System One boundary.

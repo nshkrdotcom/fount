@@ -2,7 +2,12 @@ import Config
 
 config :fount, Fount.Repo,
   url: System.get_env("FOUNT_DATABASE_URL", "ecto://postgres:postgres@localhost/fount_test"),
-  pool: Ecto.Adapters.SQL.Sandbox,
+  # Browser workers and LiveViews need independently reusable connections.
+  pool:
+    if(System.get_env("PHX_SERVER") == "true",
+      do: DBConnection.ConnectionPool,
+      else: Ecto.Adapters.SQL.Sandbox
+    ),
   pool_size: 10
 
 config :fount_web, FountWeb.Endpoint,

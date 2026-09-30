@@ -74,3 +74,5 @@ PDF is never faked. It remains an explicit format failure unless Afterwriting an
 ## Build/release inventory
 
 See `../../docs/implementation_handoff/PHASE_06_BUILD_AND_RELEASE.md` for the five-library + host build/release inventory.
+
+The test browser server (`PHX_SERVER=true`) uses the normal database connection pool so durable workers and LiveViews can share it without retaining Sandbox ownership. ExUnit continues to use SQL Sandbox. Run database suites and the browser harness sequentially against a disposable database.

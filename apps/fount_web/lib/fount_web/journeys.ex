@@ -1,9 +1,9 @@
 defmodule FountWeb.Journeys do
-  @moduledoc "Deterministic Phase 06 screenplay journeys. Runtime acceptance still exercises real Core/Run/Workshop persistence."
+  @moduledoc "Deterministic screenplay journeys. Runtime acceptance exercises real Core/Run/Workshop/Intelligence persistence."
   alias Fount.Query
   alias Fount.Writing.Principal
 
-  @journeys ~w(opening reveal dialogue)
+  @journeys ~w(opening reveal dialogue analysis)
   def names, do: @journeys
 
   def fixture_fountain do
@@ -88,6 +88,20 @@ defmodule FountWeb.Journeys do
            marker <>
              " Sharpen only the selected scene's dialogue; preserve out-of-scope action and protected lines.",
            [], "accept", Principal.to_map(service)}
+
+        "analysis" ->
+          dialogue =
+            Enum.find(root.ir.elements, fn element ->
+              element.type == :dialogue and String.contains?(element.text, "didn't miss")
+            end)
+
+          scene = Query.scene_for(root, dialogue.id)
+          marker = "JOURNEY:analysis TARGET_DIALOGUE:#{dialogue.id}"
+
+          {"pass", %{"targets" => [%{"kind" => "scene", "id" => scene.id}]},
+           marker <>
+             " Revise the selected dialogue while exercising prewrite and revision semantic analysis.",
+           [], "candidate", nil}
       end
 
     policy = %{

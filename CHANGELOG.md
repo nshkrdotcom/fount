@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased - Fount System One Run Phase 03 host integration (offline implementation)
+
+- Make the first-party Phoenix worker composition supply Observe in the normal path: deterministic demo/test uses `Fount.Observe.Sandbox`, while configured production uses the existing `Fount.Observe.provider/1` System One boundary.
+- Add explicit `FOUNT_OBSERVE_MODE` / System One runtime configuration with a visible `compatibility` no-analysis lane, safe analysis status/review presentation, and a candidate-only integrated analysis journey.
+- Add host/integration/browser/static regression coverage for prewrite Intelligence, candidate Revision Intelligence, advisory-vs-required checks, reconnect persistence, and unchanged canonical base. Runtime Elixir/PostgreSQL/browser/provider certification is NOT_RUN in this offline delivery.
+
 ## Unreleased - Fount Run Phase 02 run foundation (offline implementation)
 
 - Add `packages/fount_run` as the fifth workspace library with caller-supplied shared-Repo migrations and host-free startup.

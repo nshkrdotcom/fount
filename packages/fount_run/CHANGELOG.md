@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased - System One Run Phase 03 host integration
+
+- No Run production dependency/API expansion is required: the first-party host now supplies the existing optional `:observe` service in normal integrated execution.
+- Phase 03 host/browser coverage consumes Run's existing safe analysis lineage and layered checks; durable budgets, cache, fencing, recovery and Core-only acceptance remain unchanged. Offline source delivery does not certify runtime gates.
+
 ## Unreleased
 
 - Make the reintegrated analysis path durable at the Run boundary: `measurement_states` remain charged through the existing Run reservation ledger, `progress/3` now exposes safe writer/revision packet and durable analysis-run IDs plus current inference/measurement resource status, and no semantic payload is copied into new Run tables.

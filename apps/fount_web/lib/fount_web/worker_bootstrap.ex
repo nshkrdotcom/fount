@@ -15,7 +15,12 @@ defmodule FountWeb.WorkerBootstrap do
   def handle_info(:restore, state) do
     case FountWeb.Store.launched_runs(Fount.Repo) do
       runs when is_list(runs) ->
-        Enum.each(runs, &FountWeb.WorkerSupervisor.start_run/1)
+        Enum.each(runs, fn access ->
+          case FountWeb.WorkerSupervisor.start_run(access) do
+            {:ok, _pid} -> :ok
+            {:error, reason} -> Logger.error("Run worker restore refused: #{inspect(reason)}")
+          end
+        end)
 
       {:error, reason} ->
         Logger.error("Run worker restore unavailable: #{inspect(reason)}")

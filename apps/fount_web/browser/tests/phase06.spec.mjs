@@ -118,3 +118,29 @@ test('U05 control, unknown-cost and failure semantics are visible and keyboard r
   await page.getByRole('button', {name: 'Stop'}).click();
   await expect(page.getByRole('status')).toContainText('Stop recorded');
 });
+
+test('H03-H05 integrated analysis survives review reconnect and stays candidate-only', async ({page}) => {
+  await login(page);
+  const runId = await createJourney(page, 'analysis', `h03-${Date.now()}`);
+  await chooseRoute(page, runId);
+  await waitForCandidate(page, runId, 'If you missed it, you were meant to.');
+  await expect(page.locator('p.status')).toContainText('stage: deliver', {timeout: 60_000});
+
+  await expect(page.getByRole('heading', {name: 'Prewrite Intelligence'}).first()).toBeVisible();
+  await expect(page.getByRole('heading', {name: 'Revision Intelligence'}).first()).toBeVisible();
+  await expect(page.getByText(/Status: (complete|partial)/).first()).toBeVisible({timeout: 60_000});
+  await expect(page.getByRole('heading', {name: 'Semantic advisory checks'})).toBeVisible();
+  await expect(page.getByRole('heading', {name: 'Authoritative required checks'})).toBeVisible();
+  await expect(page.getByText(/revision_intelligence/).first()).toBeVisible();
+  await expect(page.locator('pre.script').first()).toContainText("I didn't miss anything.");
+  await expect(page.locator('pre.script').first()).not.toContainText('If you missed it, you were meant to.');
+
+  await page.reload();
+  await expect(page.getByText(/Status: (complete|partial)/).first()).toBeVisible({timeout: 60_000});
+  await expect(page.getByText(/analysis_run_id/).first()).toBeVisible();
+
+  await page.goto(`/runs/${runId}/timeline`);
+  await expect(page.getByText(/Analysis service:.*Deterministic Sandbox/)).toBeVisible();
+  await expect(page.getByRole('heading', {name: 'Prewrite Intelligence'})).toBeVisible();
+  await expect(page.getByRole('heading', {name: 'Revision Intelligence'})).toBeVisible();
+});

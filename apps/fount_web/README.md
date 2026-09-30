@@ -1,6 +1,22 @@
 # FountWeb
 
-`apps/fount_web` is the Phase 06 one-owner Phoenix LiveView host for the five Fount libraries. It is deliberately thin: Core owns canonical screenplay truth and acceptance, Workshop owns generated/revised pages, and Run owns durable plans, policies, decisions, approval attempts, controls, resource records, progress, and delivery. The host owns authentication, session-derived identity, Repo/process startup, runtime services, worker supervision, browser rendering, upload bounds, and artifact-root authorization.
+`apps/fount_web` is the one-owner Phoenix LiveView host for the five Fount libraries. It is deliberately thin: Core owns canonical screenplay truth and acceptance, Workshop owns generated/revised pages, Intelligence interprets Observe measurements, and Run owns durable plans, policies, decisions, approval attempts, controls, resource records, progress, and delivery. The host owns authentication, session-derived identity, Repo/process startup, runtime services, worker supervision, browser rendering, upload bounds, and artifact-root authorization.
+
+## Analysis service configuration
+
+Every normal worker is constructed with the host-owned Observe service. Development/test defaults to credential-free `Fount.Observe.Sandbox` fixtures alongside the scripted Inference adapter. Production defaults to `FOUNT_OBSERVE_MODE=system_one` and builds the provider only through `Fount.Observe.provider/1`; FountWeb never constructs or imports native `SystemOneSDK` clients/types.
+
+Production System One configuration is explicit:
+
+```text
+FOUNT_OBSERVE_MODE=system_one                 # default in prod
+FOUNT_SYSTEM_ONE_ENDPOINT_KIND=typesafe      # or endpoint
+SYSTEM_ONE_MODEL=<nonblank model id>
+SYSTEM_ONE_API_KEY=<required for typesafe; optional for endpoint>
+SYSTEM_ONE_BASE_URL=<optional typesafe override; required for endpoint>
+```
+
+Invalid/missing required configuration fails during runtime configuration or worker construction without printing values. `FOUNT_OBSERVE_MODE=compatibility` is the only production no-Observe lane; it is opt-in, visibly labeled, and records semantic analysis as `not_run` rather than success. `sandbox` is refused in production. Provider handles/credentials remain process-local and are never part of Run plans, steps, progress, Core rows or host mapping rows.
 
 ## Local deterministic launch
 
@@ -34,11 +50,12 @@ The LiveView subscribes to Run worker telemetry only as a wakeup. A periodic `Fo
 
 ## Deterministic journeys
 
-`FountWeb.Journeys.fixture_fountain/0` is a rights-cleared three-scene fixture with dialogue and a protected train-platform beat. The demo adapter is a real `Inference.Adapter` implementation with no credential and `cost: nil` (unknown, never converted to zero).
+`FountWeb.Journeys.fixture_fountain/0` is a rights-cleared three-scene fixture with dialogue and a protected train-platform beat. The demo adapter is a real `Inference.Adapter` implementation with no credential and `cost: nil` (unknown, never converted to zero). The same deterministic host composition also supplies Sandbox measurements through the real Workshop → Intelligence → Observe lane.
 
 1. `opening`: human route choice -> checked opening candidate -> candidate-labeled delivery; canonical base remains unchanged.
 2. `reveal`: human route choice -> intentionally violating first candidate -> protected-material repair -> exact human final approval -> delivery on request.
 3. `dialogue`: selected scene only -> dialogue change -> configured service approval; the approval attempt records `demo-service` and any failure/fallback remains durable and visible.
+4. `analysis`: selected scene only -> prewrite Intelligence -> human strategy route -> dialogue candidate -> Revision Intelligence -> layered check -> candidate-only completion; canonical base remains unchanged.
 
 The deterministic adapter is an acceptance fixture and does not certify screenplay quality or generated writing quality.
 
@@ -50,7 +67,7 @@ The maintained harness is `browser/` with `@playwright/test` 1.63.0 and Chromium
 FOUNT_DATABASE_URL=ecto://... scripts/run_phase06_browser.sh
 ```
 
-The runner migrates Core -> Run -> host, builds assets, starts the app on `127.0.0.1:4011`, and drives U01-U05 including reconnect/two-tab behavior and an unauthenticated denial. Runtime QC must also execute U06 setup/build/migration isolation and U07 full regression/PDF/doc gates from the operational handoff.
+The runner migrates Core -> Run -> host, builds assets, starts the app on `127.0.0.1:4011`, and drives the retained U01-U05 coverage plus the integrated H03-H05 analysis/reconnect journey. The review surface shows safe prewrite/revision packet status (`complete`, `partial`, `failed`, or `not-run`) and separates semantic advisory checks from authoritative required Run/Core checks. Runtime QC must execute the maintained suite; this offline source delivery does not claim it passed.
 
 PDF is never faked. It remains an explicit format failure unless Afterwriting and the configured Poppler checks are actually available.
 

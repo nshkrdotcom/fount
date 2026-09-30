@@ -18,4 +18,14 @@ defmodule FountWeb.SourceContractTest do
     host = :binary.match(source, "FountWeb.Migrations.path()") |> elem(0)
     assert core < run and run < host
   end
+
+  test "host composes Observe without importing native System One SDK types" do
+    source = File.read!(Path.expand("../../lib/fount_web/services.ex", __DIR__))
+    mix = File.read!(Path.expand("../../mix.exs", __DIR__))
+
+    assert source =~ "Fount.Observe.provider"
+    assert source =~ "Fount.Observe.Sandbox"
+    refute source =~ "SystemOneSDK"
+    assert mix =~ ~s({:fount_observe, path: "../../packages/fount_observe"})
+  end
 end

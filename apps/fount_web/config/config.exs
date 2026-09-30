@@ -18,6 +18,8 @@ config :fount_web, :demo,
   service_approver_id: "demo-service",
   agent_approver_id: "demo-agent"
 
+config :fount_web, :observe, mode: :sandbox
+
 config :fount_web, :artifact_root, Path.expand("../../_artifacts/fount_web", __DIR__)
 
 config :esbuild,

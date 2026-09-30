@@ -110,6 +110,7 @@ defmodule FountWeb.ProjectLive do
                   <option value="opening">Opening candidate</option>
                   <option value="reveal">Reveal change</option>
                   <option value="dialogue">Dialogue pass</option>
+                  <option value="analysis">Observe-backed analysis candidate</option>
                 </select>
               </label>
               <button type="submit">Use current accepted base</button>
@@ -124,7 +125,7 @@ defmodule FountWeb.ProjectLive do
           The supplied screenplay becomes the explicit genesis revision. Generated pages are candidates until the configured exact approval path accepts them.
         </p>
         <p class="warning">
-          Deterministic demo mode uses no secret credential. It exercises persistence, Run decisions, Workshop edits, checks and delivery; it does not certify screenplay quality.
+          Deterministic demo mode uses no secret credential. It exercises persistence, Run decisions, Workshop edits, Observe-backed Intelligence, checks and delivery; it does not certify screenplay quality.
         </p>
         <p :if={@error} role="alert">{@error}</p>
 
@@ -147,6 +148,7 @@ defmodule FountWeb.ProjectLive do
                 Reveal move → protected beat repair → human exact approval
               </option>
               <option value="dialogue">Selected-scene dialogue → configured service approval</option>
+              <option value="analysis">Selected-scene dialogue → Observe-backed candidate (canon unchanged)</option>
             </select>
           </label>
           <label>

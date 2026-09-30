@@ -201,7 +201,12 @@ defmodule FountWeb.RunLive do
     case {FountRun.progress(Fount.Repo, socket.assigns.run_id, socket.assigns.context),
           FountRun.get_run(Fount.Repo, socket.assigns.run_id, socket.assigns.context)} do
       {{:ok, progress}, {:ok, run}} ->
-        assign(socket, progress: progress, run: run, review: review_data(run, progress))
+        assign(socket,
+          progress: progress,
+          run: run,
+          review: review_data(run, progress),
+          analysis_service: FountWeb.Services.analysis_service_summary()
+        )
 
       {{:error, reason}, _} ->
         assign(socket, :error, "Progress unavailable: #{inspect(reason)}")
@@ -212,6 +217,8 @@ defmodule FountWeb.RunLive do
   end
 
   defp review_data(run, progress) do
+    analysis = analysis_snapshot(progress)
+
     with {:ok, base} <-
            Fount.Persistence.load_revision(
              Fount.Repo,
@@ -220,6 +227,8 @@ defmodule FountWeb.RunLive do
            ),
          candidate_id when is_binary(candidate_id) <- candidate_id(run, progress),
          {:ok, candidate} <- Fount.Persistence.candidate(Fount.Repo, candidate_id) do
+      checks = latest_checks(progress)
+
       %{
         base: Fount.Screenplay.to_fountain(base, mode: :spec),
         candidate: Fount.Screenplay.to_fountain(candidate["screenplay"], mode: :spec),
@@ -229,7 +238,13 @@ defmodule FountWeb.RunLive do
             pretty: true,
             limit: :infinity
           ),
-        checks: latest_checks(progress),
+        checks: checks,
+        advisory_checks: Enum.filter(checks, &(&1["severity"] == "advisory")),
+        required_run_checks: Enum.filter(checks, &(&1["severity"] == "required")),
+        other_checks:
+          Enum.reject(checks, &(&1["severity"] in ["advisory", "required"])),
+        pre_analysis: analysis.writer,
+        revision_analysis: analysis.revision,
         provenance: candidate["provenance"] || %{},
         lineage: candidate["lineage"] || [],
         required_checks: candidate["required_checks"] || [],
@@ -244,6 +259,11 @@ defmodule FountWeb.RunLive do
           candidate_id: nil,
           diff: nil,
           checks: [],
+          advisory_checks: [],
+          required_run_checks: [],
+          other_checks: [],
+          pre_analysis: analysis.writer,
+          revision_analysis: analysis.revision,
           provenance: %{},
           lineage: [],
           required_checks: [],
@@ -267,6 +287,46 @@ defmodule FountWeb.RunLive do
       if step["stage"] == "check", do: get_in(step, ["result", "checks"]) || [], else: nil
     end)
   end
+
+  defp analysis_snapshot(progress) do
+    %{
+      writer: latest_analysis(progress, "writer", ["investigate", "plan"]),
+      revision: latest_analysis(progress, "revision", ["write", "iterate", "check"])
+    }
+  end
+
+  defp latest_analysis(progress, key, stages) do
+    summary =
+      progress["analysis"]
+      |> List.wrap()
+      |> Enum.reverse()
+      |> Enum.find_value(fn item -> if is_map(item), do: item[key] end)
+
+    if is_map(summary) do
+      summary
+    else
+      step =
+        progress["steps"]
+        |> List.wrap()
+        |> Enum.reverse()
+        |> Enum.find(&(&1["stage"] in stages))
+
+      cond do
+        is_map(step) and step["status"] in ["failed", "error"] ->
+          %{
+            "status" => "failed",
+            "reason" => step["error_category"] || "stage_failed_before_analysis_summary"
+          }
+
+        true ->
+          %{"status" => "not_run", "reason" => "analysis_not_recorded"}
+      end
+    end
+  end
+
+  defp analysis_status(%{"status" => "not_run"}), do: "not-run"
+  defp analysis_status(%{"status" => status}) when is_binary(status), do: status
+  defp analysis_status(_), do: "not-run"
 
   defp normalize_started({:error, {:already_started, pid}}), do: {:ok, pid}
   defp normalize_started(other), do: other
@@ -402,6 +462,22 @@ defmodule FountWeb.RunLive do
           Progress is reloaded from PostgreSQL every second and after PubSub wakeups. Socket or worker loss does not own correctness.
         </p>
         <p>Current scope: <code>{json(@current_plan["scope"])}</code></p>
+        <p>
+          Analysis service: <strong>{@analysis_service["label"]}</strong>
+          (<code>{@analysis_service["mode"]}</code>). Compatibility mode records semantic analysis as not-run; it is never treated as success.
+        </p>
+        <div class="grid">
+          <div class="card">
+            <h3>Prewrite Intelligence</h3>
+            <p>Status: <strong>{analysis_status(@review.pre_analysis)}</strong></p>
+            <pre><%= json(@review.pre_analysis) %></pre>
+          </div>
+          <div class="card">
+            <h3>Revision Intelligence</h3>
+            <p>Status: <strong>{analysis_status(@review.revision_analysis)}</strong></p>
+            <pre><%= json(@review.revision_analysis) %></pre>
+          </div>
+        </div>
         <p :if={@run["pause_requested_at"]}>
           Pause requested at {@run["pause_requested_at"]}; any already-dispatched provider call is settling before another dispatch.
         </p>
@@ -487,6 +563,18 @@ defmodule FountWeb.RunLive do
 
       <section :if={@live_action == :review} class="stack">
         <h2>Side-by-side candidate review</h2>
+        <div class="grid">
+          <div class="card">
+            <h3>Prewrite Intelligence</h3>
+            <p>Status: <strong>{analysis_status(@review.pre_analysis)}</strong></p>
+            <pre><%= json(@review.pre_analysis) %></pre>
+          </div>
+          <div class="card">
+            <h3>Revision Intelligence</h3>
+            <p>Status: <strong>{analysis_status(@review.revision_analysis)}</strong></p>
+            <pre><%= json(@review.revision_analysis) %></pre>
+          </div>
+        </div>
         <p :if={is_nil(@review.candidate)}>
           No candidate has been persisted yet. Generated pages cannot appear before the configured strategy gate is resolved.
         </p>
@@ -509,11 +597,24 @@ defmodule FountWeb.RunLive do
             <h3>Required check identity</h3><pre><%= json(%{"required_checks" => @review.required_checks, "check_set_fingerprint" => @review.check_set_fingerprint}) %></pre>
           </div>
         </div>
-        <div class="card">
-          <h3>Checks and override evidence</h3><pre><%= json(@review.checks) %></pre><p>
-            Unknown, failed and uninspected checks remain visible; absence is not converted into a pass. Any permitted override remains part of the persisted decision/approval record rather than being hidden here.
-          </p>
+        <div class="grid">
+          <div class="card">
+            <h3>Semantic advisory checks</h3><pre><%= json(@review.advisory_checks) %></pre><p>
+              These are advisory semantic findings. Partial or failed semantic analysis is never displayed as an advisory pass.
+            </p>
+          </div>
+          <div class="card">
+            <h3>Authoritative required checks</h3><pre><%= json(@review.required_run_checks) %></pre><p>
+              Required Run/Core checks remain distinct from semantic advice and continue to control repair/acceptance under existing rules.
+            </p>
+          </div>
         </div>
+        <div :if={@review.other_checks != []} class="card">
+          <h3>Other recorded checks</h3><pre><%= json(@review.other_checks) %></pre>
+        </div>
+        <p>
+          Unknown, failed and uninspected checks remain visible; absence is not converted into a pass. Any permitted override remains part of the persisted decision/approval record rather than being hidden here.
+        </p>
         <p :if={@review.candidate}>
           Candidate selection and acceptance are explicit persisted decisions. <a href={
             ~p"/runs/#{@run_id}/decisions"

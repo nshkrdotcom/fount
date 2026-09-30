@@ -161,6 +161,9 @@ defmodule FountWeb.Launch do
   defp goal("dialogue"),
     do: "Revise selected-scene dialogue only and exercise configured automated approval"
 
+  defp goal("analysis"),
+    do: "Produce an Observe-backed checked dialogue candidate without advancing canon"
+
   defp preset(%{"completion" => "candidate"}), do: "candidate"
   defp preset(%{"approver" => %{"type" => type}}), do: "accept:" <> type
   defp preset(_), do: "custom"

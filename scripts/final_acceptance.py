@@ -243,8 +243,30 @@ def audit() -> dict:
     browser = read("apps/fount_web/browser/tests/phase06.spec.mjs") if (ROOT / "apps/fount_web/browser/tests/phase06.spec.mjs").is_file() else ""
     check("phase06_browser_u01_u05_inventory", all(f"U0{i}" in browser for i in range(1, 6)), None)
 
-    stale_current = [token for token in ("Phase 11 is offline-implemented in this delivery", "Phase 12 is not included") if token in root_readme]
-    check("current_status_is_phase06", not stale_current and "Phase 06" in root_readme and "OFFLINE_IMPLEMENTED" in root_readme, stale_current)
+    stale_current = [
+        token
+        for token in (
+            "Phase 11 is offline-implemented in this delivery",
+            "Phase 12 is not included",
+            "Phase 06 source is offline-implemented and runtime QC is pending",
+        )
+        if token in root_readme
+    ]
+    reintegration_status = all(
+        token in root_readme
+        for token in (
+            "completed six-phase Fount Run program",
+            "Fount System One Run reintegration",
+            "Phase 03",
+            "offline-implemented",
+            "runtime QC",
+        )
+    )
+    check(
+        "current_status_reflects_completed_phase06_plus_system_one_reintegration",
+        not stale_current and reintegration_status,
+        stale_current,
+    )
 
     missing_phase16 = [
         path

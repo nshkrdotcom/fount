@@ -1,5 +1,5 @@
 defmodule FountWeb.DemoAdapter do
-  @moduledoc "Deterministic, credential-free completion adapter used only by Phase 06 demo/browser acceptance."
+  @moduledoc "Deterministic, credential-free completion adapter used by demo/browser acceptance."
   @behaviour Inference.Adapter
 
   @impl true
@@ -158,7 +158,9 @@ defmodule FountWeb.DemoAdapter do
     groups =
       case journey do
         "reveal" -> reveal_groups(prompt, repair?)
-        "dialogue" -> [group("demo-change", "Dialogue change", [], dialogue_ops(prompt))]
+        journey when journey in ["dialogue", "analysis"] ->
+          [group("demo-change", "Dialogue change", [], dialogue_ops(prompt))]
+
         _ -> [group("demo-change", "Opening change", [], opening_ops())]
       end
 
@@ -167,7 +169,7 @@ defmodule FountWeb.DemoAdapter do
       "base_revision_id" => base,
       "strategy_id" => strategy,
       "summary" =>
-        "Deterministic Phase 06 demo page change. " <>
+        "Deterministic demo page change. " <>
           (capture(
              prompt,
              ~r/(JOURNEY:reveal TARGET_PROTECTED:[0-9a-f-]{36} TARGET_LATE_ACTION:[0-9a-f-]{36} AFTER_SCENE:[0-9a-f-]{36})/

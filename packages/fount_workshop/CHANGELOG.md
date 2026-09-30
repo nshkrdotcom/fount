@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased - System One Run Phase 03 first-party host integration
+
+- The first-party web host now exercises Workshop's existing Observe-backed Intelligence lane by default in deterministic acceptance and configured production composition.
+- Standalone Workshop remains compatible with the Store + Inference-only lane; no Observe service still produces explicit `not_run` analysis rather than semantic success. No Workshop production contract change is introduced by this phase.
+
 ## Unreleased - Fount Run Phase 01 core approval safety (source delivery)
 
 - Fount Run Phase 03: allow Run-managed sessions to reuse durable session/candidate operation identity, provider dispatch/recovery hooks, subordinate measurement reservations, decode-repair allowance and transport retries while preserving standalone Session behavior.

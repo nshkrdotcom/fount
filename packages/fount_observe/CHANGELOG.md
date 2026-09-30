@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased - System One Run Phase 03 first-party host integration
+
+- Document the first-party host's use of the existing `Fount.Observe.provider/1` factory and deterministic Sandbox lane. Native System One SDK types remain confined to `Fount.Observe.Providers.SystemOne`; no Observe runtime contract changes in this phase.
+
 ## Unreleased - Phase 16 final integration source delivery
 
 - Add the final source/package acceptance harness and W01-W12/A01-A12 evidence inventory without introducing a second analysis, generation, session, or canon path.

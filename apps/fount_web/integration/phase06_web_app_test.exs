@@ -106,4 +106,81 @@ defmodule FountWeb.Phase06IntegrationTest do
     assert {:error, :storage_error} =
              FountWeb.Store.run_access(Fount.Repo, "test-owner", "invalid-uuid")
   end
+
+  test "H01-H05 deterministic host journey persists prewrite/revision analysis and keeps candidate noncanonical" do
+    assert {:ok, %{project: project, run: run}} =
+             FountWeb.Launch.create("test-owner", %{
+               "title" => "Integrated analysis",
+               "key" => "h03-integrated-analysis",
+               "journey" => "analysis",
+               "source" => FountWeb.Journeys.fixture_fountain(),
+               "filename" => "fixture.fountain"
+             })
+
+    {:ok, context} = FountWeb.Actors.owner_context("test-owner", run["screenplay_id"])
+    assert {:ok, step_opts} = FountWeb.Services.worker_step_opts("test-owner", run["screenplay_id"], run)
+    assert Fount.Observe.Provider.sensor_id(Keyword.fetch!(step_opts, :observe)) == "sandbox"
+
+    for expected <- ["intake", "investigate", "plan"] do
+      assert {:ok, %{"status" => "succeeded", "stage" => ^expected}} =
+               FountRun.step(Fount.Repo, run["id"], context, step_opts)
+    end
+
+    assert {:ok, at_strategy} = FountRun.progress(Fount.Repo, run["id"], context)
+    strategy = Enum.find(at_strategy["decisions"], &(&1["kind"] == "strategy" and &1["status"] == "pending"))
+    assert is_map(strategy)
+
+    assert {:ok, _} =
+             FountRun.submit_decision(
+               Fount.Repo,
+               strategy["id"],
+               %{
+                 "choice" => "route-a",
+                 "context_fingerprint" => strategy["context_fingerprint"],
+                 "plan_version" => strategy["plan_version"],
+                 "policy_version" => strategy["policy_version"]
+               },
+               context
+             )
+
+    assert {:ok, %{"status" => "succeeded", "stage" => "write"}} =
+             FountRun.step(Fount.Repo, run["id"], context, step_opts)
+
+    assert {:ok, %{"status" => "succeeded", "stage" => "check"}} =
+             FountRun.step(Fount.Repo, run["id"], context, step_opts)
+
+    assert {:ok, progress} = FountRun.progress(Fount.Repo, run["id"], context)
+    prewrite = progress["analysis"] |> Enum.find_value(& &1["writer"])
+    revision = progress["analysis"] |> Enum.reverse() |> Enum.find_value(& &1["revision"])
+    assert prewrite["status"] in ["complete", "partial"]
+    assert revision["status"] in ["complete", "partial"]
+    assert is_binary(prewrite["analysis_run_id"])
+    assert is_binary(revision["analysis_run_id"])
+
+    for analysis_run_id <- [prewrite["analysis_run_id"], revision["analysis_run_id"]] do
+      result =
+        Ecto.Adapters.SQL.query!(
+          Fount.Repo,
+          "SELECT count(*) FROM analysis_runs WHERE id=$1::text::uuid",
+          [analysis_run_id]
+        )
+
+      assert result.rows == [[1]]
+    end
+
+    check = progress["steps"] |> Enum.find(&(&1["stage"] == "check"))
+    checks = check["result"]["checks"]
+    assert Enum.any?(checks, &(&1["severity"] == "advisory" and &1["kind"] == "revision_intelligence"))
+    assert Enum.any?(checks, &(&1["severity"] == "required" and &1["source"] == "run"))
+
+    candidate_id = check["result"]["candidate_id"]
+    assert {:ok, candidate} = Fount.Persistence.candidate(Fount.Repo, candidate_id)
+    assert get_in(candidate, ["provenance", "revision_intelligence", "status"]) in ["complete", "partial"]
+
+    assert {:ok, canonical} = Fount.Persistence.load(Fount.Repo, project["key"])
+    assert canonical.revision.id == run["plan"]["base_revision_id"]
+
+    assert {:ok, reloaded} = FountRun.progress(Fount.Repo, run["id"], context)
+    assert reloaded["analysis"] == progress["analysis"]
+  end
 end

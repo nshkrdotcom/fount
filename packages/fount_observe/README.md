@@ -2,7 +2,7 @@
 
 # Fount Observe
 
-> **Current workspace status (Run Phase 06):** Observe remains the neutral measurement/System One boundary in the five-library workspace. The Phoenix host lives only at `apps/fount_web`; Observe has no Phoenix dependency. Phase 06 source is offline-implemented and runtime QC is pending.
+> **Current workspace status:** Observe remains the neutral measurement/System One boundary in the five-library workspace. The six-phase Run program is complete; System One reintegration Phases 01 and 02 are runtime-certified, while Phase 03 host integration is offline-implemented and awaits runtime QC. The Phoenix host lives only at `apps/fount_web`; Observe has no Phoenix dependency and remains the sole owner of native System One SDK construction.
 
 **Measure what is on the page without letting an answer rewrite the screenplay.**
 
@@ -17,6 +17,8 @@ From this package, run `mix run examples/sandbox.exs`. It uses an authored fixtu
 ## Package boundary
 
 Observe depends on canonical `fount` and `system_one_sdk`. Only `Fount.Observe.Providers.SystemOne` touches native SDK types. Closed sensor, projection and lens registries reject arbitrary executable names. Intelligence interprets measurements; Workshop owns screenplay generation, PDF rendering and acceptance.
+
+The first-party FountWeb composition uses `Fount.Observe.provider/1` for configured System One runtime and `Fount.Observe.Sandbox` for deterministic test/demo work. Host code does not construct `SystemOneSDK.Client` directly. Credentials remain inside the opaque provider handle, whose public Inspect representation omits state; callers must not serialize or log provider internals.
 
 The Phase 1 source includes request/error contracts, source projections, a deterministic Sandbox, ordered batch reassembly, analytical budgets, cancellation/timeouts, and a process-owned LRU cache. The measurement substrate is the verified Phase-10 baseline. Phase-11 calibration/corpus interpretation remains owned by Intelligence; Observe only adds a gated live measurement check.
 

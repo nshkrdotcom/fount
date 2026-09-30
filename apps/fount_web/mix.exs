@@ -29,6 +29,7 @@ defmodule FountWeb.MixProject do
     [
       {:fount, path: "../../packages/fount"},
       {:fount_run, path: "../../packages/fount_run"},
+      {:fount_observe, path: "../../packages/fount_observe"},
       {:inference, "~> 0.5.0"},
       {:phoenix, "~> 1.8.1"},
       {:phoenix_live_view, "~> 1.2"},

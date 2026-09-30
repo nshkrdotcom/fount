@@ -2,150 +2,143 @@
   "format_version": 1,
   "base_identity": {
     "source_name": "fount",
-    "git_commit": "829a9ff11fd52bb762b6f6380c3a175bf9029ee1",
-    "snapshot_sha256": "e49aab455dcc6bb846ff67b29f66e95a26a3bdd9eb89ea493376ec8441fbc533",
+    "git_commit": "d2a7df8065e61e6af4293e97e732d93a545487a9",
+    "snapshot_sha256": "52e86dd187a9ec18292883d19accd775b6ae6188e71957651bf32e44535c62c4",
     "working_tree_clean": true
   },
-  "packet_manifest_sha256": "96772110ab2337060f1baa48a47f862c599f80f2a47c9cb9f8ff88d894718cc3",
+  "packet_manifest_sha256": "e2844b6947e8da8536566ce7d4ebdbbad1865e31955cc72eadd88873b6ccf1f0",
   "files": [
     {
       "path": "apps/fount_web/README.md",
       "action": "modify",
-      "original_sha256": "c0bb976ae0bc0b62a97e2ecccc3b4f141e08e26594596267979b9168c779303f",
-      "result_sha256": "ffbb7e07855e756572c9e917e0089d51255188554b178148218da5d22a9892c1",
+      "original_sha256": "4ce0fc6935503caa4096f6a5514c16eafe1a223f3d3dcf0e7e099ec37523807f",
+      "result_sha256": "77e0527bc183bf0cf4d28729b980426e8e0b6cfc0809ea0c9bd8db2cbc0cf400",
       "mode": 420
     },
     {
       "path": "apps/fount_web/assets/css/app.css",
       "action": "modify",
-      "original_sha256": "9705a5bcdb527154c1e76541acd87226e428524dc7ca9e20f2133f005cf6645d",
-      "result_sha256": "e471d850dd832e41cc6660438a470f45c16632c889dc053e528195e6ac18e2a2",
+      "original_sha256": "e471d850dd832e41cc6660438a470f45c16632c889dc053e528195e6ac18e2a2",
+      "result_sha256": "aa276a2c9722edcd04f55cdf8c697eaf1f506c56b2043005946b07c9c79b6ec1",
       "mode": 420
     },
     {
       "path": "apps/fount_web/assets/js/app.js",
       "action": "modify",
-      "original_sha256": "698952376d2f7bb6d9d6e7006125a5aaabedd512479736dc4ff3db5541b8b5d5",
-      "result_sha256": "33cae0ef0a39e8aff7decc6b7dc20c19e8e1d310466bbcada8d2df6a9e86bd20",
+      "original_sha256": "876534f8015052b9b1bb69959b446d52ab79123cb5365f71d2a8ec553a5eeb29",
+      "result_sha256": "014e9a92ee1b6126b0e6f0a0b4b371378a944686d47916ccd4d48cc8f6b6054d",
       "mode": 420
     },
     {
       "path": "apps/fount_web/browser/README.md",
       "action": "modify",
-      "original_sha256": "145e8646f076a1cfa8bf40897c9fc41b013c23c3baa02c05acbd2a1644de9981",
-      "result_sha256": "8e61e4d0704d4abb74fbd6737b32f6e5b06a9637e0c7369aa8e0b89d8522bae2",
+      "original_sha256": "774145ea3ff5e034eef6e49d45c9991ae7e322f75d8dba022a83f64d211eee5b",
+      "result_sha256": "2d47dc36c6ad4196cdba07e5281f3cc30e62f4aba95103bb48713bfc7b08e20e",
       "mode": 420
     },
     {
-      "path": "apps/fount_web/browser/tests/phase04_viewer.spec.mjs",
+      "path": "apps/fount_web/browser/tests/phase05_authoring.spec.mjs",
       "action": "add",
       "original_sha256": null,
-      "result_sha256": "87b34463e345e5c6d1b954a530f1a3809d7e1246cd5534896f8db2a053b68e9d",
+      "result_sha256": "862248b168f5670c1d2d1a4064ec86628a19aaca624dc014dcc1af138040d193",
       "mode": 420
     },
     {
-      "path": "apps/fount_web/integration/phase04_viewer_test.exs",
-      "action": "add",
-      "original_sha256": null,
-      "result_sha256": "4baa8129e3c315321902201a6c4ec4ab89a1f1ad0bb1a3a73041f696f77ab9d3",
+      "path": "apps/fount_web/config/config.exs",
+      "action": "modify",
+      "original_sha256": "5a94b555d6fe925248e1448dbe826a1927b48ea4cbcf1bc90710697f9992fd21",
+      "result_sha256": "d73d74c737ac1fa356951ba14f37c844162facfd55310656365ffed717b8ddaf",
       "mode": 420
     },
     {
-      "path": "apps/fount_web/lib/fount_web/components/core_components.ex",
+      "path": "apps/fount_web/integration/phase05_authoring_test.exs",
       "action": "add",
       "original_sha256": null,
-      "result_sha256": "296d087030729992fb509a1850865027f26252923d6ade13455de47755839562",
+      "result_sha256": "115f0aedbd345b893bdbf4f869dc63c958149d3915ed2b7e1f6f26c2ec2fe681",
       "mode": 420
     },
     {
-      "path": "apps/fount_web/lib/fount_web/components/diff_viewer.ex",
+      "path": "apps/fount_web/lib/fount_web/authoring.ex",
       "action": "add",
       "original_sha256": null,
-      "result_sha256": "d892cb858b8672e78e83b21fe903dd21da7933a17c82f0fa42e4203f0bb64208",
+      "result_sha256": "86fcf6401fa6a43b787b241bc096aae4bc7e68e43dcee4b04d0f8f53f0bef847",
       "mode": 420
     },
     {
-      "path": "apps/fount_web/lib/fount_web/components/screenplay_renderer.ex",
+      "path": "apps/fount_web/lib/fount_web/authoring_store.ex",
       "action": "add",
       "original_sha256": null,
-      "result_sha256": "f3b8bf541a097c10bcffbe24bceac46eda3fc7c5f75cc60fa46b9d1c1f3a1ab5",
+      "result_sha256": "f9b54e6648f592753426e287b96b4632c0928ff4a9cc27cccc3bbd17b6ce1d66",
+      "mode": 420
+    },
+    {
+      "path": "apps/fount_web/lib/fount_web/launch.ex",
+      "action": "modify",
+      "original_sha256": "ded19060cc33c22c31e71426fbcdf435b5356c55efc91d3d0293e796e1867cd4",
+      "result_sha256": "d54b4678d7f0fbdc3990767b9736cff8341389b4842a4421b1e58f5a2be5dbba",
+      "mode": 420
+    },
+    {
+      "path": "apps/fount_web/lib/fount_web/live/editor_live.ex",
+      "action": "add",
+      "original_sha256": null,
+      "result_sha256": "d64ed7b4d020999ce491278a0adaa379e1a41860860e3316941212d9e2aef1d2",
       "mode": 420
     },
     {
       "path": "apps/fount_web/lib/fount_web/live/run_live.ex",
       "action": "modify",
-      "original_sha256": "eba3163bdd7bbcf9316e2a23d40429f0656bfbe7c73c9fe64e2a0ecbcd38be18",
-      "result_sha256": "f6d262a10b2855c60dbaeb4ffa177c6f4f5ed59df2ffc2e8248bcfa444aec990",
+      "original_sha256": "f6d262a10b2855c60dbaeb4ffa177c6f4f5ed59df2ffc2e8248bcfa444aec990",
+      "result_sha256": "0c0fa21ec42342b4ddbf9f144c3b5c7d1176b5683c05db106561a09bf5e9d538",
       "mode": 420
     },
     {
       "path": "apps/fount_web/lib/fount_web/live/viewer_live.ex",
-      "action": "add",
-      "original_sha256": null,
-      "result_sha256": "91bb07b8d8ab3ea8f7f8787116ceb877c3cd1b30a3592decfb990643218b9557",
+      "action": "modify",
+      "original_sha256": "3e5b06846a4e6f741dced1ecec545c4aaf324ae6e1496f514eabf1aaeace9793",
+      "result_sha256": "929b71d2de09e95197d043f45fdf94d91058e71210eeb2b886191a7eb8eefa40",
       "mode": 420
     },
     {
       "path": "apps/fount_web/lib/fount_web/router.ex",
       "action": "modify",
-      "original_sha256": "52d186aa445eb073338e86547ca763508962ce7bd90ac180c4eef082ed8657ee",
-      "result_sha256": "2823c204f5eb48c4ac217501dbc66a6a00986d9293759802b5085a351e61b919",
+      "original_sha256": "2823c204f5eb48c4ac217501dbc66a6a00986d9293759802b5085a351e61b919",
+      "result_sha256": "e09e1cc81577c1923f95793610370847bb5fc8a1e35a6e695325ea0299d631be",
       "mode": 420
     },
     {
-      "path": "apps/fount_web/lib/fount_web/screenplay_index.ex",
+      "path": "apps/fount_web/priv/repo/migrations/20260930053000_create_fount_web_authoring_tables.exs",
       "action": "add",
       "original_sha256": null,
-      "result_sha256": "d547478b229db105f5db55670d101234268a7baedf5d2c9b68dc8a47727a38bf",
+      "result_sha256": "ca4935bbcafdd81de558a03541d793813dac5eb60fc590a911d6e534e0249a90",
       "mode": 420
     },
     {
-      "path": "apps/fount_web/lib/fount_web/screenplay_views.ex",
+      "path": "apps/fount_web/test/fount_web/phase05_authoring_contract_test.exs",
       "action": "add",
       "original_sha256": null,
-      "result_sha256": "2f1e79859dd6e57dd8cde8281b9b2540868af996fdffac8a8587b9bc5ab7d1da",
+      "result_sha256": "5a491144b5f8f89385b84e64ac69d7b69189c8f693978605d42966d0c40bdfc5",
       "mode": 420
     },
     {
-      "path": "apps/fount_web/test/fount_web/core_components_test.exs",
+      "path": "packages/fount/lib/fount/screenplay/source_reconciler.ex",
       "action": "add",
       "original_sha256": null,
-      "result_sha256": "f9224273424805a3ef2b84384cc4ccbba2bf8fefadf880388b209a5038a48a9e",
+      "result_sha256": "7f63b8bee4ad43b110c223616ce76ec46cb4663e10a5202c9c2d1c6867215649",
       "mode": 420
     },
     {
-      "path": "apps/fount_web/test/fount_web/diff_viewer_test.exs",
+      "path": "packages/fount/test/fount/screenplay/source_reconciler_test.exs",
       "action": "add",
       "original_sha256": null,
-      "result_sha256": "c32b5f3e2442f1066c80279cf5f542d80ac5da54ce10fefd71175e7040bd2be8",
+      "result_sha256": "6476cd30904cab9b4eaf2bdf907fc94bcc613c1914b1a980f971386f28c8c593",
       "mode": 420
     },
     {
-      "path": "apps/fount_web/test/fount_web/phase04_source_contract_test.exs",
+      "path": "scripts/tests/test_system_one_run_phase05_source.py",
       "action": "add",
       "original_sha256": null,
-      "result_sha256": "e9b59cb12ff0b13a6564df22522ae31b965f7ad8567c62efdab46ea9ebd7ad93",
-      "mode": 420
-    },
-    {
-      "path": "apps/fount_web/test/fount_web/screenplay_index_test.exs",
-      "action": "add",
-      "original_sha256": null,
-      "result_sha256": "2809e577b8cee8bd5def2a357cd1e7da41498fb3466b607140f36299c2b608f7",
-      "mode": 420
-    },
-    {
-      "path": "apps/fount_web/test/fount_web/screenplay_renderer_test.exs",
-      "action": "add",
-      "original_sha256": null,
-      "result_sha256": "d566045840167d64c8df397d0960a513159fd9503e3054615d17443c7f3144cd",
-      "mode": 420
-    },
-    {
-      "path": "scripts/tests/test_system_one_run_phase04_source.py",
-      "action": "add",
-      "original_sha256": null,
-      "result_sha256": "570dde31f043499fa2a2295ff481c3dbdcb11677c899c733f2afef8b8897dd27",
+      "result_sha256": "07384ceb583ce4c4ea09ede7aba1ebe7098b08f6200288c8795d853f7695692a",
       "mode": 420
     }
   ],

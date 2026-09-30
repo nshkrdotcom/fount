@@ -20,6 +20,13 @@ config :fount_web, :demo,
 
 config :fount_web, :observe, mode: :sandbox
 
+config :fount_web, :authoring,
+  autosave_ms: 60_000,
+  history_limit: 30,
+  draft_limit: 12,
+  max_source_bytes: 1_048_576
+
+
 config :fount_web, :artifact_root, Path.expand("../../_artifacts/fount_web", __DIR__)
 
 config :esbuild,

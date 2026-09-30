@@ -96,6 +96,61 @@ defmodule FountWeb.Launch do
     end
   end
 
+  @doc "Starts the generic authoring AI journey from an owner-bound saved manual candidate without accepting it."
+  def create_from_candidate(owner_id, project_id, candidate_id, attrs)
+      when is_binary(owner_id) and is_binary(project_id) and is_binary(candidate_id) and is_map(attrs) do
+    command_id = Map.get(attrs, "command_id", "") |> String.trim()
+
+    with :ok <- validate_authoring_command(command_id),
+         {:ok, project} <- FountWeb.Store.project(Fount.Repo, owner_id, project_id),
+         {:ok, head} <- Persistence.load(Fount.Repo, project["key"]),
+         {:ok, candidate} <- Persistence.candidate(Fount.Repo, candidate_id),
+         true <- candidate["screenplay_id"] == project["screenplay_id"],
+         true <- candidate["base_revision_id"] == head.revision.id,
+         true <- candidate["decision"] == "proposed",
+         root <- candidate["screenplay"],
+         {:ok, context} <- FountWeb.Actors.owner_context(owner_id, root.id),
+         config <- FountWeb.Journeys.configuration(root, "opening", owner_id),
+         {:ok, run} <-
+           FountRun.start_run(
+             Fount.Repo,
+             run_attrs(root, config, "opening", "web-authoring:" <> command_id),
+             context
+           ),
+         {:ok, access} <-
+           FountWeb.Store.register_run(Fount.Repo, %{
+             run_id: run["id"],
+             project_id: project["id"],
+             owner_id: owner_id,
+             preset: preset(config.policy),
+             journey: "opening"
+           }),
+         {:ok, envelope} <- PipelineRequest.new(config.request),
+         {:ok, _step} <-
+           FountRun.enqueue_step(Fount.Repo, run["id"], intake(root, envelope), context) do
+      {:ok,
+       %{
+         project: project,
+         run: run,
+         access:
+           Map.merge(access, %{
+             "screenplay_id" => root.id,
+             "key" => project["key"],
+             "title" => project["title"]
+           })
+       }}
+    else
+      false -> {:error, :authoring_candidate_stale_or_unbound}
+      {:error, _} = error -> error
+    end
+  end
+
+  defp validate_authoring_command(command_id) do
+    if command_id != "" and byte_size(command_id) <= 128,
+      do: :ok,
+      else: {:error, :invalid_command_id}
+  end
+
   defp validate_input(key, title, journey, source) do
     cond do
       not Regex.match?(~r/^[a-z0-9][a-z0-9_-]{1,63}$/, key) -> {:error, :invalid_project_key}

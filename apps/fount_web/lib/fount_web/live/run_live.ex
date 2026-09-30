@@ -370,6 +370,7 @@ defmodule FountWeb.RunLive do
         <span aria-label="pending decision count">({length(@pending_decisions)})</span></a>
         <a href={~p"/runs/#{@run_id}/review"}>Review</a>
         <a href={~p"/runs/#{@run_id}/viewer"}>Viewer</a>
+        <a href={~p"/runs/#{@run_id}/edit"}>Editor</a>
         <a href={~p"/runs/#{@run_id}/exports"}>Exports</a>
       </nav>
 

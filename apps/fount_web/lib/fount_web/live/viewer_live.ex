@@ -159,6 +159,7 @@ defmodule FountWeb.ViewerLive do
         <a href={~p"/runs/#{@run_id}/decisions"}>Decisions</a>
         <a href={~p"/runs/#{@run_id}/review"}>Review</a>
         <a href={~p"/runs/#{@run_id}/viewer"} aria-current="page">Viewer</a>
+        <a href={~p"/runs/#{@run_id}/edit"}>Editor</a>
         <a href={~p"/runs/#{@run_id}/exports"}>Exports</a>
       </nav>
 

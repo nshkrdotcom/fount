@@ -56,6 +56,7 @@ test('W01-W03 expose validated policy, closed actions and persistent exact-base 
   await page.getByLabel('Preset name').fill(presetName);
   await page.getByRole('button', {name: 'Save current policy'}).click();
   await expect(page.getByText(`Saved host preset ${presetName} v1.`)).toBeVisible();
+  await page.getByLabel('Preset name').fill(presetName);
   await page.getByRole('button', {name: 'Save current policy'}).click();
   await expect(page.getByText(`Saved host preset ${presetName} v2.`)).toBeVisible();
 

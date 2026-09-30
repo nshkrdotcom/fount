@@ -19,6 +19,10 @@ PHASE_REQUIRED_FOCUSED = {
         'test/fount_web/phase07_workflow_management_test.exs',
         'integration/phase07_workflow_management_test.exs',
     ],
+    8: [
+        'test/fount_web/phase08_production_tools_test.exs',
+        'integration/phase08_production_tools_test.exs',
+    ],
 }
 LADDER = [
     ['mix', 'setup'],

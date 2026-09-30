@@ -14,10 +14,16 @@ defmodule FountWeb.ProjectController do
       {:error, :upload_unreadable} ->
         reject(conn, "The screenplay upload could not be read.")
 
-      {:error, _} ->
+      {:error, :unsupported_screenplay_format} ->
+        reject(conn, "Only .fountain and .fdx screenplay files are supported.")
+
+      {:error, {:invalid_fdx, _reason}} ->
+        reject(conn, "FDX import failed. The accepted screenplay source remains unchanged.")
+
+      {:error, _reason} ->
         reject(
           conn,
-          "Could not create Run. Check the project title, unique key and screenplay source."
+          "Could not create Run. Check the project title, unique key and screenplay source; the accepted source remains unchanged."
         )
     end
   end
@@ -25,13 +31,21 @@ defmodule FountWeb.ProjectController do
   def create(conn, _params), do: reject(conn, "Project fields are required to create a Run.")
 
   defp source(attrs, %Plug.Upload{path: path, filename: filename}) do
-    with {:ok, stat} <- File.stat(path),
-         true <- stat.size <= @max_upload,
-         {:ok, bytes} <- File.read(path) do
-      {:ok, Map.merge(attrs, %{"source" => bytes, "filename" => filename})}
-    else
-      false -> {:error, :upload_too_large}
-      _ -> {:error, :upload_unreadable}
+    extension = filename |> Path.extname() |> String.downcase()
+
+    cond do
+      extension not in [".fountain", ".fdx"] ->
+        {:error, :unsupported_screenplay_format}
+
+      true ->
+        with {:ok, stat} <- File.stat(path),
+             true <- stat.size <= @max_upload,
+             {:ok, bytes} <- File.read(path) do
+          {:ok, Map.merge(attrs, %{"source" => bytes, "filename" => filename})}
+        else
+          false -> {:error, :upload_too_large}
+          _ -> {:error, :upload_unreadable}
+        end
     end
   end
 

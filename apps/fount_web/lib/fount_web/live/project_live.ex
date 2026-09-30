@@ -8,6 +8,9 @@ defmodule FountWeb.ProjectLive do
     socket =
       socket
       |> assign(:projects, [])
+      |> assign(:project_cards, [])
+      |> assign(:project_filter, "")
+      |> assign(:project_sort, "recent")
       |> assign(:runs, [])
       |> assign(:run_filter, "")
       |> assign(:comparison, nil)
@@ -57,6 +60,19 @@ defmodule FountWeb.ProjectLive do
     end
   end
 
+
+  def handle_event("filter_projects", %{"projects" => attrs}, socket) do
+    query = Map.get(attrs, "query", "")
+    sort = Map.get(attrs, "sort", "recent")
+    sort = if sort in ~w(recent title scenes), do: sort, else: "recent"
+
+    {:noreply,
+     socket
+     |> assign(:project_filter, query)
+     |> assign(:project_sort, sort)
+     |> load_projects()}
+  end
+
   def handle_event("filter_runs", %{"runs" => %{"status" => status}}, socket) do
     allowed = [
       "",
@@ -103,17 +119,35 @@ defmodule FountWeb.ProjectLive do
   end
 
   defp load_projects(socket) do
-    case FountWeb.Store.list_projects(Fount.Repo, socket.assigns.current_owner) do
+    case FountWeb.Store.list_projects(Fount.Repo, socket.assigns.current_owner, limit: 24) do
       projects when is_list(projects) ->
-        runs =
+        all_runs =
           FountWeb.WorkflowManagement.list_owner_runs(
             Fount.Repo,
             socket.assigns.current_owner,
-            limit: 50,
-            status: socket.assigns.run_filter
+            limit: 50
           )
 
-        assign(socket, projects: projects, runs: runs)
+        runs =
+          if socket.assigns.run_filter == "" do
+            all_runs
+          else
+            Enum.filter(all_runs, &(&1["status"] == socket.assigns.run_filter))
+          end
+
+        cards =
+          FountWeb.ProductionTools.project_cards(
+            Fount.Repo,
+            socket.assigns.current_owner,
+            projects,
+            all_runs
+          )
+          |> FountWeb.ProductionTools.filter_cards(
+            socket.assigns.project_filter,
+            socket.assigns.project_sort
+          )
+
+        assign(socket, projects: projects, project_cards: cards, runs: runs)
 
       {:error, reason} ->
         assign(socket, :error, "Projects unavailable: #{inspect(reason)}")
@@ -144,15 +178,46 @@ defmodule FountWeb.ProjectLive do
         <p>
           Authenticated owner: <strong><%= @current_owner %></strong>. Canon changes remain explicit Run decisions.
         </p>
+        <p class="muted">Showing at most the 24 most recent owner-visible projects; filter and sort operate inside that bounded set.</p>
+        <form phx-change="filter_projects" class="project-filter inline-form">
+          <label>Filter projects <input name="projects[query]" value={@project_filter} placeholder="title, key or supplied synopsis" /></label>
+          <label>Sort
+            <select name="projects[sort]">
+              <option value="recent" selected={@project_sort == "recent"}>Recent</option>
+              <option value="title" selected={@project_sort == "title"}>Title</option>
+              <option value="scenes" selected={@project_sort == "scenes"}>Scene count</option>
+            </select>
+          </label>
+        </form>
         <p :if={@projects == []}>No projects yet.</p>
+        <p :if={@projects != [] and @project_cards == []}>No projects match this filter.</p>
         <div class="project-grid">
-          <article :for={project <- @projects} class="card project-card">
+          <article :for={card <- @project_cards} class="card project-card">
+            <% project = card.project %>
             <h2>{project["title"]}</h2>
             <p><code>{project["key"]}</code></p>
-            <p>Screenplay <code>{project["screenplay_id"]}</code></p>
+            <p :if={project["synopsis"]}>{project["synopsis"]}</p>
+            <p :if={project["thumbnail_ref"]}>Thumbnail reference: <code>{project["thumbnail_ref"]}</code></p>
+            <p>Screenplay <code>{project["screenplay_id"]}</code> · accepted revision <code>{card.revision_id || "unavailable"}</code></p>
+            <dl class="project-facts">
+              <div><dt>Scenes</dt><dd>{card.scene_count || "—"}</dd></div>
+              <div><dt>Cast</dt><dd>{card.cast_count || "—"}</dd></div>
+              <div><dt>Notes</dt><dd>{card.note_count || "—"}</dd></div>
+            </dl>
+            <p>{card.page_estimate || "Page estimate unavailable"}</p>
+            <p>Import: {project["import_format"] || "legacy / unknown"} · losses {card.import_fidelity["loss_count"] || "unknown"} · source preserved unchanged {to_string(card.import_fidelity["original_bytes_preserved_when_unchanged"] || false)}</p>
             <p>
               Starting here reloads the current accepted head; it does not create or accept generated pages.
             </p>
+            <div :if={card.latest_run} class="project-links">
+              <a href={~p"/runs/#{card.latest_run["id"]}/viewer"}>Viewer</a>
+              <a href={~p"/runs/#{card.latest_run["id"]}/analysis"}>Analysis</a>
+              <a href={~p"/runs/#{card.latest_run["id"]}/tools"}>Search & production tools</a>
+            </div>
+            <details :if={card.recent_activity != []}>
+              <summary>Recent persisted activity</summary>
+              <ul><li :for={item <- card.recent_activity}>{item["kind"]}: {item["detail"]} · {item["resource_id"]}</li></ul>
+            </details>
             <form phx-submit="create_existing" class="stack">
               <input type="hidden" name="run[project_id]" value={project["id"]} />
               <input type="hidden" name="run[command_id]" value={Fount.ID.v4()} />
@@ -306,6 +371,12 @@ defmodule FountWeb.ProjectLive do
               </option>
             </select>
           </label>
+          <label>Supplied synopsis (optional; never generated from the script)
+            <textarea name="project[synopsis]" maxlength="4000"></textarea>
+          </label>
+          <label>Supplied thumbnail reference (optional; stored as text, never fetched)
+            <input name="project[thumbnail_ref]" maxlength="2048" />
+          </label>
           <label>
             Upload Fountain/FDX (max 1 MiB)
             <input type="file" name="screenplay" accept=".fountain,.fdx" />
@@ -313,7 +384,8 @@ defmodule FountWeb.ProjectLive do
           <label>
             Or Fountain source <textarea name="project[source]"><%= @fixture_source %></textarea>
           </label>
-          <button type="submit" phx-disable-with="Creating Run…">Create Run</button>
+          <p role="status">Import is synchronous. The next page appears only after parsing, genesis persistence and durable Run creation succeed.</p>
+          <button type="submit" phx-disable-with="Importing + creating Run…">Create Run</button>
         </form>
       </section>
     </main>

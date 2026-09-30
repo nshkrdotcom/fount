@@ -38,7 +38,12 @@ defmodule FountWeb.Router do
       live "/runs/:id/viewer", ViewerLive, :show
       live "/runs/:id/edit", EditorLive, :edit
       live "/runs/:id/exports", RunLive, :exports
+      live "/runs/:id/tools", ProductionLive, :show
     end
+
+    get "/production/:run_id/notes.json", ProductionController, :notes
+    get "/production/:run_id/table-reads/:id.json", ProductionController, :table_read
+    get "/production/:run_id/usefulness.json", ProductionController, :usefulness
 
     get "/artifacts/:run_id/:delivery_id/preview", ArtifactController, :preview
     get "/artifacts/:run_id/:delivery_id", ArtifactController, :show

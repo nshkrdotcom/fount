@@ -10,10 +10,19 @@ defmodule FountWeb.Store do
     key = fetch!(attrs, :key)
     title = fetch!(attrs, :title)
 
+    synopsis = value(attrs, :synopsis)
+    thumbnail_ref = value(attrs, :thumbnail_ref)
+    import_format = value(attrs, :import_format)
+    import_fidelity = value(attrs, :import_fidelity)
+
     case SQL.query(
            repo,
-           "INSERT INTO fount_web_projects(id,owner_id,screenplay_id,key,title,inserted_at,updated_at) VALUES($1::text::uuid,$2,$3::text::uuid,$4,$5,now(),now()) RETURNING *",
-           [id, owner, screenplay_id, key, title],
+           """
+           INSERT INTO fount_web_projects(
+             id,owner_id,screenplay_id,key,title,synopsis,thumbnail_ref,import_format,import_fidelity,inserted_at,updated_at
+           ) VALUES($1::text::uuid,$2,$3::text::uuid,$4,$5,$6,$7,$8,$9::jsonb,now(),now()) RETURNING *
+           """,
+           [id, owner, screenplay_id, key, title, synopsis, thumbnail_ref, import_format, import_fidelity],
            log: false
          ) do
       {:ok, result} -> {:ok, one(result)}
@@ -26,6 +35,16 @@ defmodule FountWeb.Store do
       repo,
       "SELECT * FROM fount_web_projects WHERE owner_id=$1 ORDER BY inserted_at DESC,id",
       [owner]
+    )
+  end
+
+  def list_projects(repo, owner, opts) do
+    limit = opts |> Keyword.get(:limit, 24) |> min(100) |> max(1)
+
+    query(
+      repo,
+      "SELECT * FROM fount_web_projects WHERE owner_id=$1 ORDER BY inserted_at DESC,id LIMIT $2",
+      [owner, limit]
     )
   end
 
@@ -295,7 +314,8 @@ defmodule FountWeb.Store do
 
   defp decode_column(pair), do: pair
   defp one(result), do: result |> rows() |> List.first()
-  defp fetch!(attrs, key), do: Map.get(attrs, key) || Map.fetch!(attrs, Atom.to_string(key))
+  defp fetch!(attrs, key), do: value(attrs, key) || Map.fetch!(attrs, Atom.to_string(key))
+  defp value(attrs, key), do: Map.get(attrs, key) || Map.get(attrs, Atom.to_string(key))
   defp storage_reason(%Postgrex.Error{postgres: %{code: :unique_violation}}), do: :conflict
   defp storage_reason(_), do: :storage_error
 end

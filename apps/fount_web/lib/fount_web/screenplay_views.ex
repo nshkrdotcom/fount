@@ -11,10 +11,15 @@ defmodule FountWeb.ScreenplayViews do
       when is_map(access) and is_map(run) and is_map(progress) do
     with :ok <- verify_run_binding(access, run) do
       base = base_option(run)
+      project_head = project_head_option(repo, access, base)
       candidates = candidate_options(repo, run, progress)
       accepted = accepted_options(repo, run)
       evidence = evidence_options(repo, run, progress)
-      {:ok, [base | candidates ++ accepted ++ evidence] |> Enum.reject(&is_nil/1)}
+
+      {:ok,
+       [base, project_head | candidates ++ accepted ++ evidence]
+       |> Enum.reject(&is_nil/1)
+       |> Enum.uniq_by(& &1.token)}
     end
   end
 
@@ -47,6 +52,21 @@ defmodule FountWeb.ScreenplayViews do
     case get_in(run, ["plan", "base_revision_id"]) do
       revision_id when is_binary(revision_id) ->
         option(:base, revision_id, "Run base")
+
+      _ ->
+        nil
+    end
+  end
+
+
+  defp project_head_option(repo, access, base) do
+    case Persistence.load(repo, access["key"]) do
+      {:ok, screenplay} when screenplay.id == access["screenplay_id"] ->
+        if base && screenplay.revision.id == base.revision_id do
+          nil
+        else
+          option(:accepted, screenplay.revision.id, "Current accepted head")
+        end
 
       _ ->
         nil

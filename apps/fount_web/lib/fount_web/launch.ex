@@ -14,14 +14,18 @@ defmodule FountWeb.Launch do
     journey = Map.get(attrs, "journey", "opening")
 
     with :ok <- validate_input(key, title, journey, source),
-         {:ok, root} <- parse(source, filename),
+         {:ok, root, import} <- parse(source, filename),
          {:ok, _created} <- Persistence.create(Fount.Repo, key, root),
          {:ok, project} <-
            FountWeb.Store.create_project(Fount.Repo, %{
              owner_id: owner_id,
              screenplay_id: root.id,
              key: key,
-             title: title
+             title: title,
+             synopsis: optional_text(attrs, "synopsis", 4_000),
+             thumbnail_ref: optional_text(attrs, "thumbnail_ref", 2_048),
+             import_format: import["format"],
+             import_fidelity: import
            }),
          {:ok, context} <- FountWeb.Actors.owner_context(owner_id, root.id),
          config <- FountWeb.Journeys.configuration(root, journey, owner_id),
@@ -255,14 +259,54 @@ defmodule FountWeb.Launch do
   end
 
   defp parse(source, filename) do
-    if String.ends_with?(String.downcase(filename), ".fdx") do
-      case Screenplay.from_fdx(source) do
-        {:ok, root, _losses} -> {:ok, root}
-        {:error, reason} -> {:error, {:invalid_fdx, reason}}
-      end
-    else
-      with {:ok, doc} <- Fount.parse(source),
-           do: {:ok, Screenplay.from_document(doc, cast_resolution: :literal_cues)}
+    lower = String.downcase(filename)
+
+    cond do
+      String.ends_with?(lower, ".fdx") ->
+        case Screenplay.from_fdx(source) do
+          {:ok, root, losses} ->
+            {:ok, root,
+             %{
+               "format" => "fdx",
+               "source_bytes" => byte_size(source),
+               "parsed" => true,
+               "adapter_losses" => losses,
+               "loss_count" => length(losses),
+               "original_bytes_preserved_when_unchanged" => true
+             }}
+
+          {:error, reason} ->
+            {:error, {:invalid_fdx, reason}}
+        end
+
+      String.ends_with?(lower, ".fountain") ->
+        with {:ok, doc} <- Fount.parse(source) do
+          root = Screenplay.from_document(doc, cast_resolution: :literal_cues)
+
+          {:ok, root,
+           %{
+             "format" => "fountain",
+             "source_bytes" => byte_size(source),
+             "parsed" => true,
+             "adapter_losses" => [],
+             "loss_count" => 0,
+             "original_bytes_preserved_when_unchanged" => Screenplay.to_fountain(root) == source
+           }}
+        end
+
+      true ->
+        {:error, :unsupported_screenplay_format}
+    end
+  end
+
+  defp optional_text(attrs, key, max_bytes) do
+    case Map.get(attrs, key) do
+      value when is_binary(value) ->
+        value = String.trim(value)
+        if value == "" or byte_size(value) > max_bytes, do: nil, else: value
+
+      _ ->
+        nil
     end
   end
 

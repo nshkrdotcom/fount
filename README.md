@@ -13,6 +13,8 @@
 
 For the local Phoenix website, run `./scripts/dev.sh setup`, then `./scripts/dev.sh start`. Use `./scripts/dev.sh --help` for SDK, database, and port options. The launcher uses the published SDK from Hex and handles development settings without shell exports. Use `--sdk-path` for an explicit local SDK override. See [FountWeb](apps/fount_web/README.md).
 
+Architecture diagrams: [overview](docs/architecture/README.md), [Fount](docs/architecture/FOUNT_ARCHITECTURE.md), and [System One SDK](docs/architecture/SYSTEM_ONE_SDK_ARCHITECTURE.md), with high-level and implementation views.
+
 **A screenplay revision workshop for writers who want to experiment aggressively without losing control of the draft.**
 
 Fount lets you experiment aggressively with a screenplay without losing control of it: **ask creative questions, generate real alternate pages, trace the consequences of big story changes, mix the best pieces, hear them performed, compare them to your draft, and decide what actually becomes canon.**

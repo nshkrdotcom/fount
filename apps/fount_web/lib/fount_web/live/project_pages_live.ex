@@ -15,7 +15,8 @@ defmodule FountWeb.ProjectPagesLive do
              project["id"],
              artifact_ref
            ),
-         true <- artifact["state"] == "ready" and artifact["kind"] == "pdf" do
+         true <- artifact["state"] == "ready" and artifact["kind"] == "pdf",
+         {:ok, current} <- Fount.Persistence.load(Fount.Repo, key) do
       page_count = page_count(artifact)
       page = clamp_page(params["page"], page_count)
 
@@ -23,6 +24,13 @@ defmodule FountWeb.ProjectPagesLive do
        socket
        |> assign(:project, project)
        |> assign(:artifact, artifact)
+       |> assign(
+         :source_label,
+         if(artifact["revision_id"] == current.revision.id,
+           do: "Current draft",
+           else: "Earlier saved draft"
+         )
+       )
        |> assign(:artifact_ref, artifact_ref)
        |> assign(:page_count, page_count)
        |> assign(:page, page)}
@@ -52,7 +60,7 @@ defmodule FountWeb.ProjectPagesLive do
         project={@project}
         section="script"
         view="reading"
-        source_label={@artifact["source_label"]}
+        source_label={@source_label}
         example={@project["project_kind"] == "example"}
       />
 
@@ -60,7 +68,7 @@ defmodule FountWeb.ProjectPagesLive do
         <div>
           <p class="eyebrow">Fixed-layout artifact</p>
           <h1>Exported pages</h1>
-          <p>{@artifact["source_label"]} · {@artifact["filename"]}</p>
+          <p>{@source_label} · {@artifact["filename"]}</p>
         </div>
         <nav class="inline-actions">
           <a href={"/p/#{@project["key"]}"}>Back to responsive reading</a>
@@ -75,8 +83,8 @@ defmodule FountWeb.ProjectPagesLive do
           aria-disabled={@page <= 1}
         >Previous page</a>
         <form method="get" action={"/p/#{@project["key"]}/pages/#{@artifact_ref}"}>
-          <label>Page
-            <input type="number" name="page" min="1" max={@page_count || 1} value={@page} />
+          <label>
+            Page <input type="number" name="page" min="1" max={@page_count || 1} value={@page} />
           </label>
           <button type="submit">Go</button>
         </form>
@@ -102,9 +110,17 @@ defmodule FountWeb.ProjectPagesLive do
       <details class="technical-details">
         <summary>Artifact details</summary>
         <dl>
-          <div><dt>Renderer</dt><dd>{get_in(@artifact, ["metadata", "renderer"]) || "not recorded"}</dd></div>
-          <div><dt>Verified page map</dt><dd>{get_in(@artifact, ["metadata", "page_map"]) || "unavailable"}</dd></div>
-          <div><dt>Built source</dt><dd>{@artifact["source_label"]}</dd></div>
+          <div>
+            <dt>Renderer</dt><dd>{get_in(@artifact, ["metadata", "renderer"]) || "not recorded"}</dd>
+          </div>
+          <div>
+            <dt>Verified page map</dt><dd>
+              {get_in(@artifact, ["metadata", "page_map"]) || "unavailable"}
+            </dd>
+          </div>
+          <div>
+            <dt>Built source</dt><dd>{@source_label}</dd>
+          </div>
         </dl>
       </details>
     </main>
@@ -121,13 +137,17 @@ defmodule FountWeb.ProjectPagesLive do
   defp clamp_page(value, page_count) do
     page =
       case value do
-        value when is_integer(value) -> value
+        value when is_integer(value) ->
+          value
+
         value when is_binary(value) ->
           case Integer.parse(value) do
             {number, ""} -> number
             _ -> 1
           end
-        _ -> 1
+
+        _ ->
+          1
       end
 
     upper = page_count || max(page, 1)

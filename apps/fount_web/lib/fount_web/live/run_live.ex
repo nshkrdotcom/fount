@@ -675,6 +675,7 @@ defmodule FountWeb.RunLive do
          candidate_id when is_binary(candidate_id) <- candidate_id(run, progress),
          {:ok, candidate} <- Fount.Persistence.candidate(Fount.Repo, candidate_id) do
       checks = latest_checks(progress)
+
       current =
         case Fount.Persistence.load(Fount.Repo, access["key"]) do
           {:ok, screenplay} -> screenplay
@@ -1604,7 +1605,12 @@ defmodule FountWeb.RunLive do
         <p :if={is_nil(@review.candidate)}>
           No proposed pages have been saved yet. Complete the required review before generation can continue.
         </p>
-        <section :if={@review.candidate} id="task-source-comparison" class="source-comparison" aria-label="Compare task proposal">
+        <section
+          :if={@review.candidate}
+          id="task-source-comparison"
+          class="source-comparison"
+          aria-label="Compare task proposal"
+        >
           <header class="source-comparison__heading">
             <div>
               <p class="eyebrow">Exact saved sources</p>
@@ -1618,25 +1624,56 @@ defmodule FountWeb.RunLive do
               <% end %>
             </p>
           </header>
-          <input class="source-comparison__tab" type="radio" name="task-source-comparison-tab" id="task-compare-current" checked />
-          <input class="source-comparison__tab" type="radio" name="task-source-comparison-tab" id="task-compare-proposed" />
-          <input class="source-comparison__tab" type="radio" name="task-source-comparison-tab" id="task-compare-changes" />
+          <input
+            class="source-comparison__tab"
+            type="radio"
+            name="task-source-comparison-tab"
+            id="task-compare-current"
+            checked
+          />
+          <input
+            class="source-comparison__tab"
+            type="radio"
+            name="task-source-comparison-tab"
+            id="task-compare-proposed"
+          />
+          <input
+            class="source-comparison__tab"
+            type="radio"
+            name="task-source-comparison-tab"
+            id="task-compare-changes"
+          />
           <nav class="source-comparison__tabs" aria-label="Proposal comparison view">
             <label for="task-compare-current">Current</label>
             <label for="task-compare-proposed">Proposed</label>
             <label for="task-compare-changes">Changes</label>
           </nav>
           <div class="source-comparison__columns">
-            <section class="source-comparison__panel source-comparison__panel--current" aria-label="Current draft">
+            <section
+              class="source-comparison__panel source-comparison__panel--current"
+              aria-label="Current draft"
+            >
               <header><strong>Current draft</strong><span>accepted screenplay</span></header>
-              <div class="source-comparison__paper"><pre class="script"><%= @review.current %></pre></div>
+              <div class="source-comparison__paper">
+                <pre class="script"><%= @review.current %></pre>
+              </div>
             </section>
-            <section class="source-comparison__panel source-comparison__panel--proposed" aria-label="Proposed change">
-              <header><strong>Proposed change</strong><span>not current until exact approval</span></header>
-              <div class="source-comparison__paper"><pre class="script"><%= @review.candidate %></pre></div>
+            <section
+              class="source-comparison__panel source-comparison__panel--proposed"
+              aria-label="Proposed change"
+            >
+              <header>
+                <strong>Proposed change</strong><span>not current until exact approval</span>
+              </header>
+              <div class="source-comparison__paper">
+                <pre class="script"><%= @review.candidate %></pre>
+              </div>
             </section>
           </div>
-          <section class="source-comparison__panel source-comparison__panel--changes" aria-label="Changes from current draft">
+          <section
+            class="source-comparison__panel source-comparison__panel--changes"
+            aria-label="Changes from current draft"
+          >
             <FountWeb.Components.DiffViewer.diff
               before={@review.current_model}
               after={@review.candidate_model}
@@ -1652,7 +1689,9 @@ defmodule FountWeb.RunLive do
           </section>
           <details :if={!@review.base_is_current?} class="technical-details">
             <summary>Earlier task base</summary>
-            <p>The task started from an older saved screenplay. This exact historical base is retained for provenance and rebase review.</p>
+            <p>
+              The task started from an older saved screenplay. This exact historical base is retained for provenance and rebase review.
+            </p>
             <pre class="script"><%= @review.base %></pre>
           </details>
         </section>

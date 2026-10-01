@@ -1013,7 +1013,8 @@ input, textarea, select { padding: .4rem .48rem; }
 .source-comparison { margin: .45rem 0; border: 1px solid var(--line); padding: .45rem; background: var(--ink-1); }
 .source-comparison__heading { display: flex; justify-content: space-between; gap: .8rem; align-items: end; }
 .source-comparison__heading p { max-width: 36rem; color: var(--text-dim); }
-.source-comparison__tab { position: absolute; opacity: 0; pointer-events: none; }
+.source-comparison__tab { position: absolute; width: 1px; height: 1px; padding: 0; margin: 0; opacity: 0; pointer-events: none; }
+.source-comparison:has(.source-comparison__tab:focus-visible) .source-comparison__tabs { outline: 2px solid var(--accent); outline-offset: 2px; }
 .source-comparison__tabs { display: none; gap: .25rem; margin: .3rem 0; }
 .source-comparison__tabs label { border: 1px solid var(--line); padding: .3rem .46rem; cursor: pointer; }
 .source-comparison__columns { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .4rem; align-items: start; }

@@ -46,6 +46,7 @@ FountWeb.AnalysisFixtures.insert_usage(run, "reserved", "tokens", 120, nil, "unk
 FountWeb.AnalysisFixtures.insert_usage(run, "settled", "tokens", 80, 60, "known", "settled")
 
 FountWeb.AnalysisFixtures.insert_usage(run, "unknown", "tokens", 30, 0, "unknown", "unknown")
+
 {:ok, %{run: stale_run, access: stale_access}} =
   FountWeb.Launch.create(owner, %{
     "title" => "Stale stored evidence",
@@ -73,6 +74,7 @@ Ecto.Adapters.SQL.query!(
 output =
   Map.merge(ids, %{
     "run_id" => run["id"],
+    "project_key" => access["key"],
     "revision_id" => base.revision.id,
     "empty" => empty,
     "legacy" => legacy,
@@ -81,6 +83,7 @@ output =
     "other" => other,
     "oversized" => oversized,
     "stale_run_id" => stale_run["id"],
+    "stale_project_key" => stale_access["key"],
     "stale" => stale.id
   })
 

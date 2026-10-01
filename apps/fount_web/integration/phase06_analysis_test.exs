@@ -277,7 +277,9 @@ defmodule FountWeb.Phase06AnalysisIntegrationTest do
            )
   end
 
-  test "A07 finding navigation is authorized by analysis-run plus revision and does no edit" do
+  test "A07 finding navigation is authorized by analysis-run plus revision and does no edit", %{
+    conn: conn
+  } do
     {:ok, %{run: run, access: access}} = launch("finding-nav")
     {:ok, base} = Fount.Persistence.load(Fount.Repo, access["key"])
     saved = persist_packet(base, "complete", "nav")
@@ -291,6 +293,35 @@ defmodule FountWeb.Phase06AnalysisIntegrationTest do
              AnalysisDashboard.load(Fount.Repo, "test-owner", run["id"], %{"packet" => saved.id})
 
     assert dashboard.selected.run["lineage_kind"] == "legacy_revision"
+
+    conn = FountWeb.ConnCase.login(conn)
+    assert {:ok, view, _} = live(conn, analysis_path(run, "?packet=#{saved.id}"))
+
+    focus_html = view |> element("a", "Focus provenance here") |> render()
+    assert focus_html =~ "target=evidence-nav"
+
+    assert {:ok, _, focused_html} =
+             live(conn, analysis_path(run, "?packet=#{saved.id}&target=evidence-nav"))
+
+    assert focused_html =~ "Recorded source identity"
+    assert focused_html =~ base.revision.id
+
+    link_html = view |> element("a", "Open exact recorded revision target") |> render()
+    [_, escaped_href] = Regex.run(~r/href="([^"]+)"/, link_html)
+    href = String.replace(escaped_href, "&amp;", "&")
+
+    assert href =~ URI.encode_www_form("evidence:#{saved.id}:#{base.revision.id}")
+    assert href =~ "#scene-"
+    _newer = persist_packet(base, "complete", "newer")
+    assert {:ok, source_view, source_html} = live(conn, href)
+    assert source_html =~ saved.id
+    assert has_element?(source_view, ".named-source-picker [aria-current=page]")
+
+    assert {:ok, _, unresolved_html} =
+             live(conn, String.replace(href, ~r/target=[^&#]+/, "target=deleted-target"))
+
+    assert unresolved_html =~
+             "Recorded target unresolved in this exact analysis evidence revision"
 
     token = FountWeb.ScreenplayViews.token(evidence)
 

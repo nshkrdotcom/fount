@@ -43,8 +43,8 @@ test('UX01 import reaches real pages before any workflow setup and keeps ordinar
   await capture(page, 'ux01-desktop-arrival');
   await importFixture(page, 'window-light.fountain', fountain);
   await expect(page.getByText('WINDOW LIGHT', {exact: true}).first()).toBeVisible();
-  await expect(page.locator('.screenplay')).toContainText('INT. KITCHEN - NIGHT');
-  await expect(page.locator('.screenplay')).toContainText('Leave it open.');
+  await expect(page.getByRole('region', {name: 'Responsive screenplay pages'}).locator('.screenplay')).toContainText('INT. KITCHEN - NIGHT');
+  await expect(page.getByRole('region', {name: 'Responsive screenplay pages'}).locator('.screenplay')).toContainText('Leave it open.');
   await expect(page.getByText('Current draft', {exact: true}).first()).toBeVisible();
   noMachineIdentity(await page.locator('main').innerText());
 
@@ -63,7 +63,7 @@ test('UX01 import reaches real pages before any workflow setup and keeps ordinar
   await page.getByRole('button', {name: 'Preview import'}).click();
   await expect(page.getByText('FDX', {exact: true})).toBeVisible();
   await page.getByRole('button',{name:'Open screenplay'}).click();
-  await expect(page.locator('.screenplay')).toContainText('Eli waits.');
+  await expect(page.getByRole('region', {name: 'Responsive screenplay pages'}).locator('.screenplay')).toContainText('Eli waits.');
   await capture(page,'ux01-desktop-fdx-import');
 });
 
@@ -84,9 +84,9 @@ test('UX01 blank starts with empty source; saving working pages never advances c
   await expect(editor).toHaveValue(source);
 
   await page.getByRole('link', {name: 'Reading'}).click();
-  await expect(page.locator('.screenplay')).not.toContainText('A WRITER starts with an actual page.');
+  await expect(page.getByRole('region', {name: 'Responsive screenplay pages'}).locator('.screenplay')).not.toContainText('A WRITER starts with an actual page.');
   await page.getByRole('link', {name: 'Working draft'}).click();
-  await expect(page.locator('.screenplay')).toContainText('A WRITER starts with an actual page.');
+  await expect(page.getByRole('region', {name: 'Responsive screenplay pages'}).locator('.screenplay')).toContainText('A WRITER starts with an actual page.');
   noMachineIdentity(await page.locator('main').innerText());
   await capture(page, 'ux01-desktop-blank-working');
 });
@@ -95,7 +95,7 @@ test('UX01 example is provider-free, Help is reopenable, and phone navigation re
   await page.setViewportSize({width: 390, height: 844});
   await login(page);
   await page.getByRole('button', {name: 'Open LAST RETURN'}).click();
-  await expect(page.locator('.screenplay')).toContainText('We stopped counting.');
+  await expect(page.getByRole('region', {name: 'Responsive screenplay pages'}).locator('.screenplay')).toContainText('We stopped counting.');
   await expect(page.locator('#scene-outline [data-scene-link]')).toHaveCount(3);
 
   const second = page.locator('#scene-outline [data-scene-link]').nth(1);
@@ -103,7 +103,7 @@ test('UX01 example is provider-free, Help is reopenable, and phone navigation re
   await second.click();
   await expect(second).toHaveAttribute('aria-current', 'location');
 
-  await page.getByRole('link', {name: 'Help', exact: true}).click();
+  await page.locator('.project-tabs__help').click();
   await expect(page.getByText('Optional example checklist')).toBeVisible();
   await page.getByRole('button', {name: 'Show dismissed hints again'}).click();
   await page.getByRole('link', {name: /Back to LAST RETURN/}).click();
@@ -123,7 +123,7 @@ test('UX01 example is provider-free, Help is reopenable, and phone navigation re
 test('UX01 shell, supplied About, no-task destinations, Help dismissal and phone writing remain usable', async ({page}) => {
   await login(page);
   await page.getByRole('button', {name:'Open LAST RETURN'}).click();
-  await expect(page.locator('.screenplay')).toBeVisible();
+  await expect(page.getByRole('region', {name: 'Responsive screenplay pages'}).locator('.screenplay')).toBeVisible();
   const key=new URL(page.url()).pathname.split('/')[2];
   await capture(page,'ux01-desktop-default-pages');
   await page.locator('.project-more > summary').focus();
@@ -146,15 +146,21 @@ test('UX01 shell, supplied About, no-task destinations, Help dismissal and phone
   await expect(about.getByText('Mara and Eli pack the final cartons together.')).toBeVisible();
   await expect(about.locator('.script-facts')).not.toHaveAttribute('open','');
   await capture(page,'ux01-desktop-about-supplied');
+  await page.locator('.project-tabs__help').click();
+  await page.getByRole('link',{name:/Back to/}).click();
+  await expect(page.locator('.context-help')).toHaveCount(0);
+  await page.goto(`/p/${key}/write`);
   await page.getByRole('button',{name:'Dismiss',exact:true}).click();
   await expect(page.locator('.context-help')).toHaveCount(0);
-  await page.getByRole('link',{name:'Help',exact:true}).click();
+  await page.locator('.project-tabs__help').click();
   await page.getByLabel('Search help').fill('Fountain');
   await expect(page.locator('.help-topic')).not.toHaveCount(0);
   await page.getByRole('button',{name:'Show dismissed hints again'}).click();
   await page.getByRole('link',{name:/Back to LAST RETURN/}).click();
+  await expect(page.locator('.context-help')).toHaveCount(0);
+  await page.goto(`/p/${key}/write`);
   await expect(page.locator('.context-help')).toBeVisible();
-  for (const destination of ['changes','analysis','read','exports','activity']) {
+  for (const destination of ['changes','activity']) {
     await page.goto(`/p/${key}/${destination}`);
     await expect(page.getByText('No saved tasks yet. The screenplay is still fully available for reading and writing.')).toBeVisible();
     noMachineIdentity(await page.locator('main').innerText());
@@ -196,17 +202,17 @@ test('UX01 import errors preserve the desk and allow a later successful import',
   await expect(page.getByText('This Final Draft file could not be parsed. The project was not created.')).toBeVisible();
   await capture(page,'ux01-import-error');
   await importFixture(page,'recovered.fountain',fountain);
-  await expect(page.locator('.screenplay')).toContainText('Leave it open.');
+  await expect(page.getByRole('region', {name: 'Responsive screenplay pages'}).locator('.screenplay')).toContainText('Leave it open.');
 });
 
 
 test('UX01 touch Help, menus and About work on a phone',async ({browser})=>{
   const context=await browser.newContext({hasTouch:true,isMobile:true,viewport:{width:390,height:844}});
   const page=await context.newPage(); await login(page);
-  await page.getByRole('button',{name:'Open LAST RETURN'}).tap(); await expect(page.locator('.screenplay')).toBeVisible();
+  await page.getByRole('button',{name:'Open LAST RETURN'}).tap(); await expect(page.getByRole('region', {name: 'Responsive screenplay pages'}).locator('.screenplay')).toBeVisible();
   await page.locator('#reader-scenes > summary').tap();
   await page.locator('#scene-outline [data-scene-link]').nth(1).tap();
-  await page.getByRole('link',{name:'Help',exact:true}).tap();
+  await page.locator('.project-tabs__help').tap();
   await expect(page.getByText('Optional example checklist')).toBeVisible();
   await capture(page,'ux01-phone-touch-help');
   await page.getByRole('link',{name:/Back to LAST RETURN/}).tap();

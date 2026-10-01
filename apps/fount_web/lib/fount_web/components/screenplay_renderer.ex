@@ -6,6 +6,7 @@ defmodule FountWeb.Components.ScreenplayRenderer do
 
   attr :screenplay, :any, required: true
   attr :selected_scene_id, :string, default: nil
+  attr :id_prefix, :string, default: ""
 
   def screenplay(assigns) do
     screenplay = assigns.screenplay
@@ -43,6 +44,7 @@ defmodule FountWeb.Components.ScreenplayRenderer do
             item={item}
             scene_by_heading={@scene_by_heading}
             selected_scene_id={@selected_scene_id}
+            id_prefix={@id_prefix}
           />
         <% end %>
       </div>
@@ -53,14 +55,15 @@ defmodule FountWeb.Components.ScreenplayRenderer do
   attr :item, :any, required: true
   attr :scene_by_heading, :map, required: true
   attr :selected_scene_id, :string, default: nil
+  attr :id_prefix, :string, default: ""
 
   defp render_item(%{item: {:dual, left, right}} = assigns) do
     assigns = assign(assigns, left: left, right: right)
 
     ~H"""
     <div class="screenplay-dual" role="group" aria-label="Dual dialogue">
-      <.dialogue_block block={@left} />
-      <.dialogue_block block={@right} />
+      <.dialogue_block block={@left} id_prefix={@id_prefix} />
+      <.dialogue_block block={@right} id_prefix={@id_prefix} />
     </div>
     """
   end
@@ -69,7 +72,7 @@ defmodule FountWeb.Components.ScreenplayRenderer do
     assigns = assign(assigns, block: block)
 
     ~H"""
-    <.dialogue_block block={@block} />
+    <.dialogue_block block={@block} id_prefix={@id_prefix} />
     """
   end
 
@@ -87,7 +90,7 @@ defmodule FountWeb.Components.ScreenplayRenderer do
 
     ~H"""
     <div
-      id={if @scene, do: "scene-#{@scene.id}", else: "node-#{@element.id}"}
+      id={if @scene, do: "#{@id_prefix}scene-#{@scene.id}", else: "#{@id_prefix}node-#{@element.id}"}
       class={[
         "screenplay-element",
         "screenplay-element--#{@css_type}",
@@ -98,7 +101,12 @@ defmodule FountWeb.Components.ScreenplayRenderer do
       data-node-type={to_string(@element.type)}
       tabindex={if @scene, do: "-1", else: nil}
     >
-      <span :if={@scene} id={"node-#{@element.id}"} class="screenplay-node-anchor" aria-hidden="true"></span>
+      <span
+        :if={@scene}
+        id={"#{@id_prefix}node-#{@element.id}"}
+        class="screenplay-node-anchor"
+        aria-hidden="true"
+      ></span>
       <span :if={!@known} class="screenplay-element__fallback-label">
         Unsupported element type: {to_string(@element.type)}
       </span>
@@ -111,18 +119,19 @@ defmodule FountWeb.Components.ScreenplayRenderer do
   end
 
   attr :block, :any, required: true
+  attr :id_prefix, :string, default: ""
 
   defp dialogue_block(assigns) do
     ~H"""
     <div
-      id={"dialogue-#{@block.id}"}
+      id={"#{@id_prefix}dialogue-#{@block.id}"}
       class={["screenplay-dialogue-block", @block.side && "screenplay-dialogue-block--#{@block.side}"]}
       data-dialogue-block-id={@block.id}
       data-dual-with={@block.dual_with}
     >
       <div
         :for={element <- @block.elements}
-        id={"node-#{element.id}"}
+        id={"#{@id_prefix}node-#{element.id}"}
         class={["screenplay-element", "screenplay-element--#{css_type(element.type)}"]}
         data-node-id={element.id}
         data-node-type={to_string(element.type)}

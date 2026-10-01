@@ -151,31 +151,38 @@ defmodule FountWeb.ProductionTools do
       {:ok, []}
     else
       with {:ok, result} <- Search.find(screenplay, query, limit: limit, include_notes: true) do
-        scene_ordinals =
-          screenplay.ir.scenes
-          |> Enum.with_index(1)
-          |> Map.new(fn {scene, ordinal} -> {scene.id, ordinal} end)
-
-        options =
-          result.hits
-          |> Enum.map(fn hit ->
-            scene = Query.scene_for(screenplay, hit.element_id)
-            node = Query.node(screenplay, hit.element_id)
-            excerpt = human_excerpt(node && node.text || hit.excerpt || "", 110)
-            ordinal = scene && scene_ordinals[scene.id]
-
-            %{
-              value: "element:#{hit.element_id}",
-              label: "#{if(ordinal, do: "Scene #{ordinal} · ", else: "")}#{human_type(node && node.type)} · #{excerpt}",
-              scene_id: hit.scene_id,
-              element_id: hit.element_id
-            }
-          end)
-          |> Enum.uniq_by(& &1.value)
-
-        {:ok, options}
+        target_search_options(screenplay, result)
       end
     end
+  end
+
+  defp target_search_options(screenplay, result) do
+    scene_ordinals =
+      screenplay.ir.scenes
+      |> Enum.with_index(1)
+      |> Map.new(fn {scene, ordinal} -> {scene.id, ordinal} end)
+
+    options =
+      result.hits
+      |> Enum.map(&target_search_option(screenplay, &1, scene_ordinals))
+      |> Enum.uniq_by(& &1.value)
+
+    {:ok, options}
+  end
+
+  defp target_search_option(screenplay, hit, scene_ordinals) do
+    scene = Query.scene_for(screenplay, hit.element_id)
+    node = Query.node(screenplay, hit.element_id)
+    excerpt = human_excerpt((node && node.text) || hit.excerpt || "", 110)
+    ordinal = scene && scene_ordinals[scene.id]
+
+    %{
+      value: "element:#{hit.element_id}",
+      label:
+        "#{if(ordinal, do: "Scene #{ordinal} · ", else: "")}#{human_type(node && node.type)} · #{excerpt}",
+      scene_id: hit.scene_id,
+      element_id: hit.element_id
+    }
   end
 
   def cast_rename_preview(%Screenplay{} = screenplay, character_id, new_name) do
@@ -485,15 +492,30 @@ defmodule FountWeb.ProductionTools do
       end)
   end
 
-  def create_project_table_read(repo, owner, project, %Screenplay{} = screenplay, selection, attrs \\ %{})
+  def create_project_table_read(
+        repo,
+        owner,
+        project,
+        %Screenplay{} = screenplay,
+        selection,
+        attrs \\ %{}
+      )
       when is_map(project) and is_map(selection) and is_map(attrs) do
     with {:ok, stored} <- Store.project(repo, owner, project["id"]),
-         true <- stored["screenplay_id"] == screenplay.id or {:error, :project_screenplay_mismatch},
-         {:ok, persisted} <- Persistence.load_revision(repo, screenplay.id, screenplay.revision.id),
-         true <- persisted.revision.id == screenplay.revision.id or {:error, :revision_unavailable},
+         true <-
+           stored["screenplay_id"] == screenplay.id or {:error, :project_screenplay_mismatch},
+         {:ok, persisted} <-
+           Persistence.load_revision(repo, screenplay.id, screenplay.revision.id),
+         true <-
+           persisted.revision.id == screenplay.revision.id or {:error, :revision_unavailable},
+         true <-
+           Model.refresh(screenplay).revision.content_hash == persisted.revision.content_hash or
+             {:error, :source_content_mismatch},
          {:ok, packet} <- TableRead.packet(screenplay, selection) do
       title = blank_to_nil(Map.get(attrs, "title"))
-      packet = if title, do: Map.put(packet, "display_title", String.slice(title, 0, 160)), else: packet
+
+      packet =
+        if title, do: Map.put(packet, "display_title", String.slice(title, 0, 160)), else: packet
 
       ProductionStore.create_table_read(repo, %{
         owner_id: owner,
@@ -505,55 +527,69 @@ defmodule FountWeb.ProductionTools do
         packet: packet
       })
     else
-      false -> {:error, :revision_unavailable}
       {:error, _} = error -> error
     end
   end
 
-  def save_note_review(repo, owner, project, note_id, source_revision_id, reviewed_revision_id, attrs)
+  def save_note_review(
+        repo,
+        owner,
+        project,
+        note_id,
+        source_revision_id,
+        reviewed_revision_id,
+        attrs
+      )
       when is_map(project) and is_map(attrs) do
     response = Map.get(attrs, "response", "open")
     expected_version = parse_nonnegative(Map.get(attrs, "version", 0))
 
-    with true <- response in ~w(open addressed not_addressed deferred) or {:error, :invalid_response},
-         {:ok, source} <- Persistence.load_revision(repo, project["screenplay_id"], source_revision_id),
+    with {:ok, stored} <- Store.project(repo, owner, project["id"]),
+         true <-
+           stored["screenplay_id"] == project["screenplay_id"] or
+             {:error, :project_screenplay_mismatch},
+         true <-
+           response in ~w(open addressed not_addressed deferred) or {:error, :invalid_response},
+         {:ok, source} <-
+           Persistence.load_revision(repo, project["screenplay_id"], source_revision_id),
          %{"kind" => "note"} <- source.authored_items[note_id] || {:error, :note_not_found},
-         {:ok, reviewed} <- Persistence.load_revision(repo, project["screenplay_id"], reviewed_revision_id),
+         {:ok, reviewed} <-
+           Persistence.load_revision(repo, project["screenplay_id"], reviewed_revision_id),
          true <- reviewed.id == source.id or {:error, :review_source_mismatch} do
-      if response == "open" do
-        case ProductionStore.clear_note_review(
-               repo,
-               owner,
-               project["id"],
-               note_id,
-               reviewed_revision_id,
-               expected_version
-             ) do
-          :ok -> {:ok, nil}
-          {:error, _} = error -> error
-        end
-      else
-        ProductionStore.save_note_review(
-          repo,
-          %{
-            owner_id: owner,
-            project_id: project["id"],
-            screenplay_id: source.id,
-            note_id: note_id,
-            source_revision_id: source_revision_id,
-            reviewed_revision_id: reviewed_revision_id,
-            response: response,
-            comment: blank_to_nil(Map.get(attrs, "comment")),
-            actor_label: "human:#{owner}"
-          },
-          expected_version
-        )
-      end
+      review_attrs = %{
+        owner_id: owner,
+        project_id: project["id"],
+        screenplay_id: source.id,
+        note_id: note_id,
+        source_revision_id: source_revision_id,
+        reviewed_revision_id: reviewed_revision_id,
+        response: response,
+        comment: blank_to_nil(Map.get(attrs, "comment")),
+        actor_label: "human:#{owner}"
+      }
+
+      persist_note_review(repo, review_attrs, expected_version)
     else
-      false -> {:error, :review_source_mismatch}
       {:error, _} = error -> error
     end
   end
+
+  defp persist_note_review(repo, %{response: "open"} = attrs, expected_version) do
+    case ProductionStore.clear_note_review(
+           repo,
+           attrs.owner_id,
+           attrs.project_id,
+           attrs.note_id,
+           attrs.reviewed_revision_id,
+           expected_version
+         ) do
+      :ok -> {:ok, nil}
+      {:error, _} = error -> error
+    end
+  end
+
+  defp persist_note_review(repo, attrs, expected_version),
+    do: ProductionStore.save_note_review(repo, attrs, expected_version)
 
   def note_reviews(repo, owner, project_id, note_id \\ nil),
     do: ProductionStore.note_reviews(repo, owner, project_id, note_id)

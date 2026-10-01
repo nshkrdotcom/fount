@@ -32,6 +32,7 @@ defmodule FountWeb.TaskSourceLive do
        |> assign(:scope_error, scope_error)
        |> assign(:index, index)
        |> assign(:selected_scene_id, selected_scene_id(index.scenes, params["scene"]))
+       |> assign(:target_notice, nil)
        |> assign(:error, nil)}
     else
       _ ->
@@ -60,6 +61,7 @@ defmodule FountWeb.TaskSourceLive do
            |> assign(:workspace, workspace)
            |> assign(:index, index)
            |> assign(:selected_scene_id, selected_scene_id(index.scenes, params["scene"]))
+           |> assign(:target_notice, target_notice(workspace.screenplay, params["target"]))
            |> assign(:error, nil)}
 
         {:error, _} ->
@@ -101,6 +103,15 @@ defmodule FountWeb.TaskSourceLive do
            "That scope no longer matches this task's base screenplay. Choose it again."
          )}
     end
+  end
+
+  defp target_notice(_screenplay, target) when target in [nil, ""], do: nil
+
+  defp target_notice(screenplay, target) do
+    if Fount.Query.node(screenplay, target) || Enum.any?(screenplay.ir.scenes, &(&1.id == target)),
+      do: nil,
+      else:
+        "Recorded target unresolved in this exact analysis evidence revision. No replacement passage has been inferred."
   end
 
   defp load_base_screenplay(run, access) do
@@ -193,7 +204,7 @@ defmodule FountWeb.TaskSourceLive do
   defp display_label(option), do: option.label || "Saved source"
 
   defp source_path(project_key, task_key, option) do
-    "/p/#{project_key}/source/#{task_key}?" <> URI.encode_query(%{"view" => option.display_ref})
+    "/p/#{project_key}/source/#{task_key}?" <> URI.encode_query(%{"view" => option.token})
   end
 
   @impl true
@@ -232,6 +243,7 @@ defmodule FountWeb.TaskSourceLive do
         {@scope_error}
       </FountWeb.CoreComponents.alert>
       <p :if={@scope_notice} class="save-state" role="status">{@scope_notice}</p>
+      <p :if={@target_notice} class="source-note">{@target_notice}</p>
 
       <section class="script-context">
         <div>

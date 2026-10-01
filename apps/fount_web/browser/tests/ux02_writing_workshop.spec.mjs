@@ -157,7 +157,7 @@ test('UX02 notes create an explicit proposal and reopen persisted related work a
   await page.getByRole('button', {name: 'Save proposed note'}).click();
   await expect(page.getByText('Proposed note changes', {exact: true})).toBeVisible();
   await page.getByRole('button', {name: 'Make this note change current'}).click();
-  await expect(page.getByText('Keep the withheld fact', {exact: true})).toBeVisible();
+  await expect(page.getByRole('heading', {name: 'Keep the withheld fact', exact: true})).toBeVisible();
 
   await page.getByRole('button', {name: 'Work on this note now'}).click();
   await expect(page.getByText('Related work', {exact: true})).toBeVisible();

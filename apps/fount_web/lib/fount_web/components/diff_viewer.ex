@@ -16,7 +16,12 @@ defmodule FountWeb.Components.DiffViewer do
         assigns = assigns |> assign(:payload, payload) |> assign(:after_model, assigns.after)
 
         ~H"""
-        <section class={["diff-viewer", "diff-viewer--#{@mode}"]} aria-label="Screenplay diff">
+        <section
+          class={["diff-viewer", "diff-viewer--#{@mode}"]}
+          aria-label="Screenplay diff"
+          data-before-revision={@before.revision.id}
+          data-after-revision={@after_model.revision.id}
+        >
           <header class="diff-viewer__header">
             <div>
               <strong>{@before_label}</strong>
@@ -105,7 +110,8 @@ defmodule FountWeb.Components.DiffViewer do
   defp change_label(:changed), do: "Changed"
   defp change_label(:moved), do: "Moved"
 
-  defp human_type(type), do: type |> to_string() |> String.replace("_", " ") |> String.capitalize()
+  defp human_type(type),
+    do: type |> to_string() |> String.replace("_", " ") |> String.capitalize()
 
   defp diff_error(:different_screenplay),
     do: "The selected revisions belong to different screenplay identities."

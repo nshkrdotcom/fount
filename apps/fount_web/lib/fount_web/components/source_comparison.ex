@@ -9,7 +9,12 @@ defmodule FountWeb.Components.SourceComparison do
 
   def comparison(assigns) do
     ~H"""
-    <section id="source-comparison" class="source-comparison" aria-label="Compare screenplay sources" phx-hook="SourceComparison">
+    <section
+      id="source-comparison"
+      class="source-comparison"
+      aria-label="Compare screenplay sources"
+      phx-hook="SourceComparison"
+    >
       <header class="source-comparison__heading">
         <div>
           <p class="eyebrow">Exact saved sources</p>
@@ -18,9 +23,25 @@ defmodule FountWeb.Components.SourceComparison do
         <p>{@other_status}. Reading or comparing never changes the current screenplay.</p>
       </header>
 
-      <input class="source-comparison__tab" type="radio" name="source-comparison-tab" id="compare-current" checked />
-      <input class="source-comparison__tab" type="radio" name="source-comparison-tab" id="compare-proposed" />
-      <input class="source-comparison__tab" type="radio" name="source-comparison-tab" id="compare-changes" />
+      <input
+        class="source-comparison__tab"
+        type="radio"
+        name="source-comparison-tab"
+        id="compare-current"
+        checked
+      />
+      <input
+        class="source-comparison__tab"
+        type="radio"
+        name="source-comparison-tab"
+        id="compare-proposed"
+      />
+      <input
+        class="source-comparison__tab"
+        type="radio"
+        name="source-comparison-tab"
+        id="compare-changes"
+      />
       <nav class="source-comparison__tabs" aria-label="Comparison view">
         <label for="compare-current">Current</label>
         <label for="compare-proposed">{@other_label}</label>
@@ -34,21 +55,36 @@ defmodule FountWeb.Components.SourceComparison do
       </div>
 
       <div class="source-comparison__columns">
-        <section class="source-comparison__panel source-comparison__panel--current" aria-label="Current draft">
+        <section
+          class="source-comparison__panel source-comparison__panel--current"
+          aria-label="Current draft"
+        >
           <header><strong>Current draft</strong><span>accepted screenplay</span></header>
           <div class="source-comparison__paper">
-            <FountWeb.Components.ScreenplayRenderer.screenplay screenplay={@current} />
+            <FountWeb.Components.ScreenplayRenderer.screenplay
+              screenplay={@current}
+              id_prefix="compare-current-"
+            />
           </div>
         </section>
-        <section class="source-comparison__panel source-comparison__panel--proposed" aria-label={@other_label}>
+        <section
+          class="source-comparison__panel source-comparison__panel--proposed"
+          aria-label={@other_label}
+        >
           <header><strong>{@other_label}</strong><span>{@other_status}</span></header>
           <div class="source-comparison__paper">
-            <FountWeb.Components.ScreenplayRenderer.screenplay screenplay={@other} />
+            <FountWeb.Components.ScreenplayRenderer.screenplay
+              screenplay={@other}
+              id_prefix="compare-other-"
+            />
           </div>
         </section>
       </div>
 
-      <section class="source-comparison__panel source-comparison__panel--changes" aria-label="Structural changes">
+      <section
+        class="source-comparison__panel source-comparison__panel--changes"
+        aria-label="Structural changes"
+      >
         <FountWeb.Components.DiffViewer.diff
           before={@current}
           after={@other}

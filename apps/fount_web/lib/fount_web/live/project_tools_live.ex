@@ -338,7 +338,10 @@ defmodule FountWeb.ProjectToolsLive do
         {:noreply,
          socket
          |> assign(:note_target_results, results)
-         |> assign(:notice, "Found #{length(results)} exact source passages in the current draft.")
+         |> assign(
+           :notice,
+           "Found #{length(results)} exact source passages in the current draft."
+         )
          |> assign(:error, nil)}
 
       {:error, reason} ->
@@ -360,7 +363,10 @@ defmodule FountWeb.ProjectToolsLive do
         {:noreply,
          socket
          |> refresh_project_data()
-         |> assign(:notice, "Note deletion saved as a proposal. The current screenplay is unchanged.")
+         |> assign(
+           :notice,
+           "Note deletion saved as a proposal. The current screenplay is unchanged."
+         )
          |> assign(:error, nil)}
 
       {:error, reason} ->
@@ -415,7 +421,9 @@ defmodule FountWeb.ProjectToolsLive do
   def handle_event("build_notes_memo", %{"memo" => params}, socket) do
     selected = List.wrap(params["note_ids"])
     notes = Enum.filter(socket.assigns.notes, &(&1.id in selected))
-    responses = review_map(socket.assigns.note_reviews, socket.assigns.context.current.revision.id)
+
+    responses =
+      review_map(socket.assigns.note_reviews, socket.assigns.context.current.revision.id)
 
     attrs =
       params
@@ -434,7 +442,10 @@ defmodule FountWeb.ProjectToolsLive do
         {:noreply,
          socket
          |> refresh_project_data()
-         |> assign(:notice, "Notes memo built from the selected verbatim notes and exact current source.")
+         |> assign(
+           :notice,
+           "Notes memo built from the selected verbatim notes and exact current source."
+         )
          |> assign(:error, nil)}
 
       {:error, reason} ->
@@ -487,11 +498,15 @@ defmodule FountWeb.ProjectToolsLive do
          socket
          |> refresh_project_data()
          |> assign(:cast_rename_preview, nil)
-         |> assign(:notice, "Name change saved as a proposal. The current screenplay is unchanged.")
+         |> assign(
+           :notice,
+           "Name change saved as a proposal. The current screenplay is unchanged."
+         )
          |> assign(:error, nil)}
 
       {:error, reason} ->
-        {:noreply, assign(socket, :error, "Name-change proposal was not saved: #{inspect(reason)}")}
+        {:noreply,
+         assign(socket, :error, "Name-change proposal was not saved: #{inspect(reason)}")}
     end
   end
 
@@ -536,7 +551,8 @@ defmodule FountWeb.ProjectToolsLive do
        |> assign(:error, nil)}
     else
       {:error, reason} ->
-        {:noreply, assign(socket, :error, "Table read was not created: #{creative_error(reason)}")}
+        {:noreply,
+         assign(socket, :error, "Table read was not created: #{creative_error(reason)}")}
     end
   end
 
@@ -586,7 +602,8 @@ defmodule FountWeb.ProjectToolsLive do
          )}
 
       {:error, reason} ->
-        {:reply, %{status: "error"}, assign(socket, :error, "Table-read state not saved: #{inspect(reason)}")}
+        {:reply, %{status: "error"},
+         assign(socket, :error, "Table-read state not saved: #{inspect(reason)}")}
     end
   end
 
@@ -605,10 +622,14 @@ defmodule FountWeb.ProjectToolsLive do
        |> refresh_project_data()
        |> assign(:selected_read, saved)
        |> assign(:reaction_conflict, nil)
-       |> assign(:notice, "Human reaction saved with the exact table-read packet and source revision.")
+       |> assign(
+         :notice,
+         "Human reaction saved with the exact table-read packet and source revision."
+       )
        |> assign(:error, nil)}
     else
-      nil -> {:noreply, assign(socket, :error, "Choose a saved table read first.")}
+      nil ->
+        {:noreply, assign(socket, :error, "Choose a saved table read first.")}
 
       {:error, {:stale_table_read, row}} ->
         {:noreply,
@@ -652,7 +673,8 @@ defmodule FountWeb.ProjectToolsLive do
 
     with {:ok, workspace} <-
            ProductionTools.workspace(Fount.Repo, socket.assigns.current_owner, run_id),
-         true <- workspace.project["id"] == socket.assigns.project["id"] or {:error, :project_mismatch},
+         true <-
+           workspace.project["id"] == socket.assigns.project["id"] or {:error, :project_mismatch},
          attrs <- feedback_attrs(workspace, params),
          {:ok, _row} <-
            ProductionTools.save_usefulness(
@@ -664,11 +686,17 @@ defmodule FountWeb.ProjectToolsLive do
       {:noreply,
        socket
        |> refresh_project_data()
-       |> assign(:notice, "Human feedback saved. No aggregate quality score or learning claim was calculated.")
+       |> assign(
+         :notice,
+         "Human feedback saved. No aggregate quality score or learning claim was calculated."
+       )
        |> assign(:error, nil)}
     else
-      false -> {:noreply, assign(socket, :error, "That task does not belong to this project.")}
-      {:error, reason} -> {:noreply, assign(socket, :error, "Feedback was not saved: #{inspect(reason)}")}
+      {:partial, reason, _} ->
+        {:noreply, assign(socket, :error, "That task result is incomplete: #{inspect(reason)}")}
+
+      {:error, reason} ->
+        {:noreply, assign(socket, :error, "Feedback was not saved: #{inspect(reason)}")}
     end
   end
 
@@ -689,7 +717,8 @@ defmodule FountWeb.ProjectToolsLive do
   def handle_event("check_submission", %{"submission" => %{"target" => target}}, socket) do
     current = socket.assigns.context.current
 
-    with %{} = artifact <- current_pdf_artifact(socket.assigns.project_artifacts, current.revision.id),
+    with %{} = artifact <-
+           current_pdf_artifact(socket.assigns.project_artifacts, current.revision.id),
          {:ok, profile} <- submission_profile(target) do
       report = %{
         source_revision: artifact["revision_id"],
@@ -704,11 +733,19 @@ defmodule FountWeb.ProjectToolsLive do
       {:noreply,
        socket
        |> assign(:submission_check, check)
-       |> assign(:notice, "Mechanical submission checks refreshed from the exact current PDF artifact.")
+       |> assign(
+         :notice,
+         "Mechanical submission checks refreshed from the exact current PDF artifact."
+       )
        |> assign(:error, nil)}
     else
       nil ->
-        {:noreply, assign(socket, :error, "Build a ready PDF from the current draft before running submission checks.")}
+        {:noreply,
+         assign(
+           socket,
+           :error,
+           "Build a ready PDF from the current draft before running submission checks."
+         )}
 
       {:error, :unknown_profile} ->
         {:noreply, assign(socket, :error, "That submission-check profile is not available.")}
@@ -771,7 +808,9 @@ defmodule FountWeb.ProjectToolsLive do
     owner = socket.assigns.current_owner
     project_id = context.project["id"]
     project_runs = runs(owner, project_id)
-    note_filters = socket.assigns[:note_filters] || %{"query" => "", "status" => "", "category" => ""}
+
+    note_filters =
+      socket.assigns[:note_filters] || %{"query" => "", "status" => "", "category" => ""}
 
     _ =
       ProductionTools.reconcile_note_work_links(Fount.Repo, owner, project_id, context.current.id)
@@ -821,7 +860,9 @@ defmodule FountWeb.ProjectToolsLive do
   defp assign_note_prefill(socket, model, params) do
     target = Map.get(params, "target")
     source_revision = Map.get(params, "source_revision")
-    valid_targets = model |> ProductionTools.target_options() |> Enum.map(& &1.value) |> MapSet.new()
+
+    valid_targets =
+      model |> ProductionTools.target_options() |> Enum.map(& &1.value) |> MapSet.new()
 
     cond do
       is_nil(target) ->
@@ -838,12 +879,18 @@ defmodule FountWeb.ProjectToolsLive do
       MapSet.member?(valid_targets, target) ->
         socket
         |> assign(:note_prefill_target, target)
-        |> assign(:note_prefill_notice, "Selected passage carried into this note from the exact current draft.")
+        |> assign(
+          :note_prefill_notice,
+          "Selected passage carried into this note from the exact current draft."
+        )
 
       true ->
         socket
         |> assign(:note_prefill_target, nil)
-        |> assign(:note_prefill_notice, "The selected passage is no longer available in this draft. Choose a named source passage.")
+        |> assign(
+          :note_prefill_notice,
+          "The selected passage is no longer available in this draft. Choose a named source passage."
+        )
     end
   end
 
@@ -924,7 +971,6 @@ defmodule FountWeb.ProjectToolsLive do
     end
   end
 
-
   defp cast_candidates(owner, project_id) do
     case ProductionTools.list_tool_candidates(Fount.Repo, owner, project_id) do
       rows when is_list(rows) -> Enum.filter(rows, &(&1["kind"] == "cast"))
@@ -975,7 +1021,10 @@ defmodule FountWeb.ProjectToolsLive do
   end
 
   defp review_for(rows, note_id, reviewed_revision_id) do
-    Enum.find(rows, &(&1["note_id"] == note_id and &1["reviewed_revision_id"] == reviewed_revision_id))
+    Enum.find(
+      rows,
+      &(&1["note_id"] == note_id and &1["reviewed_revision_id"] == reviewed_revision_id)
+    )
   end
 
   defp review_history(rows, note_id), do: Enum.filter(rows, &(&1["note_id"] == note_id))
@@ -993,7 +1042,10 @@ defmodule FountWeb.ProjectToolsLive do
   defp review_conflict_version(_conflict, _note_id), do: nil
 
   defp note_state_label("active"), do: "Passage unchanged"
-  defp note_state_label("active_untracked"), do: "Passage resolves; earlier fingerprint unavailable"
+
+  defp note_state_label("active_untracked"),
+    do: "Passage resolves; earlier fingerprint unavailable"
+
   defp note_state_label("stale_changed"), do: "The passage changed"
   defp note_state_label("unresolved"), do: "The passage is no longer in this draft"
   defp note_state_label(value), do: value |> to_string() |> String.replace("_", " ")
@@ -1014,7 +1066,9 @@ defmodule FountWeb.ProjectToolsLive do
   end
 
   defp note_bound_source_label(note, current_revision_id) do
-    if note.bound_revision_id == current_revision_id, do: "Current draft", else: "Earlier bound revision"
+    if note.bound_revision_id == current_revision_id,
+      do: "Current draft",
+      else: "Earlier bound revision"
   end
 
   defp review_actor_label(_row), do: "Signed-in reviewer"
@@ -1031,11 +1085,14 @@ defmodule FountWeb.ProjectToolsLive do
 
   defp current_pdf_artifact(artifacts, revision_id) do
     Enum.find(artifacts, fn artifact ->
-      artifact["kind"] == "pdf" and artifact["state"] == "ready" and artifact["revision_id"] == revision_id
+      artifact["kind"] == "pdf" and artifact["state"] == "ready" and
+        artifact["revision_id"] == revision_id
     end)
   end
 
-  defp submission_profile("nicholl_2026_27"), do: FountWorkshop.Submission.profile(:nicholl_2026_27)
+  defp submission_profile("nicholl_2026_27"),
+    do: FountWorkshop.Submission.profile(:nicholl_2026_27)
+
   defp submission_profile("black_list"), do: FountWorkshop.Submission.profile(:black_list)
   defp submission_profile(_), do: {:error, :unknown_profile}
 
@@ -1057,14 +1114,27 @@ defmodule FountWeb.ProjectToolsLive do
 
   defp artifact_ref(artifacts, artifact), do: ReadingArtifacts.artifact_ref(artifacts, artifact)
 
+  defp artifact_source_label(artifact, current_revision_id) do
+    if artifact["revision_id"] == current_revision_id,
+      do: "Current draft",
+      else: "Earlier saved draft"
+  end
+
   defp artifact_format_note(%{"kind" => "pdf"} = artifact) do
     pages = get_in(artifact, ["metadata", "pages"])
-    if is_integer(pages), do: "Fixed-layout PDF · #{pages} pages", else: "Fixed-layout PDF · page count unavailable"
+
+    if is_integer(pages),
+      do: "Fixed-layout PDF · #{pages} pages",
+      else: "Fixed-layout PDF · page count unavailable"
   end
 
   defp artifact_format_note(%{"kind" => kind} = artifact) when kind in ["fountain", "fdx"] do
     losses = get_in(artifact, ["metadata", "losses"]) || []
-    if losses == [], do: "Editable #{String.upcase(kind)} export · no recorded conversion losses", else: "Editable #{String.upcase(kind)} export · #{length(losses)} recorded conversion note(s)"
+
+    if losses == [],
+      do: "Editable #{String.upcase(kind)} export · no recorded conversion losses",
+      else:
+        "Editable #{String.upcase(kind)} export · #{length(losses)} recorded conversion note(s)"
   end
 
   defp artifact_format_note(%{"kind" => "notes_memo"} = artifact) do
@@ -1093,7 +1163,8 @@ defmodule FountWeb.ProjectToolsLive do
       "condition" => "fount_assisted",
       "outcome" => outcome,
       "kept_original" => params["kept_original"],
-      "preference" => if(params["kept_original"] in [true, "true", "on", "1"], do: "original", else: nil),
+      "preference" =>
+        if(params["kept_original"] in [true, "true", "on", "1"], do: "original", else: nil),
       "notes" => params["notes"],
       "dimensions" => dimensions,
       "output_refs" => feedback_output_refs(workspace),
@@ -1120,14 +1191,20 @@ defmodule FountWeb.ProjectToolsLive do
 
   defp feedback_kept_original?(row), do: feedback_response(row)["kept_original"] == true
   defp feedback_notes(row), do: feedback_response(row)["notes"] |> List.wrap() |> Enum.join("\n")
-  defp feedback_friction(row), do: feedback_response(row)["friction"] |> List.wrap() |> Enum.join("\n")
+
+  defp feedback_friction(row),
+    do: feedback_response(row)["friction"] |> List.wrap() |> Enum.join("\n")
+
   defp feedback_dimension(row, key), do: get_in(feedback_response(row), ["dimensions", key])
 
   defp feedback_output_refs(workspace) do
     refs =
       [
         workspace.run["selected_candidate_id"],
-        Enum.find_value(workspace.progress["steps"] || [], &get_in(&1, ["result", "candidate_id"]))
+        Enum.find_value(
+          workspace.progress["steps"] || [],
+          &get_in(&1, ["result", "candidate_id"])
+        )
       ]
       |> Enum.reject(&is_nil/1)
       |> Enum.uniq()
@@ -1162,15 +1239,14 @@ defmodule FountWeb.ProjectToolsLive do
   defp human_artifact_error(reason), do: inspect(reason)
 
   defp table_read_ref(reads, read) do
-    case Enum.find_index(reads, &(&1["id"] == read["id"])) do
-      nil -> nil
-      index -> "read-#{index + 1}"
-    end
+    if Enum.any?(reads, &(&1["id"] == read["id"])), do: "read-#{read["id"]}"
   end
 
   defp read_title(read) do
     case get_in(read, ["packet", "display_title"]) do
-      title when is_binary(title) and title != "" -> title
+      title when is_binary(title) and title != "" ->
+        title
+
       _ ->
         scenes = get_in(read, ["packet", "scene_context"]) || []
 
@@ -1187,7 +1263,9 @@ defmodule FountWeb.ProjectToolsLive do
   defp read_saved_time(_), do: "date not recorded"
 
   defp read_source_label(read, current_revision_id) do
-    if read["revision_id"] == current_revision_id, do: "Current draft", else: "Earlier saved draft"
+    if read["revision_id"] == current_revision_id,
+      do: "Current draft",
+      else: "Earlier saved draft"
   end
 
   defp reaction_value(%{attempted: attempted}, key), do: Map.get(attempted, key)
@@ -1697,7 +1775,9 @@ defmodule FountWeb.ProjectToolsLive do
 
       <section :if={@live_action == :notes} class="tool-page notes-workspace">
         <header class="compact-page-heading">
-          <div><p class="eyebrow">Source-bound annotations</p><h1>Notes</h1></div>
+          <div>
+            <p class="eyebrow">Source-bound annotations</p><h1>Notes</h1>
+          </div>
           <a href="/help#notes">Help</a>
         </header>
         <p>
@@ -1711,7 +1791,13 @@ defmodule FountWeb.ProjectToolsLive do
             <label>
               Source passage
               <select name="note[target]" required>
-                <option :for={option <- @target_options} value={option.value} selected={option.value == @note_prefill_target}>{option.label}</option>
+                <option
+                  :for={option <- @target_options}
+                  value={option.value}
+                  selected={option.value == @note_prefill_target}
+                >
+                  {option.label}
+                </option>
               </select>
             </label>
             <label>Title <input name="note[title]" maxlength="200" /></label>
@@ -1731,7 +1817,9 @@ defmodule FountWeb.ProjectToolsLive do
             <h2>Find a passage to remap</h2>
             <label>Exact literal search <input name="target_search[query]" maxlength="500" /></label>
             <button type="submit">Find passages</button>
-            <p class="scope-note">Current draft only · literal source search · up to 80 distinct passage choices.</p>
+            <p class="scope-note">
+              Current draft only · literal source search · up to 80 distinct passage choices.
+            </p>
             <ol :if={@note_target_results != []} class="compact-results named-target-results">
               <li :for={result <- @note_target_results}><span>{result.label}</span></li>
             </ol>
@@ -1739,24 +1827,43 @@ defmodule FountWeb.ProjectToolsLive do
         </div>
 
         <form phx-submit="filter_notes" class="card compact-form note-filters">
-          <div class="compact-page-heading"><h2>Find notes</h2><span>{length(@notes)} shown</span></div>
+          <div class="compact-page-heading">
+            <h2>Find notes</h2><span>{length(@notes)} shown</span>
+          </div>
           <div class="compact-form-grid">
             <label>Text <input name="notes[query]" value={@note_filters["query"]} maxlength="500" /></label>
             <label>
               Source status
               <select name="notes[status]">
                 <option value="" selected={@note_filters["status"] in [nil, ""]}>All</option>
-                <option value="active" selected={@note_filters["status"] == "active"}>Passage unchanged</option>
-                <option value="active_untracked" selected={@note_filters["status"] == "active_untracked"}>Passage resolves; earlier fingerprint unavailable</option>
-                <option value="stale_changed" selected={@note_filters["status"] == "stale_changed"}>The passage changed</option>
-                <option value="unresolved" selected={@note_filters["status"] == "unresolved"}>The passage is no longer in this draft</option>
+                <option value="active" selected={@note_filters["status"] == "active"}>
+                  Passage unchanged
+                </option>
+                <option
+                  value="active_untracked"
+                  selected={@note_filters["status"] == "active_untracked"}
+                >
+                  Passage resolves; earlier fingerprint unavailable
+                </option>
+                <option value="stale_changed" selected={@note_filters["status"] == "stale_changed"}>
+                  The passage changed
+                </option>
+                <option value="unresolved" selected={@note_filters["status"] == "unresolved"}>
+                  The passage is no longer in this draft
+                </option>
               </select>
             </label>
             <label>
               Category
               <select name="notes[category]">
                 <option value="" selected={@note_filters["category"] in [nil, ""]}>All</option>
-                <option :for={category <- @note_categories} value={category} selected={@note_filters["category"] == category}>{category}</option>
+                <option
+                  :for={category <- @note_categories}
+                  value={category}
+                  selected={@note_filters["category"] == category}
+                >
+                  {category}
+                </option>
               </select>
             </label>
           </div>
@@ -1767,7 +1874,9 @@ defmodule FountWeb.ProjectToolsLive do
           <h2>Proposed note changes</h2>
           <article :for={candidate <- @note_candidates} class="note-row">
             <div>
-              <strong>{if get_in(candidate, ["metadata", "action"]) == "delete", do: "Proposed note deletion", else: "Proposed note change"}</strong>
+              <strong>{if get_in(candidate, ["metadata", "action"]) == "delete",
+                do: "Proposed note deletion",
+                else: "Proposed note change"}</strong>
               <span> · {human_status(candidate["decision"])}</span>
             </div>
             <button
@@ -1779,7 +1888,11 @@ defmodule FountWeb.ProjectToolsLive do
           </article>
         </section>
 
-        <form :if={@notes != []} phx-submit="build_notes_memo" class="card compact-form notes-memo-builder">
+        <form
+          :if={@notes != []}
+          phx-submit="build_notes_memo"
+          class="card compact-form notes-memo-builder"
+        >
           <h2>Notes memo</h2>
           <p>Select exact accepted notes for a deterministic memo. Nothing is sent automatically.</p>
           <div class="choice-list notes-memo-choices">
@@ -1792,16 +1905,28 @@ defmodule FountWeb.ProjectToolsLive do
             <label>From <input name="memo[from]" maxlength="200" /></label>
             <label>To <input name="memo[to]" maxlength="200" /></label>
           </div>
-          <label class="inline-check"><input type="checkbox" name="memo[include_responses]" value="true" /> Include actual saved reviewer responses on this exact draft</label>
+          <label class="inline-check"><input
+            type="checkbox"
+            name="memo[include_responses]"
+            value="true"
+          /> Include actual saved reviewer responses on this exact draft</label>
           <button type="submit">Build notes memo</button>
         </form>
 
-        <section :if={Enum.any?(@project_artifacts, &(&1["kind"] == "notes_memo"))} class="card notes-memo-artifacts">
+        <section
+          :if={Enum.any?(@project_artifacts, &(&1["kind"] == "notes_memo"))}
+          class="card notes-memo-artifacts"
+        >
           <h2>Built notes memos</h2>
-          <article :for={artifact <- Enum.filter(@project_artifacts, &(&1["kind"] == "notes_memo"))} class="artifact-row">
+          <article
+            :for={artifact <- Enum.filter(@project_artifacts, &(&1["kind"] == "notes_memo"))}
+            class="artifact-row"
+          >
             <div>
               <strong>{artifact["filename"]}</strong>
-              <span> · {artifact["source_label"]} · {human_status(artifact["state"])}</span>
+              <span> · {artifact_source_label(artifact, @context.current.revision.id)} · {human_status(
+                artifact["state"]
+              )}</span>
             </div>
             <p :if={artifact["error"]} class="ui-field__error">{artifact["error"]}</p>
             <nav :if={artifact["state"] == "ready" and artifact_ref(@project_artifacts, artifact)}>
@@ -1811,15 +1936,21 @@ defmodule FountWeb.ProjectToolsLive do
           </article>
         </section>
 
-        <p :if={@notes != []} class="inline-actions"><a href={"/p/#{@project["key"]}/notes/export.json"}>Export accepted notes JSON</a></p>
+        <p :if={@notes != []} class="inline-actions">
+          <a href={"/p/#{@project["key"]}/notes/export.json"}>Export accepted notes JSON</a>
+        </p>
 
         <section class="note-list">
           <p :if={@notes == []}>No accepted source-bound notes match these filters.</p>
           <article :for={note <- @notes} class="card note-card" id={"note-#{note.id}"}>
             <% review = review_for(@note_reviews, note.id, @context.current.revision.id) %>
-            <% review_response = review_conflict_value(@note_review_conflict, note.id, "response", review) %>
-            <% review_comment = review_conflict_value(@note_review_conflict, note.id, "comment", review) %>
-            <% review_version = review_conflict_version(@note_review_conflict, note.id) || if(review, do: review["version"], else: 0) %>
+            <% review_response =
+              review_conflict_value(@note_review_conflict, note.id, "response", review) %>
+            <% review_comment =
+              review_conflict_value(@note_review_conflict, note.id, "comment", review) %>
+            <% review_version =
+              review_conflict_version(@note_review_conflict, note.id) ||
+                if(review, do: review["version"], else: 0) %>
             <% history = review_history(@note_reviews, note.id) %>
             <% source_excerpt = note_source_excerpt(@context.current, note) %>
             <div class="note-card-heading">
@@ -1830,11 +1961,16 @@ defmodule FountWeb.ProjectToolsLive do
               <button type="button" phx-click="work_on_note" phx-value-note_id={note.id}>Work on this note now</button>
             </div>
             <p>{note.text}</p>
-            <p :if={note.category} class="note-category">Category: <strong>{note.category}</strong></p>
+            <p :if={note.category} class="note-category">
+              Category: <strong>{note.category}</strong>
+            </p>
             <blockquote :if={source_excerpt} class="source-excerpt">{source_excerpt}</blockquote>
-            <p :if={is_nil(source_excerpt)} class="scope-note">The bound source passage is not available in the current draft.</p>
+            <p :if={is_nil(source_excerpt)} class="scope-note">
+              The bound source passage is not available in the current draft.
+            </p>
             <p class="scope-note">
-              Source status: <strong>{note_state_label(note.target_state)}</strong> · {note_bound_source_label(note, @context.current.revision.id)}. Exact source identity is retained internally.
+              Source status: <strong>{note_state_label(note.target_state)}</strong>
+              · {note_bound_source_label(note, @context.current.revision.id)}. Exact source identity is retained internally.
             </p>
 
             <details class="note-edit-panel">
@@ -1847,7 +1983,13 @@ defmodule FountWeb.ProjectToolsLive do
                   Category <span class="optional">optional and clearable</span>
                   <select name="note[category]">
                     <option value="" selected={is_nil(note.category)}>No category</option>
-                    <option :for={category <- @note_categories} value={category} selected={note.category == category}>{category}</option>
+                    <option
+                      :for={category <- @note_categories}
+                      value={category}
+                      selected={note.category == category}
+                    >
+                      {category}
+                    </option>
                   </select>
                 </label>
                 <label>Note <textarea name="note[text]" maxlength="20000" required>{note.text}</textarea></label>
@@ -1855,7 +1997,9 @@ defmodule FountWeb.ProjectToolsLive do
                   Remap to a named search result <span class="optional">optional</span>
                   <select name="note[target_override]">
                     <option value="">Keep current exact target</option>
-                    <option :for={result <- @note_target_results} value={result.value}>{result.label}</option>
+                    <option :for={result <- @note_target_results} value={result.value}>
+                      {result.label}
+                    </option>
                   </select>
                 </label>
                 <div class="inline-actions">
@@ -1865,10 +2009,22 @@ defmodule FountWeb.ProjectToolsLive do
               </form>
             </details>
 
-            <div :if={@note_review_conflict && @note_review_conflict.note_id == note.id} class="conflict-panel note-review-conflict" role="alert">
+            <div
+              :if={@note_review_conflict && @note_review_conflict.note_id == note.id}
+              class="conflict-panel note-review-conflict"
+              role="alert"
+            >
               <strong>Reviewer response changed in another tab.</strong>
-              <p>Your attempted response is preserved: {human_status(@note_review_conflict.attempted["response"] || "open")}.</p>
-              <p>Saved response: {human_status(@note_review_conflict.saved["response"])} · {review_time(@note_review_conflict.saved["updated_at"])}.</p>
+              <p>
+                Your attempted response is preserved: {human_status(
+                  @note_review_conflict.attempted["response"] || "open"
+                )}.
+              </p>
+              <p>
+                Saved response: {human_status(@note_review_conflict.saved["response"])} · {review_time(
+                  @note_review_conflict.saved["updated_at"]
+                )}.
+              </p>
               <button type="button" phx-click="reload_note_review">Reload saved response instead</button>
             </div>
 
@@ -1879,15 +2035,23 @@ defmodule FountWeb.ProjectToolsLive do
               <label>
                 Response
                 <select name="review[response]">
-                  <option value="open" selected={review_response in [nil, "open"]}>Open — no response recorded</option>
-                  <option value="addressed" selected={review_response == "addressed"}>Addressed</option>
-                  <option value="not_addressed" selected={review_response == "not_addressed"}>Not addressed</option>
+                  <option value="open" selected={review_response in [nil, "open"]}>
+                    Open — no response recorded
+                  </option>
+                  <option value="addressed" selected={review_response == "addressed"}>
+                    Addressed
+                  </option>
+                  <option value="not_addressed" selected={review_response == "not_addressed"}>
+                    Not addressed
+                  </option>
                   <option value="deferred" selected={review_response == "deferred"}>Deferred</option>
                 </select>
               </label>
               <label>Comment <textarea name="review[comment]" maxlength="4000">{review_comment}</textarea></label>
               <button type="submit">Save reviewer response</button>
-              <p class="scope-note">Open means no reviewer-response record for this revision. This action does not accept screenplay changes.</p>
+              <p class="scope-note">
+                Open means no reviewer-response record for this revision. This action does not accept screenplay changes.
+              </p>
             </form>
 
             <details :if={history != []} class="review-history">
@@ -1895,22 +2059,34 @@ defmodule FountWeb.ProjectToolsLive do
               <ol>
                 <li :for={row <- history}>
                   <strong>{human_status(row["response"])}</strong>
-                  <span> · {review_source_label(row, @context.current.revision.id)} · {review_actor_label(row)} · {review_time(row["updated_at"])}</span>
+                  <span> · {review_source_label(row, @context.current.revision.id)} · {review_actor_label(
+                    row
+                  )} · {review_time(row["updated_at"])}</span>
                   <p :if={row["comment"]}>{row["comment"]}</p>
                 </li>
               </ol>
             </details>
 
-            <div :for={link <- Enum.filter(@note_links, &(&1["note_id"] == note.id))} class="related-work-row">
-              <span>Related work · {link["display_label"] || "Saved task"} · {human_status(link["status"])}</span>
+            <div
+              :for={link <- Enum.filter(@note_links, &(&1["note_id"] == note.id))}
+              class="related-work-row"
+            >
+              <span>Related work · {link["display_label"] || "Saved task"} · {human_status(
+                link["status"]
+              )}</span>
               <a href={"/p/#{@project["key"]}/activity/#{link["display_key"]}"}>Open activity</a>
-              <a :if={link["proposal_candidate_id"]} href={"/p/#{@project["key"]}/changes/#{link["display_key"]}"}>Open linked proposal</a>
+              <a
+                :if={link["proposal_candidate_id"]}
+                href={"/p/#{@project["key"]}/changes/#{link["display_key"]}"}
+              >Open linked proposal</a>
             </div>
           </article>
         </section>
 
         <section :if={@creative_preview} class="card creative-review">
-          <p class="eyebrow">Related work</p><h2>{@creative_review.action}</h2><p>{@creative_review.question}</p>
+          <p class="eyebrow">Related work</p><h2>{@creative_review.action}</h2><p>
+            {@creative_review.question}
+          </p>
           <button type="button" phx-click="confirm_creative_task">Start this work</button>
         </section>
       </section>
@@ -1927,18 +2103,24 @@ defmodule FountWeb.ProjectToolsLive do
 
       <section :if={@live_action == :cast} class="tool-page character-workspace">
         <header class="compact-page-heading">
-          <div><p class="eyebrow">Source facts</p><h1>Cast & locations</h1></div>
+          <div>
+            <p class="eyebrow">Source facts</p><h1>Cast & locations</h1>
+          </div>
           <a href="/help#cast-locations">Help</a>
         </header>
         <p>
           Confirmed cue names, aliases, appearances and scene headings come from the selected screenplay source. Unknown or unparsed location/time facts stay unknown; this is not a production schedule.
         </p>
-        <p class="scope-note">Approximate length: {@estimates.pages.label} · Read duration: {@estimates.duration.label}. These are derived reading approximations, not production page locks or schedule estimates.</p>
+        <p class="scope-note">
+          Approximate length: {@estimates.pages.label} · Read duration: {@estimates.duration.label}. These are derived reading approximations, not production page locks or schedule estimates.
+        </p>
 
         <div class="character-grid">
           <article :for={character <- @characters} class="card compact-character-card">
             <h2>{character.display_name}</h2>
-            <p>{character.dialogue_block_count} dialogue blocks · {character.appearance_count} scenes · {character.confirmed_mentions} confirmed mentions</p>
+            <p>
+              {character.dialogue_block_count} dialogue blocks · {character.appearance_count} scenes · {character.confirmed_mentions} confirmed mentions
+            </p>
             <p :if={character.aliases != []}>Aliases: {Enum.join(character.aliases, ", ")}</p>
             <div class="inline-actions">
               <button type="button" phx-click="read_character" phx-value-character_id={character.id}>Read this character’s dialogue</button>
@@ -1955,25 +2137,41 @@ defmodule FountWeb.ProjectToolsLive do
           <p class="eyebrow">Proposed name change</p>
           <h2>Prepare {@cast_rename_preview.new_name}</h2>
           <p>
-            {length(@cast_rename_preview.plan.cue_operations)} confirmed cue edits will be included.
-            {length(@cast_rename_preview.plan.review)} suggested prose mentions remain review-only and are not silently rewritten.
+            {length(@cast_rename_preview.plan.cue_operations)} confirmed cue edits will be included. {length(
+              @cast_rename_preview.plan.review
+            )} suggested prose mentions remain review-only and are not silently rewritten.
           </p>
           <button type="button" phx-click="save_cast_rename">Save proposed name change</button>
-          <p class="scope-note">Saving creates proposed work only. Current pages remain unchanged until deliberate Core acceptance.</p>
+          <p class="scope-note">
+            Saving creates proposed work only. Current pages remain unchanged until deliberate Core acceptance.
+          </p>
         </section>
 
         <section :if={@cast_candidates != []} class="card">
           <h2>Saved cast proposals</h2>
           <article :for={candidate <- @cast_candidates} class="note-row">
-            <div><strong>{get_in(candidate, ["metadata", "new_name"]) || "Name change"}</strong><span> · {human_status(candidate["decision"])}</span></div>
-            <button :if={candidate["decision"] == "proposed"} type="button" phx-click="accept_tool_candidate" phx-value-candidate_id={candidate["candidate_id"]}>Make reviewed name change current</button>
+            <div>
+              <strong>{get_in(candidate, ["metadata", "new_name"]) || "Name change"}</strong><span> · {human_status(
+                candidate["decision"]
+              )}</span>
+            </div>
+            <button
+              :if={candidate["decision"] == "proposed"}
+              type="button"
+              phx-click="accept_tool_candidate"
+              phx-value-candidate_id={candidate["candidate_id"]}
+            >Make reviewed name change current</button>
           </article>
         </section>
 
         <section :if={@character_dialogue} class="character-dialogue-reader">
           <header>
-            <p class="eyebrow">Provider-free source reading</p><h2>{@character_dialogue.character.display_name}</h2>
-            <p>Showing {length(@character_dialogue.rows)} of {@character_dialogue.total} dialogue blocks.</p>
+            <p class="eyebrow">Provider-free source reading</p><h2>
+              {@character_dialogue.character.display_name}
+            </h2>
+            <p>
+              Showing {length(@character_dialogue.rows)} of {@character_dialogue.total} dialogue blocks.
+            </p>
           </header>
           <article :for={row <- @character_dialogue.rows} class="dialogue-return-card">
             <div class="dialogue-return-heading">
@@ -1982,9 +2180,18 @@ defmodule FountWeb.ProjectToolsLive do
             <p class="character-cue">{row.character}</p>
             <div :for={line <- row.lines} class="dialogue-line-audition">
               <p>{line.text}</p>
-              <form :if={line.type in [:dialogue, :parenthetical]} phx-submit="try_line" class="inline-form">
+              <form
+                :if={line.type in [:dialogue, :parenthetical]}
+                phx-submit="try_line"
+                class="inline-form"
+              >
                 <input type="hidden" name="line[element_id]" value={line.id} />
-                <input name="line[direction]" maxlength="500" aria-label="Direction for another line" placeholder="Optional direction" />
+                <input
+                  name="line[direction]"
+                  maxlength="500"
+                  aria-label="Direction for another line"
+                  placeholder="Optional direction"
+                />
                 <button type="submit">Try another line</button>
               </form>
             </div>
@@ -1992,13 +2199,18 @@ defmodule FountWeb.ProjectToolsLive do
         </section>
 
         <section class="location-list">
-          <header><p class="eyebrow">Scene headings</p><h2>Locations</h2></header>
+          <header>
+            <p class="eyebrow">Scene headings</p><h2>Locations</h2>
+          </header>
           <p :if={@locations == []}>No parseable scene locations in this draft.</p>
           <details :for={location <- @locations} class="card location-card">
-            <summary><strong>{location.location}</strong><span>{length(location.entries)} scenes</span></summary>
+            <summary>
+              <strong>{location.location}</strong><span>{length(location.entries)} scenes</span>
+            </summary>
             <ol>
               <li :for={entry <- location.entries}>
-                <a href={"/p/#{@project["key"]}?scene=#{entry.ordinal}"}>Scene {entry.ordinal} · {entry.heading || "Untitled"}</a>
+                <a href={"/p/#{@project["key"]}?scene=#{entry.ordinal}"}>Scene {entry.ordinal} · {entry.heading ||
+                  "Untitled"}</a>
                 <span>{entry.parsed_context} · {entry.parsed_time}</span>
               </li>
             </ol>
@@ -2014,7 +2226,9 @@ defmodule FountWeb.ProjectToolsLive do
 
       <section :if={@live_action == :read} class="tool-page table-read-destination">
         <header class="compact-page-heading">
-          <div><p class="eyebrow">Human rehearsal</p><h1>Table read</h1></div>
+          <div>
+            <p class="eyebrow">Human rehearsal</p><h1>Table read</h1>
+          </div>
           <a href="/help#table-read">Help</a>
         </header>
         <p>
@@ -2023,23 +2237,45 @@ defmodule FountWeb.ProjectToolsLive do
 
         <form phx-submit="create_table_read" class="card compact-form">
           <h2>New saved read</h2>
-          <label>Read title <span class="optional">optional</span><input name="read[title]" maxlength="160" placeholder="Act Two table read" /></label>
+          <label>Read title
+          <span class="optional">optional</span><input
+            name="read[title]"
+            maxlength="160"
+            placeholder="Act Two table read"
+          /></label>
           <label>
             Material
             <select name="read[scope][]" multiple size="6">
-              <option :for={option <- @scope_options} value={option.value} selected={option.value == "whole"}>{option.label}</option>
+              <option
+                :for={option <- @scope_options}
+                value={option.value}
+                selected={option.value == "whole"}
+              >
+                {option.label}
+              </option>
             </select>
           </label>
           <button type="submit">Save table-read material</button>
-          <p class="scope-note">The selection is bound to the exact Current draft shown now. No provider is called.</p>
+          <p class="scope-note">
+            The selection is bound to the exact Current draft shown now. No provider is called.
+          </p>
         </form>
 
         <section class="saved-read-list card">
           <h2>Saved table reads</h2>
           <p :if={@table_reads == []}>No saved table reads yet.</p>
-          <button :for={read <- @table_reads} type="button" phx-click="select_table_read" phx-value-id={read["id"]} class="saved-read-row">
+          <button
+            :for={read <- @table_reads}
+            type="button"
+            phx-click="select_table_read"
+            phx-value-id={read["id"]}
+            class="saved-read-row"
+          >
             <strong>{read_title(read)}</strong>
-            <span>{length(get_in(read, ["packet", "turns"]) || [])} turns · {read_source_label(read, @context.current.revision.id)} · saved {read_saved_time(read["inserted_at"])}</span>
+            <span>{length(get_in(read, ["packet", "turns"]) || [])} turns · {read_source_label(
+              read,
+              @context.current.revision.id
+            )} · saved {read_saved_time(read["inserted_at"])}</span>
           </button>
         </section>
 
@@ -2054,54 +2290,97 @@ defmodule FountWeb.ProjectToolsLive do
           data-scroll-mode={@selected_read["scroll_mode"] || "manual"}
         >
           <header>
-            <div><p class="eyebrow">Exact saved material</p><h2>{read_title(@selected_read)}</h2></div>
+            <div>
+              <p class="eyebrow">Exact saved material</p><h2>{read_title(@selected_read)}</h2>
+            </div>
             <p>{ProductionTools.tts_status().label}</p>
           </header>
           <div :if={@table_read_conflict} class="conflict-panel table-read-conflict" role="alert">
             <strong>Table-read navigation changed in another tab.</strong>
-            <p>Your local bookmark/timing state is still shown. Saved state: passage {@table_read_conflict.saved["bookmark_index"] + 1}, elapsed {div(@table_read_conflict.saved["elapsed_ms"] || 0, 1000)} seconds.</p>
+            <p>
+              Your local bookmark/timing state is still shown. Saved state: passage {@table_read_conflict.saved[
+                "bookmark_index"
+              ] + 1}, elapsed {div(@table_read_conflict.saved["elapsed_ms"] || 0, 1000)} seconds.
+            </p>
             <button type="button" phx-click="reload_table_read">Reload saved state instead</button>
           </div>
           <div class="table-read-controls" role="group" aria-label="Table-read controls">
             <button type="button" data-read-prev>Previous</button>
             <button type="button" data-read-toggle>Start / pause</button>
             <button type="button" data-read-next>Next</button>
-            <label>Auto-scroll speed
+            <label>
+              Auto-scroll speed
               <select data-read-speed>
-                <option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="1.5">1.5×</option><option value="2">2×</option>
+                <option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="1.5">
+                  1.5×
+                </option><option value="2">2×</option>
               </select>
             </label>
             <button type="button" data-read-bookmark>Bookmark current passage</button>
             <span data-read-elapsed>00:00</span>
           </div>
-          <p class="scope-note">Reduced-motion preference keeps manual navigation and disables automatic scrolling.</p>
-          <div :if={(get_in(@selected_read, ["packet", "roles"]) || []) != []} class="table-read-roles">
+          <p class="scope-note">
+            Reduced-motion preference keeps manual navigation and disables automatic scrolling.
+          </p>
+          <div
+            :if={(get_in(@selected_read, ["packet", "roles"]) || []) != []}
+            class="table-read-roles"
+          >
             <strong>Reader roles</strong>
-            <span :for={role <- get_in(@selected_read, ["packet", "roles"]) || []}>{role["cue"] || "Reader"}</span>
+            <span :for={role <- get_in(@selected_read, ["packet", "roles"]) || []}>{role["cue"] ||
+              "Reader"}</span>
           </div>
           <ol class="table-read-turns" data-read-turns>
-            <li :for={{turn, index} <- Enum.with_index(@selected_read["packet"]["turns"] || [])} data-read-turn data-index={index} tabindex="0" class={if index == (@selected_read["bookmark_index"] || 0), do: "is-bookmarked"}>
+            <li
+              :for={{turn, index} <- Enum.with_index(@selected_read["packet"]["turns"] || [])}
+              data-read-turn
+              data-index={index}
+              tabindex="0"
+              class={if index == (@selected_read["bookmark_index"] || 0), do: "is-bookmarked"}
+            >
               <strong>{turn["cue"]}</strong>
               <p>{turn["dialogue"]}</p>
             </li>
           </ol>
           <div :if={@reaction_conflict} class="conflict-panel reaction-conflict" role="alert">
             <strong>Reaction not saved yet.</strong>
-            <p>The table read changed in another tab. Your typed reaction remains in the form below; compare it with the saved read and submit again if it still applies.</p>
+            <p>
+              The table read changed in another tab. Your typed reaction remains in the form below; compare it with the saved read and submit again if it still applies.
+            </p>
             <button type="button" phx-click="reload_table_read">Discard my typed reaction and reload saved state</button>
           </div>
           <form phx-submit="record_reaction" class="compact-form">
             <h3>Human reaction to the current source</h3>
-            <label>Reader <input name="reaction[reader_id]" value={reaction_value(@reaction_conflict, "reader_id")} maxlength="120" /></label>
+            <label>Reader
+            <input
+              name="reaction[reader_id]"
+              value={reaction_value(@reaction_conflict, "reader_id")}
+              maxlength="120"
+            /></label>
             <label>Reaction <textarea name="reaction[reaction]" maxlength="4000" required>{reaction_value(@reaction_conflict, "reaction")}</textarea></label>
-            <label>Reader delivery <input name="reaction[reader_delivery]" value={reaction_value(@reaction_conflict, "reader_delivery")} maxlength="500" /></label>
-            <label>Listening conditions <input name="reaction[listening_conditions]" value={reaction_value(@reaction_conflict, "listening_conditions")} maxlength="500" /></label>
+            <label>Reader delivery
+            <input
+              name="reaction[reader_delivery]"
+              value={reaction_value(@reaction_conflict, "reader_delivery")}
+              maxlength="500"
+            /></label>
+            <label>Listening conditions
+            <input
+              name="reaction[listening_conditions]"
+              value={reaction_value(@reaction_conflict, "listening_conditions")}
+              maxlength="500"
+            /></label>
             <button type="submit">Save reaction</button>
           </form>
           <ul class="reaction-list">
-            <li :for={reaction <- @selected_read["packet"]["reactions"] || []}><strong>{reaction["reader_id"] || "Human reader"}</strong>: {reaction["reaction"]}</li>
+            <li :for={reaction <- @selected_read["packet"]["reactions"] || []}>
+              <strong>{reaction["reader_id"] || "Human reader"}</strong>: {reaction["reaction"]}
+            </li>
           </ul>
-          <a :if={table_read_ref(@table_reads, @selected_read)} href={"/p/#{@project["key"]}/table-reads/#{table_read_ref(@table_reads, @selected_read)}/export.json"}>Export saved table-read JSON</a>
+          <a
+            :if={table_read_ref(@table_reads, @selected_read)}
+            href={"/p/#{@project["key"]}/table-reads/#{table_read_ref(@table_reads, @selected_read)}/export.json"}
+          >Export saved table-read JSON</a>
         </section>
       </section>
 
@@ -2124,7 +2403,9 @@ defmodule FountWeb.ProjectToolsLive do
 
       <section :if={@live_action == :exports} class="tool-page exports-destination">
         <header class="compact-page-heading">
-          <div><p class="eyebrow">Exact named source</p><h1>Exports</h1></div>
+          <div>
+            <p class="eyebrow">Exact named source</p><h1>Exports</h1>
+          </div>
           <a href="/help#exports">Help</a>
         </header>
         <p>
@@ -2135,7 +2416,9 @@ defmodule FountWeb.ProjectToolsLive do
           <button type="submit" name="export[format]" value="fdx">Build FDX</button>
           <button type="submit" name="export[format]" value="pdf">Build PDF</button>
         </form>
-        <p class="scope-note">Source: Current draft. Exact source identity is retained with each artifact. A PDF page map is shown only if the renderer actually supplies a verified mapping; it is never inferred from responsive HTML.</p>
+        <p class="scope-note">
+          Source: Current draft. Exact source identity is retained with each artifact. A PDF page map is shown only if the renderer actually supplies a verified mapping; it is never inferred from responsive HTML.
+        </p>
 
         <section class="artifact-list">
           <h2>Project artifacts</h2>
@@ -2143,13 +2426,21 @@ defmodule FountWeb.ProjectToolsLive do
           <article :for={artifact <- @project_artifacts} class="card artifact-row">
             <div>
               <strong>{artifact["filename"]}</strong>
-              <span> · {artifact["source_label"]} · {human_status(artifact["state"])}</span>
+              <span> · {artifact_source_label(artifact, @context.current.revision.id)} · {human_status(
+                artifact["state"]
+              )}</span>
             </div>
             <p class="scope-note">{artifact_format_note(artifact)}</p>
             <p :if={artifact["error"]} class="ui-field__error">{artifact["error"]}</p>
             <nav :if={artifact["state"] == "ready" and artifact_ref(@project_artifacts, artifact)}>
-              <a :if={artifact["kind"] in ["fountain", "fdx", "notes_memo"]} href={"/p/#{@project["key"]}/artifacts/#{artifact_ref(@project_artifacts, artifact)}/preview"}>Preview</a>
-              <a :if={artifact["kind"] == "pdf"} href={"/p/#{@project["key"]}/pages/#{artifact_ref(@project_artifacts, artifact)}"}>Read numbered PDF pages</a>
+              <a
+                :if={artifact["kind"] in ["fountain", "fdx", "notes_memo"]}
+                href={"/p/#{@project["key"]}/artifacts/#{artifact_ref(@project_artifacts, artifact)}/preview"}
+              >Preview</a>
+              <a
+                :if={artifact["kind"] == "pdf"}
+                href={"/p/#{@project["key"]}/pages/#{artifact_ref(@project_artifacts, artifact)}"}
+              >Read numbered PDF pages</a>
               <a href={"/p/#{@project["key"]}/artifacts/#{artifact_ref(@project_artifacts, artifact)}/download"}>Download</a>
             </nav>
           </article>
@@ -2157,30 +2448,58 @@ defmodule FountWeb.ProjectToolsLive do
 
         <section class="card submission-checks">
           <h2>Optional dated submission checks</h2>
-          <p>These are mechanical checks against a named saved profile, not legal advice, acceptance, endorsement or a current-rule guarantee. The profile shows the date and source it records.</p>
+          <p>
+            These are mechanical checks against a named saved profile, not legal advice, acceptance, endorsement or a current-rule guarantee. The profile shows the date and source it records.
+          </p>
           <form phx-submit="check_submission" class="compact-form">
-            <label>Target
+            <label>
+              Target
               <select name="submission[target]">
                 <option value="nicholl_2026_27">Nicholl 2026–27</option>
                 <option value="black_list">The Black List</option>
               </select>
             </label>
-            <button type="submit" disabled={is_nil(current_pdf_artifact(@project_artifacts, @context.current.revision.id))}>Check current PDF</button>
-            <p :if={is_nil(current_pdf_artifact(@project_artifacts, @context.current.revision.id))} class="scope-note">Build the current-draft PDF first. Checks never run against responsive HTML or a stale PDF.</p>
+            <button
+              type="submit"
+              disabled={
+                is_nil(current_pdf_artifact(@project_artifacts, @context.current.revision.id))
+              }
+            >Check current PDF</button>
+            <p
+              :if={is_nil(current_pdf_artifact(@project_artifacts, @context.current.revision.id))}
+              class="scope-note"
+            >
+              Build the current-draft PDF first. Checks never run against responsive HTML or a stale PDF.
+            </p>
           </form>
           <div :if={@submission_check} class="submission-check-result">
-            <p><strong>{human_status(@submission_check.status)}</strong> · checked profile dated {Date.to_iso8601(@submission_check.checked_on)}</p>
+            <p>
+              <strong>{human_status(@submission_check.status)}</strong>
+              · checked profile dated {Date.to_iso8601(@submission_check.checked_on)}
+            </p>
             <p><a href={@submission_check.source_url} rel="noreferrer">Recorded rule source</a></p>
             <div class="review-split">
               <section>
                 <h3>Mechanical findings</h3>
-                <p :if={@submission_check.mechanical_problems == []}>No mechanical problem recorded by this profile.</p>
-                <ul><li :for={item <- @submission_check.mechanical_problems}>{submission_item(item)}</li></ul>
+                <p :if={@submission_check.mechanical_problems == []}>
+                  No mechanical problem recorded by this profile.
+                </p>
+                <ul>
+                  <li :for={item <- @submission_check.mechanical_problems}>
+                    {submission_item(item)}
+                  </li>
+                </ul>
               </section>
               <section>
                 <h3>Writer review still required</h3>
-                <p :if={@submission_check.requires_writer_review == []}>No additional writer-review item recorded by this profile.</p>
-                <ul><li :for={item <- @submission_check.requires_writer_review}>{submission_item(item)}</li></ul>
+                <p :if={@submission_check.requires_writer_review == []}>
+                  No additional writer-review item recorded by this profile.
+                </p>
+                <ul>
+                  <li :for={item <- @submission_check.requires_writer_review}>
+                    {submission_item(item)}
+                  </li>
+                </ul>
               </section>
             </div>
           </div>
@@ -2188,11 +2507,17 @@ defmodule FountWeb.ProjectToolsLive do
 
         <section :if={@table_reads != []} class="card table-read-export-list">
           <h2>Table-read packets</h2>
-          <p>Human table-read exports are exact saved packet JSON, including source binding, reader roles, bookmarks and actual reactions.</p>
+          <p>
+            Human table-read exports are exact saved packet JSON, including source binding, reader roles, bookmarks and actual reactions.
+          </p>
           <ul>
             <li :for={read <- @table_reads}>
-              <strong>{read_title(read)}</strong> · {read_source_label(read, @context.current.revision.id)}
-              <a :if={table_read_ref(@table_reads, read)} href={"/p/#{@project["key"]}/table-reads/#{table_read_ref(@table_reads, read)}/export.json"}>Download table-read JSON</a>
+              <strong>{read_title(read)}</strong>
+              · {read_source_label(read, @context.current.revision.id)}
+              <a
+                :if={table_read_ref(@table_reads, read)}
+                href={"/p/#{@project["key"]}/table-reads/#{table_read_ref(@table_reads, read)}/export.json"}
+              >Download table-read JSON</a>
             </li>
           </ul>
         </section>
@@ -2206,7 +2531,9 @@ defmodule FountWeb.ProjectToolsLive do
 
       <section :if={@live_action == :feedback} class="tool-page feedback-destination">
         <header class="compact-page-heading">
-          <div><p class="eyebrow">Optional human feedback</p><h1>Feedback</h1></div>
+          <div>
+            <p class="eyebrow">Optional human feedback</p><h1>Feedback</h1>
+          </div>
           <a href="/help#feedback">Help</a>
         </header>
         <p>
@@ -2217,50 +2544,160 @@ defmodule FountWeb.ProjectToolsLive do
           <% saved_feedback = feedback_for(@usefulness_rows, run) %>
           <% saved_outcome = feedback_outcome(saved_feedback) %>
           <h2>{task_label(run)}</h2>
-          <p>{human_status(run["status"])}<span :if={saved_feedback}> · saved response reopened below</span></p>
+          <p>
+            {human_status(run["status"])}<span :if={saved_feedback}> · saved response reopened below</span>
+          </p>
           <form phx-submit="save_feedback" class="compact-form feedback-form">
             <input type="hidden" name="feedback[run_id]" value={run["run_id"]} />
-            <input :if={saved_feedback} type="hidden" name="feedback[id]" value={saved_feedback["id"]} />
+            <input
+              :if={saved_feedback}
+              type="hidden"
+              name="feedback[id]"
+              value={saved_feedback["id"]}
+            />
             <fieldset class="segmented-choice">
               <legend>Was this useful?</legend>
-              <label><input type="radio" name="feedback[outcome]" value="useful" checked={saved_outcome == "useful"} required /> Useful</label>
-              <label><input type="radio" name="feedback[outcome]" value="mixed" checked={saved_outcome == "mixed"} /> Mixed</label>
-              <label><input type="radio" name="feedback[outcome]" value="not_useful" checked={saved_outcome == "not_useful"} /> Not useful</label>
+              <label><input
+                type="radio"
+                name="feedback[outcome]"
+                value="useful"
+                checked={saved_outcome == "useful"}
+                required
+              /> Useful</label>
+              <label><input
+                type="radio"
+                name="feedback[outcome]"
+                value="mixed"
+                checked={saved_outcome == "mixed"}
+              /> Mixed</label>
+              <label><input
+                type="radio"
+                name="feedback[outcome]"
+                value="not_useful"
+                checked={saved_outcome == "not_useful"}
+              /> Not useful</label>
             </fieldset>
-            <label class="inline-check"><input type="checkbox" name="feedback[kept_original]" value="true" checked={feedback_kept_original?(saved_feedback)} /> I kept my original</label>
+            <label class="inline-check"><input
+              type="checkbox"
+              name="feedback[kept_original]"
+              value="true"
+              checked={feedback_kept_original?(saved_feedback)}
+            /> I kept my original</label>
             <fieldset :if={feedback_feature(run, :voice)} class="segmented-choice">
-              <legend>Did this keep the character’s voice? <span class="optional">optional</span></legend>
-              <label><input type="radio" name="feedback[dimensions][voice_retention]" value="yes" checked={feedback_dimension(saved_feedback, "voice_retention") == "yes"} /> Yes</label>
-              <label><input type="radio" name="feedback[dimensions][voice_retention]" value="partly" checked={feedback_dimension(saved_feedback, "voice_retention") == "partly"} /> Partly</label>
-              <label><input type="radio" name="feedback[dimensions][voice_retention]" value="no" checked={feedback_dimension(saved_feedback, "voice_retention") == "no"} /> No</label>
-              <label><input type="radio" name="feedback[dimensions][voice_retention]" value="" checked={is_nil(feedback_dimension(saved_feedback, "voice_retention"))} /> Clear</label>
+              <legend>
+                Did this keep the character’s voice? <span class="optional">optional</span>
+              </legend>
+              <label><input
+                type="radio"
+                name="feedback[dimensions][voice_retention]"
+                value="yes"
+                checked={feedback_dimension(saved_feedback, "voice_retention") == "yes"}
+              /> Yes</label>
+              <label><input
+                type="radio"
+                name="feedback[dimensions][voice_retention]"
+                value="partly"
+                checked={feedback_dimension(saved_feedback, "voice_retention") == "partly"}
+              /> Partly</label>
+              <label><input
+                type="radio"
+                name="feedback[dimensions][voice_retention]"
+                value="no"
+                checked={feedback_dimension(saved_feedback, "voice_retention") == "no"}
+              /> No</label>
+              <label><input
+                type="radio"
+                name="feedback[dimensions][voice_retention]"
+                value=""
+                checked={is_nil(feedback_dimension(saved_feedback, "voice_retention"))}
+              /> Clear</label>
             </fieldset>
             <fieldset :if={feedback_feature(run, :alternatives)} class="segmented-choice">
-              <legend>Did the alternatives give you different options? <span class="optional">optional</span></legend>
-              <label><input type="radio" name="feedback[dimensions][alternative_diversity]" value="yes" checked={feedback_dimension(saved_feedback, "alternative_diversity") == "yes"} /> Yes</label>
-              <label><input type="radio" name="feedback[dimensions][alternative_diversity]" value="partly" checked={feedback_dimension(saved_feedback, "alternative_diversity") == "partly"} /> Partly</label>
-              <label><input type="radio" name="feedback[dimensions][alternative_diversity]" value="no" checked={feedback_dimension(saved_feedback, "alternative_diversity") == "no"} /> No</label>
-              <label><input type="radio" name="feedback[dimensions][alternative_diversity]" value="" checked={is_nil(feedback_dimension(saved_feedback, "alternative_diversity"))} /> Clear</label>
+              <legend>
+                Did the alternatives give you different options?
+                <span class="optional">optional</span>
+              </legend>
+              <label><input
+                type="radio"
+                name="feedback[dimensions][alternative_diversity]"
+                value="yes"
+                checked={feedback_dimension(saved_feedback, "alternative_diversity") == "yes"}
+              /> Yes</label>
+              <label><input
+                type="radio"
+                name="feedback[dimensions][alternative_diversity]"
+                value="partly"
+                checked={feedback_dimension(saved_feedback, "alternative_diversity") == "partly"}
+              /> Partly</label>
+              <label><input
+                type="radio"
+                name="feedback[dimensions][alternative_diversity]"
+                value="no"
+                checked={feedback_dimension(saved_feedback, "alternative_diversity") == "no"}
+              /> No</label>
+              <label><input
+                type="radio"
+                name="feedback[dimensions][alternative_diversity]"
+                value=""
+                checked={is_nil(feedback_dimension(saved_feedback, "alternative_diversity"))}
+              /> Clear</label>
             </fieldset>
-            <label>Notes <span class="optional">optional</span><textarea name="feedback[notes]" maxlength="6000">{feedback_notes(saved_feedback)}</textarea></label>
+            <label>Notes
+            <span class="optional">optional</span><textarea name="feedback[notes]" maxlength="6000">{feedback_notes(saved_feedback)}</textarea></label>
             <details>
               <summary>More detail</summary>
-              <p class="scope-note">These independent dimensions are stored separately; none is combined into a score.</p>
+              <p class="scope-note">
+                These independent dimensions are stored separately; none is combined into a score.
+              </p>
               <div class="compact-form-grid">
-                <label>Task completion <input name="feedback[dimensions][task_completion]" value={feedback_dimension(saved_feedback, "task_completion")} maxlength="300" /></label>
-                <label>Next decision <input name="feedback[dimensions][next_decision]" value={feedback_dimension(saved_feedback, "next_decision")} maxlength="300" /></label>
-                <label>Agency <input name="feedback[dimensions][agency]" value={feedback_dimension(saved_feedback, "agency")} maxlength="300" /></label>
-                <label>Consequence usefulness <input name="feedback[dimensions][consequence_usefulness]" value={feedback_dimension(saved_feedback, "consequence_usefulness")} maxlength="300" /></label>
-                <label>Rejection time (ms) <input type="number" min="0" name="feedback[dimensions][rejection_time_ms]" value={feedback_dimension(saved_feedback, "rejection_time_ms")} /></label>
+                <label>Task completion
+                <input
+                  name="feedback[dimensions][task_completion]"
+                  value={feedback_dimension(saved_feedback, "task_completion")}
+                  maxlength="300"
+                /></label>
+                <label>Next decision
+                <input
+                  name="feedback[dimensions][next_decision]"
+                  value={feedback_dimension(saved_feedback, "next_decision")}
+                  maxlength="300"
+                /></label>
+                <label>Agency
+                <input
+                  name="feedback[dimensions][agency]"
+                  value={feedback_dimension(saved_feedback, "agency")}
+                  maxlength="300"
+                /></label>
+                <label>Consequence usefulness
+                <input
+                  name="feedback[dimensions][consequence_usefulness]"
+                  value={feedback_dimension(saved_feedback, "consequence_usefulness")}
+                  maxlength="300"
+                /></label>
+                <label>Rejection time (ms)
+                <input
+                  type="number"
+                  min="0"
+                  name="feedback[dimensions][rejection_time_ms]"
+                  value={feedback_dimension(saved_feedback, "rejection_time_ms")}
+                /></label>
               </div>
-              <label>Friction <span class="optional">one item per line</span><textarea name="feedback[friction]" maxlength="4000">{feedback_friction(saved_feedback)}</textarea></label>
+              <label>Friction
+              <span class="optional">one item per line</span><textarea
+                name="feedback[friction]"
+                maxlength="4000"
+              >{feedback_friction(saved_feedback)}</textarea></label>
             </details>
-            <button type="submit">{if saved_feedback, do: "Update optional feedback", else: "Save optional feedback"}</button>
+            <button type="submit">{if saved_feedback,
+              do: "Update optional feedback",
+              else: "Save optional feedback"}</button>
           </form>
         </article>
 
         <section class="card feedback-report">
-          <div class="compact-page-heading"><h2>Saved responses</h2><a href={"/p/#{@project["key"]}/feedback/export.json"}>Export saved feedback JSON</a></div>
+          <div class="compact-page-heading">
+            <h2>Saved responses</h2><a href={"/p/#{@project["key"]}/feedback/export.json"}>Export saved feedback JSON</a>
+          </div>
           <%= if @usefulness_report do %>
             <p>{@usefulness_report["sample_label"]}</p>
             <p>{@usefulness_report["missing_data_label"]}</p>
@@ -2270,11 +2707,20 @@ defmodule FountWeb.ProjectToolsLive do
           <article :for={row <- @usefulness_rows} class="evidence-row">
             <div>
               <strong>{row["task_id"]}</strong>
-              <span> · {get_in(row, ["record", "human_response", "outcome"])}{if get_in(row, ["record", "human_response", "kept_original"]), do: " · kept original", else: ""}</span>
+              <span> · {get_in(row, ["record", "human_response", "outcome"])}{if get_in(row, [
+                                                                                   "record",
+                                                                                   "human_response",
+                                                                                   "kept_original"
+                                                                                 ]),
+                                                                                 do:
+                                                                                   " · kept original",
+                                                                                 else: ""}</span>
             </div>
             <button type="button" phx-click="delete_feedback" phx-value-id={row["id"]}>Delete</button>
           </article>
-          <p class="scope-note">Every optional dimension remains independent. No combined quality, learning or preference score is computed.</p>
+          <p class="scope-note">
+            Every optional dimension remains independent. No combined quality, learning or preference score is computed.
+          </p>
         </section>
       </section>
 

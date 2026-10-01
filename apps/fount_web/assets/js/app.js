@@ -847,16 +847,24 @@ const TableReadWorkspace = {
       })
     }
 
-    this.startButton?.addEventListener("click", this.start)
-    this.pauseButton?.addEventListener("click", () => this.pause())
-    this.toggleButton?.addEventListener("click", this.toggle)
-    this.prevButton?.addEventListener("click", () => this.move(-1))
-    this.nextButton?.addEventListener("click", () => this.move(1))
-    this.bookmarkButton?.addEventListener("click", this.bookmark)
-    this.speedControl?.addEventListener("change", this.onSpeed)
-    this.turns?.addEventListener("click", this.onTurn)
-    this.turns?.addEventListener("focusin", this.onTurn)
-    this.turns?.addEventListener("keydown", this.onKeydown)
+    this.onControl = (event) => {
+      const button = event.target.closest("button")
+      if (!button || !this.el.contains(button)) return
+      if (button.hasAttribute("data-read-start")) this.start()
+      else if (button.hasAttribute("data-read-pause")) this.pause()
+      else if (button.hasAttribute("data-read-toggle")) this.toggle()
+      else if (button.hasAttribute("data-read-prev")) this.move(-1)
+      else if (button.hasAttribute("data-read-next")) this.move(1)
+      else if (button.hasAttribute("data-read-bookmark")) this.bookmark()
+    }
+    this.onChange = (event) => {
+      if (event.target.matches("[data-read-speed]")) this.onSpeed()
+    }
+    this.el.addEventListener("click", this.onControl)
+    this.el.addEventListener("change", this.onChange)
+    this.el.addEventListener("click", this.onTurn)
+    this.el.addEventListener("focusin", this.onTurn)
+    this.el.addEventListener("keydown", this.onKeydown)
     this.reducedMotionQuery?.addEventListener?.("change", this.onReducedMotion)
     this.setActive(this.activeIndex, {scroll: false})
     this.paintElapsed()
@@ -864,6 +872,11 @@ const TableReadWorkspace = {
   },
 
   updated() {
+    this.turns = this.el.querySelector("[data-read-turns]")
+    this.toggleButton = this.el.querySelector("[data-read-toggle]")
+    this.startButton = this.el.querySelector("[data-read-start]")
+    this.speedControl = this.el.querySelector("[data-read-speed]")
+    this.elapsedOutput = this.el.querySelector("[data-read-elapsed]")
     this.el.dataset.version = this.el.dataset.version || "1"
     const persisted = Number(this.el.dataset.elapsedMs || this.elapsedBase || 0)
     if (!this.frame) this.elapsedBase = persisted
@@ -875,13 +888,11 @@ const TableReadWorkspace = {
   destroyed() {
     this.stopAnimation?.()
     this.pendingState = null
-    this.startButton?.removeEventListener("click", this.start)
-    this.toggleButton?.removeEventListener("click", this.toggle)
-    this.bookmarkButton?.removeEventListener("click", this.bookmark)
-    this.speedControl?.removeEventListener("change", this.onSpeed)
-    this.turns?.removeEventListener("click", this.onTurn)
-    this.turns?.removeEventListener("focusin", this.onTurn)
-    this.turns?.removeEventListener("keydown", this.onKeydown)
+    this.el.removeEventListener("click", this.onControl)
+    this.el.removeEventListener("change", this.onChange)
+    this.el.removeEventListener("click", this.onTurn)
+    this.el.removeEventListener("focusin", this.onTurn)
+    this.el.removeEventListener("keydown", this.onKeydown)
     this.reducedMotionQuery?.removeEventListener?.("change", this.onReducedMotion)
   }
 }

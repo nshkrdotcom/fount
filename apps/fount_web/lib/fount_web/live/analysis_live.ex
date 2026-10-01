@@ -113,14 +113,26 @@ defmodule FountWeb.AnalysisLive do
     end
   end
 
-  defp evidence_href(project_key, task_key, _selected, _item),
-    do: "/p/#{project_key}/source/#{task_key}"
+  defp evidence_href(project_key, task_key, selected, item) do
+    revision_id = item["revision_id"] || get_in(item, ["target", "revision_id"])
+    packet_id = selected.run && selected.run["id"]
+    target = item["target"] || %{}
+
+    query =
+      URI.encode_query(%{
+        "view" => "evidence:#{packet_id}:#{revision_id}",
+        "target" => target["id"] || ""
+      })
+
+    anchor = if target["kind"] == "scene", do: "scene-", else: "node-"
+    "/p/#{project_key}/source/#{task_key}?" <> query <> "#" <> anchor <> (target["id"] || "")
+  end
 
   defp evidence_focus_href(project_key, task_key, selected, item) do
     query =
       %{
-        "packet" => selected.run && selected.run["display_ref"],
-        "target" => evidence_id(item)
+        "packet" => selected.run && selected.run["id"],
+        "target" => item["evidence_id"] || item["id"] || get_in(item, ["target", "id"])
       }
       |> Enum.reject(fn {_key, value} -> is_nil(value) end)
       |> Map.new()
@@ -130,7 +142,7 @@ defmodule FountWeb.AnalysisLive do
 
   defp clear_focus_href(project_key, task_key, selected) do
     query =
-      case selected.run && selected.run["display_ref"] do
+      case selected.run && selected.run["id"] do
         nil -> ""
         packet_ref -> "?" <> URI.encode_query(%{"packet" => packet_ref})
       end
@@ -272,6 +284,10 @@ defmodule FountWeb.AnalysisLive do
             The requested target is not present in this selected saved packet. No evidence was rebound to another revision or element.
           </p>
           <p :if={!@dashboard.target.unresolved}>{evidence_target(@dashboard.target.evidence)}</p>
+          <details :if={@dashboard.target.revision_id} class="technical-details">
+            <summary>Recorded source identity</summary>
+            <p>Revision <code>{@dashboard.target.revision_id}</code></p>
+          </details>
           <a href={clear_focus_href(@project_key, @task_key, @dashboard.selected)}>Clear focus</a>
         </section>
 
@@ -290,7 +306,7 @@ defmodule FountWeb.AnalysisLive do
               <select id="analysis-packet" name="packet">
                 <option
                   :for={row <- @dashboard.history}
-                  value={row["display_ref"]}
+                  value={row["id"]}
                   selected={@dashboard.selected.run && row["id"] == @dashboard.selected.run["id"]}
                 >
                   {packet_label(row)}
@@ -461,7 +477,7 @@ defmodule FountWeb.AnalysisLive do
                   <blockquote>{item["excerpt"] || "Excerpt not stored in this packet."}</blockquote>
                   <div class="evidence-actions">
                     <a href={evidence_focus_href(@project_key, @task_key, @dashboard.selected, item)}>Focus provenance here</a>
-                    <a href={evidence_href(@project_key, @task_key, @dashboard.selected, item)}>Open exact task sources</a>
+                    <a href={evidence_href(@project_key, @task_key, @dashboard.selected, item)}>Open exact recorded revision target</a>
                   </div>
                 </article>
               </div>
@@ -656,8 +672,8 @@ defmodule FountWeb.AnalysisLive do
                     <option value="">Choose saved run</option>
                     <option
                       :for={row <- @dashboard.history}
-                      value={row["display_ref"]}
-                      selected={@params["left"] == row["display_ref"]}
+                      value={row["id"]}
+                      selected={@params["left"] in [row["id"], row["display_ref"]]}
                     >
                       {packet_label(row)}
                     </option>
@@ -669,8 +685,8 @@ defmodule FountWeb.AnalysisLive do
                     <option value="">Choose saved run</option>
                     <option
                       :for={row <- @dashboard.history}
-                      value={row["display_ref"]}
-                      selected={@params["right"] == row["display_ref"]}
+                      value={row["id"]}
+                      selected={@params["right"] in [row["id"], row["display_ref"]]}
                     >
                       {packet_label(row)}
                     </option>

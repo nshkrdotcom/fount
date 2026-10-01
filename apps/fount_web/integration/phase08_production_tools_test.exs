@@ -471,7 +471,7 @@ defmodule FountWeb.Phase08ProductionToolsIntegrationTest do
     assert notes.resp_body =~ accepted.revision.id
     assert notes.resp_body =~ "Export me"
 
-    read_export = get(conn, "/p/#{project["key"]}/table-reads/read-1/export.json")
+    read_export = get(conn, "/p/#{project["key"]}/table-reads/read-#{read["id"]}/export.json")
     assert read_export.status == 200
     assert read_export.resp_body =~ accepted.revision.id
     assert read_export.resp_body =~ read["packet_id"]

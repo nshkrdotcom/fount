@@ -138,7 +138,8 @@ defmodule FountWeb.Help do
     %{
       slug: "analysis",
       title: "Analysis findings",
-      summary: "Start with source evidence, then interpretation, limitations and optional graphs.",
+      summary:
+        "Start with source evidence, then interpretation, limitations and optional graphs.",
       body:
         "Analysis only shows saved task evidence. Exact excerpts and source links come first; uncertainty, missing evidence, sample/resource limitations and service state remain visible. Optional story/time/reader graphs have textual list equivalents and never become a screenplay quality score. No analysis is invented merely to fill the screen."
     },
@@ -159,7 +160,8 @@ defmodule FountWeb.Help do
     %{
       slug: "exports",
       title: "Exports and fixed-layout pages",
-      summary: "Build Fountain, FDX or PDF from the exact named current source and recover cleanly from errors.",
+      summary:
+        "Build Fountain, FDX or PDF from the exact named current source and recover cleanly from errors.",
       body:
         "Project exports are owner-bound to the exact saved revision shown at build time. Fountain and FDX preserve explicit fidelity/loss information; PDF uses the configured screenplay renderer and inspection tools, and table-read packets retain their exact saved source. A failed build records the error and can be retried without changing screenplay state. The exported-page reader displays the real PDF and supports page jump; it never invents a passage-to-page mapping the renderer did not provide. Optional submission checks reuse recorded dated mechanical profiles against that exact current PDF and always show their profile date/source; they are not legal advice, endorsement or a guarantee of current rules."
     }

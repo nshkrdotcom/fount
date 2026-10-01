@@ -1,11 +1,15 @@
 defmodule FountWeb.ReadingArtifacts do
   @moduledoc "Owner-bound deterministic project artifacts for UX03 reading, notes memos and exact exports."
 
+  alias Fount.Screenplay.Model
   alias FountWeb.{ProductionStore, Store}
+  alias FountWorkshop.Export.PDF
 
   @formats ~w(fountain fdx pdf)
 
   def build_source(repo, owner, project, screenplay, format, opts \\ [])
+
+  def build_source(repo, owner, project, screenplay, format, opts)
       when format in @formats and is_map(project) do
     source_label = Keyword.get(opts, :source_label, "Current draft")
 
@@ -49,6 +53,7 @@ defmodule FountWeb.ReadingArtifacts do
              }
            }) do
       body = notes_memo(project, screenplay, notes, attrs)
+
       persist_bytes(repo, owner, artifact, body, %{
         "note_count" => length(notes),
         "content_type" => "text/plain; charset=utf-8",
@@ -58,10 +63,7 @@ defmodule FountWeb.ReadingArtifacts do
   end
 
   def artifact_ref(artifacts, artifact) do
-    case Enum.find_index(artifacts, &(&1["id"] == artifact["id"])) do
-      nil -> nil
-      index -> "artifact-#{index + 1}"
-    end
+    if Enum.any?(artifacts, &(&1["id"] == artifact["id"])), do: "artifact-#{artifact["id"]}"
   end
 
   defp render_source(repo, owner, artifact, screenplay, "fountain", _opts) do
@@ -72,9 +74,6 @@ defmodule FountWeb.ReadingArtifacts do
           "losses" => result.losses,
           "source_revision_id" => screenplay.revision.id
         })
-
-      {:error, reason} ->
-        fail(repo, owner, artifact, reason)
     end
   end
 
@@ -83,7 +82,7 @@ defmodule FountWeb.ReadingArtifacts do
       {:ok, exported} ->
         persist_bytes(repo, owner, artifact, exported.data, %{
           "content_type" => "application/xml; charset=utf-8",
-          "losses" => exported.losses || [],
+          "losses" => exported.losses,
           "source_revision_id" => screenplay.revision.id
         })
 
@@ -96,43 +95,33 @@ defmodule FountWeb.ReadingArtifacts do
     path = absolute_path(artifact)
     pdf_opts = Keyword.get(opts, :pdf_options, [])
 
-    case File.mkdir_p(Path.dirname(path)) do
-      :ok ->
-        case FountWorkshop.Export.PDF.export(screenplay, path, pdf_opts) do
-          {:ok, report} ->
-            with {:ok, bytes} <- File.read(path) do
-              metadata = %{
-                "content_type" => "application/pdf",
-                "pages" => report.pages,
-                "blank_pages" => report.blank_pages,
-                "page_size" => to_string(report.page_size),
-                "courier_prime" => report.courier_prime?,
-                "renderer" => report.renderer,
-                "renderer_settings" => report.settings,
-                "renderer_settings_sha256" => report.settings_sha256,
-                "source_sha256" => report.source_sha256,
-                "source_revision_id" => screenplay.revision.id,
-                "page_map" => "unavailable"
-              }
+    with :ok <- File.mkdir_p(Path.dirname(path)),
+         {:ok, report} <- PDF.export(screenplay, path, pdf_opts),
+         {:ok, bytes} <- File.read(path) do
+      metadata = %{
+        "content_type" => "application/pdf",
+        "pages" => report.pages,
+        "blank_pages" => report.blank_pages,
+        "page_size" => to_string(report.page_size),
+        "courier_prime" => report.courier_prime?,
+        "renderer" => report.renderer,
+        "renderer_settings" => report.settings,
+        "renderer_settings_sha256" => report.settings_sha256,
+        "source_sha256" => report.source_sha256,
+        "source_revision_id" => screenplay.revision.id,
+        "page_map" => "unavailable"
+      }
 
-              ProductionStore.complete_project_artifact(
-                repo,
-                owner,
-                artifact["id"],
-                relative_path(artifact),
-                sha256(bytes),
-                metadata
-              )
-            else
-              {:error, reason} -> fail(repo, owner, artifact, reason)
-            end
-
-          {:error, reason} ->
-            fail(repo, owner, artifact, reason)
-        end
-
-      {:error, reason} ->
-        fail(repo, owner, artifact, reason)
+      ProductionStore.complete_project_artifact(
+        repo,
+        owner,
+        artifact["id"],
+        relative_path(artifact),
+        sha256(bytes),
+        metadata
+      )
+    else
+      {:error, reason} -> fail(repo, owner, artifact, reason)
     end
   end
 
@@ -165,12 +154,17 @@ defmodule FountWeb.ReadingArtifacts do
 
   defp validate_project_source(repo, owner, project, screenplay) do
     with {:ok, stored} <- Store.project(repo, owner, project["id"]),
-         true <- stored["screenplay_id"] == screenplay.id or {:error, :project_screenplay_mismatch},
-         {:ok, persisted} <- Fount.Persistence.load_revision(repo, screenplay.id, screenplay.revision.id),
-         true <- persisted.revision.id == screenplay.revision.id or {:error, :revision_unavailable} do
+         true <-
+           stored["screenplay_id"] == screenplay.id or {:error, :project_screenplay_mismatch},
+         {:ok, persisted} <-
+           Fount.Persistence.load_revision(repo, screenplay.id, screenplay.revision.id),
+         true <-
+           persisted.revision.id == screenplay.revision.id or {:error, :revision_unavailable},
+         true <-
+           Model.refresh(screenplay).revision.content_hash == persisted.revision.content_hash or
+             {:error, :source_content_mismatch} do
       :ok
     else
-      false -> {:error, :revision_unavailable}
       {:error, _} = error -> error
     end
   end
@@ -185,6 +179,7 @@ defmodule FountWeb.ReadingArtifacts do
       [
         "#{project["title"] || "Screenplay"} — Notes memo",
         "Source: Current draft",
+        "Source fingerprint: #{sha256(Fount.Screenplay.to_fountain(screenplay, mode: :spec))}",
         if(from, do: "From: #{from}"),
         if(to, do: "To: #{to}"),
         "Generated: #{Date.utc_today() |> Date.to_iso8601()}"
@@ -218,6 +213,7 @@ defmodule FountWeb.ReadingArtifacts do
   defp response_line(%{} = row) do
     status = row["response"] |> to_string() |> String.replace("_", " ")
     comment = clean(row["comment"])
+
     "Reviewer response: #{status} on Current draft" <>
       if(comment, do: " — #{comment}", else: "")
   end
@@ -226,7 +222,7 @@ defmodule FountWeb.ReadingArtifacts do
 
   defp target_label(_screenplay, %{"kind" => "screenplay"}), do: "Whole screenplay"
 
-  defp target_label(screenplay, %{"kind" => kind, "id" => id} = target) do
+  defp target_label(screenplay, %{"kind" => kind} = target) do
     case Fount.Target.resolve(screenplay, target) do
       {:ok, %{text: text}} when is_binary(text) ->
         "#{kind} · #{text |> String.replace(~r/\s+/u, " ") |> String.slice(0, 140)}"
@@ -289,18 +285,15 @@ defmodule FountWeb.ReadingArtifacts do
          :ok <- File.rename(temporary, path) do
       :ok
     else
-      {:error, reason} = error ->
+      {:error, _reason} = error ->
         File.rm(temporary)
-        if reason == :eexist do
-          with :ok <- File.rm(path), do: File.rename(temporary, path)
-        else
-          error
-        end
+        error
     end
   end
 
   defp artifact_error(:renderer_not_installed),
-    do: "PDF renderer is not installed. Responsive reading remains available; retry after the configured renderer is available."
+    do:
+      "PDF renderer is not installed. Responsive reading remains available; retry after the configured renderer is available."
 
   defp artifact_error({:tool_not_installed, tool}),
     do: "PDF inspection tool #{tool} is unavailable. No PDF artifact was recorded."

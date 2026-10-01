@@ -14,7 +14,7 @@ defmodule FountWeb.ProjectArtifactController do
         disposition: :attachment
       )
     else
-      _ -> send_resp(conn, :not_found, "artifact not found")
+      _ -> recover_artifact(conn, key)
     end
   end
 
@@ -32,16 +32,20 @@ defmodule FountWeb.ProjectArtifactController do
 
       conn
       |> put_resp_content_type("text/plain", "utf-8")
-      |> put_resp_header("content-disposition", ~s(inline; filename="#{artifact["filename"]}.txt"))
+      |> put_resp_header(
+        "content-disposition",
+        ~s(inline; filename="#{artifact["filename"]}.txt")
+      )
       |> send_resp(:ok, preview <> suffix)
     else
-      _ -> send_resp(conn, :not_found, "artifact preview not found")
+      _ -> recover_artifact(conn, key)
     end
   end
 
   def view_pdf(conn, %{"key" => key, "artifact_ref" => artifact_ref}) do
     with {:ok, artifact} <- resolve(conn, key, artifact_ref),
-         true <- artifact["state"] == "ready" and artifact["kind"] == "pdf" or {:error, :not_pdf},
+         true <-
+           (artifact["state"] == "ready" and artifact["kind"] == "pdf") or {:error, :not_pdf},
          {:ok, bytes} <- verified_bytes(artifact) do
       conn
       |> put_resp_content_type("application/pdf")
@@ -49,7 +53,7 @@ defmodule FountWeb.ProjectArtifactController do
       |> put_resp_header("cache-control", "private, no-store")
       |> send_resp(:ok, bytes)
     else
-      _ -> send_resp(conn, :not_found, "PDF artifact not found")
+      _ -> recover_artifact(conn, key)
     end
   end
 
@@ -115,14 +119,27 @@ defmodule FountWeb.ProjectArtifactController do
     end
   end
 
+  defp recover_artifact(conn, key) do
+    case Store.project_by_key(Fount.Repo, conn.assigns.current_owner, key) do
+      {:ok, _project} ->
+        conn
+        |> put_flash(
+          :error,
+          "This artifact is unavailable or failed verification. Build it again from the exact selected source in Exports."
+        )
+        |> redirect(to: "/p/#{key}/exports")
+
+      _ ->
+        send_resp(conn, :not_found, "artifact not found")
+    end
+  end
+
   defp resolve(conn, key, artifact_ref) do
     owner = conn.assigns.current_owner
 
     with {:ok, project} <- Store.project_by_key(Fount.Repo, owner, key),
-         {:ok, artifact} <-
-           ProductionStore.project_artifact_by_ref(Fount.Repo, owner, project["id"], artifact_ref) do
-      {:ok, artifact}
-    end
+         do:
+           ProductionStore.project_artifact_by_ref(Fount.Repo, owner, project["id"], artifact_ref)
   end
 
   defp verified_bytes(artifact) do
@@ -147,7 +164,10 @@ defmodule FountWeb.ProjectArtifactController do
   defp plain(%DateTime{} = value), do: DateTime.to_iso8601(value)
   defp plain(%NaiveDateTime{} = value), do: NaiveDateTime.to_iso8601(value)
   defp plain(value) when is_struct(value), do: value |> Map.from_struct() |> plain()
-  defp plain(value) when is_map(value), do: Map.new(value, fn {key, item} -> {to_string(key), plain(item)} end)
+
+  defp plain(value) when is_map(value),
+    do: Map.new(value, fn {key, item} -> {to_string(key), plain(item)} end)
+
   defp plain(value) when is_list(value), do: Enum.map(value, &plain/1)
   defp plain(value) when is_atom(value), do: Atom.to_string(value)
   defp plain(value), do: value

@@ -238,14 +238,18 @@ defmodule FountWeb.ProductionStore do
     end
   end
 
-  @doc "Resolves a saved table read by its project-level stable display ordinal, including manual run-free reads."
-  def project_table_read_by_ref(repo, owner, project_id, "read-" <> ordinal_text) do
-    with {ordinal, ""} when ordinal > 0 <- Integer.parse(ordinal_text),
-         rows when is_list(rows) <- list_table_reads(repo, owner, project_id, limit: 100),
-         row when is_map(row) <- Enum.at(rows, ordinal - 1) do
-      {:ok, row}
-    else
-      _ -> {:error, :not_found}
+  @doc "Resolves an immutable saved-read identity within its owner and project."
+  def project_table_read_by_ref(repo, owner, project_id, "read-" <> id) do
+    case Ecto.UUID.cast(id) do
+      {:ok, uuid} ->
+        one_query(
+          repo,
+          "SELECT * FROM fount_web_table_reads WHERE owner_id=$1 AND project_id=$2::text::uuid AND id=$3::text::uuid",
+          [owner, project_id, uuid]
+        )
+
+      _ ->
+        {:error, :not_found}
     end
   end
 
@@ -285,17 +289,36 @@ defmodule FountWeb.ProductionStore do
       else
         """
         UPDATE fount_web_note_review_responses
-        SET response=$8,comment=$9,actor_label=$10,version=version+1,updated_at=now()
-        WHERE owner_id=$2 AND project_id=$3::text::uuid AND note_id=$5
-          AND reviewed_revision_id=$7::text::uuid AND version=$11
+        SET response=$5,comment=$6,actor_label=$7,version=version+1,updated_at=now()
+        WHERE owner_id=$1 AND project_id=$2::text::uuid AND note_id=$3
+          AND reviewed_revision_id=$4::text::uuid AND version=$8
         RETURNING *
         """
       end
 
+    params =
+      if expected_version == 0,
+        do: Enum.take(params, 10),
+        else: [
+          owner,
+          project_id,
+          note_id,
+          reviewed_revision_id,
+          response,
+          value(attrs, :comment),
+          fetch!(attrs, :actor_label),
+          expected_version
+        ]
+
     case SQL.query(repo, statement, params, log: false) do
-      {:ok, %{num_rows: 1} = result} -> {:ok, one(result)}
-      {:ok, _} -> stale_or_missing_note_review(repo, owner, project_id, note_id, reviewed_revision_id)
-      {:error, reason} -> {:error, storage_reason(reason)}
+      {:ok, %{num_rows: 1} = result} ->
+        {:ok, one(result)}
+
+      {:ok, _} ->
+        stale_or_missing_note_review(repo, owner, project_id, note_id, reviewed_revision_id)
+
+      {:error, reason} ->
+        {:error, storage_reason(reason)}
     end
   end
 
@@ -319,9 +342,14 @@ defmodule FountWeb.ProductionStore do
              [owner, project_id, note_id, reviewed_revision_id, expected_version],
              log: false
            ) do
-        {:ok, %{num_rows: 1}} -> :ok
-        {:ok, _} -> stale_or_missing_note_review(repo, owner, project_id, note_id, reviewed_revision_id)
-        {:error, reason} -> {:error, storage_reason(reason)}
+        {:ok, %{num_rows: 1}} ->
+          :ok
+
+        {:ok, _} ->
+          stale_or_missing_note_review(repo, owner, project_id, note_id, reviewed_revision_id)
+
+        {:error, reason} ->
+          {:error, storage_reason(reason)}
       end
     end
   end
@@ -360,6 +388,7 @@ defmodule FountWeb.ProductionStore do
 
   def create_project_artifact(repo, attrs) do
     id = value(attrs, :id) || Fount.ID.v4()
+
     params = [
       id,
       fetch!(attrs, :owner_id),
@@ -440,13 +469,17 @@ defmodule FountWeb.ProductionStore do
     )
   end
 
-  def project_artifact_by_ref(repo, owner, project_id, "artifact-" <> ordinal_text) do
-    with {ordinal, ""} when ordinal > 0 <- Integer.parse(ordinal_text),
-         rows when is_list(rows) <- project_artifacts(repo, owner, project_id, limit: 100),
-         row when is_map(row) <- Enum.at(rows, ordinal - 1) do
-      {:ok, row}
-    else
-      _ -> {:error, :not_found}
+  def project_artifact_by_ref(repo, owner, project_id, "artifact-" <> id) do
+    case Ecto.UUID.cast(id) do
+      {:ok, uuid} ->
+        one_query(
+          repo,
+          "SELECT * FROM fount_web_project_artifacts WHERE owner_id=$1 AND project_id=$2::text::uuid AND id=$3::text::uuid",
+          [owner, project_id, uuid]
+        )
+
+      _ ->
+        {:error, :not_found}
     end
   end
 

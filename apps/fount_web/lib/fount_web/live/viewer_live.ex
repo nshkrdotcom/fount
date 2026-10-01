@@ -1,7 +1,7 @@
 defmodule FountWeb.ViewerLive do
   use FountWeb, :live_view
 
-  alias FountWeb.ProjectContext
+  alias FountWeb.{ProductionStore, ProductionTools, ProjectContext, ReadingArtifacts}
 
   @impl true
   def mount(%{"key" => project_key} = params, _session, socket) do
@@ -23,6 +23,9 @@ defmodule FountWeb.ViewerLive do
          |> assign(:facts, context.facts)
          |> assign(:selected_scene_id, selected_scene_id(context.index.scenes, params["scene"]))
          |> assign(:preferences, prefs)
+         |> assign(:search_result, nil)
+         |> assign(:search_facets, search_facets(context.selected.screenplay))
+         |> assign(:current_pdf, current_pdf(owner, context))
          |> assign(:error, nil)}
 
       {:error, _} ->
@@ -53,20 +56,69 @@ defmodule FountWeb.ViewerLive do
            |> assign(:index, context.index)
            |> assign(:facts, context.facts)
            |> assign(:selected_scene_id, selected_scene_id(context.index.scenes, params["scene"]))
+           |> assign(:search_result, nil)
+           |> assign(:search_facets, search_facets(context.selected.screenplay))
+           |> assign(:current_pdf, current_pdf(socket.assigns.current_owner, context))
            |> assign(:error, nil)}
 
         {:error, _} ->
-          {:noreply,
-           assign(
-             socket,
-             :error,
-             "That saved source is no longer available. Showing the current screenplay."
-           )}
+          current_source = ProjectContext.source_token("current")
+
+          case ProjectContext.load(
+                 socket.assigns.current_owner,
+                 socket.assigns.project["key"],
+                 source: current_source
+               ) do
+            {:ok, context} ->
+              {:noreply,
+               socket
+               |> assign(:context, context)
+               |> assign(:selected_source, context.selected)
+               |> assign(:sources, context.sources)
+               |> assign(:index, context.index)
+               |> assign(:facts, context.facts)
+               |> assign(:selected_scene_id, selected_scene_id(context.index.scenes, params["scene"]))
+               |> assign(:search_result, nil)
+               |> assign(:search_facets, search_facets(context.selected.screenplay))
+               |> assign(:current_pdf, current_pdf(socket.assigns.current_owner, context))
+               |> assign(
+                 :error,
+                 "That saved source is no longer available. Showing the current screenplay."
+               )}
+
+            {:error, _} ->
+              {:noreply,
+               socket
+               |> put_flash(:error, "That screenplay is not available in your workspace.")
+               |> redirect(to: "/")}
+          end
       end
     else
       {:noreply, socket}
     end
   end
+
+  @impl true
+  def handle_event("search_script", %{"search" => params}, socket) do
+    query = Map.get(params, "query", "")
+
+    case ProductionTools.search(socket.assigns.selected_source.screenplay, query, params) do
+      {:ok, result} ->
+        {:noreply,
+         socket
+         |> assign(:search_result, result)
+         |> assign(:error, nil)}
+
+      {:error, :empty_query} ->
+        {:noreply, assign(socket, :search_result, nil)}
+
+      {:error, reason} ->
+        {:noreply, assign(socket, :error, search_error(reason))}
+    end
+  end
+
+  def handle_event("clear_script_search", _params, socket),
+    do: {:noreply, assign(socket, :search_result, nil)}
 
   @impl true
   def handle_event("dismiss_hint", %{"slug" => slug}, socket) do
@@ -85,6 +137,53 @@ defmodule FountWeb.ViewerLive do
       _ -> {:noreply, socket}
     end
   end
+
+  defp current_pdf(owner, context) do
+    project_id = context.project["id"]
+    revision_id = context.current.revision.id
+
+    with {:ok, artifact} <-
+           ProductionStore.latest_ready_project_artifact(
+             Fount.Repo,
+             owner,
+             project_id,
+             revision_id,
+             "pdf"
+           ),
+         rows when is_list(rows) <-
+           ProductionStore.project_artifacts(Fount.Repo, owner, project_id, limit: 100),
+         ref when is_binary(ref) <- ReadingArtifacts.artifact_ref(rows, artifact) do
+      %{artifact: artifact, ref: ref}
+    else
+      _ -> nil
+    end
+  end
+
+  defp search_facets(screenplay) do
+    %{
+      scenes: FountWeb.ScreenplayIndex.scene_index(screenplay),
+      characters: ProductionTools.character_profiles(screenplay),
+      locations: ProductionTools.location_profiles(screenplay),
+      types: ProductionTools.search_types()
+    }
+  end
+
+  defp search_error(:unknown_scene), do: "That scene is no longer in the selected source. Search was cleared."
+  defp search_error(:unknown_character), do: "That character is no longer in the selected source. Search was cleared."
+  defp search_error(:unknown_location), do: "That location is no longer in the selected source. Search was cleared."
+  defp search_error(:invalid_element_types), do: "Choose a supported screenplay element type."
+  defp search_error(:invalid_limit), do: "Search result limit must be between 1 and 200."
+  defp search_error(reason), do: "Literal screenplay search failed: #{inspect(reason)}"
+
+  defp result_path(project, source, hit) do
+    scene = if hit.scene_ordinal, do: "&scene=#{hit.scene_ordinal}", else: ""
+    "/p/#{project["key"]}?source=#{source.token}#{scene}#node-#{hit.element_id}"
+  end
+
+  defp compare_status(%{kind: :working, valid?: true}), do: "saved working draft · not current"
+  defp compare_status(%{kind: :working, valid?: false}), do: "last valid preview of an invalid working draft · not current"
+  defp compare_status(%{kind: :proposed}), do: "saved proposal · not current"
+  defp compare_status(_), do: "selected source"
 
   defp selected_scene_id(_scenes, nil), do: nil
 
@@ -107,10 +206,6 @@ defmodule FountWeb.ViewerLive do
       else: "/p/#{project["key"]}?source=#{token}"
   end
 
-  defp dismissed?(prefs, slug) do
-    slug in List.wrap(Map.get(prefs, "dismissed_hints", []))
-  end
-
   defp import_label(project) do
     case project["import_format"] do
       "fountain" -> "Imported Fountain source"
@@ -130,9 +225,6 @@ defmodule FountWeb.ViewerLive do
 
   @impl true
   def render(assigns) do
-    hint_dismissed = dismissed?(assigns.preferences, "reading")
-    assigns = assign(assigns, :reading_hint_dismissed, hint_dismissed)
-
     ~H"""
     <main
       id="project-script"
@@ -170,16 +262,65 @@ defmodule FountWeb.ViewerLive do
         </div>
       </section>
 
-      <FountWeb.CoreComponents.contextual_help
-        slug="reading"
-        title="Reading and writing are separate views of the same project"
-        dismissed={@reading_hint_dismissed}
-        project_key={@project["key"]}
+      <p :if={@project["synopsis"]} class="reading-synopsis">{@project["synopsis"]}</p>
+      <nav class="reading-primary-actions" aria-label="Reading actions">
+        <a href={"/p/#{@project["key"]}/notes"}>Notes</a>
+        <a :if={@selected_source.kind != :current} href="#source-comparison">Compare</a>
+        <a href={"/p/#{@project["key"]}/exports"}>Export</a>
+        <a href={"/help?project=#{URI.encode_www_form(@project["key"])}#reading"}>Help</a>
+      </nav>
+
+      <FountWeb.Components.SourceComparison.comparison
+        :if={@selected_source.kind != :current}
+        current={@context.current}
+        other={@selected_source.screenplay}
+        other_label={@selected_source.label}
+        other_status={compare_status(@selected_source)}
+      />
+
+      <FountWeb.CoreComponents.disclosure
+        id="script-search"
+        title="Search this screenplay"
+        summary="Exact literal search with source-bound filters"
       >
-        <p>
-          Use Writing to edit recovery text. Reading another source never changes what is current.
-        </p>
-      </FountWeb.CoreComponents.contextual_help>
+        <form phx-submit="search_script" class="compact-form script-search-form">
+          <label>Literal text <input name="search[query]" maxlength="500" required /></label>
+          <div class="compact-form-grid">
+            <label>Scene
+              <select name="search[scene_id]"><option value="">All scenes</option><option :for={scene <- @search_facets.scenes} value={scene.id}>Scene {scene.ordinal} · {scene.heading || "Untitled"}</option></select>
+            </label>
+            <label>Character
+              <select name="search[character_id]"><option value="">All characters</option><option :for={character <- @search_facets.characters} value={character.id}>{character.display_name}</option></select>
+            </label>
+            <label>Location
+              <select name="search[location]"><option value="">All locations</option><option :for={location <- @search_facets.locations} value={location.location}>{location.location}</option></select>
+            </label>
+            <label>Element type
+              <select name="search[element_type]"><option value="">All types</option><option :for={type <- @search_facets.types} value={type}>{String.replace(type, "_", " ")}</option></select>
+            </label>
+            <label>Maximum results <input type="number" name="search[limit]" min="1" max="200" value="50" /></label>
+          </div>
+          <div class="inline-checks">
+            <label><input type="checkbox" name="search[include_omitted]" value="true" /> Include omitted scenes</label>
+            <label><input type="checkbox" name="search[include_notes]" value="true" /> Include source notes</label>
+            <label><input type="checkbox" name="search[include_boneyards]" value="true" /> Include boneyards</label>
+          </div>
+          <div class="inline-actions"><button type="submit">Search selected source</button><button type="button" phx-click="clear_script_search">Clear</button></div>
+          <p class="scope-note">Case-insensitive literal phrase search only. No provider dispatch, semantic index or cross-project search.</p>
+        </form>
+        <section :if={@search_result} class="script-search-results">
+          <h3>{@search_result.returned_hit_count} result(s)<span :if={@search_result.truncated?}> · truncated at the selected limit</span></h3>
+          <p>Inspected {@search_result.inspected_element_count} eligible source elements in {@selected_source.label}.</p>
+          <ol>
+            <li :for={hit <- @search_result.hits}>
+              <a href={result_path(@project, @selected_source, hit)}>
+                <strong>{if hit.scene_ordinal, do: "Scene #{hit.scene_ordinal} · #{hit.scene_heading || "Untitled"}", else: "Source passage"}</strong>
+                <span>{String.replace(to_string(hit.type), "_", " ")} · {hit.excerpt}</span>
+              </a>
+            </li>
+          </ol>
+        </section>
+      </FountWeb.CoreComponents.disclosure>
 
       <FountWeb.CoreComponents.disclosure
         id="about-screenplay"
@@ -278,11 +419,33 @@ defmodule FountWeb.ViewerLive do
           </ol>
         </details>
 
-        <section class="reader-paper" aria-label="Responsive screenplay pages">
+        <section
+          id="responsive-reading-paper"
+          class="reader-paper"
+          aria-label="Responsive screenplay pages"
+          phx-hook="PassageNote"
+          data-project-key={@project["key"]}
+          data-source-revision={@selected_source.screenplay.revision.id}
+        >
           <div class="reader-paper__label">
             <span>Responsive reading view</span>
+            <span class="reader-layout-choice" aria-label="Page layout">
+              <strong>Page layout</strong>
+              <span aria-current="page">Responsive</span>
+              <a
+                :if={@selected_source.kind == :current and @current_pdf}
+                href={"/p/#{@project["key"]}/pages/#{@current_pdf.ref}"}
+              >Exported pages</a>
+              <a
+                :if={@selected_source.kind == :current and is_nil(@current_pdf)}
+                href={"/p/#{@project["key"]}/exports"}
+              >Build exported pages</a>
+              <span :if={@selected_source.kind != :current} title="Fixed-layout PDF is only shown for an exact built artifact of the selected saved source.">Exported pages unavailable for this selected source</span>
+            </span>
+            <button type="button" data-note-selection disabled>Note selected passage</button>
             <a href="/help#reading">How page references work</a>
           </div>
+          <p class="selection-note-status" data-note-selection-status aria-live="polite">Select text within one screenplay passage to attach a note, or use the named passage picker in Notes.</p>
           <FountWeb.Components.ScreenplayRenderer.screenplay
             screenplay={@selected_source.screenplay}
             selected_scene_id={@selected_scene_id}

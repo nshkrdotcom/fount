@@ -38,8 +38,10 @@ defmodule FountWeb.Router do
       live "/p/:key/analysis", ProjectToolsLive, :analysis
       live "/p/:key/cast", ProjectToolsLive, :cast
       live "/p/:key/read", ProjectToolsLive, :read
+      live "/p/:key/feedback", ProjectToolsLive, :feedback
       live "/p/:key/history", ProjectToolsLive, :history
       live "/p/:key/exports", ProjectToolsLive, :exports
+      live "/p/:key/pages/:artifact_ref", ProjectPagesLive, :show
       live "/p/:key/activity", ProjectToolsLive, :activity
       live "/p/:key/settings", ProjectToolsLive, :settings
 
@@ -50,16 +52,14 @@ defmodule FountWeb.Router do
       live "/p/:key/changes/:task_key", RunLive, :review
       live "/p/:key/analysis/:task_key", AnalysisLive, :show
       live "/p/:key/exports/:task_key", RunLive, :exports
-      live "/p/:key/tools/:task_key", ProductionLive, :show
     end
 
-    get "/p/:key/tools/:task_key/notes.json", ProductionController, :notes
-
-    get "/p/:key/tools/:task_key/table-reads/:read_ref/export.json",
-        ProductionController,
-        :table_read
-
-    get "/p/:key/tools/:task_key/usefulness.json", ProductionController, :usefulness
+    get "/p/:key/notes/export.json", ProjectArtifactController, :notes
+    get "/p/:key/feedback/export.json", ProjectArtifactController, :feedback
+    get "/p/:key/table-reads/:read_ref/export.json", ProjectArtifactController, :table_read
+    get "/p/:key/artifacts/:artifact_ref/preview", ProjectArtifactController, :preview
+    get "/p/:key/artifacts/:artifact_ref/pdf", ProjectArtifactController, :view_pdf
+    get "/p/:key/artifacts/:artifact_ref/download", ProjectArtifactController, :show
 
     get "/p/:key/exports/:task_key/:delivery_ref/preview", ArtifactController, :preview
     get "/p/:key/exports/:task_key/:delivery_ref/download", ArtifactController, :show

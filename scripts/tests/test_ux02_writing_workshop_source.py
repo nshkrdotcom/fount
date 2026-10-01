@@ -111,7 +111,8 @@ class UX02WritingWorkshopSourceTest(unittest.TestCase):
         self.assertIn("reconcile_note_work_links", tools)
         self.assertIn("Work on this note now", live)
         self.assertIn("Open linked proposal", live)
-        self.assertIn("not that the note was resolved", live)
+        self.assertIn("Note-bound task validated", live)
+        self.assertIn("This action does not accept screenplay changes", live)
 
     def test_dependency_versions_and_ux03_boundaries_are_unchanged(self):
         web_mix = read("apps/fount_web/mix.exs")
@@ -124,8 +125,9 @@ class UX02WritingWorkshopSourceTest(unittest.TestCase):
         for body in [web_mix, workshop_mix, observe_mix]:
             self.assertNotRegex(body, r'path:\s*["\'].*(?:system_one_sdk|inference|agent_session_manager)')
         live = read("apps/fount_web/lib/fount_web/live/project_tools_live.ex")
-        self.assertIn("Exact fixed-layout screenplay reading remains UX03", live)
-        self.assertIn("Microphone capture and automatic performance scoring are not part of this program", live)
+        self.assertIn("A PDF page map is shown only if the renderer actually supplies a verified mapping", live)
+        self.assertIn("Microphone capture and automatic performance scoring are not available", live)
+        self.assertIn("does not create a Run", live)
 
 
 if __name__ == "__main__":

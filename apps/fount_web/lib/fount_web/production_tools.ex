@@ -10,8 +10,10 @@ defmodule FountWeb.ProductionTools do
   @search_types ~w(action character dialogue parenthetical transition centered lyric section synopsis page_break note boneyard blank scene_heading)
   @completed_statuses ~w(completed_candidate completed_accepted)
   @usefulness_dimensions ~w(task_completion next_decision agency voice_retention alternative_diversity consequence_usefulness rejection_time_ms)
+  @note_categories ~w(Pacing Character Dialogue Scope Question Other)
 
   def search_types, do: @search_types
+  def note_categories, do: @note_categories
   def usefulness_dimensions, do: @usefulness_dimensions
 
   def workspace(repo, owner, run_id, token \\ nil) do
@@ -110,6 +112,7 @@ defmodule FountWeb.ProductionTools do
   def notes(%Screenplay{} = screenplay, attrs \\ %{}) do
     query = attrs |> Map.get("query", "") |> String.trim() |> String.downcase()
     wanted_status = Map.get(attrs, "status", "")
+    wanted_category = Map.get(attrs, "category", "")
 
     screenplay
     |> Query.authored_items(:note)
@@ -118,7 +121,8 @@ defmodule FountWeb.ProductionTools do
       text = String.downcase((note.title || "") <> " " <> (note.text || ""))
 
       (query == "" or String.contains?(text, query)) and
-        (wanted_status in [nil, ""] or note.target_state == wanted_status)
+        (wanted_status in [nil, ""] or note.target_state == wanted_status) and
+        (wanted_category in [nil, ""] or note.category == wanted_category)
     end)
   end
 
@@ -137,6 +141,56 @@ defmodule FountWeb.ProductionTools do
       }
     end)
     |> Enum.sort_by(&{to_string(&1.namespace || ""), to_string(&1.kind || ""), &1.id})
+  end
+
+  def target_search(%Screenplay{} = screenplay, query, limit \\ 80) do
+    query = query |> to_string() |> String.trim()
+    limit = if is_integer(limit), do: limit |> max(1) |> min(200), else: 80
+
+    if query == "" do
+      {:ok, []}
+    else
+      with {:ok, result} <- Search.find(screenplay, query, limit: limit, include_notes: true) do
+        scene_ordinals =
+          screenplay.ir.scenes
+          |> Enum.with_index(1)
+          |> Map.new(fn {scene, ordinal} -> {scene.id, ordinal} end)
+
+        options =
+          result.hits
+          |> Enum.map(fn hit ->
+            scene = Query.scene_for(screenplay, hit.element_id)
+            node = Query.node(screenplay, hit.element_id)
+            excerpt = human_excerpt(node && node.text || hit.excerpt || "", 110)
+            ordinal = scene && scene_ordinals[scene.id]
+
+            %{
+              value: "element:#{hit.element_id}",
+              label: "#{if(ordinal, do: "Scene #{ordinal} · ", else: "")}#{human_type(node && node.type)} · #{excerpt}",
+              scene_id: hit.scene_id,
+              element_id: hit.element_id
+            }
+          end)
+          |> Enum.uniq_by(& &1.value)
+
+        {:ok, options}
+      end
+    end
+  end
+
+  def cast_rename_preview(%Screenplay{} = screenplay, character_id, new_name) do
+    new_name = new_name |> to_string() |> String.trim()
+
+    cond do
+      new_name == "" ->
+        {:error, :character_name_required}
+
+      is_nil(Query.character(screenplay, character_id)) ->
+        {:error, :character_not_found}
+
+      true ->
+        Screenplay.plan_character_rename(screenplay, character_id, new_name)
+    end
   end
 
   def target_options(%Screenplay{} = screenplay) do
@@ -431,6 +485,79 @@ defmodule FountWeb.ProductionTools do
       end)
   end
 
+  def create_project_table_read(repo, owner, project, %Screenplay{} = screenplay, selection, attrs \\ %{})
+      when is_map(project) and is_map(selection) and is_map(attrs) do
+    with {:ok, stored} <- Store.project(repo, owner, project["id"]),
+         true <- stored["screenplay_id"] == screenplay.id or {:error, :project_screenplay_mismatch},
+         {:ok, persisted} <- Persistence.load_revision(repo, screenplay.id, screenplay.revision.id),
+         true <- persisted.revision.id == screenplay.revision.id or {:error, :revision_unavailable},
+         {:ok, packet} <- TableRead.packet(screenplay, selection) do
+      title = blank_to_nil(Map.get(attrs, "title"))
+      packet = if title, do: Map.put(packet, "display_title", String.slice(title, 0, 160)), else: packet
+
+      ProductionStore.create_table_read(repo, %{
+        owner_id: owner,
+        project_id: project["id"],
+        run_id: nil,
+        screenplay_id: screenplay.id,
+        revision_id: screenplay.revision.id,
+        packet_id: packet["id"],
+        packet: packet
+      })
+    else
+      false -> {:error, :revision_unavailable}
+      {:error, _} = error -> error
+    end
+  end
+
+  def save_note_review(repo, owner, project, note_id, source_revision_id, reviewed_revision_id, attrs)
+      when is_map(project) and is_map(attrs) do
+    response = Map.get(attrs, "response", "open")
+    expected_version = parse_nonnegative(Map.get(attrs, "version", 0))
+
+    with true <- response in ~w(open addressed not_addressed deferred) or {:error, :invalid_response},
+         {:ok, source} <- Persistence.load_revision(repo, project["screenplay_id"], source_revision_id),
+         %{"kind" => "note"} <- source.authored_items[note_id] || {:error, :note_not_found},
+         {:ok, reviewed} <- Persistence.load_revision(repo, project["screenplay_id"], reviewed_revision_id),
+         true <- reviewed.id == source.id or {:error, :review_source_mismatch} do
+      if response == "open" do
+        case ProductionStore.clear_note_review(
+               repo,
+               owner,
+               project["id"],
+               note_id,
+               reviewed_revision_id,
+               expected_version
+             ) do
+          :ok -> {:ok, nil}
+          {:error, _} = error -> error
+        end
+      else
+        ProductionStore.save_note_review(
+          repo,
+          %{
+            owner_id: owner,
+            project_id: project["id"],
+            screenplay_id: source.id,
+            note_id: note_id,
+            source_revision_id: source_revision_id,
+            reviewed_revision_id: reviewed_revision_id,
+            response: response,
+            comment: blank_to_nil(Map.get(attrs, "comment")),
+            actor_label: "human:#{owner}"
+          },
+          expected_version
+        )
+      end
+    else
+      false -> {:error, :review_source_mismatch}
+      {:error, _} = error -> error
+    end
+  end
+
+  def note_reviews(repo, owner, project_id, note_id \\ nil),
+    do: ProductionStore.note_reviews(repo, owner, project_id, note_id)
+
   def create_table_read(repo, owner, workspace, selection)
       when is_map(workspace) and is_map(selection) do
     with {:ok, packet} <- TableRead.packet(workspace.screenplay, selection) do
@@ -493,7 +620,42 @@ defmodule FountWeb.ProductionTools do
   end
 
   def create_usefulness(repo, owner, workspace, attrs) when is_map(attrs) do
-    record_attrs = %{
+    attrs = Map.delete(attrs, "id")
+    save_usefulness(repo, owner, workspace, attrs)
+  end
+
+  def save_usefulness(repo, owner, workspace, attrs) when is_map(attrs) do
+    id = blank_to_nil(Map.get(attrs, "id"))
+
+    with {:ok, record} <- Usefulness.record(usefulness_record_attrs(workspace, attrs)) do
+      persistence_attrs = %{
+        owner_id: owner,
+        project_id: workspace.project["id"],
+        run_id: workspace.run["id"],
+        screenplay_id: workspace.screenplay.id,
+        revision_id: workspace.screenplay.revision.id,
+        task_id: record["task_id"],
+        condition: record["condition"],
+        record: record
+      }
+
+      if id do
+        ProductionStore.update_usefulness(
+          repo,
+          owner,
+          id,
+          workspace.project["id"],
+          workspace.run["id"],
+          persistence_attrs
+        )
+      else
+        ProductionStore.create_usefulness(repo, persistence_attrs)
+      end
+    end
+  end
+
+  defp usefulness_record_attrs(workspace, attrs) do
+    %{
       "task_id" => String.trim(Map.get(attrs, "task_id", "")),
       "condition" => Map.get(attrs, "condition", "fount_assisted"),
       "outcome" => Map.get(attrs, "outcome", "neutral"),
@@ -505,19 +667,6 @@ defmodule FountWeb.ProductionTools do
       "output_refs" => split_lines(Map.get(attrs, "output_refs")),
       "engineering" => engineering_facts(workspace)
     }
-
-    with {:ok, record} <- Usefulness.record(record_attrs) do
-      ProductionStore.create_usefulness(repo, %{
-        owner_id: owner,
-        project_id: workspace.project["id"],
-        run_id: workspace.run["id"],
-        screenplay_id: workspace.screenplay.id,
-        revision_id: workspace.screenplay.revision.id,
-        task_id: record["task_id"],
-        condition: record["condition"],
-        record: record
-      })
-    end
   end
 
   def usefulness_report(repo, owner, project_id) do
@@ -709,6 +858,7 @@ defmodule FountWeb.ProductionTools do
   defp note_operation(base, owner, target, attrs) do
     text = attrs |> Map.get("text", "") |> String.trim()
     title = attrs |> Map.get("title", "") |> String.trim()
+    category = normalize_note_category(Map.get(attrs, "category"))
     id = blank_to_nil(Map.get(attrs, "id"))
 
     cond do
@@ -730,6 +880,7 @@ defmodule FountWeb.ProductionTools do
         value = %{
           "title" => title,
           "text" => text,
+          "category" => category,
           "target_sha256" => target_fingerprint(base, target),
           "bound_revision_id" => base.revision.id
         }
@@ -788,6 +939,7 @@ defmodule FountWeb.ProductionTools do
       target_state: target_state,
       title: get_in(item, ["value", "title"]),
       text: get_in(item, ["value", "text"]),
+      category: get_in(item, ["value", "category"]),
       bound_revision_id: get_in(item, ["value", "bound_revision_id"]),
       target_sha256: get_in(item, ["value", "target_sha256"]),
       dependencies: item["dependencies"] || [],
@@ -954,6 +1106,17 @@ defmodule FountWeb.ProductionTools do
   defp normalize_dimension(_key, value) when is_number(value) or is_boolean(value), do: value
   defp normalize_dimension(_key, _value), do: nil
 
+  defp parse_nonnegative(value) when is_integer(value) and value >= 0, do: value
+
+  defp parse_nonnegative(value) when is_binary(value) do
+    case Integer.parse(value) do
+      {number, ""} when number >= 0 -> number
+      _ -> 0
+    end
+  end
+
+  defp parse_nonnegative(_), do: 0
+
   defp truthy?(value), do: value in [true, "true", "1", "on", 1]
 
   defp split_lines(nil), do: []
@@ -974,6 +1137,30 @@ defmodule FountWeb.ProductionTools do
   end
 
   defp blank_to_nil(_), do: nil
+
+  defp normalize_note_category(value) when is_binary(value) do
+    value = String.trim(value)
+    if value in @note_categories, do: value, else: nil
+  end
+
+  defp normalize_note_category(_), do: nil
+
+  defp human_excerpt(value, max_length) do
+    value
+    |> to_string()
+    |> String.replace(~r/\s+/u, " ")
+    |> String.trim()
+    |> String.slice(0, max_length)
+  end
+
+  defp human_type(nil), do: "Passage"
+
+  defp human_type(type) do
+    type
+    |> to_string()
+    |> String.replace("_", " ")
+    |> String.capitalize()
+  end
 
   defp snippet(text, phrase) when is_binary(text) and is_binary(phrase) do
     max_chars = 240

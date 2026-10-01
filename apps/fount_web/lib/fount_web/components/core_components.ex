@@ -236,6 +236,7 @@ defmodule FountWeb.CoreComponents do
             <a href={"/p/#{@project_key}/analysis"}>Analysis</a>
             <a href={"/p/#{@project_key}/cast"}>Cast &amp; locations</a>
             <a href={"/p/#{@project_key}/read"}>Table read</a>
+            <a href={"/p/#{@project_key}/feedback"}>Feedback</a>
             <a href={"/p/#{@project_key}/history"}>History</a>
             <a href={"/p/#{@project_key}/exports"}>Exports</a>
             <a href={"/p/#{@project_key}/activity"}>Activity</a>

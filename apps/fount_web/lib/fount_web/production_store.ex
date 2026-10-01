@@ -3,7 +3,7 @@ defmodule FountWeb.ProductionStore do
 
   alias Ecto.Adapters.SQL
 
-  @uuid_columns ~w(id project_id run_id screenplay_id revision_id base_revision_id candidate_id source_revision_id proposal_candidate_id result_revision_id)
+  @uuid_columns ~w(id project_id run_id screenplay_id revision_id base_revision_id candidate_id source_revision_id reviewed_revision_id proposal_candidate_id result_revision_id)
 
   def register_candidate(repo, attrs) do
     id = value(attrs, :id) || Fount.ID.v4()
@@ -144,7 +144,7 @@ defmodule FountWeb.ProductionStore do
       id,
       fetch!(attrs, :owner_id),
       fetch!(attrs, :project_id),
-      fetch!(attrs, :run_id),
+      value(attrs, :run_id),
       fetch!(attrs, :screenplay_id),
       fetch!(attrs, :revision_id),
       fetch!(attrs, :packet_id),
@@ -238,6 +238,238 @@ defmodule FountWeb.ProductionStore do
     end
   end
 
+  @doc "Resolves a saved table read by its project-level stable display ordinal, including manual run-free reads."
+  def project_table_read_by_ref(repo, owner, project_id, "read-" <> ordinal_text) do
+    with {ordinal, ""} when ordinal > 0 <- Integer.parse(ordinal_text),
+         rows when is_list(rows) <- list_table_reads(repo, owner, project_id, limit: 100),
+         row when is_map(row) <- Enum.at(rows, ordinal - 1) do
+      {:ok, row}
+    else
+      _ -> {:error, :not_found}
+    end
+  end
+
+  def project_table_read_by_ref(_repo, _owner, _project_id, _ref), do: {:error, :not_found}
+
+  def save_note_review(repo, attrs, expected_version \\ 0) do
+    id = value(attrs, :id) || Fount.ID.v4()
+    owner = fetch!(attrs, :owner_id)
+    project_id = fetch!(attrs, :project_id)
+    note_id = fetch!(attrs, :note_id)
+    reviewed_revision_id = fetch!(attrs, :reviewed_revision_id)
+    response = fetch!(attrs, :response)
+
+    params = [
+      id,
+      owner,
+      project_id,
+      fetch!(attrs, :screenplay_id),
+      note_id,
+      fetch!(attrs, :source_revision_id),
+      reviewed_revision_id,
+      response,
+      value(attrs, :comment),
+      fetch!(attrs, :actor_label),
+      expected_version
+    ]
+
+    statement =
+      if expected_version == 0 do
+        """
+        INSERT INTO fount_web_note_review_responses(
+          id,owner_id,project_id,screenplay_id,note_id,source_revision_id,reviewed_revision_id,response,comment,actor_label,version,inserted_at,updated_at
+        ) VALUES($1::text::uuid,$2,$3::text::uuid,$4::text::uuid,$5,$6::text::uuid,$7::text::uuid,$8,$9,$10,1,now(),now())
+        ON CONFLICT(owner_id,project_id,note_id,reviewed_revision_id) DO NOTHING
+        RETURNING *
+        """
+      else
+        """
+        UPDATE fount_web_note_review_responses
+        SET response=$8,comment=$9,actor_label=$10,version=version+1,updated_at=now()
+        WHERE owner_id=$2 AND project_id=$3::text::uuid AND note_id=$5
+          AND reviewed_revision_id=$7::text::uuid AND version=$11
+        RETURNING *
+        """
+      end
+
+    case SQL.query(repo, statement, params, log: false) do
+      {:ok, %{num_rows: 1} = result} -> {:ok, one(result)}
+      {:ok, _} -> stale_or_missing_note_review(repo, owner, project_id, note_id, reviewed_revision_id)
+      {:error, reason} -> {:error, storage_reason(reason)}
+    end
+  end
+
+  def clear_note_review(repo, owner, project_id, note_id, reviewed_revision_id, expected_version)
+      when is_integer(expected_version) and expected_version >= 0 do
+    if expected_version == 0 do
+      case note_review(repo, owner, project_id, note_id, reviewed_revision_id) do
+        {:error, :not_found} -> :ok
+        {:ok, row} -> {:error, {:stale_note_review, row}}
+        {:error, _} = error -> error
+      end
+    else
+      case SQL.query(
+             repo,
+             """
+             DELETE FROM fount_web_note_review_responses
+             WHERE owner_id=$1 AND project_id=$2::text::uuid AND note_id=$3
+               AND reviewed_revision_id=$4::text::uuid AND version=$5
+             RETURNING id::text
+             """,
+             [owner, project_id, note_id, reviewed_revision_id, expected_version],
+             log: false
+           ) do
+        {:ok, %{num_rows: 1}} -> :ok
+        {:ok, _} -> stale_or_missing_note_review(repo, owner, project_id, note_id, reviewed_revision_id)
+        {:error, reason} -> {:error, storage_reason(reason)}
+      end
+    end
+  end
+
+  def note_reviews(repo, owner, project_id, note_id \\ nil) do
+    {statement, params} =
+      if is_binary(note_id) do
+        {"""
+         SELECT * FROM fount_web_note_review_responses
+         WHERE owner_id=$1 AND project_id=$2::text::uuid AND note_id=$3
+         ORDER BY updated_at DESC,id
+         LIMIT 100
+         """, [owner, project_id, note_id]}
+      else
+        {"""
+         SELECT * FROM fount_web_note_review_responses
+         WHERE owner_id=$1 AND project_id=$2::text::uuid
+         ORDER BY updated_at DESC,id
+         LIMIT 200
+         """, [owner, project_id]}
+      end
+
+    query(repo, statement, params)
+  end
+
+  def note_review(repo, owner, project_id, note_id, reviewed_revision_id) do
+    one_query(
+      repo,
+      """
+      SELECT * FROM fount_web_note_review_responses
+      WHERE owner_id=$1 AND project_id=$2::text::uuid AND note_id=$3 AND reviewed_revision_id=$4::text::uuid
+      """,
+      [owner, project_id, note_id, reviewed_revision_id]
+    )
+  end
+
+  def create_project_artifact(repo, attrs) do
+    id = value(attrs, :id) || Fount.ID.v4()
+    params = [
+      id,
+      fetch!(attrs, :owner_id),
+      fetch!(attrs, :project_id),
+      fetch!(attrs, :screenplay_id),
+      fetch!(attrs, :revision_id),
+      fetch!(attrs, :kind),
+      fetch!(attrs, :source_label),
+      fetch!(attrs, :filename),
+      value(attrs, :state) || "building",
+      value(attrs, :metadata) || %{}
+    ]
+
+    case SQL.query(
+           repo,
+           """
+           INSERT INTO fount_web_project_artifacts(
+             id,owner_id,project_id,screenplay_id,revision_id,kind,source_label,filename,state,metadata,inserted_at,updated_at
+           ) VALUES($1::text::uuid,$2,$3::text::uuid,$4::text::uuid,$5::text::uuid,$6,$7,$8,$9,$10::jsonb,now(),now())
+           RETURNING *
+           """,
+           params,
+           log: false
+         ) do
+      {:ok, result} -> {:ok, one(result)}
+      {:error, reason} -> {:error, storage_reason(reason)}
+    end
+  end
+
+  def complete_project_artifact(repo, owner, id, output_location, output_checksum, metadata) do
+    case SQL.query(
+           repo,
+           """
+           UPDATE fount_web_project_artifacts
+           SET state='ready',output_location=$3,output_checksum=$4,error=NULL,metadata=$5::jsonb,updated_at=now()
+           WHERE owner_id=$1 AND id=$2::text::uuid
+           RETURNING *
+           """,
+           [owner, id, output_location, output_checksum, metadata || %{}],
+           log: false
+         ) do
+      {:ok, %{num_rows: 1} = result} -> {:ok, one(result)}
+      {:ok, _} -> {:error, :not_found}
+      {:error, reason} -> {:error, storage_reason(reason)}
+    end
+  end
+
+  def fail_project_artifact(repo, owner, id, error, metadata \\ %{}) do
+    case SQL.query(
+           repo,
+           """
+           UPDATE fount_web_project_artifacts
+           SET state='failed',output_location=NULL,output_checksum=NULL,error=$3,metadata=$4::jsonb,updated_at=now()
+           WHERE owner_id=$1 AND id=$2::text::uuid
+           RETURNING *
+           """,
+           [owner, id, to_string(error), metadata || %{}],
+           log: false
+         ) do
+      {:ok, %{num_rows: 1} = result} -> {:ok, one(result)}
+      {:ok, _} -> {:error, :not_found}
+      {:error, reason} -> {:error, storage_reason(reason)}
+    end
+  end
+
+  def project_artifacts(repo, owner, project_id, opts \\ []) do
+    limit = bounded_limit(opts, 100)
+
+    query(
+      repo,
+      """
+      SELECT * FROM fount_web_project_artifacts
+      WHERE owner_id=$1 AND project_id=$2::text::uuid
+      ORDER BY inserted_at DESC,id
+      LIMIT $3
+      """,
+      [owner, project_id, limit]
+    )
+  end
+
+  def project_artifact_by_ref(repo, owner, project_id, "artifact-" <> ordinal_text) do
+    with {ordinal, ""} when ordinal > 0 <- Integer.parse(ordinal_text),
+         rows when is_list(rows) <- project_artifacts(repo, owner, project_id, limit: 100),
+         row when is_map(row) <- Enum.at(rows, ordinal - 1) do
+      {:ok, row}
+    else
+      _ -> {:error, :not_found}
+    end
+  end
+
+  def project_artifact_by_ref(_repo, _owner, _project_id, _ref), do: {:error, :not_found}
+
+  def latest_ready_project_artifact(repo, owner, project_id, revision_id, kind) do
+    case query(
+           repo,
+           """
+           SELECT * FROM fount_web_project_artifacts
+           WHERE owner_id=$1 AND project_id=$2::text::uuid AND revision_id=$3::text::uuid
+             AND kind=$4 AND state='ready'
+           ORDER BY inserted_at DESC,id
+           LIMIT 1
+           """,
+           [owner, project_id, revision_id, kind]
+         ) do
+      [row] -> {:ok, row}
+      [] -> {:error, :not_found}
+      {:error, _} = error -> error
+    end
+  end
+
   def create_usefulness(repo, attrs) do
     id = value(attrs, :id) || Fount.ID.v4()
 
@@ -265,6 +497,42 @@ defmodule FountWeb.ProductionStore do
            log: false
          ) do
       {:ok, result} -> {:ok, one(result)}
+      {:error, reason} -> {:error, storage_reason(reason)}
+    end
+  end
+
+  def usefulness(repo, owner, id) do
+    one_query(
+      repo,
+      "SELECT * FROM fount_web_usefulness_records WHERE owner_id=$1 AND id=$2::text::uuid",
+      [owner, id]
+    )
+  end
+
+  def update_usefulness(repo, owner, id, project_id, run_id, attrs) when is_map(attrs) do
+    case SQL.query(
+           repo,
+           """
+           UPDATE fount_web_usefulness_records
+           SET task_id=$6,condition=$7,record=$8::jsonb,screenplay_id=$4::text::uuid,revision_id=$5::text::uuid,updated_at=now()
+           WHERE owner_id=$1 AND id=$2::text::uuid AND project_id=$3::text::uuid AND run_id=$9::text::uuid
+           RETURNING *
+           """,
+           [
+             owner,
+             id,
+             project_id,
+             fetch!(attrs, :screenplay_id),
+             fetch!(attrs, :revision_id),
+             fetch!(attrs, :task_id),
+             fetch!(attrs, :condition),
+             fetch!(attrs, :record),
+             run_id
+           ],
+           log: false
+         ) do
+      {:ok, %{num_rows: 1} = result} -> {:ok, one(result)}
+      {:ok, _} -> {:error, :not_found}
       {:error, reason} -> {:error, storage_reason(reason)}
     end
   end
@@ -317,6 +585,14 @@ defmodule FountWeb.ProductionStore do
       """,
       [owner, project_id, limit]
     )
+  end
+
+  defp stale_or_missing_note_review(repo, owner, project_id, note_id, reviewed_revision_id) do
+    case note_review(repo, owner, project_id, note_id, reviewed_revision_id) do
+      {:ok, row} -> {:error, {:stale_note_review, row}}
+      {:error, :not_found} -> {:error, :conflict}
+      {:error, _} = error -> error
+    end
   end
 
   defp stale_or_missing_read(repo, owner, id) do

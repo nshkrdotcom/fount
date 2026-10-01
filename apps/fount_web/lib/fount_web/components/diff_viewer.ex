@@ -21,12 +21,12 @@ defmodule FountWeb.Components.DiffViewer do
             <div>
               <strong>{@before_label}</strong>
               <FountWeb.CoreComponents.status_badge status={@before_status} label={@before_status} />
-              <code>{@before.revision.id}</code>
+              <span class="diff-viewer__source-note">exact saved source</span>
             </div>
             <div>
               <strong>{@after_label}</strong>
               <FountWeb.CoreComponents.status_badge status={@after_status} label={@after_status} />
-              <code>{@after_model.revision.id}</code>
+              <span class="diff-viewer__source-note">exact saved source</span>
             </div>
           </header>
           <p :if={@payload.entries == []} class="diff-viewer__unchanged">No structural changes.</p>
@@ -36,7 +36,6 @@ defmodule FountWeb.Components.DiffViewer do
               class={["diff-entry", "diff-entry--#{entry.change}"]}
             >
               <span class="diff-entry__label">{change_label(entry.change)}</span>
-              <code>{entry.id}</code>
               <div class="diff-entry__content">
                 <pre :if={entry.before}>{entry.before}</pre>
                 <pre :if={entry.after}>{entry.after}</pre>
@@ -100,11 +99,13 @@ defmodule FountWeb.Components.DiffViewer do
   end
 
   defp element_text(nil), do: nil
-  defp element_text(element), do: "#{element.type}: #{element.text}"
+  defp element_text(element), do: "#{human_type(element.type)} · #{element.text}"
   defp change_label(:added), do: "Added"
   defp change_label(:removed), do: "Removed"
   defp change_label(:changed), do: "Changed"
   defp change_label(:moved), do: "Moved"
+
+  defp human_type(type), do: type |> to_string() |> String.replace("_", " ") |> String.capitalize()
 
   defp diff_error(:different_screenplay),
     do: "The selected revisions belong to different screenplay identities."

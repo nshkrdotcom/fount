@@ -597,12 +597,120 @@ const AnalysisGraph = {
 }
 
 
+const PassageNote = {
+  mounted() {
+    this.button = this.el.querySelector("[data-note-selection]")
+    this.status = this.el.querySelector("[data-note-selection-status]")
+    this.targetId = null
+
+    this.nodeElement = (node) => {
+      const element = node?.nodeType === Node.ELEMENT_NODE ? node : node?.parentElement
+      return element?.closest?.("[data-node-id]") || null
+    }
+    this.inspectSelection = () => {
+      const selection = window.getSelection?.()
+      const text = selection?.toString?.().trim() || ""
+      const start = this.nodeElement(selection?.anchorNode)
+      const finish = this.nodeElement(selection?.focusNode)
+      const within = start && finish && this.el.contains(start) && this.el.contains(finish)
+      const exactPassage = within && start.dataset.nodeId && start.dataset.nodeId === finish.dataset.nodeId
+
+      this.targetId = exactPassage && text ? start.dataset.nodeId : null
+      if (this.button) this.button.disabled = !this.targetId
+      if (this.status) {
+        this.status.textContent = this.targetId
+          ? `Selected passage ready for a note: ${text.slice(0, 120)}${text.length > 120 ? "…" : ""}`
+          : text && within
+            ? "Selection crosses more than one screenplay passage. Select within one passage, or use the named passage picker in Notes."
+            : "Select text within one screenplay passage to attach a note, or use the named passage picker in Notes."
+      }
+    }
+    this.openNote = () => {
+      if (!this.targetId) return
+      const params = new URLSearchParams({
+        target: `element:${this.targetId}`,
+        source_revision: this.el.dataset.sourceRevision || ""
+      })
+      window.location.assign(`/p/${encodeURIComponent(this.el.dataset.projectKey)}/notes?${params.toString()}`)
+    }
+    this.onSelection = () => this.inspectSelection()
+
+    this.el.addEventListener("mouseup", this.onSelection)
+    this.el.addEventListener("keyup", this.onSelection)
+    this.el.addEventListener("touchend", this.onSelection)
+    this.button?.addEventListener("click", this.openNote)
+  },
+
+  destroyed() {
+    this.el.removeEventListener("mouseup", this.onSelection)
+    this.el.removeEventListener("keyup", this.onSelection)
+    this.el.removeEventListener("touchend", this.onSelection)
+    this.button?.removeEventListener("click", this.openNote)
+  }
+}
+
+const SourceComparison = {
+  mounted() {
+    this.papers = [...this.el.querySelectorAll(".source-comparison__paper")]
+    this.entries = [...this.el.querySelectorAll(".diff-entry")]
+    this.prev = this.el.querySelector("[data-compare-prev]")
+    this.next = this.el.querySelector("[data-compare-next]")
+    this.count = this.el.querySelector("[data-compare-count]")
+    this.index = this.entries.length ? 0 : -1
+    this.syncing = false
+
+    this.syncScroll = (event) => {
+      if (this.syncing || this.papers.length < 2) return
+      const source = event.currentTarget
+      const target = this.papers.find((paper) => paper !== source)
+      if (!target) return
+      const maxSource = Math.max(1, source.scrollHeight - source.clientHeight)
+      const maxTarget = Math.max(0, target.scrollHeight - target.clientHeight)
+      this.syncing = true
+      target.scrollTop = (source.scrollTop / maxSource) * maxTarget
+      requestAnimationFrame(() => { this.syncing = false })
+    }
+    this.paint = () => {
+      this.entries.forEach((entry, index) => entry.classList.toggle("is-current-change", index === this.index))
+      if (this.count) this.count.textContent = this.index >= 0 ? `Change ${this.index + 1} of ${this.entries.length}` : "No structural changes"
+      if (this.prev) this.prev.disabled = this.entries.length === 0
+      if (this.next) this.next.disabled = this.entries.length === 0
+    }
+    this.go = (delta) => {
+      if (!this.entries.length) return
+      this.index = (this.index + delta + this.entries.length) % this.entries.length
+      const changesTab = this.el.querySelector("#compare-changes")
+      if (window.matchMedia?.("(max-width: 760px)")?.matches) changesTab && (changesTab.checked = true)
+      this.paint()
+      this.entries[this.index]?.scrollIntoView({block: "center", behavior: "auto"})
+    }
+    this.onPrev = () => this.go(-1)
+    this.onNext = () => this.go(1)
+
+    this.papers.forEach((paper) => paper.addEventListener("scroll", this.syncScroll, {passive: true}))
+    this.prev?.addEventListener("click", this.onPrev)
+    this.next?.addEventListener("click", this.onNext)
+    this.paint()
+  },
+
+  destroyed() {
+    this.papers?.forEach((paper) => paper.removeEventListener("scroll", this.syncScroll))
+    this.prev?.removeEventListener("click", this.onPrev)
+    this.next?.removeEventListener("click", this.onNext)
+  }
+}
+
+
 const TableReadWorkspace = {
   mounted() {
     this.turns = this.el.querySelector("[data-read-turns]")
     this.startButton = this.el.querySelector("[data-read-start]")
     this.pauseButton = this.el.querySelector("[data-read-pause]")
+    this.toggleButton = this.el.querySelector("[data-read-toggle]")
+    this.prevButton = this.el.querySelector("[data-read-prev]")
+    this.nextButton = this.el.querySelector("[data-read-next]")
     this.bookmarkButton = this.el.querySelector("[data-read-bookmark]")
+    this.speedControl = this.el.querySelector("[data-read-speed]")
     this.elapsedOutput = this.el.querySelector("[data-read-elapsed]")
     this.elapsedBase = Number(this.el.dataset.elapsedMs || 0)
     this.startedAt = null
@@ -610,25 +718,43 @@ const TableReadWorkspace = {
     this.lastFrame = null
     this.persisting = false
     this.pendingState = null
-    this.activeIndex = Math.max(0, Number(this.el.dataset.bookmark || 0))
-    this.reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches || false
+    this.activeIndex = Math.max(0, Number(this.el.dataset.bookmarkIndex || this.el.dataset.bookmark || 0))
+    this.speed = 1
+    this.reducedMotionQuery = window.matchMedia?.("(prefers-reduced-motion: reduce)")
+    this.reducedMotion = this.reducedMotionQuery?.matches || false
 
     this.elapsed = () => this.elapsedBase + (this.startedAt ? Math.max(0, performance.now() - this.startedAt) : 0)
     this.paintElapsed = () => {
-      if (this.elapsedOutput) this.elapsedOutput.textContent = String(Math.round(this.elapsed()))
+      if (!this.elapsedOutput) return
+      const totalSeconds = Math.max(0, Math.floor(this.elapsed() / 1000))
+      const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, "0")
+      const seconds = String(totalSeconds % 60).padStart(2, "0")
+      this.elapsedOutput.textContent = `${minutes}:${seconds}`
     }
-    this.setActive = (index) => {
-      const turns = [...this.el.querySelectorAll("[data-read-turn]")]
+    this.readSpeed = () => {
+      const value = Number(this.speedControl?.value || 1)
+      return Math.max(.5, Math.min(2, Number.isFinite(value) ? value : 1))
+    }
+    this.speed = this.readSpeed()
+    this.turnElements = () => [...this.el.querySelectorAll("[data-read-turn]")]
+    this.setActive = (index, {focus = false, scroll = true} = {}) => {
+      const turns = this.turnElements()
       if (!turns.length) return
       this.activeIndex = Math.max(0, Math.min(Number(index) || 0, turns.length - 1))
       turns.forEach((turn, turnIndex) => turn.classList.toggle("is-active-read-turn", turnIndex === this.activeIndex))
+      const active = turns[this.activeIndex]
+      if (scroll) active?.scrollIntoView({block: "nearest", behavior: "auto"})
+      if (focus) active?.focus({preventScroll: true})
+    }
+    this.move = (delta) => {
+      this.pause(false)
+      this.setActive(this.activeIndex + delta, {focus: true})
     }
     this.flushState = () => {
       if (this.persisting || !this.pendingState) return
       const payload = {...this.pendingState, version: this.el.dataset.version}
       this.pendingState = null
       this.persisting = true
-
       this.pushEvent("table_read_state", payload, (reply = {}) => {
         if (reply.version != null) this.el.dataset.version = String(reply.version)
         this.persisting = false
@@ -654,11 +780,11 @@ const TableReadWorkspace = {
       this.lastFrame = null
     }
     this.tick = (now) => {
-      if (!this.turns) return
+      if (!this.turns || this.reducedMotion) return
       if (this.lastFrame == null) this.lastFrame = now
       const delta = Math.min(100, Math.max(0, now - this.lastFrame))
       this.lastFrame = now
-      this.turns.scrollTop += 0.025 * delta
+      this.turns.scrollTop += 0.025 * this.speed * delta
       this.paintElapsed()
       const atEnd = this.turns.scrollTop + this.turns.clientHeight >= this.turns.scrollHeight - 2
       if (atEnd) {
@@ -670,61 +796,93 @@ const TableReadWorkspace = {
     }
     this.start = () => {
       if (this.reducedMotion || this.frame) return
+      this.speed = this.readSpeed()
       if (!this.startedAt) this.startedAt = performance.now()
       this.persist("auto")
       this.frame = requestAnimationFrame(this.tick)
+      this.toggleButton?.setAttribute("aria-pressed", "true")
     }
-    this.pause = () => {
+    this.pause = (persist = true) => {
+      const wasRunning = Boolean(this.frame || this.startedAt)
       this.stopAnimation()
-      this.persist("paused")
+      if (persist && wasRunning) this.persist("paused")
+      else if (!persist) {
+        this.elapsedBase = Math.round(this.elapsed())
+        this.startedAt = null
+        this.paintElapsed()
+      }
+      this.toggleButton?.setAttribute("aria-pressed", "false")
     }
-    this.bookmark = () => this.persist(this.frame ? "auto" : "paused")
+    this.toggle = () => this.frame ? this.pause() : this.start()
+    this.bookmark = () => this.persist(this.frame ? "auto" : "manual")
     this.onTurn = (event) => {
       const turn = event.target.closest("[data-read-turn]")
       if (!turn || !this.el.contains(turn)) return
-      this.setActive(turn.dataset.index)
+      this.setActive(turn.dataset.index, {scroll: false})
     }
     this.onKeydown = (event) => {
       const turn = event.target.closest("[data-read-turn]")
       if (!turn || !this.el.contains(turn)) return
-      if (event.key === "Enter" || event.key === " ") {
-        event.preventDefault()
-        this.setActive(turn.dataset.index)
-      }
+      let handled = true
+      if (event.key === "ArrowDown" || event.key === "PageDown") this.move(1)
+      else if (event.key === "ArrowUp" || event.key === "PageUp") this.move(-1)
+      else if (event.key === "Home") this.setActive(0, {focus: true})
+      else if (event.key === "End") this.setActive(this.turnElements().length - 1, {focus: true})
+      else if (event.key === "Enter" || event.key === " ") this.toggle()
+      else handled = false
+      if (handled) event.preventDefault()
+    }
+    this.onSpeed = () => { this.speed = this.readSpeed() }
+    this.onReducedMotion = (event) => {
+      this.reducedMotion = event.matches
+      if (this.reducedMotion) this.pause()
+      this.applyMotionState()
+    }
+    this.applyMotionState = () => {
+      const automatic = [this.startButton, this.toggleButton].filter(Boolean)
+      automatic.forEach((button) => {
+        button.disabled = this.reducedMotion
+        button.setAttribute("aria-disabled", String(this.reducedMotion))
+        button.title = this.reducedMotion ? "Automatic scrolling is disabled by reduced-motion preference." : ""
+      })
     }
 
     this.startButton?.addEventListener("click", this.start)
-    this.pauseButton?.addEventListener("click", this.pause)
+    this.pauseButton?.addEventListener("click", () => this.pause())
+    this.toggleButton?.addEventListener("click", this.toggle)
+    this.prevButton?.addEventListener("click", () => this.move(-1))
+    this.nextButton?.addEventListener("click", () => this.move(1))
     this.bookmarkButton?.addEventListener("click", this.bookmark)
+    this.speedControl?.addEventListener("change", this.onSpeed)
     this.turns?.addEventListener("click", this.onTurn)
     this.turns?.addEventListener("focusin", this.onTurn)
     this.turns?.addEventListener("keydown", this.onKeydown)
-    if (this.reducedMotion && this.startButton) {
-      this.startButton.disabled = true
-      this.startButton.setAttribute("aria-disabled", "true")
-      this.startButton.title = "Automatic scrolling is disabled by reduced-motion preference."
-    }
-    this.setActive(this.activeIndex)
+    this.reducedMotionQuery?.addEventListener?.("change", this.onReducedMotion)
+    this.setActive(this.activeIndex, {scroll: false})
     this.paintElapsed()
+    this.applyMotionState()
   },
 
   updated() {
     this.el.dataset.version = this.el.dataset.version || "1"
     const persisted = Number(this.el.dataset.elapsedMs || this.elapsedBase || 0)
     if (!this.frame) this.elapsedBase = persisted
-    this.setActive(Number(this.el.dataset.bookmark || this.activeIndex || 0))
+    this.setActive(Number(this.el.dataset.bookmarkIndex || this.el.dataset.bookmark || this.activeIndex || 0), {scroll: false})
     this.paintElapsed()
+    this.applyMotionState?.()
   },
 
   destroyed() {
     this.stopAnimation?.()
     this.pendingState = null
     this.startButton?.removeEventListener("click", this.start)
-    this.pauseButton?.removeEventListener("click", this.pause)
+    this.toggleButton?.removeEventListener("click", this.toggle)
     this.bookmarkButton?.removeEventListener("click", this.bookmark)
+    this.speedControl?.removeEventListener("change", this.onSpeed)
     this.turns?.removeEventListener("click", this.onTurn)
     this.turns?.removeEventListener("focusin", this.onTurn)
     this.turns?.removeEventListener("keydown", this.onKeydown)
+    this.reducedMotionQuery?.removeEventListener?.("change", this.onReducedMotion)
   }
 }
 
@@ -732,7 +890,7 @@ let csrfToken = document.querySelector("meta[name='csrf-token']")?.getAttribute(
 let liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
   params: {_csrf_token: csrfToken},
-  hooks: {SceneNavigator, AccessibleDialog, ChoiceFilter, CreativeBrief, AuthoringEditor, AnalysisGraph, TableReadWorkspace}
+  hooks: {SceneNavigator, AccessibleDialog, ChoiceFilter, CreativeBrief, AuthoringEditor, AnalysisGraph, PassageNote, SourceComparison, TableReadWorkspace}
 })
 liveSocket.connect()
 window.liveSocket = liveSocket

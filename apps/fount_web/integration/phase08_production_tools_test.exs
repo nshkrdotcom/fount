@@ -5,7 +5,7 @@ defmodule FountWeb.Phase08ProductionToolsIntegrationTest do
   alias Fount.Writing.{Approval, Authority, Principal}
 
   test "S01/S02/S03 production tools load only an owner-authorized exact revision", %{conn: conn} do
-    {:ok, %{run: run}} = create_run("inspect")
+    {:ok, %{project: project, run: run}} = create_run("inspect")
     assert {:ok, workspace} = ProductionTools.workspace(Fount.Repo, "test-owner", run["id"])
     assert workspace.screenplay.revision.id == get_in(run, ["plan", "base_revision_id"])
 
@@ -21,9 +21,9 @@ defmodule FountWeb.Phase08ProductionToolsIntegrationTest do
     assert {:error, :not_found} = ProductionTools.workspace(Fount.Repo, "other-owner", run["id"])
 
     conn = FountWeb.ConnCase.login(conn)
-    assert {:ok, _view, html} = live(conn, task_path(run, :tools) <> "?section=search")
-    assert html =~ "Search this screenplay version"
-    assert html =~ workspace.screenplay.revision.id
+    assert {:ok, _view, html} = live(conn, "/p/#{project["key"]}")
+    assert html =~ "Search this screenplay"
+    assert html =~ "Current draft"
   end
 
   test "S04 note candidate persists separately, exact approval advances canon, and changed/deleted targets are explicit" do
@@ -296,7 +296,7 @@ defmodule FountWeb.Phase08ProductionToolsIntegrationTest do
     assert id == read["id"]
   end
 
-  test "S05 a same-owner read from another Run cannot be selected", %{conn: conn} do
+  test "S05 a same-owner read from another project cannot be selected", %{conn: conn} do
     {:ok, %{run: first_run}} = create_run("read-first")
     {:ok, workspace} = ProductionTools.workspace(Fount.Repo, "test-owner", first_run["id"])
 
@@ -305,11 +305,11 @@ defmodule FountWeb.Phase08ProductionToolsIntegrationTest do
         "whole_screenplay" => true
       })
 
-    {:ok, %{run: other_run}} = create_run("read-other")
+    {:ok, %{project: other_project}} = create_run("read-other")
     conn = FountWeb.ConnCase.login(conn)
-    {:ok, view, _html} = live(conn, task_path(other_run, :tools) <> "?section=read")
+    {:ok, view, _html} = live(conn, "/p/#{other_project["key"]}/read")
     html = render_click(view, "select_table_read", %{"id" => read["id"]})
-    assert html =~ "task source mismatch"
+    assert html =~ "no longer available"
     refute has_element?(view, "#table-read-workspace")
   end
 
@@ -355,7 +355,7 @@ defmodule FountWeb.Phase08ProductionToolsIntegrationTest do
              ProductionTools.delete_usefulness(Fount.Repo, "other-owner", row["id"])
 
     conn = FountWeb.ConnCase.login(conn)
-    response = get(conn, task_path(run, :usefulness_json))
+    response = get(conn, "/p/#{project["key"]}/feedback/export.json")
     assert response.status == 200
     assert response.resp_body =~ "fount.writer_usefulness_export"
     assert response.resp_body =~ "kept_original"
@@ -466,27 +466,15 @@ defmodule FountWeb.Phase08ProductionToolsIntegrationTest do
              })
 
     conn = FountWeb.ConnCase.login(conn)
-    notes = get(conn, task_path(run, :notes_json) <> "?view=#{URI.encode_www_form(token)}")
+    notes = get(conn, "/p/#{project["key"]}/notes/export.json")
     assert notes.status == 200
     assert notes.resp_body =~ accepted.revision.id
     assert notes.resp_body =~ "Export me"
 
-    read_export = get(conn, task_path(run, :table_read_json) <> "/read-1/export.json")
+    read_export = get(conn, "/p/#{project["key"]}/table-reads/read-1/export.json")
     assert read_export.status == 200
     assert read_export.resp_body =~ accepted.revision.id
     assert read_export.resp_body =~ read["packet_id"]
-  end
-
-  defp task_path(run, surface) do
-    {:ok, access} = FountWeb.Store.run_access(Fount.Repo, "test-owner", run["id"])
-    base = "/p/#{access["key"]}/tools/#{access["display_key"]}"
-
-    case surface do
-      :tools -> base
-      :usefulness_json -> base <> "/usefulness.json"
-      :notes_json -> base <> "/notes.json"
-      :table_read_json -> base <> "/table-reads"
-    end
   end
 
   defp create_run(suffix) do

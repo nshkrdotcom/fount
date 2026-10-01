@@ -36,7 +36,7 @@ defmodule FountWeb.Help do
       summary:
         "Responsive pages are for comfortable browser reading, not fixed PDF page numbers.",
       body:
-        "Reading view keeps screenplay text central. Browser width and reader text size can reflow the responsive view. Exact exported-page references belong to the fixed-layout reader, which is not part of this arrival workspace yet."
+        "Reading view keeps screenplay text central and quiet. Browser width can reflow the responsive view; Current, Working and Proposed remain visibly distinct. Select text inside one screenplay passage to start a note already bound to that exact passage and source. When a PDF has actually been built for the exact current revision, Page layout can open those fixed exported pages; otherwise Reading stays responsive rather than inventing page coordinates."
     },
     %{
       slug: "sources",
@@ -119,7 +119,49 @@ defmodule FountWeb.Help do
       title: "Notes",
       summary: "Notes retain their exact screenplay source.",
       body:
-        "Create a source-bound note as a proposal, deliberately accept the note into the current screenplay, then use Work on this note now. The host persists the factual note-to-task/proposal relation; it never infers that a launched task resolved or addressed the note. Full reviewer responses, final remap and memo delivery remain later work."
+        "Create a source-bound note, optionally categorize it, and use the visible search/status/category filters to return to it. Search exact literal passages to remap changed targets without pasting IDs; changed and deleted targets stay explicit. Reviewer responses are Addressed, Not addressed or Deferred human records on a named revision. Open means there is no saved reviewer-response record. Two-tab conflicts preserve the response you were trying to save so you can compare and retry. Notes memos contain only selected verbatim notes, supplied From/To fields and optional actual saved responses."
+    },
+    %{
+      slug: "script-search",
+      title: "Literal screenplay search",
+      summary: "Search the selected exact source with explicit filters and result limits.",
+      body:
+        "Search is case-insensitive literal phrase matching over the selected screenplay revision. Scene, character, location and element-type filters combine with explicit omitted/note/boneyard inclusion flags. The result count, inspected source count and truncation state are shown. No provider, semantic embedding index or cross-project search is used."
+    },
+    %{
+      slug: "cast-locations",
+      title: "Cast & locations",
+      summary: "Confirmed source facts, human-readable rename proposals and truthful unknowns.",
+      body:
+        "Cast profiles use stable screenplay cast identities, literal aliases, confirmed cue/mention counts and scene appearances. Prepare name change previews confirmed cue edits separately from suggested prose mentions; saving remains proposed work until exact acceptance. Locations are scene-heading facts in source order. Unknown context or time remains unknown and no production schedule is inferred."
+    },
+    %{
+      slug: "analysis",
+      title: "Analysis findings",
+      summary: "Start with source evidence, then interpretation, limitations and optional graphs.",
+      body:
+        "Analysis only shows saved task evidence. Exact excerpts and source links come first; uncertainty, missing evidence, sample/resource limitations and service state remain visible. Optional story/time/reader graphs have textual list equivalents and never become a screenplay quality score. No analysis is invented merely to fill the screen."
+    },
+    %{
+      slug: "table-read",
+      title: "Human table read",
+      summary: "Read saved exact material without creating a synthetic Run.",
+      body:
+        "Create named table-read material from the current saved revision, then navigate with Previous/Next or keyboard, pause bounded auto-scroll, choose a finite speed, bookmark a passage, retain elapsed time and save human reactions. If another tab changes the same read, Fount preserves your local bookmark/timing or reaction and offers a reload/retry path instead of silently overwriting it. Reduced-motion preference disables automatic scrolling while manual controls stay available. TTS appears only when actually configured; there is no microphone capture or automatic performance scoring."
+    },
+    %{
+      slug: "feedback",
+      title: "Optional feedback",
+      summary: "Useful, Mixed or Not useful stays descriptive human evidence.",
+      body:
+        "Feedback appears only after a task has a reviewable completed result and automatically records its engineering facts. Reopening that task restores the saved Useful/Mixed/Not useful response, kept-original choice, notes and optional dimensions; saving again updates that record rather than creating a duplicate. Relevant quick questions can be explicitly cleared. All human dimensions remain independent, and Fount does not combine them into a quality score, winner or preference-learning claim."
+    },
+    %{
+      slug: "exports",
+      title: "Exports and fixed-layout pages",
+      summary: "Build Fountain, FDX or PDF from the exact named current source and recover cleanly from errors.",
+      body:
+        "Project exports are owner-bound to the exact saved revision shown at build time. Fountain and FDX preserve explicit fidelity/loss information; PDF uses the configured screenplay renderer and inspection tools, and table-read packets retain their exact saved source. A failed build records the error and can be retried without changing screenplay state. The exported-page reader displays the real PDF and supports page jump; it never invents a passage-to-page mapping the renderer did not provide. Optional submission checks reuse recorded dated mechanical profiles against that exact current PDF and always show their profile date/source; they are not legal advice, endorsement or a guarantee of current rules."
     }
   ]
 

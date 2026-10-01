@@ -40,7 +40,7 @@ The returned `report` contains full structural and cryptographic inspection meta
   bytes: 142890,
   sha256: "8e7b1a...",
   source_revision: "rev_04f8...",
-  renderer: "afterwriting 1.17.3"
+  renderer: "afterwriting 1.17.3 / PDFKit 0.20.2"
 }
 ```
 
@@ -75,3 +75,15 @@ To use the PDF export pipeline:
    cd packages/fount_workshop
    npm ci
    ```
+
+The lockfile pins PDFKit 0.20.2 through an npm override for Afterwriting. This
+removes the deprecated CryptoJS dependency without replacing the Fountain layout
+engine. Renderer identity and the settings hash include both versions.
+
+Workshop's `.npmrc` disables dependency lifecycle scripts: the PDF renderer needs
+none. The `allowScripts` policy explicitly denies the unused upstream Snyk CLI
+bootstrap. Snyk remains an upstream dependency but is not used to render PDFs.
+
+Verified after the upgrade: clean `npm ci`, zero `npm audit` vulnerabilities,
+Letter/A4 page sizes, embedded Courier Prime, hidden notes, dual dialogue,
+pagination, Unicode text and omitted scenes.

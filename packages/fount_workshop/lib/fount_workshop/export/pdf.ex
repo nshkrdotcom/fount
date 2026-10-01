@@ -45,10 +45,12 @@ defmodule FountWorkshop.Export.PDF do
              bytes: byte_size(pdf),
              sha256: Fount.ID.hash(pdf),
              source_revision: doc.revision.id,
-             renderer: "afterwriting 1.17.3",
+             renderer: "afterwriting 1.17.3 / PDFKit 0.20.2",
              settings: settings,
              settings_sha256:
-               CanonicalJSON.hash(Map.put(settings, "renderer", "afterwriting 1.17.3")),
+               CanonicalJSON.hash(
+                 Map.put(settings, "renderer", "afterwriting 1.17.3 / PDFKit 0.20.2")
+               ),
              source_sha256: :crypto.hash(:sha256, doc.source.raw) |> Base.encode16(case: :lower)
            }}
         end

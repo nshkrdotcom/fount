@@ -57,3 +57,7 @@ before Phoenix starts and on setup failure.
 If authentication fails, configure an existing authorized role. If several
 clusters are usable, select the intended cluster explicitly. Increasing pool size
 or queue timeouts does not repair an unavailable or unauthenticated server.
+
+At startup the default demo login token appears on its own line inside a large
+terminal banner. Interactive terminals display it in bold; redirected output
+remains plain text. Custom owner tokens remain private.

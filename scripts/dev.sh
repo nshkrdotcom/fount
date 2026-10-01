@@ -122,7 +122,14 @@ fi
 run 'Checking development compilation (run setup if dependencies are missing)' mix compile
 printf '\nOpen http://127.0.0.1:%s/login\n' "$port"
 if [[ ${FOUNT_OWNER_TOKEN:-fount-demo-owner-token} == fount-demo-owner-token ]]; then
-  printf 'Local demo login token: fount-demo-owner-token\n'
+  printf '\n============================================================\n'
+  printf '  LOGIN TOKEN — copy the line below into the login page\n\n'
+  if [[ -t 1 && -z ${NO_COLOR:-} ]]; then
+    printf '\033[1mfount-demo-owner-token\033[0m\n'
+  else
+    printf 'fount-demo-owner-token\n'
+  fi
+  printf '\n============================================================\n\n'
 else
   printf 'Login with your configured owner token.\n'
 fi

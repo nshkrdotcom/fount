@@ -1,7 +1,7 @@
 defmodule FountWeb.EditorLive do
   use FountWeb, :live_view
 
-  alias FountWeb.{Authoring, AuthoringStore}
+  alias FountWeb.{Authoring, AuthoringStore, ScreenplayIndex}
 
   @autosave_default_ms 60_000
   @structural_history_limit 50
@@ -393,8 +393,43 @@ defmodule FountWeb.EditorLive do
   def handle_event("structural_edit", %{"edit" => params}, socket) do
     with true <- valid_preview?(socket.assigns.preview),
          current <- socket.assigns.preview.screenplay,
-         {:ok, operation} <- structural_operation(params, current),
-         {:ok, draft, next, changes} <-
+         {:ok, operation} <- structural_operation(params, current) do
+      apply_structural_operation(socket, current, operation)
+    else
+      false ->
+        {:noreply, assign(socket, :error, "Structural commands require valid Fountain source.")}
+
+      {:error, reason} ->
+        {:noreply, assign(socket, :error, human_error(reason))}
+    end
+  end
+
+  def handle_event("scene_move", %{"scene_id" => scene_id, "direction" => direction}, socket)
+      when direction in ["up", "down"] do
+    with true <- valid_preview?(socket.assigns.preview),
+         current <- socket.assigns.preview.screenplay,
+         {:ok, operation} <- scene_move_operation(current, scene_id, direction) do
+      apply_structural_operation(socket, current, operation)
+    else
+      false -> {:noreply, assign(socket, :error, "Scene moves require valid Fountain source.")}
+      {:error, :scene_at_boundary} -> {:noreply, socket}
+      {:error, reason} -> {:noreply, assign(socket, :error, human_error(reason))}
+    end
+  end
+
+  def handle_event("toggle_scene_omission", %{"scene_id" => scene_id, "omit" => omit}, socket) do
+    with true <- valid_preview?(socket.assigns.preview),
+         current <- socket.assigns.preview.screenplay,
+         scene when not is_nil(scene) <- Fount.Query.scene(current, scene_id) do
+      apply_structural_operation(socket, current, Fount.Edit.omit_scene(scene_id, omit == "true"))
+    else
+      false -> {:noreply, assign(socket, :error, "Scene omission requires valid Fountain source.")}
+      nil -> {:noreply, assign(socket, :error, "That scene is no longer in this working draft.")}
+    end
+  end
+
+  defp apply_structural_operation(socket, current, operation) do
+    with {:ok, draft, next, changes} <-
            Authoring.structural_edit(
              socket.assigns.current_owner,
              socket.assigns.draft["id"],
@@ -424,10 +459,7 @@ defmodule FountWeb.EditorLive do
        |> assign(:structural_redo, [])
        |> assign(:affected_scope, affected_ids(changes))
        |> assign(:history, history(socket.assigns.current_owner, draft["id"]))
-       |> assign(
-         :notice,
-         "Structure changes saved to the draft. The approved screenplay is unchanged."
-       )
+       |> assign(:notice, "Structure changes saved to the draft. The approved screenplay is unchanged.")
        |> assign(:error, nil)
        |> push_event("authoring:replace_source", %{
          source: raw,
@@ -435,11 +467,7 @@ defmodule FountWeb.EditorLive do
          reset_history: false
        })}
     else
-      false ->
-        {:noreply, assign(socket, :error, "Structural commands require valid Fountain source.")}
-
-      {:error, reason} ->
-        {:noreply, assign(socket, :error, human_error(reason))}
+      {:error, reason} -> {:noreply, assign(socket, :error, human_error(reason))}
     end
   end
 
@@ -609,6 +637,20 @@ defmodule FountWeb.EditorLive do
     case AuthoringStore.get(Fount.Repo, socket.assigns.current_owner, socket.assigns.draft["id"]) do
       {:ok, draft} -> draft
       _ -> socket.assigns.draft
+    end
+  end
+
+  defp scene_move_operation(screenplay, scene_id, direction) do
+    scenes = List.wrap(screenplay.ir.scenes)
+    index = Enum.find_index(scenes, &(&1.id == scene_id))
+
+    cond do
+      is_nil(index) -> {:error, {:unknown_scene, scene_id}}
+      direction == "down" and index >= length(scenes) - 1 -> {:error, :scene_at_boundary}
+      direction == "down" -> {:ok, Fount.Edit.move_scene(scene_id, Enum.at(scenes, index + 1).id)}
+      direction == "up" and index == 0 -> {:error, :scene_at_boundary}
+      direction == "up" and index == 1 -> {:ok, Fount.Edit.move_scene(Enum.at(scenes, 0).id, scene_id)}
+      direction == "up" -> {:ok, Fount.Edit.move_scene(scene_id, Enum.at(scenes, index - 2).id)}
     end
   end
 
@@ -805,6 +847,13 @@ defmodule FountWeb.EditorLive do
     "#{severity}: #{code} #{message}"
   end
 
+  defp element_label(element) do
+    text = element.text |> to_string() |> String.replace(~r/\s+/, " ") |> String.trim()
+    preview = if String.length(text) > 72, do: String.slice(text, 0, 69) <> "...", else: text
+    type = element.type |> to_string() |> String.replace("_", " ")
+    if preview == "", do: type, else: "#{type} · #{preview}"
+  end
+
   defp dismissed?(prefs, slug), do: slug in List.wrap(Map.get(prefs, "dismissed_hints", []))
 
   defp save_state_label("saved"), do: "Saved working draft"
@@ -826,6 +875,8 @@ defmodule FountWeb.EditorLive do
     assigns =
       assigns
       |> assign(:preview_screenplay, preview_screenplay)
+      |> assign(:writing_index, ScreenplayIndex.build(preview_screenplay))
+      |> assign(:writing_elements, List.wrap(preview_screenplay.ir.elements))
       |> assign(:writing_hint_dismissed, dismissed?(assigns.preferences, "writing"))
 
     ~H"""
@@ -900,6 +951,21 @@ defmodule FountWeb.EditorLive do
             aria-pressed={to_string(@mode == mode)}
           >{label}</button>
         </div>
+        <button
+          id="authoring-focus"
+          type="button"
+          data-authoring-focus
+          aria-pressed="false"
+          title="Hide surrounding controls. Press Escape to leave Focus."
+        >Focus</button>
+        <button
+          id="authoring-typewriter"
+          type="button"
+          data-authoring-typewriter
+          aria-pressed="false"
+          title="Optional cursor-following scroll. Off by default and disabled when reduced motion is requested."
+        >Typewriter scroll off</button>
+        <span class="focus-save-state" role="status">{save_state_label(@save_state)}</span>
         <button
           id="authoring-save"
           type="button"
@@ -1002,45 +1068,71 @@ defmodule FountWeb.EditorLive do
         </FountWeb.CoreComponents.disclosure>
 
         <FountWeb.CoreComponents.disclosure
-          id="advanced-editing"
-          title="Advanced editing controls"
-          summary="Existing exact structural operations and task handoff"
+          id="scene-cards"
+          title="Scene cards and exact edits"
+          summary="Named structural controls; no stable IDs to copy"
         >
           <p class="scope-note">
-            Generic element move/split/merge is intentionally not offered. This unsaved draft has not been analyzed; analysis remains tied to saved task sources.
+            Scene moves and omission are saved to this working draft only. Use the buttons or focus a scene card and press Alt+Arrow Up/Down. Generic element move/split/merge is intentionally not offered. This unsaved draft has not been analyzed; analysis remains tied to saved task sources.
           </p>
-          <p>
-            These exact controls remain available under Advanced editing. Ordinary writing does not require them.
-          </p>
-          <form phx-submit="structural_edit" class="authoring-command-form">
-            <label>
-              Operation
-              <select name="edit[kind]">
-                <option value="replace_text">Replace element text</option>
-                <option value="set_character_cue">Change character cue</option>
-                <option value="insert_scene">Insert scene after</option>
-                <option value="insert_element_after">Insert action element after</option>
-                <option value="delete_element">Delete element</option>
-                <option value="delete_scene">Delete scene</option>
-                <option value="move_scene">Move scene after</option>
-              </select>
-            </label>
-            <label>Target stable ID <input name="edit[target]" required /></label>
-            <label>Value / destination ID <input name="edit[value]" /></label>
-            <button type="submit" disabled={@draft["status"] != "active"}>Apply to working draft</button>
-          </form>
-          <p :if={@affected_scope != []}>
-            Affected elements are recorded internally for exact recovery and review.
-          </p>
-          <button
-            id="ai-assist"
-            type="button"
-            phx-click="start_ai_assist"
-            disabled={
-              not @live_connected or @dirty or @draft["status"] != "active" or
-                not is_binary(@draft["saved_candidate_id"])
-            }
-          >Start existing creative task from this saved proposal</button>
+          <ol class="scene-card-list" data-scene-cards>
+            <li
+              :for={{scene, index} <- Enum.with_index(@writing_index.scenes)}
+              class="scene-card"
+              tabindex="0"
+              data-scene-card
+              data-scene-id={scene.id}
+            >
+              <div>
+                <strong>Scene {scene.ordinal} · {scene.heading || "Untitled scene"}</strong>
+                <span :if={scene.omitted?} class="status-chip">Omitted</span>
+              </div>
+              <div class="button-row" role="group" aria-label={"Move Scene #{scene.ordinal}"}>
+                <button type="button" phx-click="scene_move" phx-value-scene_id={scene.id} phx-value-direction="up" disabled={@draft["status"] != "active" or index == 0}>Up</button>
+                <button type="button" phx-click="scene_move" phx-value-scene_id={scene.id} phx-value-direction="down" disabled={@draft["status"] != "active" or index == length(@writing_index.scenes) - 1}>Down</button>
+                <button type="button" phx-click="toggle_scene_omission" phx-value-scene_id={scene.id} phx-value-omit={to_string(!scene.omitted?)} disabled={@draft["status"] != "active"}>{if scene.omitted?, do: "Include", else: "Omit"}</button>
+              </div>
+            </li>
+          </ol>
+
+          <div class="exact-edit-grid">
+            <form phx-submit="structural_edit" class="authoring-command-form">
+              <input type="hidden" name="edit[kind]" value="replace_text" />
+              <label>Element <select name="edit[target]" required><option :for={element <- @writing_elements} value={element.id}>{element_label(element)}</option></select></label>
+              <label>Replacement text <textarea name="edit[value]" maxlength="4000" required></textarea></label>
+              <button type="submit" disabled={@draft["status"] != "active"}>Replace text</button>
+            </form>
+            <form phx-submit="structural_edit" class="authoring-command-form">
+              <input type="hidden" name="edit[kind]" value="set_character_cue" />
+              <label>Character cue <select name="edit[target]" required><option :for={element <- Enum.filter(@writing_elements, &(&1.type == :character))} value={element.id}>{element_label(element)}</option></select></label>
+              <label>New cue <input name="edit[value]" maxlength="160" required /></label>
+              <button type="submit" disabled={@draft["status"] != "active"}>Change cue</button>
+            </form>
+            <form phx-submit="structural_edit" class="authoring-command-form">
+              <input type="hidden" name="edit[kind]" value="insert_scene" />
+              <label>After <select name="edit[target]" required><option :for={scene <- @writing_index.scenes} value={scene.id}>Scene {scene.ordinal} · {scene.heading || "Untitled"}</option></select></label>
+              <label>Scene heading <input name="edit[value]" maxlength="240" placeholder="INT. OFFICE - DAY" required /></label>
+              <button type="submit" disabled={@draft["status"] != "active"}>Insert scene</button>
+            </form>
+            <form phx-submit="structural_edit" class="authoring-command-form">
+              <input type="hidden" name="edit[kind]" value="insert_element_after" />
+              <label>After element <select name="edit[target]" required><option :for={element <- @writing_elements} value={element.id}>{element_label(element)}</option></select></label>
+              <label>Action text <textarea name="edit[value]" maxlength="4000" required></textarea></label>
+              <button type="submit" disabled={@draft["status"] != "active"}>Insert action</button>
+            </form>
+            <form phx-submit="structural_edit" class="authoring-command-form compact-command">
+              <input type="hidden" name="edit[kind]" value="delete_element" />
+              <label>Element <select name="edit[target]" required><option :for={element <- @writing_elements} value={element.id}>{element_label(element)}</option></select></label>
+              <button type="submit" disabled={@draft["status"] != "active"}>Delete element</button>
+            </form>
+            <form phx-submit="structural_edit" class="authoring-command-form compact-command">
+              <input type="hidden" name="edit[kind]" value="delete_scene" />
+              <label>Scene <select name="edit[target]" required><option :for={scene <- @writing_index.scenes} value={scene.id}>Scene {scene.ordinal} · {scene.heading || "Untitled"}</option></select></label>
+              <button type="submit" disabled={@draft["status"] != "active"}>Delete scene</button>
+            </form>
+          </div>
+          <p :if={@affected_scope != []}>Affected source elements are retained internally for exact recovery and review.</p>
+          <p><a href={"/p/#{@project["key"]}/work"}>Work on a selected passage with the creative workshop</a></p>
         </FountWeb.CoreComponents.disclosure>
 
         <details class="technical-details">

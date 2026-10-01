@@ -312,7 +312,7 @@ defmodule FountWeb.Phase06AnalysisIntegrationTest do
     assert unchanged.revision.id == base.revision.id
   end
 
-  test "authoring exact approval and AI controls wait for the live connection", %{conn: conn} do
+  test "authoring exact approval waits for the live connection", %{conn: conn} do
     {:ok, %{run: run, access: access}} = launch("authoring-connection")
     {:ok, workspace} = FountWeb.Authoring.open_workspace("test-owner", access["project_id"])
     raw = String.replace(workspace.draft["raw_source"], "departure board", "blue departure board")
@@ -331,10 +331,8 @@ defmodule FountWeb.Phase06AnalysisIntegrationTest do
     conn = FountWeb.ConnCase.login(conn)
     html = conn |> get(editor_path(run)) |> html_response(200)
     assert html =~ ~r/<button[^>]*id="candidate-accept"[^>]*disabled/
-    assert html =~ ~r/<button[^>]*id="ai-assist"[^>]*disabled/
     assert {:ok, view, _html} = live(conn, editor_path(run))
     refute has_element?(view, "#candidate-accept[disabled]")
-    refute has_element?(view, "#ai-assist[disabled]")
   end
 
   defp analysis_path(run, suffix) do

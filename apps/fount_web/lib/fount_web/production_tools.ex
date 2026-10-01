@@ -314,6 +314,113 @@ defmodule FountWeb.ProductionTools do
   def list_tool_candidates(repo, owner, project_id),
     do: ProductionStore.list_candidates(repo, owner, project_id, limit: 30)
 
+  def link_note_work(repo, owner, project_id, screenplay_id, source_revision_id, note_id, run_id) do
+    with {:ok, project} <- Store.project(repo, owner, project_id),
+         true <- project["screenplay_id"] == screenplay_id or {:error, :project_screenplay_mismatch},
+         {:ok, source} <- Persistence.load_revision(repo, screenplay_id, source_revision_id),
+         source_fingerprint when is_binary(source_fingerprint) <- source.revision.content_hash,
+         %{"kind" => "note"} <- source.authored_items[note_id] || {:error, :note_not_found},
+         {:ok, access} <- Store.run_access(repo, owner, run_id),
+         true <- access["project_id"] == project_id or {:error, :run_project_mismatch},
+         true <- access["screenplay_id"] == screenplay_id or {:error, :run_screenplay_mismatch},
+         {:ok, context} <- FountWeb.Actors.owner_context(owner, screenplay_id),
+         {:ok, run} <- FountRun.get_run(repo, run_id, context),
+         true <- get_in(run, ["plan", "base_revision_id"]) == source_revision_id or
+                   {:error, :run_source_mismatch} do
+      ProductionStore.link_note_work(repo, %{
+        owner_id: owner,
+        project_id: project_id,
+        screenplay_id: screenplay_id,
+        source_revision_id: source_revision_id,
+        source_fingerprint: source_fingerprint,
+        note_id: note_id,
+        run_id: run_id
+      })
+    else
+      nil -> {:error, :note_not_found}
+      false -> {:error, :note_work_identity_mismatch}
+      {:error, _} = error -> error
+      _ -> {:error, :source_fingerprint_unavailable}
+    end
+  end
+
+  def note_work_links(repo, owner, project_id, note_id \\ nil),
+    do: ProductionStore.list_note_work_links(repo, owner, project_id, note_id)
+
+  def reconcile_note_work_links(repo, owner, project_id, screenplay_id) do
+    with {:ok, context} <- FountWeb.Actors.owner_context(owner, screenplay_id),
+         runs when is_list(runs) <- Store.list_project_runs(repo, owner, project_id, limit: 50) do
+      results =
+        Enum.flat_map(runs, fn access ->
+          case FountRun.get_run(repo, access["run_id"], context) do
+            {:ok, run} ->
+              base_revision_id = get_in(run, ["plan", "base_revision_id"])
+
+              note_ids =
+                get_in(run, ["plan", "operation_parameters", "request_options", "note_ids"]) || []
+
+              Enum.map(note_ids, fn note_id ->
+                link_note_work(
+                  repo,
+                  owner,
+                  project_id,
+                  screenplay_id,
+                  base_revision_id,
+                  note_id,
+                  run["id"]
+                )
+              end)
+
+            _ ->
+              []
+          end
+        end)
+
+      errors = Enum.filter(results, &match?({:error, _}, &1))
+      if errors == [], do: :ok, else: {:error, errors}
+    else
+      {:error, _} = error -> error
+      _ -> {:error, :note_work_runs_unavailable}
+    end
+  end
+
+  def sync_note_work_results(repo, owner, screenplay_id, links) when is_list(links) do
+    with {:ok, context} <- FountWeb.Actors.owner_context(owner, screenplay_id) do
+      Enum.each(links, fn link ->
+        if is_nil(link["proposal_candidate_id"]) do
+          with true <- link["screenplay_id"] == screenplay_id,
+               {:ok, source} <-
+                 Persistence.load_revision(repo, screenplay_id, link["source_revision_id"]),
+               true <- source.revision.content_hash == link["source_fingerprint"],
+               {:ok, run} <- FountRun.get_run(repo, link["run_id"], context),
+               true <- get_in(run, ["plan", "base_revision_id"]) == link["source_revision_id"],
+               {:ok, progress} <- FountRun.progress(repo, link["run_id"], context),
+               candidate_id when is_binary(candidate_id) <- linked_candidate_id(run, progress),
+               {:ok, candidate} <- Persistence.candidate(repo, candidate_id),
+               true <- candidate["screenplay_id"] == screenplay_id do
+            _ =
+              ProductionStore.attach_note_work_result(
+                repo,
+                owner,
+                link["run_id"],
+                candidate_id,
+                candidate["result_revision_id"]
+              )
+          else
+            _ -> :ok
+          end
+        end
+      end)
+
+      :ok
+    end
+  end
+
+  defp linked_candidate_id(run, progress) do
+    run["selected_candidate_id"] ||
+      Enum.find_value(progress["steps"] || [], fn step -> get_in(step, ["result", "candidate_id"]) end)
+  end
+
   def create_table_read(repo, owner, workspace, selection)
       when is_map(workspace) and is_map(selection) do
     with {:ok, packet} <- TableRead.packet(workspace.screenplay, selection) do

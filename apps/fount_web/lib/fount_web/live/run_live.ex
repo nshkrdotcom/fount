@@ -34,6 +34,7 @@ defmodule FountWeb.RunLive do
          |> assign(:unread_notifications, [])
          |> assign(:launch_preview, nil)
          |> assign(:launch_results, nil)
+         |> assign(:audition, nil)
          |> refresh()}
 
       {:error, _} ->
@@ -146,6 +147,128 @@ defmodule FountWeb.RunLive do
     end
   end
 
+  def handle_event("audition_candidate", %{"candidate_id" => candidate_id}, socket) do
+    case FountWeb.CandidateWorkspace.audition(
+           Fount.Repo,
+           socket.assigns.run,
+           socket.assigns.progress,
+           candidate_id
+         ) do
+      {:ok, audition} ->
+        {:noreply,
+         socket
+         |> assign(:audition, audition)
+         |> assign(:notice, "Audition prepared from the exact saved task scope. Nothing was accepted.")
+         |> assign(:error, nil)}
+
+      {:error, reason} ->
+        {:noreply, assign(socket, :error, candidate_work_error(reason))}
+    end
+  end
+
+  def handle_event("select_candidate_groups", %{"candidate" => params}, socket) do
+    candidate_id = params["id"]
+    group_ids = List.wrap(params["groups"])
+
+    case FountWeb.CandidateWorkspace.select_groups(
+           Fount.Repo,
+           socket.assigns.progress,
+           candidate_id,
+           group_ids
+         ) do
+      {:ok, candidate} ->
+        {:noreply,
+         socket
+         |> assign(:notice, "Selected changes saved as related proposed writing. The current screenplay is unchanged.")
+         |> assign(:error, nil)
+         |> assign(:audition, nil)
+         |> refresh()
+         |> put_related_candidate_notice(candidate)}
+
+      {:error, reason} ->
+        {:noreply, assign(socket, :error, candidate_work_error(reason))}
+    end
+  end
+
+  def handle_event("combine_candidates", %{"combine" => params}, socket) do
+    picks =
+      params
+      |> Map.get("groups", %{})
+      |> Enum.map(fn {candidate_id, group_ids} ->
+        %{"candidate_id" => candidate_id, "group_ids" => List.wrap(group_ids)}
+      end)
+
+    case FountWeb.CandidateWorkspace.combine(Fount.Repo, socket.assigns.progress, picks) do
+      {:ok, candidate} ->
+        {:noreply,
+         socket
+         |> assign(:notice, "Combined changes saved as related proposed writing. The current screenplay is unchanged.")
+         |> assign(:error, nil)
+         |> assign(:audition, nil)
+         |> refresh()
+         |> put_related_candidate_notice(candidate)}
+
+      {:error, reason} ->
+        {:noreply, assign(socket, :error, candidate_work_error(reason))}
+    end
+  end
+
+  def handle_event("use_related_candidate", %{"candidate_id" => candidate_id}, socket) do
+    related = FountWeb.CandidateWorkspace.related(Fount.Repo, socket.assigns.progress)
+    candidate = Enum.find(related, &(&1["id"] == candidate_id))
+    decision = Enum.find(pending_decisions(socket.assigns.progress), &(&1["kind"] == "final_approval"))
+
+    cond do
+      is_nil(candidate) ->
+        {:noreply, assign(socket, :error, "That related proposal no longer belongs to this task.")}
+
+      is_nil(decision) ->
+        {:noreply,
+         assign(
+           socket,
+           :error,
+           "This task is not at its final proposal checkpoint yet. Keep the related work saved and return after required checks finish."
+         )}
+
+      true ->
+        response = %{
+          "choice" => "replace",
+          "context_fingerprint" => decision["context_fingerprint"],
+          "plan_version" => decision["plan_version"],
+          "policy_version" => decision["policy_version"],
+          "replacement_fountain" => candidate["fountain"]
+        }
+
+        case FountRun.submit_decision(Fount.Repo, decision["id"], response, socket.assigns.context) do
+          {:ok, _value} ->
+            FountWeb.RunEvents.notify(socket.assigns.run_id)
+
+            {:noreply,
+             socket
+             |> assign(
+               :notice,
+               "Related writing is now the task's proposed replacement and has been sent back through required checks. It is not current screenplay."
+             )
+             |> assign(:error, nil)
+             |> assign(:audition, nil)
+             |> refresh()}
+
+          {:error, reason}
+          when reason in [:stale_decision, :stale_decision_context, :decision_conflict] ->
+            {:noreply,
+             socket
+             |> assign(
+               :error,
+               "The proposal checkpoint changed. The latest saved task state has loaded; review it before trying again."
+             )
+             |> refresh()}
+
+          {:error, reason} ->
+            {:noreply, assign(socket, :error, friendly_error(reason))}
+        end
+    end
+  end
+
   def handle_event("save_policy", %{"policy" => params}, socket) do
     case FountWeb.WorkflowManagement.policy_from_form(
            params,
@@ -228,6 +351,37 @@ defmodule FountWeb.RunLive do
         {:noreply,
          socket
          |> assign(:error, "Preset could not be applied: #{friendly_error(reason)}")
+         |> refresh()}
+    end
+  end
+
+  def handle_event("export_preset", %{"reference" => reference}, socket) do
+    case FountWeb.WorkflowManagement.find_preset(
+           Fount.Repo,
+           socket.assigns.current_owner,
+           reference,
+           socket.assigns.context
+         ) do
+      {:ok, preset} ->
+        payload = %{
+          "name" => preset["name"],
+          "version" => preset["version"],
+          "policy" => preset["policy"]
+        }
+
+        {:noreply,
+         socket
+         |> push_event("download-json", %{
+           filename: preset_filename(preset),
+           content: Jason.encode!(payload, pretty: true)
+         })
+         |> assign(:notice, "Prepared #{preset["name"]} v#{preset["version"]} for export.")
+         |> assign(:error, nil)}
+
+      {:error, reason} ->
+        {:noreply,
+         socket
+         |> assign(:error, "Preset could not be exported: #{friendly_error(reason)}")
          |> refresh()}
     end
   end
@@ -419,6 +573,7 @@ defmodule FountWeb.RunLive do
           progress: progress,
           run: run,
           review: review_data(run, progress),
+          related_candidates: FountWeb.CandidateWorkspace.related(Fount.Repo, progress),
           analysis_service: FountWeb.Services.analysis_service_summary(),
           workflow_selection: workflow_selection,
           policy_presets:
@@ -562,6 +717,24 @@ defmodule FountWeb.RunLive do
   defp maybe_put(map, _key, value) when value in [nil, ""], do: map
   defp maybe_put(map, key, value), do: Map.put(map, key, value)
 
+  defp put_related_candidate_notice(socket, candidate) do
+    assign(socket, :related_candidate_id, candidate["id"])
+  end
+
+  defp candidate_work_error({:overlapping_selections, _}),
+    do: "Those choices edit the same passage. Narrow the checked change groups and combine again."
+
+  defp candidate_work_error(:change_group_required), do: "Choose at least one saved change."
+
+  defp candidate_work_error(:combination_requires_two_sources),
+    do: "Choose change groups from at least two saved proposals to recombine them."
+
+  defp candidate_work_error(:candidate_not_in_task),
+    do: "That proposal is not related to this owner-bound task."
+
+  defp candidate_work_error(:task_scope_unavailable), do: "The saved task scope is unavailable."
+  defp candidate_work_error(reason), do: friendly_error(reason)
+
   defp pending_decisions(progress),
     do: Enum.filter(progress["decisions"] || [], &(&1["status"] == "pending"))
 
@@ -601,7 +774,99 @@ defmodule FountWeb.RunLive do
   end
 
   defp limit_value(policy, key, default), do: get_in(policy, ["limits", key]) || default
+  defp review_step_label("investigation_scope"), do: "Investigation scope"
+  defp review_step_label("strategy_choice"), do: "Approach choice"
+  defp review_step_label("candidate_generation"), do: "Proposed-writing generation"
+  defp review_step_label("iteration"), do: "Further iteration"
+  defp decision_kind_label("strategy"), do: "Choose an approach"
+  defp decision_kind_label("routing"), do: "Choose where the work runs"
+  defp decision_kind_label("investigation_scope"), do: "Confirm what to investigate"
+  defp decision_kind_label("iteration"), do: "Continue or keep this version"
+  defp decision_kind_label("final_approval"), do: "Make the reviewed work current"
+  defp decision_kind_label("rebase"), do: "Screenplay changed — rebase first"
+  defp decision_kind_label(nil), do: "Checkpoint"
+  defp decision_kind_label(kind), do: kind |> String.replace("_", " ") |> String.capitalize()
+
+  defp decision_option_label(option) do
+    option["title"] || option["label"] ||
+      case option["id"] || option["value"] || option["choice"] do
+        "approve" -> "Make this exact checked proposal current"
+        "reject" -> "Keep as proposed writing"
+        "replace" -> "Save manual adjustment and re-check"
+        "rebase" -> "Rebase onto the current screenplay"
+        "stop" -> "Stop this task"
+        value when is_binary(value) -> value |> String.replace("_", " ") |> String.capitalize()
+        _ -> "Choose"
+      end
+  end
+
+  defp review_step_label(gate), do: gate |> String.replace("_", " ") |> String.capitalize()
+
   defp money_value(policy, key), do: get_in(policy, ["limits", "money", key])
+
+  defp policy_effect_summary(policy) do
+    human_gates =
+      policy
+      |> Map.get("gates", %{})
+      |> Enum.count(fn {_gate, mode} -> mode == "human" end)
+
+    completion =
+      if policy["completion"] == "accept",
+        do: "authorized acceptance after checks",
+        else: "proposed writing for separate review"
+
+    inference_calls = get_in(policy, ["limits", "max_inference_calls"]) || 0
+
+    money =
+      case get_in(policy, ["limits", "money"]) do
+        %{"currency" => currency, "max_microunits" => max_microunits}
+        when is_integer(max_microunits) ->
+          "#{currency} #{FountWeb.WorkflowManagement.money_units(max_microunits)} spend ceiling"
+
+        _ ->
+          "no spending ceiling"
+      end
+
+    "#{human_gates} human review stop#{if human_gates == 1, do: "", else: "s"}; #{completion}; #{inference_calls} inference-call ceiling; #{money}."
+  end
+
+  defp preset_effect_summary(current, proposed) when current == proposed, do: "Same as the current settings."
+
+  defp preset_effect_summary(current, proposed) do
+    current_human = current |> Map.get("gates", %{}) |> Enum.count(fn {_key, value} -> value == "human" end)
+    proposed_human = proposed |> Map.get("gates", %{}) |> Enum.count(fn {_key, value} -> value == "human" end)
+    current_calls = get_in(current, ["limits", "max_inference_calls"])
+    proposed_calls = get_in(proposed, ["limits", "max_inference_calls"])
+
+    changes =
+      []
+      |> maybe_effect(current_human != proposed_human, "human review stops #{current_human} → #{proposed_human}")
+      |> maybe_effect(current["completion"] != proposed["completion"], "result #{completion_label(current["completion"])} → #{completion_label(proposed["completion"])}")
+      |> maybe_effect(current_calls != proposed_calls, "inference-call ceiling #{current_calls || 0} → #{proposed_calls || 0}")
+      |> maybe_effect(get_in(current, ["limits", "money"]) != get_in(proposed, ["limits", "money"]), "spending ceiling changes")
+      |> maybe_effect(current["route_choice"] != proposed["route_choice"], "tradeoff routing changes")
+
+    case changes do
+      [] -> "Other validated settings change; open Technical details for the exact policy snapshot."
+      values -> "Would change: " <> Enum.join(values, "; ") <> "."
+    end
+  end
+
+  defp completion_label("accept"), do: "authorized acceptance"
+  defp completion_label(_), do: "proposed writing"
+
+  defp preset_filename(preset) do
+    stem =
+      preset["name"]
+      |> String.downcase()
+      |> String.replace(~r/[^a-z0-9._-]+/u, "-")
+      |> String.trim("-")
+
+    "#{if(stem == "", do: "fount-policy", else: stem)}-v#{preset["version"]}.json"
+  end
+
+  defp maybe_effect(values, true, text), do: values ++ [text]
+  defp maybe_effect(values, false, _text), do: values
 
   defp friendly_error(:not_found), do: "The saved task state is no longer available."
 
@@ -774,158 +1039,74 @@ defmodule FountWeb.RunLive do
 
         <form phx-submit="save_policy" class="card stack policy-form">
           <div>
-            <p class="eyebrow">Task settings</p>
-            <h3>Review steps, completion and limits</h3>
-            <p>Settings version {@run["current_policy_version"]}</p>
-            <details class="technical-details">
-              <summary>Technical details</summary><code>{get_in(@run, ["policy", "fingerprint"]) ||
-                "recorded"}</code>
-            </details>
+            <p class="eyebrow">Purposeful controls</p>
+            <h3>Task settings</h3>
+            <p>Settings version {@run["current_policy_version"]}. Changes are saved as a new version and fence affected old work.</p>
           </div>
-          <div class="policy-grid">
-            <label :for={
-              gate <- ~w(investigation_scope strategy_choice candidate_generation iteration)
-            }>
-              {String.replace(gate, "_", " ")}
-              <select name={"policy[#{gate}]"}>
-                <option value="human" selected={get_in(@current_policy, ["gates", gate]) == "human"}>
-                  Human checkpoint
-                </option>
-                <option
-                  value="automatic"
-                  selected={get_in(@current_policy, ["gates", gate]) == "automatic"}
-                >
-                  Automatic
-                </option>
-              </select>
-            </label>
-            <label>
-              Completion
-              <select name="policy[completion]">
-                <option value="candidate" selected={@current_policy["completion"] == "candidate"}>
-                  Proposed changes — approval required
-                </option>
-                <option value="accept" selected={@current_policy["completion"] == "accept"}>
-                  Accept — exact approver required
-                </option>
-              </select>
-            </label>
-            <label>
-              Trusted approver
-              <select name="policy[approver]">
-                <option
-                  :for={option <- @policy_principals}
-                  value={option["key"]}
-                  selected={
-                    policy_principal_key(@current_policy, @policy_principals) == option["key"]
-                  }
-                >
-                  {option["label"]}
-                </option>
-              </select>
-            </label>
-            <label class="inline-check"><input
-              type="checkbox"
-              name="policy[owner_fallback_enabled]"
-              value="true"
-              checked={not is_nil(@current_policy["fallback_approver"])}
-            /> Use authenticated owner as fallback approver</label>
-            <label>
-              Route
-              <select name="policy[route_choice]">
-                <option
-                  value="pause_on_material_tradeoff"
-                  selected={policy_route_rule(@current_policy) == "pause_on_material_tradeoff"}
-                >
-                  Pause on material tradeoff
-                </option>
-                <option
-                  value="registered_reviewer"
-                  selected={policy_route_rule(@current_policy) == "registered_reviewer"}
-                >
-                  Route to registered human reviewer
-                </option>
-              </select>
-            </label>
-            <label>
-              Registered route reviewer
-              <select name="policy[route_reviewer_key]">
-                <option
-                  :for={option <- @policy_reviewers}
-                  value={option["key"]}
-                  selected={policy_reviewer_key(@current_policy, @policy_reviewers) == option["key"]}
-                >
-                  {option["label"]}
-                </option>
-              </select>
-            </label>
-          </div>
+
           <fieldset>
-            <legend>Resource ceilings</legend>
+            <legend>Review steps</legend>
+            <p class="scope-note">Choose where the task must stop for a person. Candidate completion keeps proposed writing separate from the current screenplay.</p>
+            <p class="scope-note"><strong>Effective now:</strong> {policy_effect_summary(@current_policy)}</p>
             <div class="policy-grid">
-              <label>Iterations
-              <input
-                type="number"
-                min="0"
-                name="policy[max_iterations]"
-                value={limit_value(@current_policy, "max_iterations", 3)}
-              /></label>
-              <label>Malformed repairs/call
-              <input
-                type="number"
-                min="0"
-                name="policy[max_malformed_repairs_per_call]"
-                value={limit_value(@current_policy, "max_malformed_repairs_per_call", 1)}
-              /></label>
-              <label>Transient retries
-              <input
-                type="number"
-                min="0"
-                name="policy[max_transient_retries]"
-                value={limit_value(@current_policy, "max_transient_retries", 2)}
-              /></label>
-              <label>Inference calls
-              <input
-                type="number"
-                min="0"
-                name="policy[max_inference_calls]"
-                value={limit_value(@current_policy, "max_inference_calls", 12)}
-              /></label>
-              <label>Measurement states
-              <input
-                type="number"
-                min="0"
-                name="policy[max_measurement_states]"
-                value={limit_value(@current_policy, "max_measurement_states", 500)}
-              /></label>
+              <label :for={gate <- ~w(investigation_scope strategy_choice candidate_generation iteration)}>
+                {review_step_label(gate)}
+                <select name={"policy[#{gate}]"}>
+                  <option value="human" selected={get_in(@current_policy, ["gates", gate]) == "human"}>Ask me</option>
+                  <option value="automatic" selected={get_in(@current_policy, ["gates", gate]) == "automatic"}>Continue automatically</option>
+                </select>
+              </label>
+              <label>Completion
+                <select name="policy[completion]">
+                  <option value="candidate" selected={@current_policy["completion"] == "candidate"}>Save proposed writing — review required</option>
+                  <option value="accept" selected={@current_policy["completion"] == "accept"}>Accept only with the exact authorized approver</option>
+                </select>
+              </label>
+              <label>Trusted approver
+                <select name="policy[approver]">
+                  <option :for={option <- @policy_principals} value={option["key"]} selected={policy_principal_key(@current_policy, @policy_principals) == option["key"]}>{option["label"]}</option>
+                </select>
+              </label>
+              <label class="inline-check"><input type="checkbox" name="policy[owner_fallback_enabled]" value="true" checked={not is_nil(@current_policy["fallback_approver"])} /> Allow the authenticated owner as fallback approver</label>
+              <label>When a material tradeoff appears
+                <select name="policy[route_choice]">
+                  <option value="pause_on_material_tradeoff" selected={policy_route_rule(@current_policy) == "pause_on_material_tradeoff"}>Pause for review</option>
+                  <option value="registered_reviewer" selected={policy_route_rule(@current_policy) == "registered_reviewer"}>Route to a registered human reviewer</option>
+                </select>
+              </label>
+              <label>Registered reviewer
+                <select name="policy[route_reviewer_key]">
+                  <option :for={option <- @policy_reviewers} value={option["key"]} selected={policy_reviewer_key(@current_policy, @policy_reviewers) == option["key"]}>{option["label"]}</option>
+                </select>
+              </label>
             </div>
-            <label class="inline-check"><input
-              type="checkbox"
-              name="policy[money_enabled]"
-              value="true"
-              checked={not is_nil(get_in(@current_policy, ["limits", "money"]))}
-            /> Enable money ceiling</label>
-            <div class="policy-grid">
-              <label>Currency
-              <input
-                name="policy[currency]"
-                maxlength="3"
-                value={money_value(@current_policy, "currency") || "USD"}
-              /></label>
-              <label>Max microunits
-              <input
-                type="number"
-                min="0"
-                name="policy[max_microunits]"
-                value={money_value(@current_policy, "max_microunits") || 0}
-              /></label>
-            </div>
-            <p>
-              <strong>Effective limits and estimates.</strong>
-              Enter a spending limit in millionths of a dollar. Estimated cost is shown only when available. Estimates are separate from actual charges.
-            </p>
           </fieldset>
-          <button disabled={!@live_connected || !@lifecycle["update_policy"]} type="submit">Save Task settings</button>
+
+          <fieldset>
+            <legend>Time and spending limits</legend>
+            <p class="eyebrow">Effective limits and estimates</p>
+            <p class="scope-note">These are hard task ceilings. Estimated cost is shown only when available; missing cost estimates remain unknown rather than being invented.</p>
+            <div class="policy-grid">
+              <label>Writing iterations <input type="number" min="0" name="policy[max_iterations]" value={limit_value(@current_policy, "max_iterations", 3)} /></label>
+              <label>Malformed-response repairs per call <input type="number" min="0" name="policy[max_malformed_repairs_per_call]" value={limit_value(@current_policy, "max_malformed_repairs_per_call", 1)} /></label>
+              <label>Transient retries <input type="number" min="0" name="policy[max_transient_retries]" value={limit_value(@current_policy, "max_transient_retries", 2)} /></label>
+              <label>Inference calls <input type="number" min="0" name="policy[max_inference_calls]" value={limit_value(@current_policy, "max_inference_calls", 12)} /></label>
+              <label>Measurement states <input type="number" min="0" name="policy[max_measurement_states]" value={limit_value(@current_policy, "max_measurement_states", 500)} /></label>
+            </div>
+            <label class="inline-check"><input type="checkbox" name="policy[money_enabled]" value="true" checked={not is_nil(get_in(@current_policy, ["limits", "money"]))} /> Set a spending ceiling</label>
+            <div class="policy-grid">
+              <label>Currency <input name="policy[currency]" maxlength="3" value={money_value(@current_policy, "currency") || "USD"} /></label>
+              <label>Maximum spend <input inputmode="decimal" name="policy[max_currency_units]" value={FountWeb.WorkflowManagement.money_units(money_value(@current_policy, "max_microunits") || 0)} /></label>
+            </div>
+            <p>Enter ordinary currency units, for example <code>12.50</code>. Fount converts that value exactly to the existing microunit contract before validation.</p>
+          </fieldset>
+
+          <details class="technical-details">
+            <summary>Technical details</summary>
+            <p>Policy fingerprint <code>{get_in(@run, ["policy", "fingerprint"]) || "recorded"}</code></p>
+            <pre><%= json(@current_policy) %></pre>
+          </details>
+          <button disabled={!@live_connected || !@lifecycle["update_policy"]} type="submit">Save task settings</button>
         </form>
 
         <div class="card stack">
@@ -941,6 +1122,7 @@ defmodule FountWeb.RunLive do
             <article :for={preset <- @policy_presets} class="preset-card">
               <p><strong>{preset["name"]}</strong> · {preset["source"]} v{preset["version"]}</p>
               <p>Status: {if(preset["compatible"], do: "compatible", else: "incompatible")}</p>
+              <p :if={preset["compatible"]} class="scope-note">{preset_effect_summary(@current_policy, preset["policy"])}</p>
               <details class="technical-details">
                 <summary>Technical details</summary><code>{preset["fingerprint"]}</code>
               </details>
@@ -956,6 +1138,13 @@ defmodule FountWeb.RunLive do
                 value={preset["reference"]}
                 disabled={!@live_connected}
               >Apply settings</button>
+              <button
+                :if={preset["compatible"]}
+                type="button"
+                phx-click="export_preset"
+                phx-value-reference={preset["reference"]}
+                disabled={!@live_connected}
+              >Export JSON</button>
             </article>
           </div>
         </div>
@@ -977,97 +1166,9 @@ defmodule FountWeb.RunLive do
         </div>
 
         <div class="card stack">
-          <h3>Available actions</h3>
-          <p>
-            Only available actions can be started. Review their settings before continuing.
-          </p>
-          <div class="action-catalog">
-            <article
-              :for={action <- @workflow_actions}
-              class={
-                if(action["enabled"], do: "action-card enabled", else: "action-card unavailable")
-              }
-            >
-              <h4>{action["label"]}</h4>
-              <p>
-                Status:
-                <strong>{if(action["enabled"], do: "enabled", else: "unavailable for this task")}</strong>
-              </p>
-              <p :if={!action["enabled"]}>This action is unavailable in this workspace.</p>
-              <details>
-                <summary>Action details</summary>
-                <p>Mode: {action["mode"]}</p>
-                <p>{action["request"]}</p>
-                <p>{action["handler"]}</p>
-                <p>{action["preconditions"]}</p>
-              </details>
-            </article>
-          </div>
-        </div>
-
-        <form phx-submit="preview_workflow_launch" class="card stack">
-          <h3>Start work</h3>
-          <label>
-            Action
-            <select name="workflow[action]">
-              <option :for={action <- @enabled_workflow_actions} value={action["id"]}>
-                {action["label"]}
-              </option>
-            </select>
-          </label>
-          <label>Instruction <textarea name="workflow[instruction]" maxlength="4096" required></textarea></label>
-          <label class="inline-check"><input
-            type="checkbox"
-            name="workflow[multi_launch]"
-            value="true"
-          />
-          Start one independent task per selected target (maximum {FountWeb.WorkflowManagement.max_multi_launch()})</label>
-          <p>
-            Each task keeps its own full policy budget; there is no shared batch budget or second scheduler.
-          </p>
-          <button disabled={!@live_connected || is_nil(@workflow_selection)} type="submit">Validate launch preview</button>
-        </form>
-
-        <div :if={@launch_preview} class="card stack launch-preview">
-          <h3>Review before starting</h3>
-          <p>Validated against the selected screenplay source. Exact internal binding is recorded.</p>
-          <details class="technical-details">
-            <summary>Technical details</summary>
-            <p>Command <code>{@launch_preview["command_id"]}</code></p>
-          </details>
-          <article
-            :for={{entry, index} <- Enum.with_index(@launch_preview["entries"])}
-            class="launch-entry"
-          >
-            <strong>Task {index + 1}</strong>
-            · exact selection recorded
-            <details class="technical-details">
-              <summary>Technical details</summary><pre><%= json(%{"preview" => entry["preview"], "budget" => entry["budget"], "request_fingerprint" => entry["request_fingerprint"]}) %></pre>
-            </details>
-          </article>
-          <button phx-click="confirm_workflow_launch" disabled={!@live_connected}>Create these independent tasks</button>
-        </div>
-
-        <div :if={@launch_results} class="card">
-          <h3>Launch results</h3>
-          <p>
-            {length(@launch_results["created"])} created/replayed · {length(@launch_results["failed"])} failed · partial: {to_string(
-              @launch_results["partial"]
-            )}
-          </p>
-          <ul>
-            <li :for={row <- @launch_results["created"]}>
-              Ready: saved task. Open Project Activity to continue.
-            </li>
-            <li :for={row <- @launch_results["failed"]}>
-              Task launch failed: {row["error"]}
-            </li>
-          </ul>
-        </div>
-
-        <div class="card">
-          <button disabled={!@live_connected} phx-click="launch">Start / resume task</button>
-          <p>Resuming continues this task without starting a duplicate.</p>
+          <h3>Related creative work</h3>
+          <p>The complete creative catalog, exact screenplay selection, protections, approaches and recovery inputs live beside the pages rather than inside this task-policy screen.</p>
+          <a class="button-link" href={"/p/#{@project_key}/work"}>Open Work on it</a>
         </div>
       </section>
 
@@ -1114,7 +1215,7 @@ defmodule FountWeb.RunLive do
         </p>
         <p>
           Analysis service: <strong>{@analysis_service["label"]}</strong>
-          (<code>{@analysis_service["mode"]}</code>). Compatibility mode records semantic analysis as not-run; it is never treated as success.
+          (<code>{@analysis_service["mode"]}</code>). If semantic analysis is unavailable, it is recorded as not-run; it is never treated as success.
         </p>
         <div class="grid">
           <div class="card">
@@ -1183,7 +1284,7 @@ defmodule FountWeb.RunLive do
         </p>
         <p :if={@pending_decisions == []}>No pending decisions.</p>
         <article :for={{decision, ordinal} <- Enum.with_index(@pending_decisions, 1)} class="card">
-          <h3>Decision {ordinal} · {String.replace(decision["kind"] || "checkpoint", "_", " ")}</h3>
+          <h3>Decision {ordinal} · {decision_kind_label(decision["kind"])}</h3>
           <p><strong>Question:</strong> {decision["prompt"]}</p>
           <details class="technical-details">
             <summary>Technical decision binding</summary><dl>
@@ -1254,9 +1355,7 @@ defmodule FountWeb.RunLive do
                 placeholder="Paste the complete replacement Fountain source for a new checked candidate"
               ></textarea>
             </label>
-            <button disabled={!@live_connected} type="submit">{option["title"] || option["label"] ||
-              option["id"] ||
-              option["value"]}</button>
+            <button disabled={!@live_connected} type="submit">{decision_option_label(option)}</button>
           </form>
         </article>
       </section>
@@ -1351,6 +1450,78 @@ defmodule FountWeb.RunLive do
             mode="side-by-side"
           />
         </div>
+        <section :if={@review.candidate && @related_candidates != []} class="card stack candidate-workshop">
+          <div>
+            <p class="eyebrow">Related work</p>
+            <h3>Audition, select or recombine proposed writing</h3>
+            <p>
+              These operations save new Workshop candidates inside this task. They never make pages current.
+              To use one as the task proposal, send it through the existing replacement checkpoint so required checks run again.
+            </p>
+          </div>
+
+          <article :for={candidate <- @related_candidates} class="related-candidate">
+            <div class="related-candidate__head">
+              <div>
+                <strong>{candidate["label"]}</strong>
+                <span :if={candidate["id"] == @review.candidate_id} class="status-chip">Current task proposal</span>
+              </div>
+              <button
+                type="button"
+                phx-click="audition_candidate"
+                phx-value-candidate_id={candidate["id"]}
+                disabled={!@live_connected}
+              >Audition in context</button>
+            </div>
+
+            <form :if={candidate["groups"] != []} phx-submit="select_candidate_groups" class="stack">
+              <input type="hidden" name="candidate[id]" value={candidate["id"]} />
+              <fieldset>
+                <legend>Select saved changes</legend>
+                <label :for={group <- candidate["groups"]} class="candidate-group">
+                  <input type="checkbox" name="candidate[groups][]" value={group["id"]} />
+                  <span><strong>{group["title"]}</strong> — {group["reason"]}</span>
+                </label>
+              </fieldset>
+              <button type="submit" disabled={!@live_connected}>Save selected changes as related proposal</button>
+            </form>
+
+            <button
+              type="button"
+              phx-click="use_related_candidate"
+              phx-value-candidate_id={candidate["id"]}
+              disabled={!@live_connected}
+            >Use this as the task proposal and re-check</button>
+          </article>
+
+          <form :if={length(@related_candidates) >= 2} phx-submit="combine_candidates" class="stack combine-candidates">
+            <fieldset>
+              <legend>Recombine selected change groups</legend>
+              <p class="scope-note">Choose groups from at least two proposals. Conflicting edits are rejected rather than guessed.</p>
+              <div :for={candidate <- @related_candidates} class="candidate-combine-source">
+                <strong>{candidate["label"]}</strong>
+                <label :for={group <- candidate["groups"]} class="candidate-group">
+                  <input
+                    type="checkbox"
+                    name={"combine[groups][#{candidate["id"]}][]"}
+                    value={group["id"]}
+                  />
+                  <span>{group["title"]}</span>
+                </label>
+              </div>
+            </fieldset>
+            <button type="submit" disabled={!@live_connected}>Save recombined proposal</button>
+          </form>
+
+          <div :if={@audition} class="audition-panel" role="region" aria-label="Candidate audition">
+            <div>
+              <strong>Auditioned in saved task context</strong>
+              <p>Neighboring scenes are included for continuity. No acceptance occurred.</p>
+            </div>
+            <pre class="script"><%= @audition["fountain"] %></pre>
+          </div>
+        </section>
+
         <div :if={@review.candidate} class="grid">
           <div class="card">
             <h3>Revision history</h3><details class="technical-details">

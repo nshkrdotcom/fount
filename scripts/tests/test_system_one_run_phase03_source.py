@@ -49,7 +49,11 @@ class SystemOneRunPhase03Source(unittest.TestCase):
         browser = self.read("apps/fount_web/browser/tests/phase06.spec.mjs")
         self.assertIn("JOURNEY:analysis", journeys)
         self.assertIn('"completion" => completion', journeys)
-        self.assertIn('<option value="analysis">', project_tools)
+        # UX02 removes the legacy journey selector from the writer-facing Work screen.
+        # The deterministic analysis journey remains in the retained host fixtures, while
+        # source-bound investigation is exposed through the new creative brief.
+        self.assertIn('data-action="investigate"', project_tools)
+        self.assertNotIn('<option value="analysis">', project_tools)
         self.assertIn("H01-H05 deterministic host journey", integration)
         self.assertIn('prewrite["analysis_run_id"]', integration)
         self.assertIn('revision["analysis_run_id"]', integration)

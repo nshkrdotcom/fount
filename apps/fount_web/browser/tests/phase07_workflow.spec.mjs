@@ -46,7 +46,7 @@ test('W01-W03 expose validated policy, closed actions and persistent exact-base 
   for (const gate of ['investigation_scope', 'strategy_choice', 'candidate_generation', 'iteration']) {
     await expect(page.locator(`select[name="policy[${gate}]"]`)).toBeVisible();
   }
-  await expect(page.getByText(/Max microunits/)).toBeVisible();
+  await expect(page.getByText(/Maximum spend/)).toBeVisible();
   await expect(page.getByLabel('Trusted approver')).toHaveValue('owner');
   await expect(page.getByText(/Estimates are separate from actual charges/)).toBeVisible();
   await page.locator('select[name="policy[route_choice]"]').selectOption('registered_reviewer');

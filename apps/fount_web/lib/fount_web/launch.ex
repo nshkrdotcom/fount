@@ -258,7 +258,7 @@ defmodule FountWeb.Launch do
     end
   end
 
-  @doc "Starts a closed-catalog Phase 07 action from an exact owner-authorized screenplay revision."
+  @doc "Starts a validated creative action from an exact owner-authorized screenplay revision."
   def create_action_from_base(owner_id, project_id, base_revision_id, attrs)
       when is_binary(owner_id) and is_binary(project_id) and is_binary(base_revision_id) and
              is_map(attrs) do
@@ -267,6 +267,7 @@ defmodule FountWeb.Launch do
     instruction = Map.get(attrs, "instruction", "")
     selection = Map.get(attrs, "selection")
     policy = Map.get(attrs, "policy")
+    request_attrs = Map.get(attrs, "request_attrs", %{})
 
     with :ok <- validate_authoring_command(command_id),
          {:ok, project} <- FountWeb.Store.project(Fount.Repo, owner_id, project_id),
@@ -279,7 +280,8 @@ defmodule FountWeb.Launch do
              root,
              action,
              instruction,
-             selection
+             selection,
+             request_attrs
            ),
          {:ok, validated_policy} <- FountRun.Policy.new(policy, context),
          {:ok, run} <-
@@ -329,11 +331,12 @@ defmodule FountWeb.Launch do
       "goal" => String.trim(instruction),
       "scope" => request["selection"],
       "constraints" => request["constraints"] || [],
-      "protected_material" => [],
+      "protected_material" => get_in(request, ["options", "protected_text"]) || [],
       "client_idempotency_key" => idempotency_key,
       "operation_parameters" => %{
         "workflow" => request["workflow"],
         "request_fingerprint" => CanonicalJSON.hash(request),
+        "request_options" => request["options"],
         "selection_fingerprint" => CanonicalJSON.hash(request["selection"])
       },
       "policy" => policy

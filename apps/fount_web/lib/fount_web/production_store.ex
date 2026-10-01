@@ -1,9 +1,9 @@
 defmodule FountWeb.ProductionStore do
-  @moduledoc "Owner-scoped host persistence for Phase 08 human records and candidate bindings."
+  @moduledoc "Owner-scoped host persistence for production records and candidate bindings."
 
   alias Ecto.Adapters.SQL
 
-  @uuid_columns ~w(id project_id run_id screenplay_id revision_id base_revision_id candidate_id)
+  @uuid_columns ~w(id project_id run_id screenplay_id revision_id base_revision_id candidate_id source_revision_id proposal_candidate_id result_revision_id)
 
   def register_candidate(repo, attrs) do
     id = value(attrs, :id) || Fount.ID.v4()
@@ -60,6 +60,82 @@ defmodule FountWeb.ProductionStore do
       """,
       [owner, project_id, limit]
     )
+  end
+
+
+  def link_note_work(repo, attrs) do
+    id = value(attrs, :id) || Fount.ID.v4()
+
+    params = [
+      id,
+      fetch!(attrs, :owner_id),
+      fetch!(attrs, :project_id),
+      fetch!(attrs, :screenplay_id),
+      fetch!(attrs, :note_id),
+      fetch!(attrs, :source_revision_id),
+      fetch!(attrs, :source_fingerprint),
+      fetch!(attrs, :run_id)
+    ]
+
+    case SQL.query(
+           repo,
+           """
+           INSERT INTO fount_web_note_work_links(
+             id,owner_id,project_id,screenplay_id,note_id,source_revision_id,source_fingerprint,run_id,inserted_at,updated_at
+           ) VALUES($1::text::uuid,$2,$3::text::uuid,$4::text::uuid,$5,$6::text::uuid,$7,$8::text::uuid,now(),now())
+           ON CONFLICT(owner_id,note_id,run_id) DO UPDATE SET updated_at=now()
+           RETURNING *
+           """,
+           params,
+           log: false
+         ) do
+      {:ok, result} -> {:ok, one(result)}
+      {:error, reason} -> {:error, storage_reason(reason)}
+    end
+  end
+
+  def list_note_work_links(repo, owner, project_id, note_id \\ nil) do
+    {statement, params} =
+      if is_binary(note_id) do
+        {"""
+         SELECT l.*,wr.display_key,wr.display_label,r.status
+         FROM fount_web_note_work_links l
+         JOIN fount_web_runs wr ON wr.owner_id=l.owner_id AND wr.run_id=l.run_id
+         JOIN fount_runs r ON r.id=l.run_id
+         WHERE l.owner_id=$1 AND l.project_id=$2::text::uuid AND l.note_id=$3
+         ORDER BY l.inserted_at DESC,l.id
+         LIMIT 100
+         """, [owner, project_id, note_id]}
+      else
+        {"""
+         SELECT l.*,wr.display_key,wr.display_label,r.status
+         FROM fount_web_note_work_links l
+         JOIN fount_web_runs wr ON wr.owner_id=l.owner_id AND wr.run_id=l.run_id
+         JOIN fount_runs r ON r.id=l.run_id
+         WHERE l.owner_id=$1 AND l.project_id=$2::text::uuid
+         ORDER BY l.inserted_at DESC,l.id
+         LIMIT 100
+         """, [owner, project_id]}
+      end
+
+    query(repo, statement, params)
+  end
+
+  def attach_note_work_result(repo, owner, run_id, candidate_id, result_revision_id) do
+    case SQL.query(
+           repo,
+           """
+           UPDATE fount_web_note_work_links
+           SET proposal_candidate_id=$3::text::uuid,result_revision_id=$4::text::uuid,updated_at=now()
+           WHERE owner_id=$1 AND run_id=$2::text::uuid
+           RETURNING *
+           """,
+           [owner, run_id, candidate_id, result_revision_id],
+           log: false
+         ) do
+      {:ok, result} -> {:ok, rows(result)}
+      {:error, reason} -> {:error, storage_reason(reason)}
+    end
   end
 
   def create_table_read(repo, attrs) do

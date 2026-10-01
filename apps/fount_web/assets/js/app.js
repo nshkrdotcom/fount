@@ -139,6 +139,95 @@ const AccessibleDialog = {
   }
 }
 
+const ChoiceFilter = {
+  mounted() {
+    this.filter = this.el.querySelector("[data-choice-filter]")
+    this.choices = () => [...this.el.querySelectorAll("[data-choice]")]
+    this.apply = () => {
+      const query = (this.filter?.value || "").trim().toLowerCase()
+      this.choices().forEach((choice) => {
+        const haystack = choice.dataset.choice || ""
+        choice.hidden = query !== "" && !haystack.includes(query)
+      })
+    }
+    this.onChange = (event) => {
+      const input = event.target.closest("input[type='checkbox']")
+      if (!input || !this.el.contains(input) || input.name !== "task[scope][]") return
+      const boxes = [...this.el.querySelectorAll("input[name='task[scope][]']")]
+      const whole = boxes.find((box) => box.value === "whole")
+      if (input.value === "whole" && input.checked) {
+        boxes.filter((box) => box !== input).forEach((box) => { box.checked = false })
+      } else if (input.checked && whole) {
+        whole.checked = false
+      }
+      if (boxes.every((box) => !box.checked) && whole) whole.checked = true
+    }
+    this.filter?.addEventListener("input", this.apply)
+    this.el.addEventListener("change", this.onChange)
+    this.apply()
+  },
+
+  destroyed() {
+    this.filter?.removeEventListener("input", this.apply)
+    this.el.removeEventListener("change", this.onChange)
+  }
+}
+
+const CreativeBrief = {
+  mounted() {
+    this.question = this.el.querySelector("textarea[name='task[question]']")
+    this.radios = () => [...this.el.querySelectorAll("input[type='radio'][name='task[action]']")]
+    this.taskDetails = () => [...this.el.querySelectorAll("[data-task-actions]")]
+    this.currentAction = () => this.radios().find((radio) => radio.checked)?.value || "rewrite"
+
+    this.applyAction = () => {
+      const action = this.currentAction()
+      this.taskDetails().forEach((row) => {
+        const allowed = (row.dataset.taskActions || "").split(/\s+/).filter(Boolean)
+        const active = allowed.includes(action)
+        row.hidden = !active
+        row.querySelectorAll("input, select, textarea").forEach((control) => {
+          control.disabled = !active
+        })
+      })
+    }
+
+    this.onChange = (event) => {
+      if (event.target.matches("input[type='radio'][name='task[action]']")) this.applyAction()
+    }
+
+    this.onClick = (event) => {
+      const preset = event.target.closest("[data-creative-preset]")
+      if (!preset || !this.el.contains(preset)) return
+      event.preventDefault()
+      const action = preset.dataset.action
+      const radio = this.radios().find((entry) => entry.value === action)
+      if (radio) radio.checked = true
+      if (this.question && preset.dataset.question) this.question.value = preset.dataset.question
+      const profile = preset.dataset.profile
+      if (profile) {
+        const field = this.el.querySelector("select[name='task[profile]']")
+        if (field) field.value = profile
+      }
+      this.applyAction()
+      this.question?.focus({preventScroll: true})
+    }
+
+    this.el.addEventListener("change", this.onChange)
+    this.el.addEventListener("click", this.onClick)
+    this.applyAction()
+  },
+
+  updated() {
+    this.applyAction?.()
+  },
+
+  destroyed() {
+    this.el.removeEventListener("change", this.onChange)
+    this.el.removeEventListener("click", this.onClick)
+  }
+}
+
 const AuthoringEditor = {
   mounted() {
     this.source = this.el.querySelector("[data-authoring-source]")
@@ -149,6 +238,29 @@ const AuthoringEditor = {
     this.textHistory = [this.source?.value || ""]
     this.textIndex = 0
     this.maxHistory = 100
+    this.focusMode = false
+    this.typewriterMode = false
+    this.reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)") || null
+    this.applyTypewriter = () => {
+      const button = this.el.querySelector("[data-authoring-typewriter]")
+      const reduced = Boolean(this.reducedMotion?.matches)
+      if (reduced) this.typewriterMode = false
+      if (button) {
+        button.disabled = reduced
+        button.setAttribute("aria-pressed", String(this.typewriterMode))
+        button.textContent = reduced
+          ? "Typewriter off · reduced motion"
+          : (this.typewriterMode ? "Typewriter scroll on" : "Typewriter scroll off")
+      }
+    }
+    this.applyFocus = () => {
+      this.el.classList.toggle("is-focus-mode", this.focusMode)
+      const button = this.el.querySelector("[data-authoring-focus]")
+      if (button) {
+        button.setAttribute("aria-pressed", String(this.focusMode))
+        button.textContent = this.focusMode ? "Leave Focus" : "Focus"
+      }
+    }
 
     this.position = () => {
       if (!this.source) return
@@ -157,6 +269,16 @@ const AuthoringEditor = {
       const output = this.el.querySelector("[data-editor-position]")
       if (output) output.textContent = `Line ${lines.length}, column ${lines[lines.length - 1].length + 1}`
       return {line: lines.length, column: lines[lines.length - 1].length + 1}
+    }
+
+    this.maybeTypewriterScroll = () => {
+      if (!this.source || !this.typewriterMode || this.reducedMotion?.matches) return
+      const before = this.source.value.slice(0, this.source.selectionStart || 0)
+      const line = before.split("\n").length
+      const style = window.getComputedStyle(this.source)
+      const lineHeight = Number.parseFloat(style.lineHeight) || 20
+      const desired = Math.max(0, ((line - 1) * lineHeight) - (this.source.clientHeight * 0.45))
+      this.source.scrollTo({top: desired, behavior: "auto"})
     }
 
     this.pushHistory = () => {
@@ -190,6 +312,7 @@ const AuthoringEditor = {
       this.el.dataset.dirty = "true"
       this.pushHistory()
       this.position()
+      this.maybeTypewriterScroll()
       this.schedulePreview()
     }
 
@@ -212,9 +335,28 @@ const AuthoringEditor = {
       this.composing = false
       this.markChanged()
     }
-    this.onSelection = () => this.position()
+    this.onSelection = () => {
+      this.position()
+      this.maybeTypewriterScroll()
+    }
 
     this.onKeydown = (event) => {
+      if (event.key === "Escape" && this.focusMode) {
+        event.preventDefault()
+        this.focusMode = false
+        this.applyFocus()
+        this.el.querySelector("[data-authoring-focus]")?.focus()
+        return
+      }
+      const sceneCard = event.target.closest?.("[data-scene-card]")
+      if (sceneCard && event.altKey && (event.key === "ArrowUp" || event.key === "ArrowDown")) {
+        event.preventDefault()
+        this.pushEvent("scene_move", {
+          scene_id: sceneCard.dataset.sceneId,
+          direction: event.key === "ArrowUp" ? "up" : "down"
+        })
+        return
+      }
       if (!this.source || event.target !== this.source) return
       const modifier = event.ctrlKey || event.metaKey
       if (modifier && event.key.toLowerCase() === "s") {
@@ -239,6 +381,24 @@ const AuthoringEditor = {
     }
 
     this.onClick = (event) => {
+      const typewriter = event.target.closest("[data-authoring-typewriter]")
+      if (typewriter && this.el.contains(typewriter)) {
+        event.preventDefault()
+        if (!this.reducedMotion?.matches) {
+          this.typewriterMode = !this.typewriterMode
+          this.applyTypewriter()
+          if (this.typewriterMode) this.maybeTypewriterScroll()
+        }
+        return
+      }
+      const focus = event.target.closest("[data-authoring-focus]")
+      if (focus && this.el.contains(focus)) {
+        event.preventDefault()
+        this.focusMode = !this.focusMode
+        this.applyFocus()
+        if (this.focusMode) this.source?.focus({preventScroll: true})
+        return
+      }
       const boundary = event.target.closest("#ai-assist, #candidate-accept")
       if (boundary && this.el.contains(boundary)) {
         event.preventDefault()
@@ -289,6 +449,8 @@ const AuthoringEditor = {
     this.el.addEventListener("click", this.onClick)
     window.addEventListener("beforeunload", this.onBeforeUnload)
     this.position()
+    this.applyFocus()
+    this.applyTypewriter()
 
     this.handleEvent("authoring:mark_saved", ({client_seq}) => {
       if (Number(client_seq) !== this.seq) return
@@ -332,6 +494,8 @@ const AuthoringEditor = {
 
   updated() {
     if (this.source) this.source.readOnly = this.el.dataset.draftStatus !== "active"
+    this.applyFocus?.()
+    this.applyTypewriter?.()
   },
 
   destroyed() {
@@ -568,7 +732,22 @@ let csrfToken = document.querySelector("meta[name='csrf-token']")?.getAttribute(
 let liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
   params: {_csrf_token: csrfToken},
-  hooks: {SceneNavigator, AccessibleDialog, AuthoringEditor, AnalysisGraph, TableReadWorkspace}
+  hooks: {SceneNavigator, AccessibleDialog, ChoiceFilter, CreativeBrief, AuthoringEditor, AnalysisGraph, TableReadWorkspace}
 })
 liveSocket.connect()
 window.liveSocket = liveSocket
+
+window.addEventListener("phx:download-json", (event) => {
+  const {filename, content} = event.detail || {}
+  if (!filename || typeof content !== "string") return
+
+  const blob = new Blob([content], {type: "application/json;charset=utf-8"})
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement("a")
+  link.href = url
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
+})

@@ -1,6 +1,6 @@
 defmodule FountWeb.WorkflowManagement do
   @moduledoc """
-  Host-owned Phase 07 policy, workflow, selection, comparison and notification helpers.
+  Host-owned workflow, policy, selection, comparison and notification helpers.
 
   This module never manufactures ActorContext identity from browser fields. It validates
   policy through FountRun.Policy, request scope through Fount.Selection and writer requests
@@ -15,7 +15,7 @@ defmodule FountWeb.WorkflowManagement do
   @limit_keys ~w(max_iterations max_malformed_repairs_per_call max_transient_retries max_inference_calls max_measurement_states)
   @policy_form_keys @gate_keys ++
                       @limit_keys ++
-                      ~w(completion approver owner_fallback_enabled route_choice route_reviewer_key money_enabled currency max_microunits)
+                      ~w(completion approver owner_fallback_enabled route_choice route_reviewer_key money_enabled currency max_microunits max_currency_units)
   @terminal ~w(completed_candidate completed_accepted stopped failed)
   @max_instruction_bytes 4_096
   @max_scope_targets 64
@@ -25,86 +25,116 @@ defmodule FountWeb.WorkflowManagement do
   @action_catalog [
     %{
       "id" => "develop",
-      "label" => "Develop",
+      "workflow" => "develop",
+      "label" => "Develop pages",
       "enabled" => true,
       "mode" => "revise",
-      "request" => "FountWorkshop.Request workflow=develop; placement=start",
-      "handler" => "FountRun.PipelineRequest → PipelineHandler → WorkshopHandler",
-      "preconditions" => "authorized exact base revision and validated screenplay selection"
+      "summary" => "Draft new material from a brief and an exact placement.",
+      "request" => "develop",
+      "handler" => "durable Run → Workshop",
+      "preconditions" => "brief, exact base and placement"
     },
     %{
-      "id" => "propagate",
-      "label" => "Propagate change",
+      "id" => "rewrite",
+      "workflow" => "pass",
+      "label" => "Rewrite selected pages",
       "enabled" => true,
       "mode" => "revise",
-      "request" => "FountWorkshop.Request workflow=propagate; change + repair_scope",
-      "handler" => "FountRun.PipelineRequest → PipelineHandler → WorkshopHandler",
-      "preconditions" =>
-        "nonempty instruction, exact base revision and validated screenplay selection"
+      "summary" => "Rewrite only the selected material in the direction you give.",
+      "request" => "pass/custom",
+      "handler" => "durable Run → Workshop",
+      "preconditions" => "direction and exact selection"
     },
     %{
       "id" => "pass",
+      "workflow" => "pass",
       "label" => "Focused pass",
       "enabled" => true,
       "mode" => "revise",
-      "request" => "FountWorkshop.Request workflow=pass; profile=dialogue_subtext",
-      "handler" => "FountRun.PipelineRequest → PipelineHandler → WorkshopHandler",
-      "preconditions" => "authorized exact base revision and validated screenplay selection"
+      "summary" => "Run one supported craft pass over selected pages.",
+      "request" => "pass",
+      "handler" => "durable Run → Workshop",
+      "preconditions" => "profile and exact selection"
     },
     %{
       "id" => "alternatives",
-      "label" => "Alternatives",
-      "enabled" => false,
+      "workflow" => "alternatives",
+      "label" => "Explore alternatives",
+      "enabled" => true,
       "mode" => "explore",
-      "request" => "FountWorkshop.Workflows.alternatives/4 exists",
-      "handler" => "not enabled by the Phase 07 host catalog",
-      "preconditions" => "no retained durable-host launch proof for this exact action schema"
+      "summary" => "Materialize a finite set of distinct approaches without accepting one.",
+      "request" => "alternatives",
+      "handler" => "durable Run → Workshop sessions/candidates",
+      "preconditions" => "brief, exact selection and alternative count"
     },
     %{
       "id" => "sequence",
-      "label" => "Sequence",
-      "enabled" => false,
+      "workflow" => "sequence",
+      "label" => "Rebuild sequence",
+      "enabled" => true,
       "mode" => "revise",
-      "request" => "FountWorkshop.Workflows.sequence/4 requires target_scene_count",
-      "handler" => "not enabled by the Phase 07 host catalog",
-      "preconditions" => "requires an explicit sequence contract not exposed by this surface"
+      "summary" => "Reshape a selected sequence toward an explicit scene-count target.",
+      "request" => "sequence",
+      "handler" => "durable Run → Workshop",
+      "preconditions" => "selection and target scene count"
     },
     %{
       "id" => "character",
-      "label" => "Character",
-      "enabled" => false,
+      "workflow" => "character",
+      "label" => "Character work",
+      "enabled" => true,
       "mode" => "revise",
-      "request" => "FountWorkshop.Workflows.character/4 requires character_id + direction",
-      "handler" => "not enabled by the Phase 07 host catalog",
-      "preconditions" => "character-specific action surface is not present"
+      "summary" =>
+        "Work on one named character using literal cast identity and selected scope.",
+      "request" => "character",
+      "handler" => "durable Run → Workshop",
+      "preconditions" => "character, direction and exact selection"
+    },
+    %{
+      "id" => "propagate",
+      "workflow" => "propagate",
+      "label" => "Carry a change through",
+      "enabled" => true,
+      "mode" => "revise",
+      "summary" => "Propagate one stated story change through a capped repair scope.",
+      "request" => "propagate",
+      "handler" => "durable Run → Workshop",
+      "preconditions" => "change and exact repair scope"
     },
     %{
       "id" => "notes",
-      "label" => "Notes",
-      "enabled" => false,
+      "workflow" => "notes",
+      "label" => "Work from notes",
+      "enabled" => true,
       "mode" => "revise",
-      "request" => "FountWorkshop.Workflows.notes/4 requires authored note identities",
-      "handler" => "not enabled by the Phase 07 host catalog",
-      "preconditions" => "Phase 08 owns production note tooling"
+      "summary" => "Turn selected accepted source-bound notes into proposed writing.",
+      "request" => "notes",
+      "handler" => "durable Run → Workshop",
+      "preconditions" => "accepted note identities and exact base"
     },
     %{
       "id" => "recover",
-      "label" => "Recover",
-      "enabled" => false,
+      "workflow" => "recover",
+      "label" => "Recover earlier material",
+      "enabled" => true,
       "mode" => "revise",
-      "request" => "FountWorkshop.Workflows.recover/4 requires source/destination bindings",
-      "handler" => "not enabled by the Phase 07 host catalog",
-      "preconditions" => "no arbitrary source/destination launch is exposed"
+      "summary" =>
+        "Bring exact material from a named historical revision into a current destination.",
+      "request" => "recover",
+      "handler" => "durable Run → Workshop",
+      "preconditions" => "historical source, source targets and current destination"
     },
     %{
       "id" => "investigate",
-      "label" => "Investigate",
-      "enabled" => false,
+      "workflow" => "investigate",
+      "label" => "Investigate a concern",
+      "enabled" => true,
       "mode" => "diagnose",
-      "request" => "FountWorkshop.Workflows.investigate/4 exists",
-      "handler" =>
-        "durable Run already owns an investigate stage; wrapper is not promoted to a Run action",
-      "preconditions" => "diagnosis helper is not a separately proven durable Run launch"
+      "summary" =>
+        "Save read-only findings about a source-bound question before deciding what to write.",
+      "request" => "investigate",
+      "handler" => "durable Run → Workshop/Intelligence",
+      "preconditions" => "question and exact source selection"
     }
   ]
 
@@ -231,16 +261,18 @@ defmodule FountWeb.WorkflowManagement do
     with %{"enabled" => true} = action <- Enum.find(@action_catalog, &(&1["id"] == action_id)),
          :ok <- valid_instruction(instruction),
          {:ok, selection} <- validate_selection(model, selection),
+         {:ok, options} <- action_options(action_id, instruction, selection, attrs),
+         workflow = action["workflow"] || action_id,
          request = %{
            "version" => 1,
-           "workflow" => action_id,
+           "workflow" => workflow,
            "mode" => action["mode"],
            "base_revision_id" => model.revision.id,
            "instruction" => String.trim(instruction),
            "selection" => selection,
            "constraints" => [],
-           "alternatives" => 1,
-           "options" => action_options(action_id, instruction, selection, attrs)
+           "alternatives" => request_alternatives(action_id, attrs),
+           "options" => options
          },
          {:ok, validated} <- FountWorkshop.Request.validate(model, request) do
       {:ok, validated}
@@ -329,13 +361,13 @@ defmodule FountWeb.WorkflowManagement do
 
   def max_multi_launch, do: @max_multi_launch
 
-  def launch_preview(model, action_id, instruction, selection, policy, multi?) do
+  def launch_preview(model, action_id, instruction, selection, policy, multi?, attrs \\ %{}) do
     scopes = split_scopes(selection, multi?)
 
     with true <-
            (scopes != [] and length(scopes) <= @max_multi_launch) or {:error, :multi_launch_limit},
          {:ok, policy} <- ensure_policy_map(policy),
-         {:ok, entries} <- preview_entries(model, action_id, instruction, scopes, policy) do
+         {:ok, entries} <- preview_entries(model, action_id, instruction, scopes, policy, attrs) do
       {:ok,
        %{
          "command_id" => Fount.ID.v4(),
@@ -343,6 +375,7 @@ defmodule FountWeb.WorkflowManagement do
          "action" => action_id,
          "instruction" => String.trim(instruction),
          "policy" => policy,
+         "request_attrs" => attrs,
          "entries" => entries
        }}
     end
@@ -363,7 +396,8 @@ defmodule FountWeb.WorkflowManagement do
                "action" => preview["action"],
                "instruction" => preview["instruction"],
                "selection" => entry["selection"],
-               "policy" => preview["policy"]
+               "policy" => preview["policy"],
+               "request_attrs" => preview["request_attrs"] || %{}
              }
            ) do
         {:ok, %{run: run}} -> Map.merge(entry, %{"state" => "created", "run_id" => run["id"]})
@@ -610,7 +644,7 @@ defmodule FountWeb.WorkflowManagement do
 
   defp validate_selection(model, %{"targets" => targets} = selection)
        when is_list(targets) and targets != [] and length(targets) <= @max_scope_targets do
-    allowed = Enum.all?(targets, &(&1["kind"] in ["scene", "element"]))
+    allowed = Enum.all?(targets, &(&1["kind"] in ["scene", "element", "character"]))
 
     with true <- allowed or {:error, :unsupported_scope_target},
          {:ok, _ids} <- Fount.Selection.selected_ids(model, selection) do
@@ -642,17 +676,25 @@ defmodule FountWeb.WorkflowManagement do
     end
   end
 
+  defp target_label(model, %{"kind" => "character", "id" => id}) do
+    case model.cast[id] do
+      nil -> "Missing character"
+      character -> "Character · " <> character.display_name
+    end
+  end
+
   defp scene_label(nil), do: "Scene"
   defp scene_label(heading), do: heading.text || "Scene"
 
-  defp preview_entries(model, action_id, instruction, scopes, policy) do
+  defp preview_entries(model, action_id, instruction, scopes, policy, attrs) do
     Enum.reduce_while(scopes, {:ok, []}, fn selection, {:ok, acc} ->
-      case build_workshop_request(model, action_id, instruction, selection) do
+      case build_workshop_request(model, action_id, instruction, selection, attrs) do
         {:ok, request} ->
           entry = %{
             "selection" => selection,
             "selection_fingerprint" => CanonicalJSON.hash(selection),
             "preview" => selection_preview(model, selection),
+            "passages" => selection_passages(model, selection),
             "budget" => policy["limits"],
             "request_fingerprint" => CanonicalJSON.hash(request)
           }
@@ -671,6 +713,24 @@ defmodule FountWeb.WorkflowManagement do
 
   defp ensure_policy_map(value) when is_map(value), do: {:ok, value}
   defp ensure_policy_map(_), do: {:error, :invalid_policy}
+
+  defp selection_passages(model, selection) do
+    case Fount.Selection.select(model, selection) do
+      {:ok, units} ->
+        units
+        |> Enum.take(12)
+        |> Enum.map(fn unit ->
+          %{
+            "target" => unit["target"],
+            "type" => unit["type"],
+            "excerpt" => String.slice(unit["excerpt"] || unit["text"] || "", 0, 280)
+          }
+        end)
+
+      _ ->
+        []
+    end
+  end
 
   defp gates_from_form(params) do
     Enum.reduce_while(@gate_keys, {:ok, %{}}, fn key, {:ok, acc} ->
@@ -720,7 +780,7 @@ defmodule FountWeb.WorkflowManagement do
       with true <-
              (is_binary(currency) and Regex.match?(~r/^[A-Z]{3}$/, currency)) or
                {:error, :invalid_currency},
-           {:ok, max_microunits} <- nonnegative_integer(params["max_microunits"]) do
+           {:ok, max_microunits} <- money_limit_microunits(params) do
         {:ok, %{"currency" => currency, "max_microunits" => max_microunits}}
       end
     else
@@ -791,19 +851,160 @@ defmodule FountWeb.WorkflowManagement do
     end
   end
 
-  defp action_options("develop", _instruction, _selection, _attrs),
-    do: %{"placement" => %{"kind" => "start"}}
+  defp action_options("develop", _instruction, _selection, attrs) do
+    placement = attrs["placement"] || %{"kind" => "start"}
 
-  defp action_options("propagate", instruction, selection, _attrs),
-    do: %{"change" => String.trim(instruction), "repair_scope" => selection}
+    {:ok,
+     common_options(attrs)
+     |> Map.merge(compact(%{"placement" => placement, "brief" => attrs["brief"]}))}
+  end
+
+  defp action_options("rewrite", instruction, _selection, attrs) do
+    direction = attrs["direction"] || String.trim(instruction)
+
+    {:ok,
+     common_options(attrs)
+     |> Map.merge(%{"profile" => "custom", "direction" => direction})}
+  end
+
+  defp action_options("propagate", instruction, selection, attrs) do
+    options = %{
+      "change" => String.trim(instruction),
+      "repair_scope" => attrs["repair_scope"] || selection
+    }
+
+    {:ok, common_options(attrs) |> Map.merge(options)}
+  end
 
   defp action_options("pass", _instruction, _selection, attrs) do
-    profile =
-      if attrs["profile"] in ~w(dialogue_subtext action_visual sound_space cinematic_rhythm transition brevity dry_comedy tension),
-        do: attrs["profile"],
-        else: "dialogue_subtext"
+    profiles =
+      ~w(dialogue_subtext action_visual sound_space cinematic_rhythm transition brevity dry_comedy tension custom)
 
-    %{"profile" => profile}
+    profile = if attrs["profile"] in profiles, do: attrs["profile"], else: "dialogue_subtext"
+
+    {:ok,
+     common_options(attrs)
+     |> Map.merge(compact(%{"profile" => profile, "direction" => attrs["direction"]}))}
+  end
+
+  defp action_options("alternatives", _instruction, _selection, attrs) do
+    options = %{
+      "approaches" => attrs["approaches"] || [],
+      "treatments" => attrs["treatments"],
+      "allow_brief_departure" => attrs["allow_brief_departure"] || false
+    }
+
+    {:ok, common_options(attrs) |> Map.merge(compact(options))}
+  end
+
+  defp action_options("sequence", _instruction, _selection, attrs) do
+    options = %{
+      "target_scene_count" => attrs["target_scene_count"],
+      "page_reduction" => attrs["page_reduction"],
+      "entry_requirements" => attrs["entry_requirements"],
+      "exit_requirements" => attrs["exit_requirements"]
+    }
+
+    {:ok, common_options(attrs) |> Map.merge(compact(options))}
+  end
+
+  defp action_options("character", instruction, _selection, attrs) do
+    options = %{
+      "character_id" => attrs["character_id"],
+      "direction" => attrs["direction"] || String.trim(instruction),
+      "exemplar_targets" => attrs["exemplar_targets"],
+      "change_agency" => attrs["change_agency"]
+    }
+
+    {:ok, common_options(attrs) |> Map.merge(compact(options))}
+  end
+
+  defp action_options("notes", _instruction, _selection, attrs) do
+    options = %{
+      "note_ids" => attrs["note_ids"] || [],
+      "external_notes" => attrs["external_notes"] || []
+    }
+
+    {:ok, common_options(attrs) |> Map.merge(options)}
+  end
+
+  defp action_options("recover", _instruction, _selection, attrs) do
+    options = %{
+      "source_revision_id" => attrs["source_revision_id"],
+      "source_screenplay_id" => attrs["source_screenplay_id"],
+      "source_targets" => attrs["source_targets"],
+      "destination" => attrs["destination"],
+      "cast_mapping" => attrs["cast_mapping"],
+      "adapt" => attrs["adapt"]
+    }
+
+    {:ok, common_options(attrs) |> Map.merge(compact(options))}
+  end
+
+  defp action_options("investigate", instruction, _selection, attrs) do
+    options = %{
+      "concern" => attrs["concern"] || String.trim(instruction),
+      "write_fixes" => attrs["write_fixes"] || false
+    }
+
+    {:ok, common_options(attrs) |> Map.merge(options)}
+  end
+
+  defp action_options(_, _, _, _), do: {:error, :unsupported_run_action}
+
+  defp common_options(attrs) do
+    attrs
+    |> Map.take(~w(protected_strengths intended_effect pending_question voice_exemplars protected_text style_preferences))
+    |> compact()
+  end
+
+  defp compact(map), do: Map.reject(map, fn {_key, value} -> value in [nil, [], ""] end)
+
+  defp request_alternatives("alternatives", attrs) do
+    case attrs["alternatives"] do
+      value when is_integer(value) and value in 2..8 -> value
+      _ -> 3
+    end
+  end
+
+  defp request_alternatives(_, _attrs), do: 1
+
+  def money_units(max_microunits) when is_integer(max_microunits) and max_microunits >= 0 do
+    whole = div(max_microunits, 1_000_000)
+    fraction =
+      max_microunits
+      |> rem(1_000_000)
+      |> Integer.to_string()
+      |> String.pad_leading(6, "0")
+      |> String.trim_trailing("0")
+    if fraction == "", do: Integer.to_string(whole), else: "#{whole}.#{fraction}"
+  end
+
+  def money_units(_), do: "0"
+
+  defp money_limit_microunits(%{"max_currency_units" => value}) when is_binary(value) do
+    currency_units_to_microunits(value)
+  end
+
+  defp money_limit_microunits(params), do: nonnegative_integer(params["max_microunits"])
+
+  defp currency_units_to_microunits(value) do
+    value = String.trim(value)
+
+    case Regex.run(~r/^(\d+)(?:\.(\d{1,6}))?$/, value) do
+      [_, whole, fraction] ->
+        microunits =
+          String.to_integer(whole) * 1_000_000 +
+            String.to_integer(String.pad_trailing(fraction, 6, "0"))
+
+        {:ok, microunits}
+
+      [_, whole] ->
+        {:ok, String.to_integer(whole) * 1_000_000}
+
+      _ ->
+        {:error, :invalid_money_limit}
+    end
   end
 
   defp valid_instruction(value) when is_binary(value) do

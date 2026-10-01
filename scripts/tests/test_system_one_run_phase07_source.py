@@ -28,12 +28,17 @@ class Phase07SourceContractTest(unittest.TestCase):
         self.assertIn("trusted_owner(context, owner_id)", workflow)
         self.assertIn("save_policy_preset", workflow)
 
-    def test_w02_catalog_is_closed_and_not_a_workshop_module_browser(self):
+    def test_w02_catalog_is_complete_and_not_a_workshop_module_browser(self):
         workflow = read("apps/fount_web/lib/fount_web/workflow_management.ex")
-        enabled = re.findall(r'"id" => "([a-z_]+)",\n\s+"label".*?\n\s+"enabled" => true', workflow)
-        self.assertEqual(sorted(enabled), ["develop", "pass", "propagate"])
-        for disabled in ["alternatives", "sequence", "character", "notes", "recover", "investigate"]:
-            self.assertRegex(workflow, rf'(?s)"id" => "{disabled}".*?"enabled" => false')
+        enabled = re.findall(r'%\{\s*"id"\s*=>\s*"([a-z_]+)".*?"enabled"\s*=>\s*true', workflow, re.S)
+        self.assertEqual(
+            sorted(enabled),
+            sorted([
+                "develop", "rewrite", "pass", "alternatives", "sequence",
+                "character", "propagate", "notes", "recover", "investigate"
+            ]),
+        )
+        self.assertNotRegex(workflow, r'%\{"id" => "[a-z_]+"[^\n]+"enabled" => false')
         self.assertIn("FountWorkshop.Request.validate", workflow)
         integration = read("apps/fount_web/integration/phase07_workflow_management_test.exs")
         self.assertIn("for action <- ~w(develop pass propagate)", integration)

@@ -55,10 +55,51 @@ defmodule FountWeb.Help do
     %{
       slug: "work-on-it",
       title: "Work on it",
-      summary:
-        "Creative tasks use the existing durable task path only after you request creative work.",
+      summary: "Ask a short question, bind it to named screenplay material, then review the exact brief before starting.",
       body:
-        "Manual reading and writing do not need a task. The current advanced task controls remain available. Creative work opens a task only when you ask for it; manual reading and writing stay task-free."
+        "Develop, targeted rewrite, focused pass, alternatives, sequence, character, propagate, notes, recover and investigate all use the existing durable Run → Workshop path. Scope and protected passages resolve against the selected exact revision. Starting saves a task; proposed writing never becomes current merely because it was generated or saved."
+    },
+    %{
+      slug: "focus-writing",
+      title: "Focus and editor recovery",
+      summary: "Focus hides chrome only; it never changes, saves or replaces screenplay text.",
+      body:
+        "Use Focus when you want only the Fountain editor. Press Escape or the Focus button to leave it. Optional Typewriter scroll is off by default, follows the cursor without smooth animation, and disables itself when reduced motion is requested. It never rewrites Tab or Enter. Autosave, IME composition, local undo, lost-ack handling, two-tab conflicts and recovery keep their normal behavior. Conflict and save state remain authoritative whether Focus is open or closed."
+    },
+    %{
+      slug: "scene-cards",
+      title: "Scene cards and structural edits",
+      summary: "Move, omit/include, insert, replace or delete by screenplay name instead of copying internal IDs.",
+      body:
+        "Scene cards are source-bound to the working draft. Use Up/Down buttons or Alt+Arrow Up/Down from a focused scene card. Exact element edits use named pickers. Structural and text undo/redo remain separate, and every change stays in the working draft until a proposal is deliberately accepted."
+    },
+    %{
+      slug: "creative-catalog",
+      title: "Creative task families",
+      summary: "Each creative card has real validated inputs and the same durable task/review authority boundary.",
+      body:
+        "The default brief keeps three common choices visible and preserves what you typed when you change task type. All tasks opens the complete searchable catalog, grouped as Write, Explore, Revise and Restore. Task-specific details appear only when needed: pass profile, alternative count, target scene count, character, placement, notes or historical recovery source. Investigate saves findings without granting mutation authority. Unavailable analysis never counts as successful analysis."
+    },
+    %{
+      slug: "task-controls",
+      title: "Review steps, limits and saved settings",
+      summary: "Choose checkpoints and finite budgets without editing internal policy data.",
+      body:
+        "Review steps preserve the existing investigation, approach, generation and iteration gates plus authorized approvers and routing. Time and spending limits preserve the existing ceilings. Spending is entered in ordinary currency units and converted exactly to microunits. Saved settings are versioned policies, not creative genre presets."
+    },
+    %{
+      slug: "line-alternatives",
+      title: "Try another line",
+      summary: "A dialogue or parenthetical line can launch finite alternatives while surrounding dialogue is protected.",
+      body:
+        "Try another line binds the exact selected element and byte-exact surrounding cue/body protections to the existing alternatives workflow. Results are proposed candidate work. Auditioning or choosing an alternative does not advance the current screenplay; comparison and acceptance remain separate."
+    },
+    %{
+      slug: "character-dialogue",
+      title: "Read a character's dialogue",
+      summary: "Read literal confirmed cue blocks with scene context and return links, without a provider call.",
+      body:
+        "Character dialogue is derived from the selected screenplay source using confirmed cast identity and existing dialogue blocks. It does not infer performance, intent or character quality. Each displayed line returns to its exact source passage."
     },
     %{
       slug: "changes",
@@ -66,14 +107,14 @@ defmodule FountWeb.Help do
       summary:
         "Proposed writing remains separate from the current screenplay until explicit acceptance.",
       body:
-        "Changes lists real saved task/proposal work. A stale or cross-owner proposal cannot silently become current. The focused comparison workflow is not available yet; current task review remains reachable."
+        "Changes lists real saved task/proposal work and distinguishes an approach choice from actual proposed pages. Open Review for the exact current/proposed comparison, required checks and source lineage. Make current remains an explicit typed acceptance path; stale and cross-owner proposals are rejected by the existing authority checks."
     },
     %{
       slug: "notes",
       title: "Notes",
       summary: "Notes retain their exact screenplay source.",
       body:
-        "Existing note controls remain reachable. The full note-to-task-to-reviewed-revision loop is not available yet; existing task-bound notes remain reachable."
+        "Create a source-bound note as a proposal, deliberately accept the note into the current screenplay, then use Work on this note now. The host persists the factual note-to-task/proposal relation; it never infers that a launched task resolved or addressed the note. Full reviewer responses, final remap and memo delivery remain later work."
     }
   ]
 

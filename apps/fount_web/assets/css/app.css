@@ -867,3 +867,130 @@ input, textarea, select { padding: .4rem .48rem; }
 }
 .workspace-notices .ui-alert { display: flex; align-items: center; justify-content: space-between; gap: .6rem; }
 .workspace-notices .ui-alert button { flex-shrink: 0; }
+
+/* UX02 — writing and workshop */
+.creative-workspace { max-width: 1180px; }
+.creative-brief { border: 1px solid var(--line); padding: .55rem; background: rgba(255,255,255,.012); }
+.brief-question textarea { min-height: 5.25rem; }
+.brief-two-column { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .5rem; }
+.choice-picker { min-width: 0; border: 1px solid var(--line); padding: .45rem; }
+.choice-picker legend { font-weight: 800; }
+.choice-list { max-height: 15rem; overflow: auto; border-top: 1px solid var(--line); margin-top: .3rem; }
+.choice-list label { display: grid; grid-template-columns: auto minmax(0,1fr); gap: .35rem; align-items: start; padding: .26rem .1rem; border-bottom: 1px solid rgba(255,255,255,.045); }
+.choice-list label[hidden] { display: none; }
+.creative-family-grid { display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); gap: .3rem; }
+.creative-family { display: grid; gap: .12rem; min-width: 0; border: 1px solid var(--line); padding: .38rem; background: rgba(255,255,255,.01); }
+.creative-family:has(input:checked) { border-color: var(--line-hot); background: rgba(255,255,255,.035); }
+.creative-family span { color: var(--text-dim); font-size: .7rem; }
+.catalog-card { min-height: 5.5rem; }
+.compact-form-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .4rem; }
+.compact-form-grid .full-span { grid-column: 1 / -1; }
+.creative-review { margin-top: .5rem; }
+.brief-passage-preview { display: grid; gap: .35rem; margin-top: .45rem; }
+.brief-passage-preview blockquote { margin: 0; padding: .4rem .5rem; border-left: 2px solid var(--line-hot); background: var(--ink-2); }
+.brief-passage-preview blockquote span { display: block; margin-bottom: .15rem; font-size: .68rem; text-transform: uppercase; letter-spacing: .055em; color: var(--text-dim); }
+.brief-passage-preview blockquote p { margin: 0; white-space: pre-wrap; }
+.scene-card-list { list-style: none; margin: .35rem 0; padding: 0; display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .28rem; }
+.scene-card { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: .35rem; align-items: center; padding: .35rem; border: 1px solid var(--line); background: rgba(255,255,255,.012); }
+.scene-card:focus { outline: 2px solid var(--focus); outline-offset: 1px; }
+.scene-card .button-row { flex-wrap: nowrap; }
+.status-chip { margin-left: .35rem; font-size: .64rem; color: var(--text-dim); }
+.exact-edit-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .4rem; }
+.authoring-command-form { display: grid; gap: .28rem; align-content: start; border: 1px solid var(--line); padding: .38rem; }
+.authoring-command-form.compact-command { grid-template-columns: minmax(0,1fr) auto; align-items: end; }
+.authoring-command-form select { width: 100%; }
+.dialogue-return-row { border-bottom: 1px solid var(--line); padding: .35rem 0; }
+.dialogue-return-heading { display: flex; justify-content: space-between; gap: .4rem; }
+.related-work-row { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: .35rem; border-top: 1px solid var(--line); padding: .3rem 0; }
+.policy-form fieldset { border: 1px solid var(--line); padding: .45rem; }
+.policy-form legend { font-weight: 800; padding: 0 .2rem; }
+
+/* Focus never changes source text; it only removes surrounding chrome. */
+.authoring-shell.is-focus-mode > .project-header,
+.authoring-shell.is-focus-mode > .script-context,
+.authoring-shell.is-focus-mode > .context-help,
+.authoring-shell.is-focus-mode > .authoring-secondary { display: none !important; }
+.authoring-shell.is-focus-mode .authoring-toolbar [role="group"],
+.authoring-shell.is-focus-mode #authoring-save,
+.authoring-shell.is-focus-mode #candidate-save,
+.authoring-shell.is-focus-mode #candidate-accept { display: none; }
+.authoring-shell.is-focus-mode .authoring-grid { grid-template-columns: minmax(0,1fr); }
+.authoring-shell.is-focus-mode .authoring-preview-pane { display: none !important; }
+.authoring-shell.is-focus-mode #source-editor { min-height: calc(100vh - 5rem); }
+
+@media (max-width: 920px) {
+  .creative-family-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .scene-card-list, .exact-edit-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 640px), (pointer: coarse) {
+  .brief-two-column, .compact-form-grid, .creative-family-grid { grid-template-columns: 1fr; }
+  .compact-form-grid .full-span { grid-column: 1; }
+  .choice-list { max-height: 12rem; }
+  .scene-card { grid-template-columns: 1fr; }
+  .scene-card .button-row button { min-height: 28px; }
+  .authoring-command-form.compact-command { grid-template-columns: 1fr; }
+}
+
+.focus-save-state { display: none; color: var(--text-dim); font-size: .68rem; }
+.authoring-shell.is-focus-mode .focus-save-state { display: inline; margin-left: auto; }
+
+/* UX02 related proposal work stays compact and subordinate to screenplay comparison. */
+.candidate-workshop { gap: 0.7rem; }
+.related-candidate {
+  border-top: 1px solid var(--line, #d8d3c7);
+  padding-top: 0.65rem;
+  display: grid;
+  gap: 0.55rem;
+}
+.related-candidate__head {
+  display: flex;
+  gap: 0.55rem;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+.status-chip {
+  display: inline-block;
+  margin-left: 0.45rem;
+  padding: 0.08rem 0.32rem;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: 0.72rem;
+}
+.candidate-group {
+  display: flex;
+  gap: 0.42rem;
+  align-items: flex-start;
+  margin: 0.18rem 0;
+}
+.candidate-group input { margin-top: 0.18rem; }
+.combine-candidates fieldset { display: grid; gap: 0.55rem; }
+.candidate-combine-source {
+  padding: 0.45rem 0;
+  border-top: 1px dotted var(--line, #d8d3c7);
+}
+.audition-panel {
+  max-height: 34rem;
+  overflow: auto;
+  border: 1px solid var(--line, #d8d3c7);
+  padding: 0.55rem;
+}
+.audition-panel .script { margin: 0.45rem 0 0; }
+
+/* UX02 brief progressive disclosure: three common actions first; the complete catalog stays searchable. */
+.creative-family-grid--primary { grid-template-columns: repeat(3,minmax(0,1fr)); }
+.brief-shortcuts { display: flex; align-items: center; flex-wrap: wrap; gap: .25rem; color: var(--text-dim); font-size: .7rem; }
+.brief-shortcuts button { padding: .28rem .4rem; font-size: .68rem; }
+.all-tasks, .task-details { border: 1px solid var(--line); padding: .36rem .45rem; }
+.all-tasks > summary, .task-details > summary { cursor: pointer; font-weight: 800; }
+#creative-task-catalog { margin-top: .4rem; }
+.creative-task-group + .creative-task-group { margin-top: .45rem; }
+.creative-task-group h3 { margin: .1rem 0 .22rem; font-size: .72rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: .04em; }
+.creative-family-grid--catalog { grid-template-columns: repeat(2,minmax(0,1fr)); }
+[data-task-actions][hidden] { display: none !important; }
+#authoring-typewriter[disabled] { opacity: .58; cursor: not-allowed; }
+
+@media (max-width: 640px), (pointer: coarse) {
+  .creative-family-grid--primary, .creative-family-grid--catalog { grid-template-columns: 1fr; }
+}

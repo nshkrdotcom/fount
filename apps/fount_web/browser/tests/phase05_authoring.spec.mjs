@@ -89,7 +89,7 @@ test('E05 two tabs produce recoverable conflict instead of last-write-wins', asy
   await context.close();
 });
 
-test('E04-E06 candidate save leaves canon unchanged, AI uses Run, and acceptance is separate', async ({page}) => {
+test('E04-E06 candidate save leaves canon unchanged, creative work uses Run, and acceptance is separate', async ({page}) => {
   await login(page);
   const runId = await createRun(page, `authoring-candidate-${Date.now()}`);
   await page.goto(`/p/${runId}/write`);
@@ -104,11 +104,12 @@ test('E04-E06 candidate save leaves canon unchanged, AI uses Run, and acceptance
   await expect(page.locator('.screenplay')).toContainText('departure board');
   await expect(page.locator('.screenplay')).not.toContainText('blue departure board');
 
-  await page.goto(`/p/${runId}/write`);
-  await page.locator('#advanced-editing > summary').click();
-  await page.locator('#ai-assist').click();
-  await expect(page).toHaveURL(new RegExp(`/p/${runId}/activity/task-1$`));
-  await expect(page.getByText(/candidate/i).first()).toBeVisible();
+  await page.goto(`/p/${runId}/work`);
+  await page.getByLabel('What do you want to change or understand?').fill('Tighten the opening beat without changing its facts.');
+  await page.getByRole('button', {name: 'Review brief'}).click();
+  await expect(page.getByText('Validated brief', {exact: true})).toBeVisible();
+  await page.getByRole('button', {name: 'Start this work'}).click();
+  await expect(page).toHaveURL(new RegExp(`/p/${runId}/activity/task-1/setup$`));
   const aiRunId = 'task-1';
   await page.goto(`/p/${runId}/activity/${aiRunId}/decisions`);
   const route = page.getByRole('button', {name: /Commit now|route-a/i}).first();
@@ -116,7 +117,7 @@ test('E04-E06 candidate save leaves canon unchanged, AI uses Run, and acceptance
   await route.click();
   await page.goto(`/p/${runId}/changes/${aiRunId}`);
   await expect(page.locator('pre.script').last()).toContainText('INT. LOCKED ROOM - NIGHT', {timeout: 60_000});
-  await expect(page.locator('pre.script').first()).toContainText('blue departure board');
+  await expect(page.locator('pre.script').first()).toContainText('departure board');
   await expect(page.locator('p.status')).toContainText('stage: decide', {timeout: 60_000});
   await expect(page.getByRole('heading', {name: /Analysis before writing/i})).toBeVisible();
   await page.goto(`/p/${runId}/activity/${aiRunId}/decisions`);
@@ -253,20 +254,18 @@ test('E05/E06 immediate unsaved AI and acceptance clicks cannot race preview deb
   await page.getByRole('button',{name:'Save working draft'}).click();
   await page.getByRole('button', {name: 'Save proposed change'}).click();
   await expect(page.getByText(/The current screenplay is unchanged/)).toBeVisible();
-  for (const id of ['ai-assist', 'candidate-accept']) {
-    await page.evaluate(action => {
-      const source = document.querySelector('[data-authoring-source]');
-      source.value += '\nUnsaved immediate action.';
-      source.dispatchEvent(new Event('input', {bubbles: true}));
-      document.getElementById(action).click();
-    }, id);
-    await expect(page).toHaveURL(new RegExp(`/p/${runId}/write$`));
-    await expect(page.getByText(id === 'ai-assist' ? /Save the draft and candidate before starting/ : /Unsaved text cannot be accepted/)).toBeVisible();
-    await page.getByRole('button', {name: 'Save working draft'}).click();
-    await expect(page.locator('.authoring-status')).toContainText('Saved working draft');
-    await page.getByRole('button', {name: 'Save proposed change'}).click();
-    await expect(page.locator('.authoring-status')).toContainText('Proposed change saved');
-  }
+  await page.evaluate(() => {
+    const source = document.querySelector('[data-authoring-source]');
+    source.value += '\nUnsaved immediate action.';
+    source.dispatchEvent(new Event('input', {bubbles: true}));
+    document.getElementById('candidate-accept').click();
+  });
+  await expect(page).toHaveURL(new RegExp(`/p/${runId}/write$`));
+  await expect(page.getByText(/Unsaved text cannot be accepted/)).toBeVisible();
+  await page.getByRole('button', {name: 'Save working draft'}).click();
+  await expect(page.locator('.authoring-status')).toContainText('Saved working draft');
+  await page.getByRole('button', {name: 'Save proposed change'}).click();
+  await expect(page.locator('.authoring-status')).toContainText('Proposed change saved');
   await page.goto(`/p/${runId}`);
   await expect(page.locator('.screenplay')).not.toContainText('Unsaved immediate action.');
 });

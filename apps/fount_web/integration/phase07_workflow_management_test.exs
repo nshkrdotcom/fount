@@ -40,7 +40,7 @@ defmodule FountWeb.Phase07WorkflowManagementIntegrationTest do
       assert html =~ ~s(name="policy[#{gate}]")
     end
 
-    assert html =~ "Max microunits"
+    assert html =~ "Maximum spend"
     assert html =~ "Authenticated owner"
     assert html =~ "Saved settings"
     assert html =~ "registered_reviewer"
@@ -170,7 +170,7 @@ defmodule FountWeb.Phase07WorkflowManagementIntegrationTest do
                "test-owner",
                project["id"],
                model.revision.id,
-               %{attrs | "command_id" => "unsupported", "action" => "investigate"}
+               %{attrs | "command_id" => "unsupported", "action" => "not-a-workflow"}
              )
 
     assert {:error, :not_found} =

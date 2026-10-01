@@ -192,4 +192,49 @@ defmodule FountWeb.DevDatabaseTest do
                end
              end)
   end
+
+  test "slow probes run concurrently and timed-out workers stop" do
+    parent = self()
+    connections = for port <- 5500..5511, do: [port: port, username: "writer"]
+    started = System.monotonic_time(:millisecond)
+
+    assert {:ok, _, _} =
+             DevDatabase.choose(
+               connections,
+               fn connection ->
+                 if connection[:port] == 5500 do
+                   {:ok, :healthy}
+                 else
+                   send(parent, {:worker, self()})
+                   Process.sleep(5_000)
+                   {:error, "unavailable"}
+                 end
+               end,
+               100
+             )
+
+    assert System.monotonic_time(:millisecond) - started < 700
+
+    for _ <- 1..11 do
+      assert_receive {:worker, pid}
+      refute Process.alive?(pid)
+    end
+  end
+
+  test "progress is visible before probing and excludes passwords" do
+    parent = self()
+
+    assert {:ok, _, _} =
+             DevDatabase.resolve("ecto://writer:private@localhost:5433/story",
+               progress: fn message -> send(parent, {:progress, message}) end,
+               probe: fn _ ->
+                 send(parent, :probed)
+                 {:ok, :healthy}
+               end
+             )
+
+    assert_receive {:progress, message}
+    refute message =~ "private"
+    assert_receive :probed
+  end
 end

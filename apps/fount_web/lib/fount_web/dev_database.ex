@@ -5,7 +5,11 @@ defmodule FountWeb.DevDatabase do
 
   def resolve(url, opts \\ []) do
     env = Keyword.get(opts, :env, System.get_env())
-    probe = Keyword.get(opts, :probe, &probe/1)
+    attempt = Keyword.get(opts, :probe, &probe/1)
+    timeout = Keyword.get(opts, :probe_timeout, 4_000)
+    probe = fn connection -> bounded_probe(connection, attempt, timeout) end
+    progress = Keyword.get(opts, :progress, fn _ -> :ok end)
+    progress.("Checking PostgreSQL connections (bounded checks; credentials omitted)")
 
     if is_binary(url) and url != "" do
       with {:ok, connection} <- parse(url),
@@ -16,7 +20,7 @@ defmodule FountWeb.DevDatabase do
           {:error, "Explicit database connection failed: #{reason}. No fallback was attempted."}
       end
     else
-      discover(env, probe, opts)
+      discover(env, attempt, opts)
     end
   end
 
@@ -31,7 +35,16 @@ defmodule FountWeb.DevDatabase do
     user = env["PGUSER"] || env["USER"] || System.get_env("USER")
     preferred = connection(host, port, user, env["PGPASSWORD"])
     configured? = Enum.any?(~w(PGHOST PGPORT PGUSER PGPASSWORD), &Map.has_key?(env, &1))
-    result = if configured?, do: probe.(preferred), else: {:error, "not configured"}
+
+    result =
+      if configured?,
+        do:
+          bounded_probe(
+            preferred,
+            probe,
+            Keyword.get(opts, :probe_timeout, if(local_host?(host), do: 1_500, else: 4_000))
+          ),
+        else: {:error, "not configured"}
 
     case result do
       {:ok, _} -> success(preferred)
@@ -43,7 +56,10 @@ defmodule FountWeb.DevDatabase do
     if local_host?(host) do
       sockets = Keyword.get_lazy(opts, :sockets, fn -> sockets(env) end)
       ports = Keyword.get_lazy(opts, :ports, &cluster_ports/0)
-      choose(candidates(env, sockets, ports, port), probe)
+      connections = candidates(env, sockets, ports, port)
+      progress = Keyword.get(opts, :progress, fn _ -> :ok end)
+      progress.("Checking #{length(connections)} local connections concurrently")
+      choose(connections, probe, Keyword.get(opts, :probe_timeout, 1_500))
     else
       {:error, "Configured PGHOST connection failed: #{reason}. No local fallback was attempted."}
     end
@@ -71,15 +87,28 @@ defmodule FountWeb.DevDatabase do
     Enum.uniq(socket_candidates ++ tcp_candidates)
   end
 
-  def choose(candidates, probe) do
+  def choose(candidates, probe, timeout \\ 4_000) do
+    bounded_probe(
+      candidates,
+      fn connections -> collect_connections(connections, probe, timeout) end,
+      timeout + 250
+    )
+  end
+
+  defp collect_connections(candidates, probe, timeout) do
     found =
-      Enum.reduce(candidates, [], fn connection, acc ->
-        case probe.(connection) do
-          {:ok, identity} -> [{identity, connection} | acc]
-          {:error, _} -> acc
-        end
+      candidates
+      |> Task.async_stream(
+        fn connection -> {probe.(connection), connection} end,
+        ordered: true,
+        max_concurrency: 16,
+        timeout: timeout,
+        on_timeout: :kill_task
+      )
+      |> Enum.flat_map(fn
+        {:ok, {{:ok, identity}, connection}} -> [{identity, connection}]
+        _ -> []
       end)
-      |> Enum.reverse()
       |> Enum.uniq_by(&elem(&1, 0))
 
     case found do
@@ -95,6 +124,20 @@ defmodule FountWeb.DevDatabase do
 
         {:error,
          "Multiple usable PostgreSQL servers found (#{choices}). Select one with --database-url or FOUNT_DATABASE_URL."}
+    end
+  end
+
+  defp bounded_probe(connection, probe, timeout) do
+    [result] =
+      Task.async_stream([connection], probe,
+        timeout: timeout,
+        on_timeout: :kill_task
+      )
+      |> Enum.to_list()
+
+    case result do
+      {:ok, result} -> result
+      {:exit, _} -> {:error, "connection check timed out or failed"}
     end
   end
 

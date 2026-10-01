@@ -2,7 +2,7 @@
 Application.ensure_all_started(:postgrex)
 Logger.configure(level: :critical)
 
-case FountWeb.DevDatabase.resolve(System.get_env("FOUNT_DATABASE_URL")) do
+case FountWeb.DevDatabase.resolve(System.get_env("FOUNT_DATABASE_URL"), progress: &IO.puts/1) do
   {:ok, url, description} ->
     [path] = System.argv()
     File.write!(path, url)

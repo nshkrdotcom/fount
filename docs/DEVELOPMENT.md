@@ -27,6 +27,10 @@ requirement, without needing a sibling source checkout.
 4. It verifies connections using Postgrex and existing credentials or the current
    operating-system role's socket authentication. Connections to the same server
    are deduplicated. Multiple usable servers require an explicit URL.
+   Status is printed before probes. Local checks run concurrently: the preferred
+   local connection has a 1.5-second deadline and the entire discovery scan has
+   a 1.75-second deadline. Explicit URLs and remote connections get four seconds.
+   Timed-out workers are terminated; no retry loop runs during discovery.
 
 The default target database is `fount_dev`, independent of `PGDATABASE`. To select
 another database, use an explicit URL. The role must be able to connect to that

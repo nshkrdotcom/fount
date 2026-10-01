@@ -1,13 +1,16 @@
 defmodule FountWeb.Phase06IntegrationTest do
   use FountWeb.ConnCase, async: false
 
-  test "new project form mounts with Fountain upload enabled", %{conn: conn} do
+  test "writer desk mounts with import, blank and provider-free example entry points", %{conn: conn} do
     conn = FountWeb.ConnCase.login(conn)
-    assert {:ok, _view, html} = live(conn, "/projects/new")
-    assert html =~ "Upload Fountain/FDX"
+    assert {:ok, _view, html} = live(conn, "/")
+    assert html =~ "Import screenplay"
+    assert html =~ "Start blank"
+    assert html =~ "LAST RETURN"
+    refute html =~ "workflow policy"
   end
 
-  test "Run launch waits for the live connection instead of losing an early click", %{conn: conn} do
+  test "advanced task launch waits for the live connection on its named task route", %{conn: conn} do
     conn = FountWeb.ConnCase.login(conn)
 
     {:ok, %{run: run}} =
@@ -18,7 +21,7 @@ defmodule FountWeb.Phase06IntegrationTest do
         "source" => FountWeb.Journeys.fixture_fountain()
       })
 
-    path = "/runs/#{run["id"]}/setup"
+    path = run_path(run, :setup)
     html = conn |> get(path) |> html_response(200)
     assert html =~ "Connecting live controls"
     assert html =~ ~r/<button[^>]*disabled[^>]*phx-click="launch"/
@@ -26,66 +29,25 @@ defmodule FountWeb.Phase06IntegrationTest do
     refute has_element?(view, "button[phx-click=launch][disabled]")
   end
 
-  test "native POST creates a Run for the signed owner without LiveView", %{conn: conn} do
+  test "greenfield host removes the old native project POST route", %{conn: conn} do
     conn = FountWeb.ConnCase.login(conn)
-
-    response =
-      post(conn, "/projects", %{
-        "project" => %{
-          "title" => "Native form",
-          "key" => "native-form",
-          "journey" => "opening",
-          "source" => FountWeb.Journeys.fixture_fountain()
-        }
-      })
-
-    location = redirected_to(response)
-    assert location =~ ~r{^/runs/[0-9a-f-]+/setup$}
-    run_id = location |> String.split("/") |> Enum.at(2)
-    assert {:ok, access} = FountWeb.Store.run_access(Fount.Repo, "test-owner", run_id)
-    assert access["owner_id"] == "test-owner"
+    response = post(conn, "/projects", %{"project" => %{}})
+    assert response.status == 404
   end
 
-  test "native POST accepts an upload and rejects oversized uploads visibly", %{conn: conn} do
-    conn = FountWeb.ConnCase.login(conn)
-    path = Path.join(System.tmp_dir!(), "fount-native-#{Fount.ID.v4()}.fountain")
-    on_exit(fn -> File.rm(path) end)
-    File.write!(path, FountWeb.Journeys.fixture_fountain())
-    upload = %Plug.Upload{path: path, filename: "story.fountain", content_type: "text/plain"}
+  test "manual project creation is run-independent while old controller intake stays absent" do
+    assert {:ok, %{project: project}} =
+             FountWeb.Launch.create_project("test-owner", %{
+               "kind" => "blank",
+               "title" => "Manual pages"
+             })
 
-    attrs = %{
-      "title" => "Native upload",
-      "key" => "native-upload",
-      "journey" => "opening",
-      "source" => ""
-    }
-
-    assert post(conn, "/projects", %{"project" => attrs, "screenplay" => upload})
-           |> redirected_to() =~ "/setup"
-
-    File.write!(path, :binary.copy("x", 1_048_577))
-
-    response =
-      post(conn, "/projects", %{
-        "project" => Map.put(attrs, "key", "native-large"),
-        "screenplay" => upload
-      })
-
-    assert redirected_to(response) == "/projects/new"
-    assert Phoenix.Flash.get(response.assigns.flash, :error) =~ "1 MiB"
-
-    assert {:error, :not_found} =
-             FountWeb.Store.project_by_key(Fount.Repo, "test-owner", "native-large")
-  end
-
-  test "native POST requires authentication and reports validation failure", %{conn: conn} do
-    assert redirected_to(post(conn, "/projects", %{"project" => %{}})) == "/login"
-
-    response =
-      conn |> FountWeb.ConnCase.login() |> post("/projects", %{"project" => %{"key" => "!"}})
-
-    assert redirected_to(response) == "/projects/new"
-    assert Phoenix.Flash.get(response.assigns.flash, :error) != nil
+    %{rows: [[0]]} =
+      Ecto.Adapters.SQL.query!(
+        Fount.Repo,
+        "SELECT count(*)::bigint FROM fount_web_runs WHERE project_id=$1::text::uuid",
+        [project["id"]]
+      )
   end
 
   test "U01 project intake creates candidate-only Run and exact owner mapping", %{conn: conn} do
@@ -104,7 +66,7 @@ defmodule FountWeb.Phase06IntegrationTest do
     assert project["id"] =~ ~r/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
     assert project["screenplay_id"] == run["screenplay_id"]
     assert get_in(run, ["policy", "policy", "completion"]) == "candidate"
-    assert {:ok, _view, html} = live(conn, "/runs/#{run["id"]}/setup")
+    assert {:ok, _view, html} = live(conn, run_path(run, :setup))
     assert html =~ "Propose an opening, check it and leave the approved screenplay unchanged"
     assert html =~ "Proposed changes"
     assert html =~ "Proposed pages replace the approved screenplay only after your approval."
@@ -123,7 +85,7 @@ defmodule FountWeb.Phase06IntegrationTest do
              })
 
     assert {:error, :not_found} = FountWeb.Store.run_access(Fount.Repo, "other-owner", run["id"])
-    assert {:error, {kind, %{to: "/"}}} = live(conn, "/runs/#{Fount.ID.v4()}/timeline")
+    assert {:error, {kind, %{to: "/"}}} = live(conn, "/p/missing-project/activity/task-1")
     assert kind in [:redirect, :live_redirect]
   end
 
@@ -144,12 +106,12 @@ defmodule FountWeb.Phase06IntegrationTest do
     for session <- [%{}, %{owner_id: "other-owner"}],
         path <- [
           "/",
-          "/projects/new",
-          "/runs/#{run["id"]}/setup",
-          "/runs/#{run["id"]}/timeline",
-          "/runs/#{run["id"]}/decisions",
-          "/runs/#{run["id"]}/review",
-          "/runs/#{run["id"]}/exports"
+          "/new",
+          run_path(run, :setup),
+          run_path(run, :timeline),
+          run_path(run, :decisions),
+          run_path(run, :review),
+          run_path(run, :exports)
         ] do
       private_conn = Phoenix.ConnTest.init_test_session(conn, session)
       assert {:error, {kind, %{to: "/login"}}} = live(private_conn, path)
@@ -158,7 +120,7 @@ defmodule FountWeb.Phase06IntegrationTest do
 
     for session <- [%{}, %{owner_id: "other-owner"}] do
       private_conn = Phoenix.ConnTest.init_test_session(conn, session)
-      response = get(private_conn, "/artifacts/#{run["id"]}/#{Fount.ID.v4()}")
+      response = get(private_conn, run_path(run, :artifact_probe))
       assert redirected_to(response) == "/login"
       refute response.resp_body =~ "departure board"
     end
@@ -176,7 +138,7 @@ defmodule FountWeb.Phase06IntegrationTest do
                "filename" => "fixture.fountain"
              })
 
-    assert {:ok, view, _html} = live(conn, "/runs/#{run["id"]}/exports")
+    assert {:ok, view, _html} = live(conn, run_path(run, :exports))
     assert render_submit(element(view, "form[phx-submit=deliver]")) =~ "Export failed"
   end
 
@@ -387,7 +349,7 @@ defmodule FountWeb.Phase06IntegrationTest do
       if status != "not_run", do: assert(hd(progress["analysis"])["writer"] == summary)
 
       for _reload <- 1..2 do
-        assert {:ok, view, html} = live(conn, "/runs/#{run["id"]}/timeline")
+        assert {:ok, view, html} = live(conn, run_path(run, :timeline))
         display = if status == "not_run", do: "not-run", else: status
         assert html =~ "Status: <strong>#{display}</strong>"
         if status == "not_run", do: assert(html =~ "Compatibility (analysis not run)")
@@ -400,4 +362,19 @@ defmodule FountWeb.Phase06IntegrationTest do
       end
     end
   end
+  defp run_path(run, surface) do
+    {:ok, access} = FountWeb.Store.run_access(Fount.Repo, "test-owner", run["id"])
+    base = "/p/#{access["key"]}"
+    task = access["display_key"]
+
+    case surface do
+      :setup -> "#{base}/activity/#{task}/setup"
+      :timeline -> "#{base}/activity/#{task}"
+      :decisions -> "#{base}/activity/#{task}/decisions"
+      :review -> "#{base}/changes/#{task}"
+      :exports -> "#{base}/exports/#{task}"
+      :artifact_probe -> "#{base}/exports/#{task}/delivery-999/download"
+    end
+  end
+
 end

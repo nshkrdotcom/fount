@@ -13,7 +13,7 @@ defmodule FountWeb.Phase05BoundaryRaceTest do
 
     {:ok, workspace} = Authoring.open_workspace("test-owner", access["project_id"])
     {:ok, _, _, _} = Authoring.save_candidate("test-owner", workspace.draft["id"], 1)
-    {:ok, view, _} = live(FountWeb.ConnCase.login(conn), "/runs/#{run["id"]}/edit")
+    {:ok, view, _} = live(FountWeb.ConnCase.login(conn), editor_path(run))
 
     html =
       render_hook(view, "start_ai_assist", %{
@@ -35,7 +35,7 @@ defmodule FountWeb.Phase05BoundaryRaceTest do
 
     {:ok, workspace} = Authoring.open_workspace("test-owner", access["project_id"])
     {:ok, _, _, _} = Authoring.save_candidate("test-owner", workspace.draft["id"], 1)
-    {:ok, view, _} = live(FountWeb.ConnCase.login(conn), "/runs/#{run["id"]}/edit")
+    {:ok, view, _} = live(FountWeb.ConnCase.login(conn), editor_path(run))
 
     html =
       render_hook(view, "accept_candidate", %{
@@ -67,4 +67,9 @@ defmodule FountWeb.Phase05BoundaryRaceTest do
     {:ok, canon} = Fount.Persistence.load(Fount.Repo, access["key"])
     assert canon.revision.id == workspace.base.revision.id
   end
+  defp editor_path(run) do
+    {:ok, access} = FountWeb.Store.run_access(Fount.Repo, "test-owner", run["id"])
+    "/p/#{access["key"]}/write"
+  end
+
 end

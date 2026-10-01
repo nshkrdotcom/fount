@@ -8,7 +8,7 @@ defmodule FountWeb.Phase07WorkflowManagementIntegrationTest do
   } do
     assert {:ok, %{run: run}} = create_run("unconfirmed-decision-stop")
     conn = FountWeb.ConnCase.login(conn)
-    assert {:ok, view, _html} = live(conn, "/runs/#{run["id"]}/decisions")
+    assert {:ok, view, _html} = live(conn, task_path(run, :decisions))
 
     for params <- [%{"choice" => "stop"}, %{"choice" => "stop", "confirm_stop" => "false"}] do
       assert render_click(view, "submit_decision", %{"decision" => params}) =~
@@ -34,7 +34,7 @@ defmodule FountWeb.Phase07WorkflowManagementIntegrationTest do
   test "W01 complete policy UI uses trusted principals and versioned owner presets", %{conn: conn} do
     conn = FountWeb.ConnCase.login(conn)
     assert {:ok, %{run: run}} = create_run("policy")
-    assert {:ok, view, html} = live(conn, "/runs/#{run["id"]}/setup")
+    assert {:ok, view, html} = live(conn, task_path(run, :setup))
 
     for gate <- ~w(investigation_scope strategy_choice candidate_generation iteration) do
       assert html =~ ~s(name="policy[#{gate}]")
@@ -273,7 +273,7 @@ defmodule FountWeb.Phase07WorkflowManagementIntegrationTest do
     assert is_list(preview["fdx_losses"])
     assert preview["fountain_bytes"] > 0
 
-    assert {:ok, _view, html} = live(conn, "/runs/#{run["id"]}/exports")
+    assert {:ok, _view, html} = live(conn, task_path(run, :exports))
     assert html =~ "Standard bundle formats are Fountain, FDX"
     assert html =~ "Optional formats are only PDF and table-read"
     assert html =~ "explicitly fails/partials"
@@ -410,4 +410,16 @@ defmodule FountWeb.Phase07WorkflowManagementIntegrationTest do
 
     assert {:error, :not_found} = FountWeb.Store.run_access(Fount.Repo, "other-owner", run["id"])
   end
+  defp task_path(run, surface) do
+    {:ok, access} = FountWeb.Store.run_access(Fount.Repo, "test-owner", run["id"])
+    base = "/p/#{access["key"]}"
+    task = access["display_key"]
+
+    case surface do
+      :decisions -> "#{base}/activity/#{task}/decisions"
+      :setup -> "#{base}/activity/#{task}/setup"
+      :exports -> "#{base}/exports/#{task}"
+    end
+  end
+
 end

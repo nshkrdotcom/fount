@@ -6,11 +6,12 @@ defmodule FountWeb.RunLive do
   @refresh_ms 1_000
 
   @impl true
-  def mount(%{"id" => run_id}, _session, socket) do
+  def mount(%{"key" => project_key, "task_key" => task_key}, _session, socket) do
     owner = socket.assigns.current_owner
 
-    case FountWeb.Store.run_access(Fount.Repo, owner, run_id) do
+    case FountWeb.Store.run_access_by_task_key(Fount.Repo, owner, project_key, task_key) do
       {:ok, access} ->
+        run_id = access["run_id"]
         {:ok, context} = FountWeb.Actors.owner_context(owner, access["screenplay_id"])
 
         if connected?(socket) do
@@ -22,6 +23,8 @@ defmodule FountWeb.RunLive do
          socket
          |> assign(:live_connected, connected?(socket))
          |> assign(:run_id, run_id)
+         |> assign(:project_key, project_key)
+         |> assign(:task_key, task_key)
          |> assign(:access, access)
          |> assign(:context, context)
          |> assign(:error, nil)
@@ -34,7 +37,7 @@ defmodule FountWeb.RunLive do
          |> refresh()}
 
       {:error, _} ->
-        {:ok, socket |> put_flash(:error, "Run not found for this owner.") |> redirect(to: ~p"/")}
+        {:ok, socket |> put_flash(:error, "That task is not available for this project.") |> redirect(to: "/")}
     end
   end
 
@@ -66,9 +69,9 @@ defmodule FountWeb.RunLive do
          {:ok, _pid} <- normalize_started(FountWeb.WorkerSupervisor.start_run(access)) do
       FountWeb.RunEvents.notify(socket.assigns.run_id)
 
-      {:noreply, socket |> assign(:notice, "Run started.") |> assign(:error, nil) |> refresh()}
+      {:noreply, socket |> assign(:notice, "Task started.") |> assign(:error, nil) |> refresh()}
     else
-      {:error, reason} -> {:noreply, assign(socket, :error, inspect(reason))}
+      {:error, reason} -> {:noreply, assign(socket, :error, friendly_error(reason))}
     end
   end
 
@@ -88,11 +91,11 @@ defmodule FountWeb.RunLive do
   end
 
   def handle_event("stop", _params, socket),
-    do: {:noreply, assign(socket, :error, "Confirm that you want to stop this Run.")}
+    do: {:noreply, assign(socket, :error, "Confirm that you want to stop this task.")}
 
   def handle_event("submit_decision", %{"decision" => %{"choice" => "stop"} = params}, socket)
       when not is_map_key(params, "confirm_stop"),
-      do: {:noreply, assign(socket, :error, "Confirm that you want to stop this Run.")}
+      do: {:noreply, assign(socket, :error, "Confirm that you want to stop this task.")}
 
   def handle_event(
         "submit_decision",
@@ -100,7 +103,7 @@ defmodule FountWeb.RunLive do
         socket
       )
       when value not in ["true", "on", "1"],
-      do: {:noreply, assign(socket, :error, "Confirm that you want to stop this Run.")}
+      do: {:noreply, assign(socket, :error, "Confirm that you want to stop this task.")}
 
   def handle_event("submit_decision", %{"decision" => params}, socket) do
     response =
@@ -131,12 +134,12 @@ defmodule FountWeb.RunLive do
          socket
          |> assign(
            :error,
-           "This decision changed: #{inspect(reason)}. The latest saved state has loaded; review it before submitting again."
+           "This decision changed. The latest saved state has loaded; review it before submitting again."
          )
          |> refresh()}
 
       {:error, reason} ->
-        {:noreply, assign(socket, :error, inspect(reason))}
+        {:noreply, assign(socket, :error, friendly_error(reason))}
     end
   end
 
@@ -161,13 +164,13 @@ defmodule FountWeb.RunLive do
             socket.assigns.context,
             opts
           ),
-          "Run settings saved; prior-version work and decisions were fenced and refreshed."
+          "Task settings saved; prior-version work and decisions were fenced and refreshed."
         )
 
       {:error, reason} ->
         {:noreply,
          socket
-         |> assign(:error, "Policy rejected by the server: #{inspect(reason)}")
+         |> assign(:error, "Task settings were not saved: #{friendly_error(reason)}")
          |> refresh()}
     end
   end
@@ -188,7 +191,7 @@ defmodule FountWeb.RunLive do
          |> refresh()}
 
       {:error, reason} ->
-        {:noreply, socket |> assign(:error, "Preset not saved: #{inspect(reason)}") |> refresh()}
+        {:noreply, socket |> assign(:error, "Preset not saved: #{friendly_error(reason)}") |> refresh()}
     end
   end
 
@@ -218,7 +221,7 @@ defmodule FountWeb.RunLive do
         )
 
       {:error, reason} ->
-        {:noreply, socket |> assign(:error, "Preset rejected: #{inspect(reason)}") |> refresh()}
+        {:noreply, socket |> assign(:error, "Preset could not be applied: #{friendly_error(reason)}") |> refresh()}
     end
   end
 
@@ -244,7 +247,7 @@ defmodule FountWeb.RunLive do
         )
 
       {:error, reason} ->
-        {:noreply, assign(socket, :error, "Plan update rejected: #{inspect(reason)}")}
+        {:noreply, assign(socket, :error, "Task plan was not updated: #{friendly_error(reason)}")}
     end
   end
 
@@ -271,16 +274,16 @@ defmodule FountWeb.RunLive do
        |> assign(:launch_results, nil)
        |> assign(
          :notice,
-         "Launch preview validated. Confirm to create the listed independent Runs."
+         "Launch preview validated. Confirm to create the listed independent tasks."
        )
        |> assign(:error, nil)}
     else
       nil ->
         {:noreply,
-         assign(socket, :error, "Select and save a valid workflow scope in the Viewer first.")}
+         assign(socket, :error, "Choose and save task scope from Sources first.")}
 
       {:error, reason} ->
-        {:noreply, assign(socket, :error, "Launch preview rejected: #{inspect(reason)}")}
+        {:noreply, assign(socket, :error, "Task preview could not be prepared: #{friendly_error(reason)}")}
     end
   end
 
@@ -300,7 +303,7 @@ defmodule FountWeb.RunLive do
     summary = FountWeb.WorkflowManagement.launch_summary(results)
 
     message =
-      "Created/replayed #{length(summary["created"])} Run(s); #{length(summary["failed"])} failed. Retry uses the same per-scope idempotency keys."
+      "Created/replayed #{length(summary["created"])} task(s); #{length(summary["failed"])} failed. Retry uses the same saved scope."
 
     {:noreply,
      socket
@@ -310,7 +313,7 @@ defmodule FountWeb.RunLive do
        :error,
        if(summary["failed"] == [],
          do: nil,
-         else: "Some launches failed; successful Run IDs are preserved and retry-safe."
+         else: "Some launches failed; successful tasks are preserved and retry-safe."
        )
      )}
   end
@@ -357,13 +360,13 @@ defmodule FountWeb.RunLive do
          socket
          |> assign(
            :notice,
-           "Delivery is partial: #{inspect(reason)}. Failed formats remain visible and retryable."
+           "Delivery is partial. Failed formats remain visible and retryable."
          )
          |> assign(:error, nil)
          |> refresh()}
 
       {:error, reason} ->
-        {:noreply, assign(socket, :error, "Export failed: #{inspect(reason)}")}
+        {:noreply, assign(socket, :error, "Export failed: #{friendly_error(reason)}")}
     end
   end
 
@@ -373,7 +376,7 @@ defmodule FountWeb.RunLive do
   end
 
   defp command_result(socket, {:error, reason}, _notice),
-    do: {:noreply, socket |> assign(:error, inspect(reason)) |> refresh()}
+    do: {:noreply, socket |> assign(:error, friendly_error(reason)) |> refresh()}
 
   defp refresh(socket) do
     case {FountRun.progress(Fount.Repo, socket.assigns.run_id, socket.assigns.context),
@@ -402,7 +405,7 @@ defmodule FountWeb.RunLive do
                  socket.assigns.context
                ) do
             {:ok, preview} -> preview
-            {:error, reason} -> %{"available" => false, "reason" => inspect(reason)}
+            {:error, reason} -> %{"available" => false, "reason" => friendly_error(reason)}
           end
 
         assign(socket,
@@ -428,10 +431,10 @@ defmodule FountWeb.RunLive do
         )
 
       {{:error, reason}, _} ->
-        assign(socket, :error, "Progress unavailable: #{inspect(reason)}")
+        assign(socket, :error, "Task progress is unavailable: #{friendly_error(reason)}")
 
       {_, {:error, reason}} ->
-        assign(socket, :error, "Progress unavailable: #{inspect(reason)}")
+        assign(socket, :error, "Task progress is unavailable: #{friendly_error(reason)}")
     end
   end
 
@@ -560,14 +563,9 @@ defmodule FountWeb.RunLive do
 
   defp delivery_identity(delivery) do
     cond do
-      is_binary(delivery["accepted_revision_id"]) ->
-        "accepted revision " <> delivery["accepted_revision_id"]
-
-      is_binary(delivery["candidate_id"]) ->
-        "candidate " <> delivery["candidate_id"]
-
-      true ->
-        "recorded run result"
+      is_binary(delivery["accepted_revision_id"]) -> "Current screenplay"
+      is_binary(delivery["candidate_id"]) -> "Proposed writing"
+      true -> "Saved screenplay output"
     end
   end
 
@@ -598,6 +596,19 @@ defmodule FountWeb.RunLive do
   defp limit_value(policy, key, default), do: get_in(policy, ["limits", key]) || default
   defp money_value(policy, key), do: get_in(policy, ["limits", "money", key])
 
+  defp friendly_error(:not_found), do: "The saved task state is no longer available."
+  defp friendly_error(:conflict), do: "The task changed. Reload the saved state before trying again."
+  defp friendly_error(:stale_decision), do: "The decision changed before it was saved."
+  defp friendly_error(:stale_decision_context), do: "The decision context changed before it was saved."
+  defp friendly_error(:decision_conflict), do: "A different decision was already saved."
+  defp friendly_error(:unauthorized), do: "This task is not available to the current owner."
+  defp friendly_error(_), do: "The action could not be completed; saved screenplay material is unchanged."
+
+  defp step_result_label(nil), do: "No saved result"
+  defp step_result_label(%{"candidate_id" => value}) when is_binary(value), do: "Proposed writing saved"
+  defp step_result_label(%{"status" => status}) when is_binary(status), do: String.replace(status, "_", " ")
+  defp step_result_label(_), do: "Saved result"
+
   defp json(value), do: Jason.encode!(value || [], pretty: true)
 
   @impl true
@@ -622,24 +633,28 @@ defmodule FountWeb.RunLive do
     ~H"""
     <main class="run-shell">
       <p :if={!@live_connected} role="status">Connecting live controls…</p>
-      <nav class="context-nav" aria-label="Run">
-        <a href={~p"/"}>Projects</a>
-        <a href={~p"/runs/#{@run_id}/setup"}>Setup</a>
-        <a href={~p"/runs/#{@run_id}/timeline"}>Timeline</a>
-        <a href={~p"/runs/#{@run_id}/decisions"}>Decisions
-        <span aria-label="pending decision count">({length(@pending_decisions)})</span></a>
-        <a href={~p"/runs/#{@run_id}/review"}>Review</a>
-        <a href={~p"/runs/#{@run_id}/analysis"}>Intelligence</a>
-        <a href={~p"/runs/#{@run_id}/viewer"}>Viewer</a>
-        <a href={~p"/runs/#{@run_id}/edit"}>Editor</a>
-        <a href={~p"/runs/#{@run_id}/exports"}>Exports</a>
+      <FountWeb.CoreComponents.project_header
+        project={%{"key" => @project_key, "title" => @access["title"], "project_kind" => "screenplay"}}
+        section={if @live_action == :review, do: "changes", else: "work"}
+        view="reading"
+        source_label="Current draft"
+      />
+
+      <nav class="task-subnav" aria-label="Task">
+        <strong>{@access["display_label"] || "Saved task"}</strong>
+        <a href={"/p/#{@project_key}/activity/#{@task_key}/setup"} aria-current={if @live_action == :setup, do: "page"}>Controls</a>
+        <a href={"/p/#{@project_key}/activity/#{@task_key}"} aria-current={if @live_action == :timeline, do: "page"}>Activity</a>
+        <a href={"/p/#{@project_key}/activity/#{@task_key}/decisions"} aria-current={if @live_action == :decisions, do: "page"}>Decisions <span aria-label="pending decision count">({length(@pending_decisions)})</span></a>
+        <a href={"/p/#{@project_key}/changes/#{@task_key}"} aria-current={if @live_action == :review, do: "page"}>Review</a>
+        <a href={"/p/#{@project_key}/analysis/#{@task_key}"}>Analysis</a>
+        <a href={"/p/#{@project_key}/exports/#{@task_key}"} aria-current={if @live_action == :exports, do: "page"}>Exports</a>
       </nav>
 
-      <header class="card">
+      <header class="card task-header">
         <h1>{@access["title"]}</h1>
-        <p>Journey <strong>{@access["journey"]}</strong> · Run <code>{@run_id}</code></p>
+        <p><strong>{@access["display_label"] || "Saved task"}</strong> · {String.replace(@access["journey"] || "task", "_", " ")}</p>
         <p class="status" aria-live="polite">
-          Status: {@run["status"]} · stage: {@run["stage"] || "—"}
+          Status: {String.replace(@run["status"] || "unknown", "_", " ")} · stage: {String.replace(@run["stage"] || "—", "_", " ")}
         </p>
         <p :if={@notice} role="status">{@notice}</p>
         <p :if={@error} role="alert">{@error}</p>
@@ -666,7 +681,7 @@ defmodule FountWeb.RunLive do
       </details>
 
       <section :if={@live_action == :setup} class="stack">
-        <h2>Run setup</h2>
+        <h2>Task controls</h2>
         <p class="warning">
           Proposed pages replace the approved screenplay only after your approval.
           Changing settings creates a saved version and prevents affected work from continuing with old settings.
@@ -676,28 +691,25 @@ defmodule FountWeb.RunLive do
           <div class="card">
             <p class="eyebrow">Plan snapshot</p>
             <h3>Goal</h3><p>{@current_plan["goal"]}</p>
-            <p>
-              Version <strong>{@run["current_plan_version"]}</strong>
-              · version reference
-              <code>{get_in(@run, ["plan", "fingerprint"]) || "recorded in Run lineage"}</code>
-            </p>
+            <p>Version <strong>{@run["current_plan_version"]}</strong></p>
+            <details class="technical-details"><summary>Technical details</summary><code>{get_in(@run, ["plan", "fingerprint"]) || "recorded in task lineage"}</code></details>
           </div>
           <div class="card">
-            <h3>Exact scope</h3><pre><%= json(@current_plan["scope"]) %></pre>
-            <p>Base revision <code>{@current_plan["base_revision_id"]}</code></p>
+            <h3>Exact scope</h3><details class="technical-details"><summary>Technical details</summary><pre><%= json(@current_plan["scope"]) %></pre></details>
+            <details class="technical-details"><summary>Technical details</summary><p>Base revision <code>{@current_plan["base_revision_id"]}</code></p></details>
           </div>
           <div class="card">
-            <h3>Constraints</h3><pre><%= json(@current_plan["constraints"]) %></pre>
+            <h3>Constraints</h3><details class="technical-details"><summary>Technical details</summary><pre><%= json(@current_plan["constraints"]) %></pre></details>
           </div>
           <div class="card">
-            <h3>Protected passages</h3><pre><%= json(@current_plan["protected_material"]) %></pre>
+            <h3>Protected passages</h3><details class="technical-details"><summary>Technical details</summary><pre><%= json(@current_plan["protected_material"]) %></pre></details>
           </div>
         </div>
 
         <form phx-submit="update_plan" class="card stack">
           <h3>Update plan goal</h3>
           <p>
-            Update the goal for the selected screenplay and material. To change the selection, start a new Run.
+            Update the goal for the selected screenplay and material. To change the selection, start a new task.
           </p>
           <label>Goal <textarea name="plan[goal]" maxlength="2000"><%= @current_plan["goal"] %></textarea></label>
           <button disabled={!@live_connected || !@lifecycle["update_plan"]} type="submit">Save plan changes</button>
@@ -705,12 +717,10 @@ defmodule FountWeb.RunLive do
 
         <form phx-submit="save_policy" class="card stack policy-form">
           <div>
-            <p class="eyebrow">Run settings</p>
+            <p class="eyebrow">Task settings</p>
             <h3>Review steps, completion and limits</h3>
-            <p>
-              Policy v{@run["current_policy_version"]} · version reference
-              <code>{get_in(@run, ["policy", "fingerprint"]) || "recorded"}</code>
-            </p>
+            <p>Settings version {@run["current_policy_version"]}</p>
+            <details class="technical-details"><summary>Technical details</summary><code>{get_in(@run, ["policy", "fingerprint"]) || "recorded"}</code></details>
           </div>
           <div class="policy-grid">
             <label :for={
@@ -855,7 +865,7 @@ defmodule FountWeb.RunLive do
               Enter a spending limit in millionths of a dollar. Estimated cost is shown only when available. Estimates are separate from actual charges.
             </p>
           </fieldset>
-          <button disabled={!@live_connected || !@lifecycle["update_policy"]} type="submit">Save Run settings</button>
+          <button disabled={!@live_connected || !@lifecycle["update_policy"]} type="submit">Save Task settings</button>
         </form>
 
         <div class="card stack">
@@ -871,8 +881,8 @@ defmodule FountWeb.RunLive do
             <article :for={preset <- @policy_presets} class="preset-card">
               <p><strong>{preset["name"]}</strong> · {preset["source"]} v{preset["version"]}</p>
               <p>Status: {if(preset["compatible"], do: "compatible", else: "incompatible")}</p>
-              <p>Version reference <code>{preset["fingerprint"]}</code></p>
-              <pre><%= json(preset["policy"]) %></pre>
+              <details class="technical-details"><summary>Technical details</summary><code>{preset["fingerprint"]}</code></details>
+              <details class="technical-details"><summary>Technical details</summary><pre><%= json(preset["policy"]) %></pre></details>
               <p :if={!preset["compatible"]} role="status">Cannot apply: {preset["error"]}</p>
               <button
                 :if={preset["compatible"]}
@@ -889,16 +899,15 @@ defmodule FountWeb.RunLive do
         <div class="card stack">
           <h3>Selected screenplay material</h3>
           <p :if={is_nil(@workflow_selection)}>
-            No material is selected. Open the Viewer to choose scenes from this screenplay version.
+            No material is selected. Open Sources to choose material from this task's exact base screenplay.
           </p>
           <div :if={@workflow_selection}>
             <p>
-              Base <code>{@workflow_selection["base_revision_id"]}</code>
-              · selection <code>{@workflow_selection["selection_fingerprint"]}</code>
+              Saved against the exact task base and selection
             </p>
-            <pre><%= json(@workflow_selection["preview"]) %></pre>
+            <details class="technical-details"><summary>Technical details</summary><pre><%= json(@workflow_selection["preview"]) %></pre></details>
           </div>
-          <a href={~p"/runs/#{@run_id}/viewer"}>Select scenes in Viewer</a>
+          <a href={"/p/#{@project_key}/source/#{@task_key}#task-scope"}>Choose task scope in Sources</a>
         </div>
 
         <div class="card stack">
@@ -916,7 +925,7 @@ defmodule FountWeb.RunLive do
               <h4>{action["label"]}</h4>
               <p>
                 Status:
-                <strong>{if(action["enabled"], do: "enabled", else: "unavailable through Run")}</strong>
+                <strong>{if(action["enabled"], do: "enabled", else: "unavailable for this task")}</strong>
               </p>
               <p :if={!action["enabled"]}>This action is unavailable in this workspace.</p>
               <details>
@@ -946,27 +955,27 @@ defmodule FountWeb.RunLive do
             name="workflow[multi_launch]"
             value="true"
           />
-          Launch one independent Run per selected target (maximum {FountWeb.WorkflowManagement.max_multi_launch()})</label>
+          Start one independent task per selected target (maximum {FountWeb.WorkflowManagement.max_multi_launch()})</label>
           <p>
-            Each Run keeps its own full policy budget; there is no shared batch budget or second scheduler.
+            Each task keeps its own full policy budget; there is no shared batch budget or second scheduler.
           </p>
           <button disabled={!@live_connected || is_nil(@workflow_selection)} type="submit">Validate launch preview</button>
         </form>
 
         <div :if={@launch_preview} class="card stack launch-preview">
           <h3>Review before starting</h3>
-          <p>
-            Command <code>{@launch_preview["command_id"]}</code>
-            · base <code>{@launch_preview["base_revision_id"]}</code>
-          </p>
+          <p>Validated against the selected screenplay source. Exact internal binding is recorded.</p>
+          <details class="technical-details"><summary>Technical details</summary>
+            <p>Command <code>{@launch_preview["command_id"]}</code></p>
+          </details>
           <article
             :for={{entry, index} <- Enum.with_index(@launch_preview["entries"])}
             class="launch-entry"
           >
-            <strong>Run {index + 1}</strong> · selection <code>{entry["selection_fingerprint"]}</code>
-            <pre><%= json(%{"preview" => entry["preview"], "budget" => entry["budget"], "request_fingerprint" => entry["request_fingerprint"]}) %></pre>
+            <strong>Task {index + 1}</strong> · exact selection recorded
+            <details class="technical-details"><summary>Technical details</summary><pre><%= json(%{"preview" => entry["preview"], "budget" => entry["budget"], "request_fingerprint" => entry["request_fingerprint"]}) %></pre></details>
           </article>
-          <button phx-click="confirm_workflow_launch" disabled={!@live_connected}>Create these independent Runs</button>
+          <button phx-click="confirm_workflow_launch" disabled={!@live_connected}>Create these independent tasks</button>
         </div>
 
         <div :if={@launch_results} class="card">
@@ -978,17 +987,17 @@ defmodule FountWeb.RunLive do
           </p>
           <ul>
             <li :for={row <- @launch_results["created"]}>
-              Ready: <a href={~p"/runs/#{row["run_id"]}/setup"}><code>{row["run_id"]}</code></a>
+              Ready: saved task. Open Project Activity to continue.
             </li>
             <li :for={row <- @launch_results["failed"]}>
-              Failed for <code>{row["selection_fingerprint"]}</code>: {row["error"]}
+              Task launch failed: {row["error"]}
             </li>
           </ul>
         </div>
 
         <div class="card">
-          <button disabled={!@live_connected} phx-click="launch">Launch / resume Run</button>
-          <p>Resuming continues this Run without starting a duplicate.</p>
+          <button disabled={!@live_connected} phx-click="launch">Start / resume task</button>
+          <p>Resuming continues this task without starting a duplicate.</p>
         </div>
       </section>
 
@@ -1027,7 +1036,7 @@ defmodule FountWeb.RunLive do
         <p>
           Progress updates from saved work. Reconnect to recover the latest state.
         </p>
-        <p>Current scope: <code>{json(@current_plan["scope"])}</code></p>
+        <p>Current scope is saved with this task. <details class="technical-details"><summary>Technical scope</summary><code>{json(@current_plan["scope"])}</code></details></p>
         <p>
           Analysis service: <strong>{@analysis_service["label"]}</strong>
           (<code>{@analysis_service["mode"]}</code>). Compatibility mode records semantic analysis as not-run; it is never treated as success.
@@ -1036,12 +1045,12 @@ defmodule FountWeb.RunLive do
           <div class="card">
             <h3>Analysis before writing</h3>
             <p>Status: <strong>{analysis_status(@review.pre_analysis)}</strong></p>
-            <pre><%= json(@review.pre_analysis) %></pre>
+            <details class="technical-details"><summary>Technical details</summary><pre><%= json(@review.pre_analysis) %></pre></details>
           </div>
           <div class="card">
             <h3>Analysis of changes</h3>
             <p>Status: <strong>{analysis_status(@review.revision_analysis)}</strong></p>
-            <pre><%= json(@review.revision_analysis) %></pre>
+            <details class="technical-details"><summary>Technical details</summary><pre><%= json(@review.revision_analysis) %></pre></details>
           </div>
         </div>
         <p :if={@run["pause_requested_at"]}>
@@ -1059,22 +1068,23 @@ defmodule FountWeb.RunLive do
           <tbody>
             <tr :for={step <- @progress["steps"] || []}>
               <td>{step["stage"]}</td><td>{step["status"]}</td><td>{step["iteration"]}</td><td>
-                <code>{inspect(step["result"], limit: 8)}</code>
+                {step_result_label(step["result"])}
+                <details :if={step["result"]} class="technical-details"><summary>Technical details</summary><pre><%= json(step["result"]) %></pre></details>
               </td>
             </tr>
           </tbody>
         </table>
         <div class="grid">
           <div class="card">
-            <h3>Usage / incurred cost</h3><pre><%= json(@progress["usage"]) %></pre><p>
+            <h3>Usage / incurred cost</h3><details class="technical-details"><summary>Technical details</summary><pre><%= json(@progress["usage"]) %></pre></details><p>
               Missing provider cost remains unknown; it is not displayed as zero.
             </p>
           </div>
           <div class="card">
-            <h3>Provider requests / partial work</h3><pre><%= json(@progress["provider_requests"]) %></pre>
+            <h3>Provider requests / partial work</h3><details class="technical-details"><summary>Technical details</summary><pre><%= json(@progress["provider_requests"]) %></pre></details>
           </div>
           <div class="card">
-            <h3>Approval attempts / recorded identity</h3><pre><%= json(@progress["approval_attempts"]) %></pre>
+            <h3>Approval attempts / recorded identity</h3><details class="technical-details"><summary>Technical details</summary><pre><%= json(@progress["approval_attempts"]) %></pre></details>
           </div>
         </div>
       </section>
@@ -1085,11 +1095,13 @@ defmodule FountWeb.RunLive do
           Decisions apply to the saved version shown here. If it changes, reload and review before submitting.
         </p>
         <p :if={@pending_decisions == []}>No pending decisions.</p>
-        <article :for={decision <- @pending_decisions} class="card">
-          <h3>{decision["kind"]}</h3>
-          <p>Decision <code>{decision["id"]}</code></p>
+        <article :for={{decision, ordinal} <- Enum.with_index(@pending_decisions, 1)} class="card">
+          <h3>Decision {ordinal} · {String.replace(decision["kind"] || "checkpoint", "_", " ")}</h3>
           <p><strong>Question:</strong> {decision["prompt"]}</p>
-          <p>Version reference <code>{decision["context_fingerprint"]}</code></p>
+          <details class="technical-details"><summary>Technical decision binding</summary><dl>
+            <div><dt>Decision identity</dt><dd><code>{decision["id"]}</code></dd></div>
+            <div><dt>Version reference</dt><dd><code>{decision["context_fingerprint"]}</code></dd></div>
+          </dl></details>
           <p :if={is_nil(@decision_contexts[decision["id"]]["analysis_lineage"])} role="status">
             Intelligence lineage: not recorded for this decision.
           </p>
@@ -1098,14 +1110,14 @@ defmodule FountWeb.RunLive do
             class="decision-lineage"
           >
             <strong>Recorded Intelligence lineage</strong>
-            <pre><%= json(@decision_contexts[decision["id"]]["analysis_lineage"]) %></pre>
+            <details class="technical-details"><summary>Technical details</summary><pre><%= json(@decision_contexts[decision["id"]]["analysis_lineage"]) %></pre></details>
           </div>
           <div class="grid">
             <div>
-              <h4>Available choices and consequences</h4><pre><%= json(decision["options"]) %></pre>
+              <h4>Available choices and consequences</h4><details class="technical-details"><summary>Technical details</summary><pre><%= json(decision["options"]) %></pre></details>
             </div>
             <div>
-              <h4>Version details for this decision</h4><pre><%= json(Map.merge(Map.take(decision, ["candidate_id", "base_revision_id", "content_hash", "check_set_fingerprint", "plan_version", "policy_version"]), @decision_contexts[decision["id"]])) %></pre>
+              <h4>Version details for this decision</h4><details class="technical-details"><summary>Technical details</summary><pre><%= json(Map.merge(Map.take(decision, ["candidate_id", "base_revision_id", "content_hash", "check_set_fingerprint", "plan_version", "policy_version"]), @decision_contexts[decision["id"]])) %></pre></details>
             </div>
           </div>
           <p>
@@ -1156,12 +1168,12 @@ defmodule FountWeb.RunLive do
           <div class="card">
             <h3>Analysis before writing</h3>
             <p>Status: <strong>{analysis_status(@review.pre_analysis)}</strong></p>
-            <pre><%= json(@review.pre_analysis) %></pre>
+            <details class="technical-details"><summary>Technical details</summary><pre><%= json(@review.pre_analysis) %></pre></details>
           </div>
           <div class="card">
             <h3>Analysis of changes</h3>
             <p>Status: <strong>{analysis_status(@review.revision_analysis)}</strong></p>
-            <pre><%= json(@review.revision_analysis) %></pre>
+            <details class="technical-details"><summary>Technical details</summary><pre><%= json(@review.revision_analysis) %></pre></details>
           </div>
         </div>
         <p :if={is_nil(@review.candidate)}>
@@ -1172,7 +1184,7 @@ defmodule FountWeb.RunLive do
             <h3>Approved original</h3><pre class="script"><%= @review.base %></pre>
           </div>
           <div>
-            <h3>Candidate <code>{@review.candidate_id}</code></h3><pre class="script"><%= @review.candidate %></pre>
+            <h3>Proposed change</h3><pre class="script"><%= @review.candidate %></pre>
           </div>
         </div>
         <div :if={@review.candidate} class="card intelligence-binding-card">
@@ -1180,6 +1192,7 @@ defmodule FountWeb.RunLive do
             <p class="eyebrow">Analysis for this revision</p>
             <h3>Analysis of proposed changes</h3>
           </div>
+          <details class="technical-details"><summary>Technical source binding</summary>
           <dl class="binding-ledger">
             <div>
               <dt>Base revision</dt><dd>
@@ -1215,10 +1228,11 @@ defmodule FountWeb.RunLive do
               </dd>
             </div>
           </dl>
+          </details>
           <p>
             Story observations do not replace required checks or your approval. Missing or outdated analysis is not a pass.
           </p>
-          <a class="inline-action" href={~p"/runs/#{@run_id}/analysis"}>Open saved analysis</a>
+          <a class="inline-action" href={"/p/#{@project_key}/analysis/#{@task_key}"}>Open saved analysis</a>
         </div>
 
         <div :if={@review.candidate} class="card">
@@ -1235,33 +1249,33 @@ defmodule FountWeb.RunLive do
         </div>
         <div :if={@review.candidate} class="grid">
           <div class="card">
-            <h3>Revision history</h3><pre><%= json(%{"provenance" => @review.provenance, "lineage" => @review.lineage, "result_revision_id" => @review.result_revision_id}) %></pre>
+            <h3>Revision history</h3><details class="technical-details"><summary>Technical details</summary><pre><%= json(%{"provenance" => @review.provenance, "lineage" => @review.lineage, "result_revision_id" => @review.result_revision_id}) %></pre></details>
           </div>
           <div class="card">
-            <h3>Check details</h3><pre><%= json(%{"required_checks" => @review.required_checks, "check_set_fingerprint" => @review.check_set_fingerprint}) %></pre>
+            <h3>Check details</h3><details class="technical-details"><summary>Technical details</summary><pre><%= json(%{"required_checks" => @review.required_checks, "check_set_fingerprint" => @review.check_set_fingerprint}) %></pre></details>
           </div>
         </div>
         <div class="grid">
           <div class="card">
-            <h3>Story observations</h3><pre><%= json(@review.advisory_checks) %></pre><p>
+            <h3>Story observations</h3><details class="technical-details"><summary>Technical details</summary><pre><%= json(@review.advisory_checks) %></pre></details><p>
               These are advisory semantic findings. Partial or failed semantic analysis is never displayed as an advisory pass.
             </p>
           </div>
           <div class="card">
-            <h3>Required checks</h3><pre><%= json(@review.required_run_checks) %></pre><p>
+            <h3>Required checks</h3><details class="technical-details"><summary>Technical details</summary><pre><%= json(@review.required_run_checks) %></pre></details><p>
               Required checks must be resolved before approval. Story observations are advice, not approval.
             </p>
           </div>
         </div>
         <div :if={@review.other_checks != []} class="card">
-          <h3>Other recorded checks</h3><pre><%= json(@review.other_checks) %></pre>
+          <h3>Other recorded checks</h3><details class="technical-details"><summary>Technical details</summary><pre><%= json(@review.other_checks) %></pre></details>
         </div>
         <p>
           Missing checks do not count as passes. Any permitted exception is recorded with your decision.
         </p>
         <p :if={@review.candidate}>
           Choosing a proposed revision and approving it are separate saved decisions. <a href={
-            ~p"/runs/#{@run_id}/decisions"
+            "/p/#{@project_key}/activity/#{@task_key}/decisions"
           }>Open the current decision inbox</a>; this review page never accepts pages implicitly.
         </p>
       </section>
@@ -1277,20 +1291,17 @@ defmodule FountWeb.RunLive do
             <div>
               <dt>Content identity</dt><dd>{@export_preview["completion"]}</dd>
             </div>
-            <div>
-              <dt>Candidate</dt><dd><code>{@export_preview["candidate_id"]}</code></dd>
-            </div>
-            <div>
-              <dt>Result revision</dt><dd>
-                <code>{@export_preview["result_revision_id"] || "not accepted"}</code>
-              </dd>
-            </div>
+            <div><dt>Source</dt><dd>{if @export_preview["result_revision_id"], do: "Current screenplay", else: "Proposed writing"}</dd></div>
+            <div><dt>Technical identity</dt><dd><details class="technical-details"><summary>Show identities</summary><dl>
+              <div><dt>Candidate identity</dt><dd><code>{@export_preview["candidate_id"]}</code></dd></div>
+              <div><dt>Result revision</dt><dd><code>{@export_preview["result_revision_id"] || "not accepted"}</code></dd></div>
+            </dl></details></dd></div>
             <div>
               <dt>Fountain bytes</dt><dd>{@export_preview["fountain_bytes"]}</dd>
             </div>
             <div>
               <dt>FDX fidelity/loss report</dt><dd>
-                <pre><%= json(@export_preview["fdx_losses"]) %></pre>
+                <details class="technical-details"><summary>Technical details</summary><pre><%= json(@export_preview["fdx_losses"]) %></pre></details>
               </dd>
             </div>
             <div>
@@ -1311,26 +1322,30 @@ defmodule FountWeb.RunLive do
         <table>
           <thead>
             <tr>
-              <th>Format</th><th>Content identity</th><th>State</th><th>Checksum / explicit error</th><th>
+              <th>Format</th><th>Content</th><th>State</th><th>Details</th><th>
                 Access
               </th>
             </tr>
           </thead>
           <tbody>
-            <tr :for={delivery <- @progress["deliveries"] || []}>
+            <tr :for={{delivery, ordinal} <- Enum.with_index(@progress["deliveries"] || [], 1)}>
               <td>{delivery["format"]}</td>
               <td>{delivery_identity(delivery)}</td>
               <td>{delivery["state"]}</td>
-              <td><code>{delivery["output_checksum"] || delivery["error"] || "unknown"}</code></td>
+              <td>
+                <span :if={delivery["state"] == "failed"}>{delivery["error"] || "Delivery failed"}</span>
+                <span :if={delivery["state"] != "failed"}>Saved output</span>
+                <details :if={delivery["output_checksum"]} class="technical-details"><summary>Technical details</summary><code>{delivery["output_checksum"]}</code></details>
+              </td>
               <td>
                 <a
                   :if={delivery_previewable?(delivery)}
-                  href={~p"/artifacts/#{@run_id}/#{delivery["id"]}/preview"}
+                  href={"/p/#{@project_key}/exports/#{@task_key}/delivery-#{ordinal}/preview"}
                 >Preview</a>
                 <span :if={delivery_previewable?(delivery)}> · </span>
                 <a
                   :if={delivery["state"] == "ready"}
-                  href={~p"/artifacts/#{@run_id}/#{delivery["id"]}"}
+                  href={"/p/#{@project_key}/exports/#{@task_key}/delivery-#{ordinal}/download"}
                 >Download</a>
                 <span :if={delivery["state"] == "failed"}>Explicit failure; no artifact is served.</span>
               </td>

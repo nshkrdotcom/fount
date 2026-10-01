@@ -7,19 +7,19 @@ defmodule FountWeb.EditorLive do
   @structural_history_limit 50
 
   @impl true
-  def mount(%{"id" => run_id}, _session, socket) do
+  def mount(%{"key" => project_key}, _session, socket) do
     owner = socket.assigns.current_owner
 
-    with {:ok, access} <- FountWeb.Store.run_access(Fount.Repo, owner, run_id),
-         {:ok, workspace} <- Authoring.open_workspace(owner, access["project_id"]) do
+    with {:ok, project} <- FountWeb.Store.project_by_key(Fount.Repo, owner, project_key),
+         {:ok, workspace} <- Authoring.open_workspace(owner, project["id"]) do
       if connected?(socket), do: Process.send_after(self(), :autosave, autosave_ms())
+      _ = FountWeb.ProjectContext.remember(owner, project_key, "writing")
 
       {:ok,
        socket
        |> assign(:live_connected, connected?(socket))
-       |> assign(:run_id, run_id)
-       |> assign(:access, access)
        |> assign(:project, workspace.project)
+       |> assign(:preferences, FountWeb.Store.owner_preferences(Fount.Repo, owner))
        |> assign(:base, workspace.base)
        |> assign(:draft, workspace.draft)
        |> assign(:raw_source, workspace.draft["raw_source"])
@@ -42,8 +42,8 @@ defmodule FountWeb.EditorLive do
       {:error, _} ->
         {:ok,
          socket
-         |> put_flash(:error, "Editor unavailable for this owner or Run.")
-         |> redirect(to: ~p"/")}
+         |> put_flash(:error, "Writing view is not available for that screenplay.")
+         |> redirect(to: "/")}
     end
   end
 
@@ -164,7 +164,7 @@ defmodule FountWeb.EditorLive do
              |> assign(:draft, draft)
              |> assign(
                :notice,
-               "Candidate #{candidate.id} saved. The approved screenplay is unchanged."
+               "Proposed change saved. The current screenplay is unchanged."
              )
              |> assign(:error, nil)
              |> assign(:save_state, "candidate-saved")}
@@ -237,11 +237,28 @@ defmodule FountWeb.EditorLive do
                :info,
                "AI assistance started. The approved screenplay is unchanged."
              )
-             |> push_navigate(to: ~p"/runs/#{result.run["id"]}/timeline")}
+             |> push_navigate(to: "/p/#{socket.assigns.project["key"]}/activity/#{result.access["display_key"]}")}
 
           {:error, reason} ->
             {:noreply, assign(socket, :error, human_error(reason))}
         end
+    end
+  end
+
+  def handle_event("dismiss_hint", %{"slug" => slug}, socket) do
+    dismissed =
+      socket.assigns.preferences
+      |> Map.get("dismissed_hints", [])
+      |> List.wrap()
+      |> MapSet.new()
+      |> MapSet.put(slug)
+      |> MapSet.to_list()
+
+    case FountWeb.Store.put_owner_preferences(Fount.Repo, socket.assigns.current_owner, %{
+           "dismissed_hints" => dismissed
+         }) do
+      {:ok, prefs} -> {:noreply, assign(socket, :preferences, prefs)}
+      _ -> {:noreply, socket}
     end
   end
 
@@ -364,7 +381,7 @@ defmodule FountWeb.EditorLive do
            socket.assigns.draft["version"]
          ) do
       {:ok, _draft} ->
-        {:noreply, push_navigate(socket, to: ~p"/runs/#{socket.assigns.run_id}/viewer")}
+        {:noreply, push_navigate(socket, to: "/p/#{socket.assigns.project["key"]}")}
 
       {:error, reason} ->
         {:noreply, assign(socket, :error, human_error(reason))}
@@ -524,7 +541,7 @@ defmodule FountWeb.EditorLive do
              expected_client_seq: socket.assigns.client_seq,
              reset_history: false
            })
-           |> assign(:notice, "Structural undo applied to draft only (#{next.revision.id}).")}
+           |> assign(:notice, "Structural undo applied to the working draft only.")}
         else
           {:error, reason} -> {:noreply, assign(socket, :error, human_error(reason))}
         end
@@ -781,7 +798,7 @@ defmodule FountWeb.EditorLive do
   defp human_error(:draft_limit_reached),
     do: "Draft history is full. Discard an older draft first."
 
-  defp human_error(reason), do: "Authoring operation failed: #{inspect(reason)}"
+  defp human_error(_reason), do: "That writing action could not be completed. Your working text has been kept."
 
   defp diagnostic_text(diagnostic) do
     severity = Map.get(diagnostic, :severity, :info)
@@ -790,6 +807,17 @@ defmodule FountWeb.EditorLive do
     "#{severity}: #{code} #{message}"
   end
 
+  defp dismissed?(prefs, slug), do: slug in List.wrap(Map.get(prefs, "dismissed_hints", []))
+
+  defp save_state_label("saved"), do: "Saved working draft"
+  defp save_state_label("candidate-saved"), do: "Proposed change saved"
+  defp save_state_label("accepted"), do: "Current screenplay updated"
+  defp save_state_label("invalid-saved"), do: "Saved working draft · Fountain needs attention"
+  defp save_state_label("invalid-unsaved"), do: "Unsaved text · Fountain needs attention"
+  defp save_state_label("unsaved"), do: "Unsaved local changes"
+  defp save_state_label("save-failed"), do: "Save failed · local text kept"
+  defp save_state_label(other), do: other |> to_string() |> String.replace("-", " ")
+
   @impl true
   def render(assigns) do
     preview_screenplay =
@@ -797,111 +825,79 @@ defmodule FountWeb.EditorLive do
         do: assigns.preview.screenplay,
         else: assigns.last_valid.screenplay
 
-    assigns = assign(assigns, :preview_screenplay, preview_screenplay)
+    assigns =
+      assigns
+      |> assign(:preview_screenplay, preview_screenplay)
+      |> assign(:writing_hint_dismissed, dismissed?(assigns.preferences, "writing"))
 
     ~H"""
     <main
-      id={"editor-#{@run_id}"}
-      class={"authoring-shell mode-#{@mode}"}
+      id="project-editor"
+      class={"project-workspace authoring-shell mode-#{@mode}"}
       phx-hook="AuthoringEditor"
       data-dirty={to_string(@dirty)}
       data-draft-status={@draft["status"]}
+      data-project-key={@project["key"]}
     >
-      <nav class="context-nav" aria-label="Run">
-        <a href={~p"/"}>Projects</a>
-        <a href={~p"/runs/#{@run_id}/timeline"}>Timeline</a>
-        <a href={~p"/runs/#{@run_id}/viewer"}>Viewer</a>
-        <a href={~p"/runs/#{@run_id}/edit"} aria-current="page">Editor</a>
-        <a href={~p"/runs/#{@run_id}/review"}>Review</a>
-        <a href={~p"/runs/#{@run_id}/analysis"}>Intelligence</a>
-      </nav>
+      <FountWeb.CoreComponents.project_header
+        project={@project}
+        section="script"
+        view="writing"
+        source_label="Working draft"
+        example={@project["project_kind"] == "example"}
+      />
 
-      <header class="workspace-header">
+      <section class="script-context writing-context" aria-label="Writing status">
         <div>
-          <p class="eyebrow">Screenplay editor</p>
-          <h1>{@access["title"]}</h1>
-          <p>
-            Accepted base <code>{@draft["base_revision_id"]}</code>
-            · draft <code>{@draft["id"]}</code>
-            v{@draft["version"]}
-          </p>
+          <h1>{@project["title"]}</h1>
+          <p><strong>Working draft</strong> · separate from the current screenplay until you explicitly make a saved proposal current.</p>
         </div>
         <div class="authoring-status" role="status" aria-live="polite">
-          <strong>{@save_state}</strong>
-          <span>{if @dirty, do: "Unsaved local changes", else: "Draft synchronized"}</span>
+          <strong>{save_state_label(@save_state)}</strong>
+          <span>Draft version {@draft["version"]}</span>
         </div>
-      </header>
+      </section>
 
-      <p class={"analysis-draft-marker #{if @dirty, do: "is-stale", else: "is-saved"}"} role="status">
-        <strong>Analysis evidence:</strong>
-        <%= if @dirty do %>
-          This unsaved draft has not been analyzed. Previous analysis applies to its original screenplay version.
-        <% else %>
-          Saved analysis applies to the version it examined. Open Intelligence to review it.
-        <% end %>
-      </p>
+      <FountWeb.CoreComponents.contextual_help
+        slug="writing"
+        title="Working text is recoverable, not automatically current"
+        dismissed={@writing_hint_dismissed}
+        project_key={@project["key"]}
+      >
+        <p>Save freely. Saving a proposed change still does not replace the current screenplay; that requires the separate Make current action.</p>
+      </FountWeb.CoreComponents.contextual_help>
 
-      <FountWeb.CoreComponents.alert :if={@error} kind="warning" title="Authoring notice">
+      <FountWeb.CoreComponents.alert :if={@error} kind="warning" title="Writing notice">
         {@error}
       </FountWeb.CoreComponents.alert>
-      <FountWeb.CoreComponents.alert :if={@notice} kind="info" title="Authoring status">
+      <FountWeb.CoreComponents.alert :if={@notice} kind="info" title="Writing status">
         {@notice}
       </FountWeb.CoreComponents.alert>
 
       <section :if={@conflict} id="draft-conflict" class="authoring-conflict" role="alert">
-        <h2>Draft conflict</h2>
-        <p>Another tab saved version {@conflict["version"]}. No text was overwritten.</p>
-        <button type="button" phx-click="reload_server">Use newer server draft</button>
-        <button type="button" data-authoring-fork>Keep my text as a new recovery draft</button>
+        <h2>This draft changed in another tab</h2>
+        <p>Your local text has not been overwritten. Choose which recovery path to keep.</p>
+        <button type="button" phx-click="reload_server">Use the newer saved draft</button>
+        <button type="button" data-authoring-fork>Keep my text as a separate recovery draft</button>
       </section>
 
-      <section class="authoring-toolbar" aria-label="Authoring controls">
-        <div role="group" aria-label="Workspace mode">
+      <section class="authoring-toolbar" aria-label="Writing controls">
+        <div role="group" aria-label="Writing layout">
           <button
-            :for={mode <- ["editor", "split", "preview"]}
+            :for={{mode, label} <- [{"editor", "Source"}, {"split", "Source + pages"}, {"preview", "Pages"}]}
             type="button"
             phx-click="set_mode"
             phx-value-mode={mode}
             aria-pressed={to_string(@mode == mode)}
-          >{String.capitalize(mode)}</button>
+          >{label}</button>
         </div>
-        <div role="group" aria-label="Text history">
-          <button type="button" phx-click="text_undo" disabled={@draft["status"] != "active"}>Undo text</button>
-          <button type="button" phx-click="text_redo" disabled={@draft["status"] != "active"}>Redo text</button>
-        </div>
-        <div role="group" aria-label="Structural history">
-          <button
-            type="button"
-            phx-click="structural_undo"
-            disabled={@draft["status"] != "active" or @structural_undo == []}
-          >Undo structure</button>
-          <button
-            type="button"
-            phx-click="structural_redo"
-            disabled={@draft["status"] != "active" or @structural_redo == []}
-          >Redo structure</button>
-        </div>
-        <button
-          id="authoring-save"
-          type="button"
-          data-authoring-save
-          disabled={@draft["status"] != "active"}
-        >Save draft</button>
+        <button id="authoring-save" type="button" data-authoring-save disabled={@draft["status"] != "active"}>Save working draft</button>
         <button
           id="candidate-save"
           type="button"
           data-authoring-candidate
           disabled={not valid_preview?(@preview) or @draft["status"] != "active"}
-        >Save candidate</button>
-        <button
-          id="ai-assist"
-          type="button"
-          phx-click="start_ai_assist"
-          disabled={
-            not @live_connected or @dirty or @draft["status"] != "active" or
-              not is_binary(@draft["saved_candidate_id"])
-          }
-        >AI assist via Run</button>
+        >Save proposed change</button>
         <button
           id="candidate-accept"
           type="button"
@@ -910,7 +906,7 @@ defmodule FountWeb.EditorLive do
             not @live_connected or @dirty or @draft["status"] != "active" or
               not is_binary(@draft["saved_candidate_id"])
           }
-        >Accept exact candidate</button>
+        >Make proposed change current</button>
       </section>
 
       <div class="authoring-grid">
@@ -932,45 +928,48 @@ defmodule FountWeb.EditorLive do
             >{@raw_source}</textarea>
           </div>
           <p id="fountain-syntax-help" class="scope-note">
-            Fountain syntax assistance: scene headings such as <code>INT. OFFICE - DAY</code>, character cues, dialogue, transitions, notes, and sections remain plain editable text.
+            Plain Fountain text. Scene headings such as <code>INT. OFFICE - DAY</code>, character cues and dialogue preview on the right.
           </p>
 
-          <div
-            id="authoring-diagnostics"
-            class="authoring-diagnostics"
-            aria-live="polite"
-            aria-atomic="false"
-          >
-            <h2>Source diagnostics</h2>
-            <p :if={@diagnostics == []}>No blocking source diagnostics.</p>
-            <ul>
-              <li :for={diagnostic <- Enum.take(@diagnostics, 12)}>{diagnostic_text(diagnostic)}</li>
-            </ul>
+          <div id="authoring-diagnostics" class="authoring-diagnostics" aria-live="polite">
+            <h2>Source check</h2>
+            <p :if={@diagnostics == []}>No blocking Fountain diagnostics.</p>
+            <ul><li :for={diagnostic <- Enum.take(@diagnostics, 12)}>{diagnostic_text(diagnostic)}</li></ul>
             <p :if={not valid_preview?(@preview)}>
-              Preview is showing the last valid draft while the invalid raw source remains editable and recoverable.
-            </p>
-            <p :if={valid_preview?(@preview)} class="scope-note">
-              Fidelity: exact raw round-trip {to_string(@preview.fidelity["exact_source_round_trip"])} · preserved element IDs {length(
-                @preview.fidelity["preserved_element_ids"]
-              )} · source SHA-256 <code>{@preview.fidelity["source_sha256"]}</code>.
+              Your raw text is still saved. Pages continue to show the last valid draft until the Fountain source can be reconciled.
             </p>
           </div>
         </section>
 
-        <section class="authoring-preview-pane" aria-label="Screenplay preview" data-authoring-preview>
-          <p class="scope-note">
-            Preview is debounced and best-effort. Stable source identities anchor editor-to-preview navigation.
-          </p>
+        <section class="authoring-preview-pane" aria-label="Responsive screenplay preview" data-authoring-preview>
+          <div class="reader-paper__label"><span>Responsive screenplay preview</span><a href="/help#reading">About page references</a></div>
           <FountWeb.Components.ScreenplayRenderer.screenplay screenplay={@preview_screenplay} />
         </section>
       </div>
 
-      <section class="authoring-lower-grid">
-        <FountWeb.CoreComponents.card>
-          <h2>Validated structural commands</h2>
-          <p>
-            These commands use the existing screenplay edit algebra and stable IDs. Generic element move/split/merge is intentionally not offered.
-          </p>
+      <div class="authoring-secondary">
+        <FountWeb.CoreComponents.disclosure id="text-history" title="Undo and recovery" summary="Local text, structure and saved history">
+          <div class="button-row" role="group" aria-label="Text history">
+            <button type="button" phx-click="text_undo" disabled={@draft["status"] != "active"}>Undo text</button>
+            <button type="button" phx-click="text_redo" disabled={@draft["status"] != "active"}>Redo text</button>
+            <button type="button" phx-click="structural_undo" disabled={@draft["status"] != "active" or @structural_undo == []}>Undo structure</button>
+            <button type="button" phx-click="structural_redo" disabled={@draft["status"] != "active" or @structural_redo == []}>Redo structure</button>
+          </div>
+          <ol class="draft-history">
+            <li :for={item <- @history}>
+              <span>Version {item["draft_version"]} · {item["reason"]}</span>
+              <button type="button" phx-click="restore_history" phx-value-history_id={item["id"]}>Restore as new draft</button>
+            </li>
+          </ol>
+          <div class="button-row">
+            <button type="button" phx-click="rebase_draft" disabled={@draft["status"] != "active"}>Rebase onto current screenplay</button>
+            <button type="button" phx-click="discard_draft" disabled={@draft["status"] != "active"}>Discard working draft</button>
+          </div>
+        </FountWeb.CoreComponents.disclosure>
+
+        <FountWeb.CoreComponents.disclosure id="advanced-editing" title="Advanced editing controls" summary="Existing exact structural operations and task handoff">
+          <p class="scope-note">Generic element move/split/merge is intentionally not offered. This unsaved draft has not been analyzed; analysis remains tied to saved task sources.</p>
+          <p>These exact controls remain available under Advanced editing. Ordinary writing does not require them.</p>
           <form phx-submit="structural_edit" class="authoring-command-form">
             <label>
               Operation
@@ -986,32 +985,31 @@ defmodule FountWeb.EditorLive do
             </label>
             <label>Target stable ID <input name="edit[target]" required /></label>
             <label>Value / destination ID <input name="edit[value]" /></label>
-            <button type="submit" disabled={@draft["status"] != "active"}>Apply to draft</button>
+            <button type="submit" disabled={@draft["status"] != "active"}>Apply to working draft</button>
           </form>
-          <p :if={@affected_scope != []} id="affected-scope">
-            Affected stable IDs: {Enum.join(@affected_scope, ", ")}
-          </p>
-        </FountWeb.CoreComponents.card>
+          <p :if={@affected_scope != []}>Affected elements are recorded internally for exact recovery and review.</p>
+          <button
+            id="ai-assist"
+            type="button"
+            phx-click="start_ai_assist"
+            disabled={
+              not @live_connected or @dirty or @draft["status"] != "active" or
+                not is_binary(@draft["saved_candidate_id"])
+            }
+          >Start existing creative task from this saved proposal</button>
+        </FountWeb.CoreComponents.disclosure>
 
-        <FountWeb.CoreComponents.card>
-          <h2>Recovery history</h2>
-          <p>
-            Recent drafts are kept in history. Restoring one creates a new draft and leaves the approved screenplay unchanged.
-          </p>
-          <ol class="draft-history">
-            <li :for={item <- @history}>
-              <span>v{item["draft_version"]} · {item["reason"]}</span>
-              <button type="button" phx-click="restore_history" phx-value-history_id={item["id"]}>Restore as new draft</button>
-            </li>
-          </ol>
-          <button type="button" phx-click="rebase_draft" disabled={@draft["status"] != "active"}>Rebase draft to current accepted head</button>
-          <button type="button" phx-click="discard_draft" disabled={@draft["status"] != "active"}>Discard working draft</button>
-        </FountWeb.CoreComponents.card>
-      </section>
-
-      <p class="scope-note">
-        Saving a proposed revision leaves the approved screenplay unchanged. To replace it, use the approval action above.
-      </p>
+        <details class="technical-details">
+          <summary>Technical details</summary>
+          <dl>
+            <div><dt>Project identity</dt><dd><code>{@project["id"]}</code></dd></div>
+            <div><dt>Draft identity</dt><dd><code>{@draft["id"]}</code></dd></div>
+            <div><dt>Base revision</dt><dd><code>{@draft["base_revision_id"]}</code></dd></div>
+            <div :if={is_binary(@draft["saved_candidate_id"])}><dt>Saved proposal</dt><dd><code>{@draft["saved_candidate_id"]}</code></dd></div>
+            <div :if={valid_preview?(@preview)}><dt>Source SHA-256</dt><dd><code>{@preview.fidelity["source_sha256"]}</code></dd></div>
+          </dl>
+        </details>
+      </div>
     </main>
     """
   end

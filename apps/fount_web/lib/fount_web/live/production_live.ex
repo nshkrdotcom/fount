@@ -6,30 +6,41 @@ defmodule FountWeb.ProductionLive do
   @sections ~w(search cast locations notes read usefulness)
 
   @impl true
-  def mount(%{"id" => run_id}, _session, socket) do
-    {:ok,
-     socket
-     |> assign(:run_id, run_id)
-     |> assign(:section, "search")
-     |> assign(:view_token, nil)
-     |> assign(:workspace, nil)
-     |> assign(:search_query, "")
-     |> assign(:search_attrs, %{"limit" => "50"})
-     |> assign(:search_result, nil)
-     |> assign(:search_notice, nil)
-     |> assign(:characters, [])
-     |> assign(:locations, [])
-     |> assign(:notes, [])
-     |> assign(:measured_annotations, [])
-     |> assign(:note_filter, %{})
-     |> assign(:target_options, [])
-     |> assign(:tool_candidates, [])
-     |> assign(:table_reads, [])
-     |> assign(:selected_read, nil)
-     |> assign(:usefulness_rows, [])
-     |> assign(:usefulness_report, nil)
-     |> assign(:tts, ProductionTools.tts_status())
-     |> assign(:error, nil)}
+  def mount(%{"key" => project_key, "task_key" => task_key}, _session, socket) do
+    owner = socket.assigns.current_owner
+
+    case FountWeb.Store.run_access_by_task_key(Fount.Repo, owner, project_key, task_key) do
+      {:ok, access} ->
+        {:ok,
+         socket
+         |> assign(:run_id, access["run_id"])
+         |> assign(:project_key, project_key)
+         |> assign(:task_key, task_key)
+         |> assign(:task_access, access)
+         |> assign(:section, "search")
+         |> assign(:view_token, nil)
+         |> assign(:workspace, nil)
+         |> assign(:search_query, "")
+         |> assign(:search_attrs, %{"limit" => "50"})
+         |> assign(:search_result, nil)
+         |> assign(:search_notice, nil)
+         |> assign(:characters, [])
+         |> assign(:locations, [])
+         |> assign(:notes, [])
+         |> assign(:measured_annotations, [])
+         |> assign(:note_filter, %{})
+         |> assign(:target_options, [])
+         |> assign(:tool_candidates, [])
+         |> assign(:table_reads, [])
+         |> assign(:selected_read, nil)
+         |> assign(:usefulness_rows, [])
+         |> assign(:usefulness_report, nil)
+         |> assign(:tts, ProductionTools.tts_status())
+         |> assign(:error, nil)}
+
+      _ ->
+        {:ok, socket |> put_flash(:error, "That task's tools are not available.") |> redirect(to: "/")}
+    end
   end
 
   @impl true
@@ -79,7 +90,7 @@ defmodule FountWeb.ProductionLive do
          |> reload_human_records()}
 
       {:error, reason} ->
-        {:noreply, assign(socket, :error, "Production tools unavailable: #{inspect(reason)}")}
+        {:noreply, assign(socket, :error, "Project tools unavailable: #{tool_error(reason)}")}
     end
   end
 
@@ -88,7 +99,7 @@ defmodule FountWeb.ProductionLive do
     {:noreply,
      push_patch(socket,
        to:
-         ~p"/runs/#{socket.assigns.run_id}/tools?#{[view: token, section: socket.assigns.section]}"
+         "/p/#{socket.assigns.project_key}/tools/#{socket.assigns.task_key}?" <> URI.encode_query(%{"view" => token, "section" => socket.assigns.section})
      )}
   end
 
@@ -98,7 +109,7 @@ defmodule FountWeb.ProductionLive do
     {:noreply,
      push_patch(socket,
        to:
-         ~p"/runs/#{socket.assigns.run_id}/tools?#{[view: socket.assigns.view_token, section: section]}"
+         "/p/#{socket.assigns.project_key}/tools/#{socket.assigns.task_key}?" <> URI.encode_query(%{"view" => socket.assigns.view_token, "section" => section})
      )}
   end
 
@@ -116,7 +127,7 @@ defmodule FountWeb.ProductionLive do
          |> assign(:error, nil)}
 
       {:error, reason} ->
-        {:noreply, assign(socket, :error, "Search unavailable: #{inspect(reason)}")}
+        {:noreply, assign(socket, :error, "Search unavailable: #{tool_error(reason)}")}
     end
   end
 
@@ -140,13 +151,13 @@ defmodule FountWeb.ProductionLive do
          socket
          |> put_flash(
            :info,
-           "Note candidate #{short(candidate.id)} saved. The approved screenplay is unchanged until you approve this revision."
+           "Note proposal saved. The current screenplay is unchanged until you approve it separately."
          )
          |> assign(:error, nil)
          |> reload_human_records()}
 
       {:error, reason} ->
-        {:noreply, assign(socket, :error, "Note candidate not saved: #{inspect(reason)}")}
+        {:noreply, assign(socket, :error, "Note candidate not saved: #{tool_error(reason)}")}
     end
   end
 
@@ -165,13 +176,13 @@ defmodule FountWeb.ProductionLive do
          socket
          |> put_flash(
            :info,
-           "Deletion candidate #{short(candidate.id)} saved. The approved screenplay is unchanged."
+           "Note-deletion proposal saved. The current screenplay is unchanged."
          )
          |> assign(:error, nil)
          |> reload_human_records()}
 
       {:error, reason} ->
-        {:noreply, assign(socket, :error, "Note deletion not saved: #{inspect(reason)}")}
+        {:noreply, assign(socket, :error, "Note deletion not saved: #{tool_error(reason)}")}
     end
   end
 
@@ -191,13 +202,13 @@ defmodule FountWeb.ProductionLive do
          socket
          |> put_flash(
            :info,
-           "Rename candidate #{short(candidate.id)} saved from #{length(plan.cue_operations)} confirmed cue(s); #{length(plan.review)} suggested mention(s) remain unaccepted."
+           "Rename proposal saved from #{length(plan.cue_operations)} confirmed cue(s); #{length(plan.review)} suggested mention(s) remain unaccepted."
          )
          |> assign(:error, nil)
          |> reload_human_records()}
 
       {:error, reason} ->
-        {:noreply, assign(socket, :error, "Cast candidate not saved: #{inspect(reason)}")}
+        {:noreply, assign(socket, :error, "Cast candidate not saved: #{tool_error(reason)}")}
     end
   end
 
@@ -222,11 +233,11 @@ defmodule FountWeb.ProductionLive do
          )
          |> push_patch(
            to:
-             ~p"/runs/#{socket.assigns.run_id}/tools?#{[view: accepted_token, section: socket.assigns.section]}"
+             "/p/#{socket.assigns.project_key}/tools/#{socket.assigns.task_key}?" <> URI.encode_query(%{"view" => accepted_token, "section" => socket.assigns.section})
          )}
 
       {:error, reason} ->
-        {:noreply, assign(socket, :error, "Candidate not accepted: #{inspect(reason)}")}
+        {:noreply, assign(socket, :error, "Candidate not accepted: #{tool_error(reason)}")}
     end
   end
 
@@ -250,7 +261,7 @@ defmodule FountWeb.ProductionLive do
          |> reload_human_records(row["id"])}
 
       {:error, reason} ->
-        {:noreply, assign(socket, :error, "Table read not created: #{inspect(reason)}")}
+        {:noreply, assign(socket, :error, "Table read not created: #{tool_error(reason)}")}
     end
   end
 
@@ -260,10 +271,10 @@ defmodule FountWeb.ProductionLive do
       {:noreply, assign(socket, :selected_read, row)}
     else
       false ->
-        {:noreply, assign(socket, :error, "Table read unavailable: Run identity mismatch.")}
+        {:noreply, assign(socket, :error, "Table read unavailable: task source mismatch.")}
 
       {:error, reason} ->
-        {:noreply, assign(socket, :error, "Table read unavailable: #{inspect(reason)}")}
+        {:noreply, assign(socket, :error, "Table read unavailable: #{tool_error(reason)}")}
     end
   end
 
@@ -295,7 +306,7 @@ defmodule FountWeb.ProductionLive do
 
       {:error, reason} ->
         {:reply, %{status: "error"},
-         assign(socket, :error, "Table-read state not saved: #{inspect(reason)}")}
+         assign(socket, :error, "Table-read state not saved: #{tool_error(reason)}")}
     end
   end
 
@@ -316,7 +327,7 @@ defmodule FountWeb.ProductionLive do
        |> reload_human_records(saved["id"])}
     else
       {:error, reason} ->
-        {:noreply, assign(socket, :error, "Reaction not saved: #{inspect(reason)}")}
+        {:noreply, assign(socket, :error, "Reaction not saved: #{tool_error(reason)}")}
     end
   end
 
@@ -337,7 +348,7 @@ defmodule FountWeb.ProductionLive do
          |> reload_human_records()}
 
       {:error, reason} ->
-        {:noreply, assign(socket, :error, "Usefulness evidence not saved: #{inspect(reason)}")}
+        {:noreply, assign(socket, :error, "Usefulness evidence not saved: #{tool_error(reason)}")}
     end
   end
 
@@ -348,7 +359,7 @@ defmodule FountWeb.ProductionLive do
          socket |> put_flash(:info, "Usefulness record deleted.") |> reload_human_records()}
 
       {:error, reason} ->
-        {:noreply, assign(socket, :error, "Record not deleted: #{inspect(reason)}")}
+        {:noreply, assign(socket, :error, "Record not deleted: #{tool_error(reason)}")}
     end
   end
 
@@ -418,25 +429,45 @@ defmodule FountWeb.ProductionLive do
   defp parse_integer(_), do: {:error, :invalid_integer}
   defp normalize_section(section) when section in @sections, do: section
   defp normalize_section(_), do: "search"
-  defp short(value) when is_binary(value), do: String.slice(value, 0, 8)
-  defp short(_), do: "unknown"
 
-  defp source_link(run_id, token, anchor) do
-    "/runs/#{run_id}/viewer?" <> URI.encode_query(%{"view" => token}) <> "##{anchor}"
+  defp source_link(project_key, task_key, token, scene_ordinal) do
+    params = %{"view" => token} |> maybe_scene(scene_ordinal)
+    "/p/#{project_key}/source/#{task_key}?" <> URI.encode_query(params)
   end
 
+  defp maybe_scene(params, value) when is_integer(value), do: Map.put(params, "scene", Integer.to_string(value))
+  defp maybe_scene(params, _), do: params
+
+  defp tool_error(:not_found), do: "The saved item is no longer available."
+  defp tool_error(:conflict), do: "The saved item changed. Reload it before trying again."
+  defp tool_error(:stale_revision), do: "The screenplay changed; reopen the current source before saving."
+  defp tool_error(_), do: "The action could not be completed. No accepted screenplay was changed."
+
+
+
+  defp read_ref(reads, selected) do
+    case Enum.find_index(reads, &(&1["id"] == selected["id"])) do
+      nil -> "read-1"
+      index -> "read-#{index + 1}"
+    end
+  end
   @impl true
   def render(assigns) do
     ~H"""
     <main class="production-shell">
       <fieldset class="production-connection" disabled={not connected?(@socket)}>
-        <nav class="context-nav production-nav" aria-label="Run tools">
-          <a href={~p"/"}>Projects</a>
-          <a href={~p"/runs/#{@run_id}/setup"}>Setup</a>
-          <a href={~p"/runs/#{@run_id}/viewer?#{[view: @view_token]}"}>Viewer</a>
-          <a href={~p"/runs/#{@run_id}/edit"}>Editor</a>
-          <a href={~p"/runs/#{@run_id}/analysis"}>Analysis</a>
-          <a href={~p"/runs/#{@run_id}/tools?#{[view: @view_token]}"} aria-current="page">Production tools</a>
+        <FountWeb.CoreComponents.project_header
+          project={%{"key" => @project_key, "title" => @task_access["title"], "project_kind" => "screenplay"}}
+          section="notes"
+          view="reading"
+          source_label="Task source"
+        />
+        <nav class="task-subnav" aria-label="Task">
+          <strong>{@task_access["display_label"] || "Saved task"}</strong>
+          <a href={"/p/#{@project_key}/activity/#{@task_key}"}>Activity</a>
+          <a href={"/p/#{@project_key}/source/#{@task_key}?" <> URI.encode_query(%{"view" => @view_token})}>Sources</a>
+          <a href={"/p/#{@project_key}/analysis/#{@task_key}"}>Analysis</a>
+          <a href={"/p/#{@project_key}/tools/#{@task_key}"} aria-current="page">Tools</a>
         </nav>
 
         <p :if={@flash["info"]} class="notice" role="status">{@flash["info"]}</p>
@@ -447,11 +478,10 @@ defmodule FountWeb.ProductionLive do
             <div>
               <p class="eyebrow">Screenplay tools</p>
               <h1>{@workspace.project["title"]}</h1>
-              <p>
-                Screenplay <code>{@workspace.screenplay.id}</code>
-                · revision <code>{@workspace.screenplay.revision.id}</code>
-                · {@workspace.selection.label}
-              </p>
+              <p><strong>{@task_access["display_label"] || "Saved task"}</strong> · {@workspace.selection.label}</p>
+              <details class="technical-details"><summary>Technical details</summary>
+                <p>Screenplay <code>{@workspace.screenplay.id}</code> · revision <code>{@workspace.screenplay.revision.id}</code></p>
+              </details>
               <p :if={!@workspace.editable?} class="warning">
                 This selected revision is inspection-only. Note/cast changes require the current accepted head.
               </p>
@@ -462,10 +492,10 @@ defmodule FountWeb.ProductionLive do
                 <select name="revision[view]">
                   <option
                     :for={option <- @workspace.options}
-                    value={option.token}
-                    selected={option.token == @view_token}
+                    value={FountWeb.ScreenplayViews.token(option)}
+                    selected={FountWeb.ScreenplayViews.token(option) == @view_token}
                   >
-                    {option.label} · {String.slice(option.revision_id, 0, 8)}
+                    {option.label}
                   </option>
                 </select>
               </label>
@@ -595,9 +625,8 @@ defmodule FountWeb.ProductionLive do
                       <code>{hit.type}</code>
                       · scene {hit.scene_ordinal || "—"} {hit.scene_heading || ""}
                     </div>
-                    <p><code>{hit.element_id}</code></p>
                     <p>{hit.excerpt}</p>
-                    <a href={source_link(@run_id, @view_token, hit.anchor)}>Open exact source element</a>
+                    <a href={source_link(@project_key, @task_key, @view_token, hit.scene_ordinal)}>Open source scene</a>
                   </li>
                 </ol>
               <% else %>
@@ -615,7 +644,6 @@ defmodule FountWeb.ProductionLive do
             <div class="dense-card-grid">
               <article :for={character <- @characters} class="card character-card">
                 <h3>{character.display_name}</h3>
-                <p><code>{character.id}</code></p>
                 <p>
                   Aliases: {if(character.aliases == [],
                     do: "none recorded",
@@ -675,7 +703,7 @@ defmodule FountWeb.ProductionLive do
                         {entry.parsed_context}
                       </td><td>{entry.parsed_time}</td>
                       <td>
-                        <a href={source_link(@run_id, @view_token, "scene-#{entry.scene_id}")}>Screenplay version</a>
+                        <a href={source_link(@project_key, @task_key, @view_token, "scene-#{entry.scene_id}")}>Screenplay version</a>
                       </td>
                     </tr>
                   </tbody>
@@ -708,7 +736,7 @@ defmodule FountWeb.ProductionLive do
                       value={status}
                       selected={@note_filter["status"] == status}
                     >
-                      {status}
+                      {String.replace(status, "_", " ")}
                     </option>
                   </select>
                 </label>
@@ -724,8 +752,12 @@ defmodule FountWeb.ProductionLive do
                     </option>
                   </select>
                 </label>
-                <label>Exact target override (optional)
-                <input name="note[target_override]" placeholder="element:&lt;uuid&gt;" /></label>
+                <details class="technical-details">
+                  <summary>Technical target override</summary>
+                  <label>Exact internal target
+                    <input name="note[target_override]" placeholder="element:internal-id" />
+                  </label>
+                </details>
                 <label>Note <textarea name="note[text]" required></textarea></label>
                 <button type="submit" phx-disable-with="Saving candidate…">Save note candidate</button>
               </form>
@@ -735,7 +767,7 @@ defmodule FountWeb.ProductionLive do
               <p :if={!@workspace.editable?} class="warning">
                 Select the current accepted head to create, edit, remap or delete notes.
               </p>
-              <a href={~p"/production/#{@run_id}/notes.json?#{[view: @view_token]}"}>Export notes JSON for this exact revision</a>
+              <a href={"/p/#{@project_key}/tools/#{@task_key}/notes.json?" <> URI.encode_query(%{"view" => @view_token})}>Export notes JSON for this exact revision</a>
             </article>
 
             <article class="stack tool-results">
@@ -745,15 +777,12 @@ defmodule FountWeb.ProductionLive do
                 data-note-state={note.target_state}
               >
                 <header>
-                  <h3>{note.title || "Untitled note"}</h3><code>{note.target_state}</code>
+                  <h3>{note.title || "Untitled note"}</h3><span class="status-badge status-badge--neutral">{note.target_state |> to_string() |> String.replace("_", " ")}</span>
                 </header>
                 <p>{note.text}</p>
-                <p>Target: <code>{note.target["kind"]}:{note.target["id"]}</code></p>
-                <p>
-                  Producer: {note.provenance["producer"] || "unknown"} · bound revision {short(
-                    note.bound_revision_id
-                  )}
-                </p>
+                <p>Target: {note.target["kind"] |> to_string() |> String.replace("_", " ")}</p>
+                <p>Producer: {note.provenance["producer"] || "unknown"} · exact source is recorded.</p>
+                <details class="technical-details"><summary>Technical source binding</summary><code>{note.bound_revision_id}</code></details>
                 <form :if={@workspace.editable?} phx-submit="save_note" class="stack">
                   <input type="hidden" name="note[id]" value={note.id} />
                   <label>Title <input name="note[title]" value={note.title} /></label>
@@ -772,8 +801,12 @@ defmodule FountWeb.ProductionLive do
                       </option>
                     </select>
                   </label>
-                  <label>Exact target override (optional)
-                  <input name="note[target_override]" placeholder="element:&lt;uuid&gt;" /></label>
+                  <details class="technical-details">
+                    <summary>Technical target override</summary>
+                    <label>Exact internal target
+                      <input name="note[target_override]" placeholder="element:internal-id" />
+                    </label>
+                  </details>
                   <label>Text <textarea name="note[text]" required><%= note.text %></textarea></label>
                   <button type="submit" phx-disable-with="Saving candidate…">Save edited/remapped candidate</button>
                 </form>
@@ -795,8 +828,8 @@ defmodule FountWeb.ProductionLive do
                 <details :for={annotation <- Enum.take(@measured_annotations, 24)}>
                   <summary>{annotation.namespace} · {annotation.kind}</summary>
                   <p>
-                    Annotation <code>{annotation.id}</code>
-                    · source revision <code>{short(annotation.source_revision)}</code>
+                    Saved measured annotation
+                    <details class="technical-details"><summary>Technical source binding</summary><code>{annotation.id}</code> · <code>{annotation.source_revision}</code></details>
                   </p>
                   <p>
                     Producer: {get_in(annotation, [:provenance, "producer"]) ||
@@ -822,13 +855,13 @@ defmodule FountWeb.ProductionLive do
               <table>
                 <thead>
                   <tr>
-                    <th>Kind</th><th>Candidate</th><th>Base</th><th>Decision</th><th>Action</th>
+                    <th>Kind</th><th>Change</th><th>Base</th><th>Decision</th><th>Action</th>
                   </tr>
                 </thead>
                 <tbody>
-                  <tr :for={candidate <- @tool_candidates}>
-                    <td>{candidate["kind"]}</td><td><code>{candidate["candidate_id"]}</code></td><td>
-                      <code>{short(candidate["base_revision_id"])}</code>
+                  <tr :for={{candidate, ordinal} <- Enum.with_index(@tool_candidates, 1)}>
+                    <td>{candidate["kind"]}</td><td>Proposed change {ordinal}</td><td>
+                      <span>Exact base recorded</span>
                     </td><td>{candidate["decision"]}</td>
                     <td>
                       <form :if={candidate["decision"] == "proposed"} phx-submit="accept_candidate">
@@ -867,12 +900,12 @@ defmodule FountWeb.ProductionLive do
               </p>
               <h3>Saved reads</h3>
               <button
-                :for={read <- @table_reads}
+                :for={{read, ordinal} <- Enum.with_index(@table_reads, 1)}
                 type="button"
                 phx-click="select_table_read"
                 phx-value-id={read["id"]}
               >
-                {read["packet_id"]} · {short(read["revision_id"])}
+                Saved table read {ordinal}
               </button>
             </article>
 
@@ -887,9 +920,9 @@ defmodule FountWeb.ProductionLive do
               data-elapsed-ms={@selected_read["elapsed_ms"]}
             >
               <header>
-                <h2>{@selected_read["packet_id"]}</h2>
+                <h2>Saved table read</h2>
                 <p>
-                  Revision <code>{@selected_read["revision_id"]}</code>
+                  Exact source revision recorded
                   · saved state v{@selected_read["version"]}
                 </p>
               </header>
@@ -924,7 +957,8 @@ defmodule FountWeb.ProductionLive do
                   {reaction["reader_id"] || "human"}: {reaction["reaction"]}
                 </li>
               </ul>
-              <a href={~p"/production/#{@run_id}/table-reads/#{@selected_read["id"]}/export.json"}>Export saved read JSON</a>
+              <a href={"/p/#{@project_key}/tools/#{@task_key}/table-reads/#{read_ref(@table_reads, @selected_read)}/export.json"}>Export saved read JSON</a>
+              <details class="technical-details"><summary>Technical details</summary><code>{@selected_read["id"]}</code> · packet <code>{@selected_read["packet_id"]}</code></details>
             </article>
           </section>
 
@@ -973,7 +1007,7 @@ defmodule FountWeb.ProductionLive do
                 <label>Notes, one item per line <textarea name="usefulness[notes]"></textarea></label>
                 <button type="submit" phx-disable-with="Saving evidence…">Save descriptive record</button>
               </form>
-              <a href={~p"/production/#{@run_id}/usefulness.json"}>Export owner-scoped evidence JSON</a>
+              <a href={"/p/#{@project_key}/tools/#{@task_key}/usefulness.json"}>Export owner-scoped evidence JSON</a>
             </article>
             <article class="card stack tool-results">
               <%= if @usefulness_report do %>

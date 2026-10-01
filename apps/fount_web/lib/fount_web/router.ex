@@ -25,27 +25,39 @@ defmodule FountWeb.Router do
   scope "/", FountWeb do
     pipe_through [:browser, :owner]
 
-    post "/projects", ProjectController, :create
-
     live_session :owner, on_mount: [{FountWeb.OwnerAuth, :ensure_authenticated}] do
       live "/", ProjectLive, :index
-      live "/projects/new", ProjectLive, :new
-      live "/runs/:id/setup", RunLive, :setup
-      live "/runs/:id/timeline", RunLive, :timeline
-      live "/runs/:id/decisions", RunLive, :decisions
-      live "/runs/:id/review", RunLive, :review
-      live "/runs/:id/analysis", AnalysisLive, :show
-      live "/runs/:id/viewer", ViewerLive, :show
-      live "/runs/:id/edit", EditorLive, :edit
-      live "/runs/:id/exports", RunLive, :exports
-      live "/runs/:id/tools", ProductionLive, :show
+      live "/new", ProjectLive, :new
+      live "/help", HelpLive, :index
+
+      live "/p/:key", ViewerLive, :show
+      live "/p/:key/write", EditorLive, :edit
+      live "/p/:key/work", ProjectToolsLive, :work
+      live "/p/:key/changes", ProjectToolsLive, :changes
+      live "/p/:key/notes", ProjectToolsLive, :notes
+      live "/p/:key/analysis", ProjectToolsLive, :analysis
+      live "/p/:key/cast", ProjectToolsLive, :cast
+      live "/p/:key/read", ProjectToolsLive, :read
+      live "/p/:key/history", ProjectToolsLive, :history
+      live "/p/:key/exports", ProjectToolsLive, :exports
+      live "/p/:key/activity", ProjectToolsLive, :activity
+      live "/p/:key/settings", ProjectToolsLive, :settings
+
+      live "/p/:key/source/:task_key", TaskSourceLive, :show
+      live "/p/:key/activity/:task_key", RunLive, :timeline
+      live "/p/:key/activity/:task_key/setup", RunLive, :setup
+      live "/p/:key/activity/:task_key/decisions", RunLive, :decisions
+      live "/p/:key/changes/:task_key", RunLive, :review
+      live "/p/:key/analysis/:task_key", AnalysisLive, :show
+      live "/p/:key/exports/:task_key", RunLive, :exports
+      live "/p/:key/tools/:task_key", ProductionLive, :show
     end
 
-    get "/production/:run_id/notes.json", ProductionController, :notes
-    get "/production/:run_id/table-reads/:id/export.json", ProductionController, :table_read
-    get "/production/:run_id/usefulness.json", ProductionController, :usefulness
+    get "/p/:key/tools/:task_key/notes.json", ProductionController, :notes
+    get "/p/:key/tools/:task_key/table-reads/:read_ref/export.json", ProductionController, :table_read
+    get "/p/:key/tools/:task_key/usefulness.json", ProductionController, :usefulness
 
-    get "/artifacts/:run_id/:delivery_id/preview", ArtifactController, :preview
-    get "/artifacts/:run_id/:delivery_id", ArtifactController, :show
+    get "/p/:key/exports/:task_key/:delivery_ref/preview", ArtifactController, :preview
+    get "/p/:key/exports/:task_key/:delivery_ref/download", ArtifactController, :show
   end
 end

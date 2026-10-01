@@ -1,10 +1,117 @@
 defmodule FountWeb.Launch do
-  @moduledoc "Creates the canonical genesis project, Run, and intake operation without advancing canon afterward."
+  @moduledoc "Creates owner-bound screenplay projects and starts durable creative tasks only when explicitly requested."
   alias Fount.{Persistence, Screenplay}
   alias Fount.Writing.CanonicalJSON
   alias FountRun.PipelineRequest
 
   @max_bytes 1_048_576
+
+  @doc "Creates an owner-bound screenplay project without creating an AI Run."
+  def create_project(owner_id, attrs) when is_binary(owner_id) and is_map(attrs) do
+    title = Map.get(attrs, "title", "Untitled screenplay") |> String.trim()
+    kind = Map.get(attrs, "kind", "import")
+    filename = Map.get(attrs, "filename", "project.fountain")
+    source = Map.get(attrs, "source", "")
+    project_kind = if Map.get(attrs, "example", false), do: "example", else: "screenplay"
+
+    with :ok <- validate_project_title(title),
+         {:ok, root, import} <- project_root(kind, title, source, filename),
+         {:ok, key} <- generated_project_key(owner_id, title),
+         {:ok, _created} <- Persistence.create(Fount.Repo, key, root),
+         {:ok, project} <-
+           FountWeb.Store.create_project(Fount.Repo, %{
+             owner_id: owner_id,
+             screenplay_id: root.id,
+             key: key,
+             title: title,
+             synopsis: optional_text(attrs, "synopsis", 4_000),
+             logline: optional_text(attrs, "logline", 1_000),
+             thumbnail_ref: nil,
+             import_format: import["format"],
+             import_fidelity: import,
+             project_kind: project_kind,
+             source_name: import["source_name"]
+           }) do
+      {:ok, %{project: project, screenplay: root, import: import}}
+    end
+  end
+
+  @doc "Parses an uploaded screenplay for the UX01 preview without writing project or Run state."
+  def preview_import(source, filename) when is_binary(source) and is_binary(filename) do
+    with :ok <- validate_import_source(source), do: parse(source, filename)
+  end
+
+  defp project_root("blank", _title, _source, _filename) do
+    root = Screenplay.new()
+
+    {:ok, root,
+     %{
+       "format" => "blank",
+       "source_name" => nil,
+       "source_bytes" => 0,
+       "parsed" => true,
+       "adapter_losses" => [],
+       "loss_count" => 0,
+       "original_bytes_preserved_when_unchanged" => true
+     }}
+  end
+
+  defp project_root(kind, _title, source, filename) when kind in ["import", "example"] do
+    with :ok <- validate_import_source(source),
+         {:ok, root, import} <- parse(source, filename) do
+      {:ok, root, Map.put(import, "source_name", filename)}
+    end
+  end
+
+  defp project_root(_, _title, _source, _filename), do: {:error, :invalid_project_kind}
+
+  defp validate_project_title(title) do
+    cond do
+      title == "" -> {:error, :title_required}
+      byte_size(title) > 160 -> {:error, :title_too_long}
+      true -> :ok
+    end
+  end
+
+  defp validate_import_source(source) do
+    cond do
+      not is_binary(source) or byte_size(source) == 0 -> {:error, :source_required}
+      byte_size(source) > @max_bytes -> {:error, :source_too_large}
+      true -> :ok
+    end
+  end
+
+  defp generated_project_key(owner_id, title) do
+    base = slug(title)
+
+    1..99
+    |> Enum.map(fn
+      1 -> base
+      n -> base <> "-" <> Integer.to_string(n)
+    end)
+    |> Enum.find(&project_key_available?(owner_id, &1))
+    |> case do
+      nil -> {:error, :project_key_exhausted}
+      key -> {:ok, key}
+    end
+  end
+
+  defp project_key_available?(owner_id, key) do
+    FountWeb.Store.project_key_available?(Fount.Repo, owner_id, key) and
+      match?({:error, :not_found}, Persistence.load(Fount.Repo, key))
+  end
+
+  defp slug(title) do
+    title
+    |> String.downcase()
+    |> String.normalize(:nfd)
+    |> String.replace(~r/[^a-z0-9]+/u, "-")
+    |> String.trim("-")
+    |> case do
+      "" -> "untitled-screenplay"
+      value -> value |> String.slice(0, 48) |> String.trim("-")
+    end
+  end
 
   def create(owner_id, attrs) when is_binary(owner_id) and is_map(attrs) do
     source = Map.get(attrs, "source", "")

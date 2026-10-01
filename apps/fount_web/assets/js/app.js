@@ -11,10 +11,11 @@ const SceneNavigator = {
       const link = event.target.closest("[data-scene-link]")
       if (!link || !this.el.contains(link)) return
       const sceneId = link.dataset.sceneLink
+      const sceneRef = link.dataset.sceneRef || sceneId
       const target = document.getElementById(`scene-${sceneId}`)
       if (!target) return
       event.preventDefault()
-      this.selectScene(sceneId, target)
+      this.selectScene(sceneId, target, sceneRef)
     }
 
     this.onKeydown = (event) => {
@@ -40,6 +41,7 @@ const SceneNavigator = {
     this.el.addEventListener("click", this.onClick)
     this.el.addEventListener("keydown", this.onKeydown)
     this.el.addEventListener("toggle", this.onToggle, true)
+    this.restorePassage()
   },
 
   destroyed() {
@@ -48,7 +50,7 @@ const SceneNavigator = {
     this.el.removeEventListener("toggle", this.onToggle, true)
   },
 
-  selectScene(sceneId, target) {
+  selectScene(sceneId, target, sceneRef, options = {}) {
     this.el.querySelectorAll("[data-scene-link]").forEach((link) => {
       if (link.dataset.sceneLink === sceneId) link.setAttribute("aria-current", "location")
       else link.removeAttribute("aria-current")
@@ -58,11 +60,37 @@ const SceneNavigator = {
     })
     target.focus({preventScroll: true})
     const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches
-    target.scrollIntoView({behavior: reducedMotion ? "auto" : "smooth", block: "start"})
+    target.scrollIntoView({behavior: options.restore || reducedMotion ? "auto" : "smooth", block: "start"})
+
+    const ref = String(sceneRef || sceneId)
+    try { sessionStorage.setItem(this.passageKey(), ref) } catch (_) {}
+
+    if (!options.restore) {
+      const url = new URL(window.location.href)
+      url.searchParams.set("scene", ref)
+      url.hash = `passage-${ref}`
+      history.replaceState(null, "", url)
+    }
+  },
+
+  passageKey() {
+    const project = this.el.dataset.projectKey || "project"
     const url = new URL(window.location.href)
-    url.searchParams.set("scene", sceneId)
-    url.hash = `scene-${sceneId}`
-    history.replaceState(null, "", url)
+    const source = url.searchParams.get("source") || url.searchParams.get("view") || "current"
+    return `fount:passage:${project}:${source}`
+  },
+
+  restorePassage() {
+    const url = new URL(window.location.href)
+    if (url.searchParams.has("scene")) return
+    let ref = null
+    try { ref = sessionStorage.getItem(this.passageKey()) } catch (_) {}
+    if (!ref) return
+    const link = [...this.el.querySelectorAll("[data-scene-ref]")].find((item) => item.dataset.sceneRef === ref)
+    if (!link) return
+    const sceneId = link.dataset.sceneLink
+    const target = document.getElementById(`scene-${sceneId}`)
+    if (target) requestAnimationFrame(() => this.selectScene(sceneId, target, ref, {restore: true}))
   }
 }
 

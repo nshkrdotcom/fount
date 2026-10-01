@@ -44,13 +44,14 @@ class Phase07SourceContractTest(unittest.TestCase):
 
     def test_w03_scope_uses_fount_selection_and_exact_base(self):
         workflow = read("apps/fount_web/lib/fount_web/workflow_management.ex")
-        viewer = read("apps/fount_web/lib/fount_web/live/viewer_live.ex")
+        task_source = read("apps/fount_web/lib/fount_web/live/task_source_live.ex")
         self.assertIn("Fount.Selection.selected_ids", workflow)
         self.assertIn('["plan", "base_revision_id"]', workflow)
         self.assertIn('"kind" => "scene"', workflow)
         self.assertIn('"kind" => "element"', workflow)
         self.assertNotIn('"kind" => "page"', workflow)
-        self.assertIn("Saved workflow scope is stale", viewer)
+        self.assertIn("Saved task scope is stale", task_source)
+        self.assertIn("WorkflowManagement.save_selection", task_source)
 
     def test_w04_w05_decision_and_control_bindings_use_run_api(self):
         live = read("apps/fount_web/lib/fount_web/live/run_live.ex")

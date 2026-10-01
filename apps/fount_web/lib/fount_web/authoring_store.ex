@@ -37,6 +37,31 @@ defmodule FountWeb.AuthoringStore do
     end
   end
 
+  @doc "Returns the most recently updated active working draft without creating one."
+  def current(repo, owner, project_id) when is_binary(owner) and is_binary(project_id) do
+    case query(
+           repo,
+           "SELECT * FROM fount_web_drafts WHERE owner_id=$1 AND project_id=$2::text::uuid AND status='active' ORDER BY updated_at DESC,id DESC LIMIT 1",
+           [owner, project_id]
+         ) do
+      [row] -> {:ok, row}
+      [] -> {:error, :not_found}
+      {:error, _} = error -> error
+    end
+  end
+
+  @doc "Lists owner-bound working drafts for a project without opening or mutating them."
+  def list_project_drafts(repo, owner, project_id, limit \\ 12)
+      when is_binary(owner) and is_binary(project_id) and is_integer(limit) do
+    limit = limit |> max(1) |> min(limits().drafts)
+
+    query(
+      repo,
+      "SELECT * FROM fount_web_drafts WHERE owner_id=$1 AND project_id=$2::text::uuid ORDER BY updated_at DESC,id DESC LIMIT $3",
+      [owner, project_id, limit]
+    )
+  end
+
   def get(repo, owner, draft_id) when is_binary(owner) and is_binary(draft_id) do
     case query(
            repo,

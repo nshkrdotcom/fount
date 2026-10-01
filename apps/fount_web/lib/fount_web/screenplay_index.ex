@@ -131,6 +131,63 @@ defmodule FountWeb.ScreenplayIndex do
     |> Enum.sort_by(&{-&1.scene_count, &1.location})
   end
 
+  @doc "Precise provider-free screenplay facts for the selected screenplay source."
+  def facts(screenplay) do
+    scenes = scene_index(screenplay)
+    characters = character_index(screenplay)
+    all_words = screenplay.ir.elements |> List.wrap() |> Enum.map_join(" ", &(&1.text || "")) |> word_count()
+
+    dialogue_words =
+      screenplay.ir.dialogue_blocks
+      |> List.wrap()
+      |> Enum.flat_map(&List.wrap(&1.body_ids))
+      |> Enum.map(&Query.node(screenplay, &1))
+      |> Enum.reject(&is_nil/1)
+      |> Enum.map_join(" ", &(&1.text || ""))
+      |> word_count()
+
+    heading_counts =
+      Enum.reduce(scenes, %{interior: 0, exterior: 0, other: 0, unknown: 0}, fn scene, acc ->
+        Map.update!(acc, heading_context(scene.heading), &(&1 + 1))
+      end)
+
+    %{
+      scene_count: length(scenes),
+      confirmed_cast_count: length(characters),
+      confirmed_cast: Enum.map(characters, &Map.take(&1, [:name, :scene_count, :cue_count])),
+      heading_contexts: heading_counts,
+      time_of_day_unknown_count: Enum.count(scenes, &(blank?(&1.time))),
+      dialogue_words: dialogue_words,
+      screenplay_element_words: all_words,
+      dialogue_word_share:
+        if(all_words > 0, do: Float.round(dialogue_words * 100 / all_words, 1), else: nil),
+      definitions: %{
+        confirmed_cast: "Literal character cues in the selected screenplay source; aliases are not inferred.",
+        speaking_scenes: "Distinct scenes containing a confirmed literal cue for that character.",
+        dialogue_word_share: "Dialogue-body words divided by words across all screenplay elements in this selected source.",
+        heading_contexts: "Scene headings classified from their literal INT./EXT. prefix; mixed or unrecognized headings are Other/Unknown.",
+        time_of_day_unknown: "Scene headings for which the existing location analyzer did not return a time value."
+      }
+    }
+  end
+
+  defp heading_context(heading) when is_binary(heading) do
+    heading = heading |> String.trim() |> String.upcase()
+
+    cond do
+      heading == "" -> :unknown
+      String.starts_with?(heading, ["INT./EXT.", "INT/EXT.", "I/E.", "I./E."]) -> :other
+      String.starts_with?(heading, ["INT.", "INT "]) -> :interior
+      String.starts_with?(heading, ["EXT.", "EXT "]) -> :exterior
+      true -> :other
+    end
+  end
+
+  defp heading_context(_), do: :unknown
+  defp blank?(nil), do: true
+  defp blank?(value) when is_binary(value), do: String.trim(value) == ""
+  defp blank?(_), do: false
+
   def estimates(screenplay) do
     elements = screenplay.ir.elements
 

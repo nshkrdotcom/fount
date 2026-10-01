@@ -15,3 +15,9 @@ For a complete automated phase cycle, use repository `scripts/run_runtime_qc.py 
 ## Phase 05 authoring scenarios
 
 `browser/tests/phase05_authoring.spec.mjs` covers the interactive Fountain editor and recovery lifecycle: 300 ms debounced preview, Unicode/paste/IME composition, last-valid preview for invalid raw input, text undo/redo, editor/preview/split modes, narrow layout, durable reload, two-tab optimistic conflict and fork recovery, noncanonical manual candidate save, durable Run AI handoff, and separate exact candidate acceptance. It is retained alongside the Phase 04 viewer and original Phase 06 regression journeys and is executed by `scripts/run_runtime_qc.py --phase 5 ...`.
+
+## UX01 arrival and workspace
+
+`browser/tests/ux01_arrival_workspace.spec.mjs` exercises the new greenfield project experience: Fountain and FDX import preview, genuine blank-source writing, working-vs-current separation, provider-free LAST RETURN, named source labels, About/Script facts, Help reopenability, phone return-to-passage, tablet layout and a 200% zoom overflow check. It intentionally starts no creative task.
+
+For UX01-only runtime verification, point the existing browser runner at the focused spec: `FOUNT_PLAYWRIGHT_SPEC=tests/ux01_arrival_workspace.spec.mjs scripts/run_phase06_browser.sh`. The runner still requires a dedicated test database and does not authorize paid/live providers. Historical Phase 04–08 browser files are retained as source evidence for their completed program; UX01 certification is based on the new journey plus affected integration/package checks, not on obsolete route assertions.

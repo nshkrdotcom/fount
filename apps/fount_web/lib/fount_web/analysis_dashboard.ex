@@ -188,11 +188,14 @@ defmodule FountWeb.AnalysisDashboard do
       observation_fingerprints(repo, access["screenplay_id"], Enum.map(history, & &1["id"]))
 
     history =
-      Enum.map(history, fn row ->
+      history
+      |> Enum.map(fn row ->
         row
         |> Map.put("_provider_fingerprints", fingerprints[row["id"]] || [])
         |> Map.put("_lineage_kind", lineage_kind(row, run_lineage))
       end)
+      |> Enum.with_index(1)
+      |> Enum.map(fn {row, index} -> Map.put(row, "_display_ref", "analysis-#{index}") end)
 
     selected = select_run(history, params["packet"], review["analysis_run_id"])
     observations = if selected, do: observations(repo, selected["id"]), else: []
@@ -281,7 +284,8 @@ defmodule FountWeb.AnalysisDashboard do
 
   defp select_run(history, requested, fallback) do
     case requested do
-      id when is_binary(id) and id != "" -> Enum.find(history, &(&1["id"] == id))
+      ref when is_binary(ref) and ref != "" ->
+        Enum.find(history, &(&1["id"] == ref or &1["_display_ref"] == ref))
       _ -> Enum.find(history, &(&1["id"] == fallback)) || List.first(history)
     end
   end
@@ -328,6 +332,7 @@ defmodule FountWeb.AnalysisDashboard do
   defp history_row(row, review, lineage) do
     %{
       "id" => row["id"],
+      "display_ref" => row["_display_ref"],
       "revision_id" => row["revision_id"],
       "candidate_id" => row["candidate_id"],
       "session_id" => row["session_id"],
@@ -516,8 +521,8 @@ defmodule FountWeb.AnalysisDashboard do
     do: %{state: :unselected, reasons: [], deltas: [], uncertainty: %{left: [], right: []}}
 
   defp comparison(history, left_id, right_id) do
-    left = Enum.find(history, &(&1["id"] == left_id))
-    right = Enum.find(history, &(&1["id"] == right_id))
+    left = Enum.find(history, &(&1["id"] == left_id or &1["_display_ref"] == left_id))
+    right = Enum.find(history, &(&1["id"] == right_id or &1["_display_ref"] == right_id))
 
     cond do
       is_nil(left) or is_nil(right) ->

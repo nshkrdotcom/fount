@@ -112,5 +112,5 @@ defmodule FountWeb.Components.DiffViewer do
   defp diff_error(:screenplay_required),
     do: "Persistent Fount.Screenplay revisions are required for this diff."
 
-  defp diff_error(reason), do: inspect(reason)
+  defp diff_error(_reason), do: "The selected versions could not be compared."
 end

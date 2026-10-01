@@ -2,6 +2,14 @@
 
 `apps/fount_web` is the one-owner Phoenix LiveView host for the five Fount libraries. It is deliberately thin: Core owns canonical screenplay truth and acceptance, Workshop owns generated/revised pages, Intelligence interprets Observe measurements, and Run owns durable plans, policies, decisions, approval attempts, controls, resource records, progress, and delivery. The host owns authentication, session-derived identity, Repo/process startup, runtime services, worker supervision, browser rendering, upload bounds, and artifact-root authorization.
 
+## UX01 project experience
+
+The current host is project-first. `/` and `/new` are the screenplay desk; project routes live under `/p/:key`. Importing pages, starting blank, opening the provider-free LAST RETURN example, reading the current screenplay and editing a working draft do **not** create a Run. A durable Run is created only when the writer explicitly starts creative work from **Work on it**.
+
+The project shell uses owner-scoped human project keys for navigation and keeps exact screenplay/revision/candidate identities internal. Current, working and proposed pages remain distinct. Saving working or proposed pages never advances the accepted screenplay; exact candidate acceptance remains a separate Core-authorized action. Contextual Help, optional About/Script facts and named source labels are host presentation concerns rather than new package schemas.
+
+UX01 replaces the previous `/projects/...` and `/runs/...` browser route model directly; there are no compatibility redirects or dual navigation. The Phase 04–08 sections below document historical implementation milestones and package invariants, not current route names.
+
 ## Analysis service configuration
 
 Every normal worker is constructed with the host-owned Observe service. Development/test defaults to credential-free `Fount.Observe.Sandbox` fixtures alongside the scripted Inference adapter. Production defaults to `FOUNT_OBSERVE_MODE=system_one` and builds the provider only through `Fount.Observe.provider/1`; FountWeb never constructs or imports native `SystemOneSDK` clients/types.
@@ -81,7 +89,7 @@ See `../../docs/implementation_handoff/PHASE_06_BUILD_AND_RELEASE.md` for the fi
 
 The test browser server (`PHX_SERVER=true`) uses the normal database connection pool so durable workers and LiveViews can share it without retaining Sandbox ownership. ExUnit continues to use SQL Sandbox. Run database suites and the browser harness sequentially against a disposable database.
 
-Project creation also has an authenticated, CSRF-protected HTTP POST path, so an unavailable LiveView connection cannot silently turn Create Run into a GET. Uploaded files keep the same 1 MiB limit. Live Run controls wait for a connection; Phoenix falls back to long polling when WebSockets fail. JavaScript is required for live controls.
+Project creation is handled by the authenticated LiveView desk and never uses a GET side effect. Uploaded screenplay files keep the same 1 MiB limit. Manual reading/writing stays provider-free; task controls still require a live connection, and Phoenix can fall back to long polling when WebSockets fail. JavaScript is required for live controls and enhanced scene-return behavior.
 
 ## Phase 04 read-only screenplay viewer
 

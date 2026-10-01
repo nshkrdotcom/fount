@@ -44,12 +44,12 @@ class SystemOneRunPhase03Source(unittest.TestCase):
 
     def test_h03_h05_demo_exercises_prewrite_revision_and_reconnect(self):
         journeys = self.read("apps/fount_web/lib/fount_web/journeys.ex")
-        project_live = self.read("apps/fount_web/lib/fount_web/live/project_live.ex")
+        project_tools = self.read("apps/fount_web/lib/fount_web/live/project_tools_live.ex")
         integration = self.read("apps/fount_web/integration/phase06_web_app_test.exs")
         browser = self.read("apps/fount_web/browser/tests/phase06.spec.mjs")
         self.assertIn("JOURNEY:analysis", journeys)
         self.assertIn('"completion" => completion', journeys)
-        self.assertIn('<option value="analysis">', project_live)
+        self.assertIn('<option value="analysis">', project_tools)
         self.assertIn("H01-H05 deterministic host journey", integration)
         self.assertIn('prewrite["analysis_run_id"]', integration)
         self.assertIn('revision["analysis_run_id"]', integration)

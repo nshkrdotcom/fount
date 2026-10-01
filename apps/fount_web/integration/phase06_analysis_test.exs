@@ -11,7 +11,7 @@ defmodule FountWeb.Phase06AnalysisIntegrationTest do
     {:ok, %{run: run, access: access}} = launch("status-matrix")
     {:ok, base} = Fount.Persistence.load(Fount.Repo, access["key"])
     conn = FountWeb.ConnCase.login(conn)
-    assert {:ok, _view, empty_html} = live(conn, "/runs/#{run["id"]}/analysis")
+    assert {:ok, _view, empty_html} = live(conn, analysis_path(run, ""))
     assert empty_html =~ "not_run"
     assert empty_html =~ "No saved story connections"
     complete = persist_packet(base, "complete", "complete")
@@ -27,7 +27,7 @@ defmodule FountWeb.Phase06AnalysisIntegrationTest do
           {failed, "failed"},
           {running, "not_run"}
         ] do
-      assert {:ok, _view, html} = live(conn, "/runs/#{run["id"]}/analysis?packet=#{saved.id}")
+      assert {:ok, _view, html} = live(conn, analysis_path(run, "?packet=#{saved.id}"))
       assert html =~ "data-comparison-state"
       assert html =~ state
       assert html =~ saved.id
@@ -54,7 +54,7 @@ defmodule FountWeb.Phase06AnalysisIntegrationTest do
     )
 
     assert {:ok, _view, stale_html} =
-             live(conn, "/runs/#{stale_run["id"]}/analysis?packet=#{stale.id}")
+             live(conn, analysis_path(stale_run, "?packet=#{stale.id}"))
 
     assert {:ok, stale_dashboard} =
              AnalysisDashboard.load(Fount.Repo, "test-owner", stale_run["id"], %{
@@ -99,7 +99,7 @@ defmodule FountWeb.Phase06AnalysisIntegrationTest do
     assert before == mutation_counts(run["id"], access["screenplay_id"])
 
     conn = FountWeb.ConnCase.login(conn)
-    assert {:ok, _view, html} = live(conn, "/runs/#{run["id"]}/analysis?packet=#{legacy.id}")
+    assert {:ok, _view, html} = live(conn, analysis_path(run, "?packet=#{legacy.id}"))
 
     assert {:ok, legacy_dashboard} =
              AnalysisDashboard.load(Fount.Repo, "test-owner", run["id"], %{"packet" => legacy.id})
@@ -109,7 +109,7 @@ defmodule FountWeb.Phase06AnalysisIntegrationTest do
     assert html =~ "This page shows saved analysis"
 
     assert {:ok, _reconnected, reloaded} =
-             live(conn, "/runs/#{run["id"]}/analysis?packet=#{saved.id}&target=evidence-stored")
+             live(conn, analysis_path(run, "?packet=#{saved.id}&target=evidence-stored"))
 
     assert reloaded =~ "Stored finding stored"
     assert reloaded =~ "Stored uncertainty"
@@ -329,12 +329,22 @@ defmodule FountWeb.Phase06AnalysisIntegrationTest do
       FountWeb.Authoring.save_candidate("test-owner", saved["id"], saved["version"])
 
     conn = FountWeb.ConnCase.login(conn)
-    html = conn |> get("/runs/#{run["id"]}/edit") |> html_response(200)
+    html = conn |> get(editor_path(run)) |> html_response(200)
     assert html =~ ~r/<button[^>]*id="candidate-accept"[^>]*disabled/
     assert html =~ ~r/<button[^>]*id="ai-assist"[^>]*disabled/
-    assert {:ok, view, _html} = live(conn, "/runs/#{run["id"]}/edit")
+    assert {:ok, view, _html} = live(conn, editor_path(run))
     refute has_element?(view, "#candidate-accept[disabled]")
     refute has_element?(view, "#ai-assist[disabled]")
+  end
+
+  defp analysis_path(run, suffix \\ "") do
+    {:ok, access} = FountWeb.Store.run_access(Fount.Repo, "test-owner", run["id"])
+    "/p/#{access["key"]}/analysis/#{access["display_key"]}" <> suffix
+  end
+
+  defp editor_path(run) do
+    {:ok, access} = FountWeb.Store.run_access(Fount.Repo, "test-owner", run["id"])
+    "/p/#{access["key"]}/write"
   end
 
   defp launch(suffix) do

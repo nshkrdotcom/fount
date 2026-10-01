@@ -21,7 +21,7 @@ defmodule FountWeb.Phase08ProductionToolsIntegrationTest do
     assert {:error, :not_found} = ProductionTools.workspace(Fount.Repo, "other-owner", run["id"])
 
     conn = FountWeb.ConnCase.login(conn)
-    assert {:ok, _view, html} = live(conn, "/runs/#{run["id"]}/tools?section=search")
+    assert {:ok, _view, html} = live(conn, task_path(run, :tools) <> "?section=search")
     assert html =~ "Search this screenplay version"
     assert html =~ workspace.screenplay.revision.id
   end
@@ -307,9 +307,9 @@ defmodule FountWeb.Phase08ProductionToolsIntegrationTest do
 
     {:ok, %{run: other_run}} = create_run("read-other")
     conn = FountWeb.ConnCase.login(conn)
-    {:ok, view, _html} = live(conn, "/runs/#{other_run["id"]}/tools?section=read")
+    {:ok, view, _html} = live(conn, task_path(other_run, :tools) <> "?section=read")
     html = render_click(view, "select_table_read", %{"id" => read["id"]})
-    assert html =~ "Run identity mismatch"
+    assert html =~ "task source mismatch"
     refute has_element?(view, "#table-read-workspace")
   end
 
@@ -355,7 +355,7 @@ defmodule FountWeb.Phase08ProductionToolsIntegrationTest do
              ProductionTools.delete_usefulness(Fount.Repo, "other-owner", row["id"])
 
     conn = FountWeb.ConnCase.login(conn)
-    response = get(conn, "/production/#{run["id"]}/usefulness.json")
+    response = get(conn, task_path(run, :usefulness_json))
     assert response.status == 200
     assert response.resp_body =~ "fount.writer_usefulness_export"
     assert response.resp_body =~ "kept_original"
@@ -466,15 +466,27 @@ defmodule FountWeb.Phase08ProductionToolsIntegrationTest do
              })
 
     conn = FountWeb.ConnCase.login(conn)
-    notes = get(conn, "/production/#{run["id"]}/notes.json?view=#{URI.encode_www_form(token)}")
+    notes = get(conn, task_path(run, :notes_json) <> "?view=#{URI.encode_www_form(token)}")
     assert notes.status == 200
     assert notes.resp_body =~ accepted.revision.id
     assert notes.resp_body =~ "Export me"
 
-    read_export = get(conn, "/production/#{run["id"]}/table-reads/#{read["id"]}/export.json")
+    read_export = get(conn, task_path(run, :table_read_json) <> "/read-1/export.json")
     assert read_export.status == 200
     assert read_export.resp_body =~ accepted.revision.id
     assert read_export.resp_body =~ read["packet_id"]
+  end
+
+  defp task_path(run, surface) do
+    {:ok, access} = FountWeb.Store.run_access(Fount.Repo, "test-owner", run["id"])
+    base = "/p/#{access["key"]}/tools/#{access["display_key"]}"
+
+    case surface do
+      :tools -> base
+      :usefulness_json -> base <> "/usefulness.json"
+      :notes_json -> base <> "/notes.json"
+      :table_read_json -> base <> "/table-reads"
+    end
   end
 
   defp create_run(suffix) do

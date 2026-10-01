@@ -2,17 +2,28 @@ defmodule FountWeb.AnalysisLive do
   use FountWeb, :live_view
 
   @impl true
-  def mount(%{"id" => run_id} = params, _session, socket) do
-    if connected?(socket),
-      do: Phoenix.PubSub.subscribe(FountWeb.PubSub, FountWeb.RunEvents.topic(run_id))
+  def mount(%{"key" => project_key, "task_key" => task_key} = params, _session, socket) do
+    owner = socket.assigns.current_owner
 
-    {:ok,
-     socket
-     |> assign(:run_id, run_id)
-     |> assign(:params, selection_params(params))
-     |> assign(:dashboard, nil)
-     |> assign(:error, nil)
-     |> refresh()}
+    case FountWeb.Store.run_access_by_task_key(Fount.Repo, owner, project_key, task_key) do
+      {:ok, access} ->
+        run_id = access["run_id"]
+        if connected?(socket), do: Phoenix.PubSub.subscribe(FountWeb.PubSub, FountWeb.RunEvents.topic(run_id))
+
+        {:ok,
+         socket
+         |> assign(:run_id, run_id)
+         |> assign(:project_key, project_key)
+         |> assign(:task_key, task_key)
+         |> assign(:task_access, access)
+         |> assign(:params, selection_params(params))
+         |> assign(:dashboard, nil)
+         |> assign(:error, nil)
+         |> refresh()}
+
+      _ ->
+        {:ok, socket |> put_flash(:error, "That analysis task is not available.") |> redirect(to: "/")}
+    end
   end
 
   @impl true
@@ -37,12 +48,15 @@ defmodule FountWeb.AnalysisLive do
         assign(socket, dashboard: dashboard, error: nil)
 
       {:error, :not_found} ->
-        socket |> put_flash(:error, "Run not found for this owner.") |> redirect(to: ~p"/")
+        socket |> put_flash(:error, "Task not found for this project.") |> redirect(to: "/")
 
       {:error, reason} ->
-        assign(socket, :error, "Analysis evidence unavailable: #{inspect(reason)}")
+        assign(socket, :error, analysis_error(reason))
     end
   end
+
+  defp analysis_error(:not_found), do: "Saved analysis is no longer available for this task."
+  defp analysis_error(_), do: "Saved analysis could not be loaded. Manual reading and writing are unaffected."
 
   defp selection_params(params) do
     Map.take(params, ~w(packet left right target))
@@ -71,9 +85,8 @@ defmodule FountWeb.AnalysisLive do
 
   defp packet_label(row) do
     status = row["display_status"] || row["status"] || "not_run"
-    playbook = row["playbook"] || "unknown playbook"
-    revision = short(row["revision_id"])
-    "#{status} · #{playbook} · rev #{revision}"
+    playbook = row["playbook"] || "saved analysis"
+    "#{status} · #{playbook}"
   end
 
   defp short(nil), do: "—"
@@ -88,53 +101,37 @@ defmodule FountWeb.AnalysisLive do
   defp status_tone("failed"), do: "failed"
   defp status_tone(_), do: "not_run"
 
-  defp evidence_id(item), do: item["evidence_id"] || item["id"] || "unidentified evidence"
+  defp evidence_id(item), do: item["label"] || item["kind"] || "Saved finding"
 
   defp evidence_target(item) do
     case item["target"] do
-      %{} = target -> "#{target["kind"] || "target"}:#{target["id"] || "unknown"}"
+      %{} = target -> "Recorded #{target["kind"] || "source"} target"
       _ -> "target unavailable"
     end
   end
 
-  defp evidence_href(run_id, selected, item) do
-    revision_id =
-      item["revision_id"] || get_in(item, ["target", "revision_id"]) ||
-        selected.run["revision_id"]
+  defp evidence_href(project_key, task_key, _selected, _item), do: "/p/#{project_key}/source/#{task_key}"
 
-    analysis_run_id = selected.run["id"]
-    target = item["target"] || %{}
-    anchor = target_anchor(target)
-    token = "evidence:#{analysis_run_id}:#{revision_id}"
-    query = %{"view" => token, "target" => target["id"] || "unresolved"}
-    query = if target["kind"] == "scene", do: Map.put(query, "scene", target["id"]), else: query
-    "/runs/#{run_id}/viewer?" <> URI.encode_query(query) <> anchor
-  end
-
-  defp target_anchor(%{"kind" => "scene", "id" => id}) when is_binary(id), do: "#scene-#{id}"
-  defp target_anchor(%{"id" => id}) when is_binary(id), do: "#node-#{id}"
-  defp target_anchor(_), do: ""
-
-  defp evidence_focus_href(run_id, selected, item) do
+  defp evidence_focus_href(project_key, task_key, selected, item) do
     query =
       %{
-        "packet" => selected.run && selected.run["id"],
+        "packet" => selected.run && selected.run["display_ref"],
         "target" => evidence_id(item)
       }
       |> Enum.reject(fn {_key, value} -> is_nil(value) end)
       |> Map.new()
 
-    "/runs/#{run_id}/analysis?" <> URI.encode_query(query) <> "#evidence-register"
+    "/p/#{project_key}/analysis/#{task_key}?" <> URI.encode_query(query) <> "#evidence-register"
   end
 
-  defp clear_focus_href(run_id, selected) do
+  defp clear_focus_href(project_key, task_key, selected) do
     query =
-      case selected.run && selected.run["id"] do
+      case selected.run && selected.run["display_ref"] do
         nil -> ""
-        analysis_run_id -> "?" <> URI.encode_query(%{"packet" => analysis_run_id})
+        packet_ref -> "?" <> URI.encode_query(%{"packet" => packet_ref})
       end
 
-    "/runs/#{run_id}/analysis" <> query
+    "/p/#{project_key}/analysis/#{task_key}" <> query
   end
 
   defp cost_label(%{currencies: currencies, unknown_cost_rows: unknown} = item) do
@@ -160,10 +157,10 @@ defmodule FountWeb.AnalysisLive do
     end
   end
 
-  defp lineage_label("analysis_run"), do: "direct Run packet"
-  defp lineage_label("session"), do: "Run session"
-  defp lineage_label("candidate"), do: "Run candidate"
-  defp lineage_label("legacy_revision"), do: "legacy Run revision"
+  defp lineage_label("analysis_run"), do: "direct analysis packet"
+  defp lineage_label("session"), do: "task session"
+  defp lineage_label("candidate"), do: "task proposal"
+  defp lineage_label("legacy_revision"), do: "legacy task revision"
   defp lineage_label(_), do: "unbound"
 
   defp value_preview(value) when is_binary(value), do: value
@@ -182,17 +179,19 @@ defmodule FountWeb.AnalysisLive do
       end
 
     ~H"""
-    <main id={"analysis-#{@run_id}"} class="analysis-shell">
-      <nav class="context-nav" aria-label="Run">
-        <a href={~p"/"}>Projects</a>
-        <a href={~p"/runs/#{@run_id}/setup"}>Setup</a>
-        <a href={~p"/runs/#{@run_id}/timeline"}>Timeline</a>
-        <a href={~p"/runs/#{@run_id}/decisions"}>Decisions</a>
-        <a href={~p"/runs/#{@run_id}/review"}>Review</a>
-        <a href={~p"/runs/#{@run_id}/analysis"} aria-current="page">Intelligence</a>
-        <a href={~p"/runs/#{@run_id}/viewer"}>Viewer</a>
-        <a href={~p"/runs/#{@run_id}/edit"}>Editor</a>
-        <a href={~p"/runs/#{@run_id}/exports"}>Exports</a>
+    <main id="project-analysis" class="analysis-shell project-workspace">
+      <FountWeb.CoreComponents.project_header
+        project={%{"key" => @project_key, "title" => @task_access["title"], "project_kind" => "screenplay"}}
+        section="work"
+        view="reading"
+        source_label="Current draft"
+      />
+      <nav class="task-subnav" aria-label="Task">
+        <strong>{@task_access["display_label"] || "Saved task"}</strong>
+        <a href={"/p/#{@project_key}/activity/#{@task_key}"}>Activity</a>
+        <a href={"/p/#{@project_key}/changes/#{@task_key}"}>Review</a>
+        <a href={"/p/#{@project_key}/analysis/#{@task_key}"} aria-current="page">Analysis</a>
+        <a href={"/p/#{@project_key}"}>Script</a>
       </nav>
 
       <FountWeb.CoreComponents.alert :if={@error} kind="error" title="Analysis dashboard">
@@ -204,10 +203,7 @@ defmodule FountWeb.AnalysisLive do
           <div class="analysis-mast__title">
             <p class="eyebrow">Script analysis</p>
             <h1>{@dashboard.access["title"]}</h1>
-            <p>
-              Run <code>{@run_id}</code>
-              · screenplay <code>{@dashboard.access["screenplay_id"]}</code>
-            </p>
+            <p><strong>{@task_access["display_label"] || "Saved task"}</strong> · saved evidence for this screenplay</p>
           </div>
           <div class="analysis-mast__signals" aria-label="Evidence status">
             <FountWeb.CoreComponents.status_badge
@@ -215,33 +211,19 @@ defmodule FountWeb.AnalysisLive do
               label={@dashboard.selected.state}
             />
             <span class="signal-chip">{@dashboard.selected.stored_status || "no saved report"}</span>
-            <span class="signal-chip">rev {short(
-              @dashboard.selected.run && @dashboard.selected.run["revision_id"]
-            )}</span>
           </div>
         </header>
 
-        <section class="analysis-strip" aria-label="Analysis identity and state">
-          <div>
-            <span class="micro-label">report</span>
-            <strong>{short(@dashboard.selected.packet && @dashboard.selected.packet["id"])}</strong>
-          </div>
-          <div>
-            <span class="micro-label">analysis run</span>
-            <strong>{short(@dashboard.selected.run && @dashboard.selected.run["id"])}</strong>
-          </div>
-          <div>
-            <span class="micro-label">playbook</span>
-            <strong>{(@dashboard.selected.run && @dashboard.selected.run["playbook"]) || "—"}</strong>
-          </div>
-          <div>
-            <span class="micro-label">proposed revision</span>
-            <strong>{short(@dashboard.review["candidate_id"])}</strong>
-          </div>
-          <div>
-            <span class="micro-label">check reference</span>
-            <strong>{short(@dashboard.review["check_set_fingerprint"])}</strong>
-          </div>
+        <section class="analysis-strip" aria-label="Analysis state">
+          <div><span class="micro-label">saved analysis</span><strong>{@dashboard.selected.stored_status || "not saved"}</strong></div>
+          <div><span class="micro-label">playbook</span><strong>{(@dashboard.selected.run && @dashboard.selected.run["playbook"]) || "—"}</strong></div>
+          <details class="technical-details"><summary>Technical details</summary>
+            <dl>
+              <div><dt>Report</dt><dd><code>{short(@dashboard.selected.packet && @dashboard.selected.packet["id"])}</code></dd></div>
+              <div><dt>Analysis run</dt><dd><code>{short(@dashboard.selected.run && @dashboard.selected.run["id"])}</code></dd></div>
+              <div><dt>Revision</dt><dd><code>{short(@dashboard.selected.run && @dashboard.selected.run["revision_id"])}</code></dd></div>
+            </dl>
+          </details>
         </section>
 
         <p class="analysis-state-note">{@dashboard.selected.reason}</p>
@@ -260,12 +242,8 @@ defmodule FountWeb.AnalysisLive do
           <p :if={@dashboard.target.unresolved}>
             The requested target is not present in this selected saved packet. No evidence was rebound to another revision or element.
           </p>
-          <p :if={!@dashboard.target.unresolved}>
-            Bound revision
-            <code>{@dashboard.target.revision_id || @dashboard.selected.run["revision_id"]}</code>
-            · {evidence_target(@dashboard.target.evidence)}
-          </p>
-          <a href={clear_focus_href(@run_id, @dashboard.selected)}>Clear focus</a>
+          <p :if={!@dashboard.target.unresolved}>{evidence_target(@dashboard.target.evidence)}</p>
+          <a href={clear_focus_href(@project_key, @task_key, @dashboard.selected)}>Clear focus</a>
         </section>
 
         <section class="analysis-layout">
@@ -274,12 +252,12 @@ defmodule FountWeb.AnalysisLive do
               <span>Saved analysis</span>
               <strong>{length(@dashboard.history)}</strong>
             </div>
-            <form action={~p"/runs/#{@run_id}/analysis"} method="get" class="compact-form">
+            <form action={"/p/#{@project_key}/analysis/#{@task_key}"} method="get" class="compact-form">
               <label for="analysis-packet">Packet</label>
               <select id="analysis-packet" name="packet">
                 <option
                   :for={row <- @dashboard.history}
-                  value={row["id"]}
+                  value={row["display_ref"]}
                   selected={@dashboard.selected.run && row["id"] == @dashboard.selected.run["id"]}
                 >
                   {packet_label(row)}
@@ -288,7 +266,8 @@ defmodule FountWeb.AnalysisLive do
               <button type="submit">Inspect</button>
             </form>
 
-            <dl :if={@dashboard.selected.run} class="identity-ledger">
+            <details :if={@dashboard.selected.run} class="technical-details"><summary>Technical details</summary>
+            <dl class="identity-ledger">
               <div>
                 <dt>Revision</dt><dd><code>{@dashboard.selected.run["revision_id"]}</code></dd>
               </div>
@@ -301,7 +280,7 @@ defmodule FountWeb.AnalysisLive do
                 <dt>Session</dt><dd><code>{@dashboard.selected.run["session_id"] || "—"}</code></dd>
               </div>
               <div>
-                <dt>Run lineage</dt><dd>{lineage_label(@dashboard.selected.run["lineage_kind"])}</dd>
+                <dt>Task lineage</dt><dd>{lineage_label(@dashboard.selected.run["lineage_kind"])}</dd>
               </div>
               <div>
                 <dt>Output contract</dt><dd>
@@ -309,6 +288,7 @@ defmodule FountWeb.AnalysisLive do
                 </dd>
               </div>
             </dl>
+            </details>
 
             <div class="rail-note">
               This page shows saved analysis. Browsing or comparing reports does not start AI work or incur new charges.
@@ -324,7 +304,7 @@ defmodule FountWeb.AnalysisLive do
                   </h2>
                 </header>
                 <p :if={@dashboard.checks.required_deterministic == []}>
-                  No required Run checks are recorded yet.
+                  No required task checks are recorded yet.
                 </p>
                 <ul class="check-list">
                   <li :for={check <- @dashboard.checks.required_deterministic}>
@@ -444,8 +424,8 @@ defmodule FountWeb.AnalysisLive do
                   </div>
                   <blockquote>{item["excerpt"] || "Excerpt not stored in this packet."}</blockquote>
                   <div class="evidence-actions">
-                    <a href={evidence_focus_href(@run_id, @dashboard.selected, item)}>Focus provenance here</a>
-                    <a href={evidence_href(@run_id, @dashboard.selected, item)}>Open exact recorded revision target</a>
+                    <a href={evidence_focus_href(@project_key, @task_key, @dashboard.selected, item)}>Focus provenance here</a>
+                    <a href={evidence_href(@project_key, @task_key, @dashboard.selected, item)}>Open exact task sources</a>
                   </div>
                 </article>
               </div>
@@ -514,7 +494,7 @@ defmodule FountWeb.AnalysisLive do
                 detail="No story connections are saved in this report."
               />
 
-              <details class="evidence-detail" open>
+              <details class="evidence-detail technical-details">
                 <summary>Accessible graph list</summary>
                 <table class="compact-table">
                   <thead>
@@ -559,10 +539,7 @@ defmodule FountWeb.AnalysisLive do
                   <li :for={event <- @dashboard.graph.events}>
                     <span>{event.order}</span>
                     <strong>{event.label}</strong>
-                    <small>rev {short(event.revision_id)} · evidence {if event.evidence_ids == [],
-                      do: "—",
-                      else: Enum.join(event.evidence_ids, ", ")} · {event.uncertainty ||
-                      "uncertainty not recorded"}</small>
+                    <small>{if event.evidence_ids == [], do: "no evidence references", else: "#{length(event.evidence_ids)} evidence reference(s)"} · {event.uncertainty || "uncertainty not recorded"}</small>
                   </li>
                 </ol>
                 <p :if={@dashboard.graph.events == []}>
@@ -574,7 +551,7 @@ defmodule FountWeb.AnalysisLive do
             <section class="analysis-grid analysis-grid--resources">
               <article class="evidence-card evidence-card--wide">
                 <header>
-                  <span class="micro-label">Run accounting</span><h2>Usage & reservations</h2>
+                  <span class="micro-label">Task accounting</span><h2>Usage & reservations</h2>
                 </header>
                 <div class="resource-ledger">
                   <div :for={item <- @dashboard.usage.totals} class="resource-row">
@@ -625,7 +602,7 @@ defmodule FountWeb.AnalysisLive do
                 <span>No quality ranking</span>
               </header>
               <form
-                action={~p"/runs/#{@run_id}/analysis#analysis-comparison"}
+                action={"/p/#{@project_key}/analysis/#{@task_key}#analysis-comparison"}
                 method="get"
                 class="comparison-form"
               >
@@ -640,8 +617,8 @@ defmodule FountWeb.AnalysisLive do
                     <option value="">Choose saved run</option>
                     <option
                       :for={row <- @dashboard.history}
-                      value={row["id"]}
-                      selected={@params["left"] == row["id"]}
+                      value={row["display_ref"]}
+                      selected={@params["left"] == row["display_ref"]}
                     >
                       {packet_label(row)}
                     </option>
@@ -653,8 +630,8 @@ defmodule FountWeb.AnalysisLive do
                     <option value="">Choose saved run</option>
                     <option
                       :for={row <- @dashboard.history}
-                      value={row["id"]}
-                      selected={@params["right"] == row["id"]}
+                      value={row["display_ref"]}
+                      selected={@params["right"] == row["display_ref"]}
                     >
                       {packet_label(row)}
                     </option>

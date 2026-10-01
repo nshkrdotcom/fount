@@ -22,8 +22,8 @@ class Phase04UISourceTest(unittest.TestCase):
     def test_u04_u05_indices_are_server_linked_analyzer_projections(self):
         live = self.text("apps/fount_web/lib/fount_web/live/viewer_live.ex")
         index = self.text("apps/fount_web/lib/fount_web/screenplay_index.ex")
-        self.assertIn('href={"#scene-#{scene.id}"}', live)
-        self.assertIn("data-scene-link", live)
+        self.assertIn("data-scene-link={scene.id}", live)
+        self.assertIn("scene=#{scene.ordinal}", live)
         self.assertIn("Fount.Analyzers", index)
         self.assertIn("derived reading approximation", index)
         self.assertNotIn("Inference", index)
@@ -39,7 +39,8 @@ class Phase04UISourceTest(unittest.TestCase):
         self.assertIn("Persistence.load_revision", views)
         self.assertIn("Persistence.candidate", views)
         self.assertIn("run_id=$2::text::uuid", views)
-        self.assertIn('live "/runs/:id/viewer", ViewerLive, :show', router)
+        self.assertIn('live "/p/:key", ViewerLive, :show', router)
+        self.assertIn('live "/p/:key/source/:task_key", TaskSourceLive, :show', router)
         self.assertIn("FountWeb.Components.DiffViewer.diff", run_live)
 
     def test_u07_hooks_cleanup_and_scope_shortcuts(self):

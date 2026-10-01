@@ -16,10 +16,13 @@ defmodule FountWeb.ScreenplayViews do
       accepted = accepted_options(repo, run)
       evidence = evidence_options(repo, run, progress)
 
-      {:ok,
-       [base, project_head | candidates ++ accepted ++ evidence]
-       |> Enum.reject(&is_nil/1)
-       |> Enum.uniq_by(& &1.token)}
+      options =
+        [base, project_head | candidates ++ accepted ++ evidence]
+        |> Enum.reject(&is_nil/1)
+        |> Enum.uniq_by(& &1.token)
+        |> named_refs()
+
+      {:ok, options}
     end
   end
 
@@ -32,6 +35,8 @@ defmodule FountWeb.ScreenplayViews do
       {:error, reason} -> {:error, reason}
     end
   end
+
+  def token(%{display_ref: display_ref}) when is_binary(display_ref), do: display_ref
 
   def token(%{kind: :base, revision_id: revision_id}), do: "base:#{revision_id}"
 
@@ -241,11 +246,34 @@ defmodule FountWeb.ScreenplayViews do
 
   defp put_token(option), do: Map.put(option, :token, token(option))
 
+  defp named_refs(options) do
+    {named, _counts} =
+      Enum.map_reduce(options, %{}, fn option, counts ->
+        kind = option.kind
+        count = Map.get(counts, kind, 0) + 1
+        counts = Map.put(counts, kind, count)
+
+        display_ref =
+          case {kind, option.label, count} do
+            {:base, _, _} -> "task-base"
+            {:accepted, "Accepted revision · current head", _} -> "current"
+            {:candidate, _, n} -> "proposal-#{n}"
+            {:accepted, _, n} -> "accepted-#{n}"
+            {:evidence, _, n} -> "evidence-#{n}"
+            {other, _, n} -> "#{other}-#{n}"
+          end
+
+        {Map.put(option, :display_ref, display_ref), counts}
+      end)
+
+    named
+  end
+
   defp selected_option([], _token), do: {:error, :no_bound_revision}
   defp selected_option([first | _], token) when token in [nil, ""], do: {:ok, first}
 
   defp selected_option(options, token) when is_binary(token) do
-    case Enum.find(options, &(&1.token == token)) do
+    case Enum.find(options, &(&1.token == token or &1[:display_ref] == token)) do
       nil -> {:error, :stale_or_unbound_revision}
       option -> {:ok, option}
     end

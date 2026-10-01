@@ -100,6 +100,19 @@ defmodule FountWeb.ProductionStore do
     )
   end
 
+  @doc "Resolves a saved table read by its owner/project/task display ordinal."
+  def table_read_by_ref(repo, owner, project_id, run_id, "read-" <> ordinal_text) do
+    with {ordinal, ""} when ordinal > 0 <- Integer.parse(ordinal_text),
+         rows when is_list(rows) <- list_table_reads(repo, owner, project_id, limit: 100),
+         row when is_map(row) <- rows |> Enum.filter(&(&1["run_id"] == run_id)) |> Enum.at(ordinal - 1) do
+      {:ok, row}
+    else
+      _ -> {:error, :not_found}
+    end
+  end
+
+  def table_read_by_ref(_repo, _owner, _project_id, _run_id, _ref), do: {:error, :not_found}
+
   def list_table_reads(repo, owner, project_id, opts \\ []) do
     limit = bounded_limit(opts, 30)
 

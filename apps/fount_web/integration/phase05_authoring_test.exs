@@ -7,10 +7,10 @@ defmodule FountWeb.Phase05AuthoringIntegrationTest do
     {:ok, %{run: run}} = launch("editor-preview")
     conn = FountWeb.ConnCase.login(conn)
 
-    assert {:ok, view, html} = live(conn, "/runs/#{run["id"]}/edit")
-    assert html =~ "Screenplay editor"
-    assert html =~ "Fountain syntax assistance"
-    assert html =~ "Saving a proposed revision leaves the approved screenplay unchanged"
+    assert {:ok, view, html} = live(conn, editor_path(run))
+    assert html =~ "Working draft"
+    assert html =~ "Plain Fountain text"
+    assert html =~ "Saving a proposed change still does not replace the current screenplay"
 
     invalid = FountWeb.Journeys.fixture_fountain() <> "\n[[unfinished"
 
@@ -30,7 +30,7 @@ defmodule FountWeb.Phase05AuthoringIntegrationTest do
         "client_seq" => 1
       })
 
-    assert html =~ "invalid-saved"
+    assert html =~ "Saved working draft · Fountain needs attention"
 
     {:ok, access} = FountWeb.Store.run_access(Fount.Repo, "test-owner", run["id"])
     {:ok, workspace} = Authoring.open_workspace("test-owner", access["project_id"])
@@ -246,7 +246,7 @@ defmodule FountWeb.Phase05AuthoringIntegrationTest do
              AuthoringStore.get(Fount.Repo, "other-owner", workspace.draft["id"])
 
     outsider = Phoenix.ConnTest.init_test_session(conn, %{owner_id: "other-owner"})
-    assert {:error, {kind, %{to: "/login"}}} = live(outsider, "/runs/#{run["id"]}/edit")
+    assert {:error, {kind, %{to: "/login"}}} = live(outsider, editor_path(run))
     assert kind in [:redirect, :live_redirect]
 
     too_large = :binary.copy("x", AuthoringStore.limits().max_source_bytes + 1)
@@ -266,7 +266,7 @@ defmodule FountWeb.Phase05AuthoringIntegrationTest do
     {:ok, workspace} = Authoring.open_workspace("test-owner", access["project_id"])
     invalid = workspace.draft["raw_source"] <> "\n[[unfinished"
     {:ok, saved, _} = Authoring.save_draft("test-owner", workspace.draft["id"], 1, invalid)
-    {:ok, view, html} = live(FountWeb.ConnCase.login(conn), "/runs/#{run["id"]}/edit")
+    {:ok, view, html} = live(FountWeb.ConnCase.login(conn), editor_path(run))
     assert html =~ "last valid draft"
     assert html =~ "unclosed_note"
     assert saved["last_valid_source"] == workspace.draft["raw_source"]
@@ -383,7 +383,7 @@ defmodule FountWeb.Phase05AuthoringIntegrationTest do
   test "E04 all seven structural commands, stale targets, reload and undo redo", %{conn: conn} do
     {:ok, %{run: run, access: access}} = launch("all-commands")
     {:ok, workspace} = Authoring.open_workspace("test-owner", access["project_id"])
-    {:ok, view, _} = live(FountWeb.ConnCase.login(conn), "/runs/#{run["id"]}/edit")
+    {:ok, view, _} = live(FountWeb.ConnCase.login(conn), editor_path(run))
     base = workspace.base
     [first_scene, second_scene | _] = base.ir.scenes
     action = Enum.find(base.ir.elements, &(&1.type == :action))
@@ -402,7 +402,7 @@ defmodule FountWeb.Phase05AuthoringIntegrationTest do
           "edit" => %{"kind" => kind, "target" => target, "value" => value}
         })
 
-      assert html =~ "Affected stable IDs"
+      assert html =~ "Affected elements are recorded internally"
       {:ok, current} = Authoring.open_workspace("test-owner", access["project_id"])
       assert current.preview.screenplay.id == base.id
       assert Fount.Query.node(current.preview.screenplay, unaffected)
@@ -484,7 +484,7 @@ defmodule FountWeb.Phase05AuthoringIntegrationTest do
     {:ok, %{run: run, access: access}} = launch("history-autosave")
     {:ok, workspace} = Authoring.open_workspace("test-owner", access["project_id"])
     target = Enum.find(workspace.base.ir.elements, &(&1.type == :action)).id
-    {:ok, view, _} = live(FountWeb.ConnCase.login(conn), "/runs/#{run["id"]}/edit")
+    {:ok, view, _} = live(FountWeb.ConnCase.login(conn), editor_path(run))
 
     for n <- 1..52 do
       render_hook(view, "structural_edit", %{
@@ -537,6 +537,11 @@ defmodule FountWeb.Phase05AuthoringIntegrationTest do
     {:ok, recovered} = Authoring.open_workspace("test-owner", access["project_id"])
     refute recovered.preview.valid?
     assert Fount.Query.node(recovered.preview.screenplay, created.id).text == created.text
+  end
+
+  defp editor_path(run) do
+    {:ok, access} = FountWeb.Store.run_access(Fount.Repo, "test-owner", run["id"])
+    "/p/#{access["key"]}/write"
   end
 
   defp launch(key) do

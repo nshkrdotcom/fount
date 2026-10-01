@@ -35,4 +35,8 @@ done
 
 cd "$APP/browser"
 npm ci
-npx playwright test
+if [ -n "${FOUNT_PLAYWRIGHT_SPEC:-}" ]; then
+  npx playwright test "$FOUNT_PLAYWRIGHT_SPEC"
+else
+  npx playwright test
+fi

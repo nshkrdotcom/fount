@@ -192,6 +192,117 @@ defmodule FountWeb.CoreComponents do
     """
   end
 
+  attr :project, :map, required: true
+  attr :section, :string, default: "script"
+  attr :view, :string, default: "reading"
+  attr :source_label, :string, default: "Current draft"
+  attr :example, :boolean, default: false
+
+  def project_header(assigns) do
+    key = assigns.project["key"]
+
+    assigns =
+      assigns
+      |> assign(:project_key, key)
+      |> assign(:script_href, "/p/#{key}")
+      |> assign(:write_href, "/p/#{key}/write")
+      |> assign(:work_href, "/p/#{key}/work")
+      |> assign(:changes_href, "/p/#{key}/changes")
+      |> assign(:notes_href, "/p/#{key}/notes")
+
+    ~H"""
+    <header class="project-header">
+      <div class="project-header__identity">
+        <a class="project-header__home" href="/" aria-label="All projects">Fount</a>
+        <span aria-hidden="true">/</span>
+        <strong>{@project["title"]}</strong>
+        <span :if={@example} class="project-header__flag">Example</span>
+        <span class="project-header__source">{@source_label}</span>
+      </div>
+
+      <div class="project-header__view" role="group" aria-label="Workspace view">
+        <a href={@write_href} aria-current={if @view == "writing", do: "page"}>Writing</a>
+        <a href={@script_href} aria-current={if @view == "reading", do: "page"}>Reading</a>
+      </div>
+
+      <nav class="project-tabs" aria-label="Project">
+        <a href={@script_href} aria-current={if @section == "script", do: "page"}>Script</a>
+        <a href={@work_href} aria-current={if @section == "work", do: "page"}>Work on it</a>
+        <a href={@changes_href} aria-current={if @section == "changes", do: "page"}>Changes</a>
+        <a href={@notes_href} aria-current={if @section == "notes", do: "page"}>Notes</a>
+        <details class="project-more">
+          <summary>More</summary>
+          <div class="project-more__menu">
+            <a href={"/p/#{@project_key}/analysis"}>Analysis</a>
+            <a href={"/p/#{@project_key}/cast"}>Cast &amp; locations</a>
+            <a href={"/p/#{@project_key}/read"}>Table read</a>
+            <a href={"/p/#{@project_key}/history"}>History</a>
+            <a href={"/p/#{@project_key}/exports"}>Exports</a>
+            <a href={"/p/#{@project_key}/activity"}>Activity</a>
+            <a href={"/p/#{@project_key}/settings"}>Project settings</a>
+          </div>
+        </details>
+        <a class="project-tabs__help" href={"/help?project=#{URI.encode_www_form(@project_key)}"}>Help</a>
+      </nav>
+    </header>
+    """
+  end
+
+  attr :id, :string, required: true
+  attr :title, :string, required: true
+  attr :summary, :string, default: nil
+  attr :open, :boolean, default: false
+  slot :inner_block, required: true
+
+  def disclosure(assigns) do
+    ~H"""
+    <details id={@id} class="ui-disclosure" open={@open}>
+      <summary>
+        <span>{@title}</span>
+        <small :if={@summary}>{@summary}</small>
+      </summary>
+      <div class="ui-disclosure__body">{render_slot(@inner_block)}</div>
+    </details>
+    """
+  end
+
+  attr :slug, :string, required: true
+  attr :title, :string, required: true
+  attr :dismissed, :boolean, default: false
+  attr :dismiss_event, :string, default: "dismiss_hint"
+  attr :project_key, :string, default: nil
+  slot :inner_block, required: true
+
+  def contextual_help(assigns) do
+    help_href =
+      if assigns.project_key,
+        do: "/help?project=#{URI.encode_www_form(assigns.project_key)}##{assigns.slug}",
+        else: "/help##{assigns.slug}"
+
+    assigns = assign(assigns, :help_href, help_href)
+    ~H"""
+    <aside :if={not @dismissed} class="context-help" aria-labelledby={"help-#{@slug}-title"}>
+      <div>
+        <strong id={"help-#{@slug}-title"}>{@title}</strong>
+        <div>{render_slot(@inner_block)}</div>
+      </div>
+      <div class="context-help__actions">
+        <a href={@help_href}>More help</a>
+        <button type="button" phx-click={@dismiss_event} phx-value-slug={@slug}>Dismiss</button>
+      </div>
+    </aside>
+    """
+  end
+
+  attr :label, :string, required: true
+  attr :value, :string, required: true
+
+  def named_reference(assigns) do
+    ~H"""
+    <span class="named-reference"><span>{@label}</span><strong>{@value}</strong></span>
+    """
+  end
+
   defp safe_status(status) do
     status
     |> to_string()

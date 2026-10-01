@@ -11,16 +11,19 @@ defmodule FountWeb.Store do
     title = fetch!(attrs, :title)
 
     synopsis = value(attrs, :synopsis)
+    logline = value(attrs, :logline)
     thumbnail_ref = value(attrs, :thumbnail_ref)
     import_format = value(attrs, :import_format)
     import_fidelity = value(attrs, :import_fidelity)
+    project_kind = value(attrs, :project_kind) || "screenplay"
+    source_name = value(attrs, :source_name)
 
     case SQL.query(
            repo,
            """
            INSERT INTO fount_web_projects(
-             id,owner_id,screenplay_id,key,title,synopsis,thumbnail_ref,import_format,import_fidelity,inserted_at,updated_at
-           ) VALUES($1::text::uuid,$2,$3::text::uuid,$4,$5,$6,$7,$8,$9::jsonb,now(),now()) RETURNING *
+             id,owner_id,screenplay_id,key,title,synopsis,logline,thumbnail_ref,import_format,import_fidelity,project_kind,source_name,inserted_at,updated_at
+           ) VALUES($1::text::uuid,$2,$3::text::uuid,$4,$5,$6,$7,$8,$9,$10::jsonb,$11,$12,now(),now()) RETURNING *
            """,
            [
              id,
@@ -29,9 +32,12 @@ defmodule FountWeb.Store do
              key,
              title,
              synopsis,
+             logline,
              thumbnail_ref,
              import_format,
-             import_fidelity
+             import_fidelity,
+             project_kind,
+             source_name
            ],
            log: false
          ) do
@@ -77,26 +83,154 @@ defmodule FountWeb.Store do
     end
   end
 
-  def register_run(repo, attrs) do
-    values = [
-      fetch!(attrs, :run_id),
-      fetch!(attrs, :project_id),
-      fetch!(attrs, :owner_id),
-      fetch!(attrs, :preset),
-      fetch!(attrs, :journey)
-    ]
+
+  def update_project(repo, owner, project_id, attrs)
+      when is_binary(owner) and is_binary(project_id) and is_map(attrs) do
+    title = value(attrs, :title)
+    synopsis = value(attrs, :synopsis)
+    logline = value(attrs, :logline)
 
     case SQL.query(
            repo,
-           "INSERT INTO fount_web_runs(run_id,project_id,owner_id,preset,journey,inserted_at,updated_at) VALUES($1::text::uuid,$2::text::uuid,$3,$4,$5,now(),now()) RETURNING *",
-           values,
+           """
+           UPDATE fount_web_projects
+           SET title=COALESCE($3,title),synopsis=$4,logline=$5,updated_at=now()
+           WHERE owner_id=$1 AND id=$2::text::uuid
+           RETURNING *
+           """,
+           [owner, project_id, title, synopsis, logline],
            log: false
          ) do
-      {:ok, result} ->
-        {:ok, one(result)}
+      {:ok, %{num_rows: 1} = result} -> {:ok, one(result)}
+      {:ok, _} -> {:error, :not_found}
+      {:error, reason} -> {:error, storage_reason(reason)}
+    end
+  end
+
+  def owner_preferences(repo, owner) when is_binary(owner) do
+    case query(repo, "SELECT preferences FROM fount_web_preferences WHERE owner_id=$1", [owner]) do
+      [%{"preferences" => preferences}] when is_map(preferences) -> preferences
+      [] -> %{}
+      {:error, _} -> %{}
+    end
+  end
+
+  def put_owner_preferences(repo, owner, changes)
+      when is_binary(owner) and is_map(changes) do
+    case SQL.query(
+           repo,
+           """
+           INSERT INTO fount_web_preferences(owner_id,preferences,inserted_at,updated_at)
+           VALUES($1,$2::jsonb,now(),now())
+           ON CONFLICT(owner_id) DO UPDATE SET
+             preferences=fount_web_preferences.preferences || EXCLUDED.preferences,updated_at=now()
+           RETURNING preferences
+           """,
+           [owner, changes],
+           log: false
+         ) do
+      {:ok, result} -> {:ok, one(result)["preferences"]}
+      {:error, reason} -> {:error, storage_reason(reason)}
+    end
+  end
+
+  def list_project_runs(repo, owner, project_id, opts \\ []) do
+    limit = opts |> Keyword.get(:limit, 30) |> min(50) |> max(1)
+
+    query(
+      repo,
+      """
+      SELECT wr.*,r.status,r.stage,r.inserted_at AS run_inserted_at
+      FROM fount_web_runs wr
+      JOIN fount_runs r ON r.id=wr.run_id
+      WHERE wr.owner_id=$1 AND wr.project_id=$2::text::uuid
+      ORDER BY r.inserted_at DESC,wr.run_id
+      LIMIT $3
+      """,
+      [owner, project_id, limit]
+    )
+  end
+
+  def latest_project_run(repo, owner, project_id) do
+    case list_project_runs(repo, owner, project_id, limit: 1) do
+      [row] -> {:ok, row}
+      [] -> {:error, :not_found}
+      {:error, _} = error -> error
+    end
+  end
+
+  def run_access_by_task_key(repo, owner, project_key, task_key)
+      when is_binary(owner) and is_binary(project_key) and is_binary(task_key) do
+    case query(
+           repo,
+           """
+           SELECT wr.*,p.screenplay_id::text,p.key,p.title
+           FROM fount_web_runs wr
+           JOIN fount_web_projects p ON p.id=wr.project_id
+           WHERE wr.owner_id=$1 AND p.owner_id=$1 AND p.key=$2 AND wr.display_key=$3
+           """,
+           [owner, project_key, task_key]
+         ) do
+      [row] -> {:ok, row}
+      [] -> {:error, :not_found}
+      {:error, _} = error -> error
+    end
+  end
+
+  def project_key_available?(repo, owner, key) do
+    case project_by_key(repo, owner, key) do
+      {:error, :not_found} -> true
+      {:ok, _} -> false
+      {:error, _} -> false
+    end
+  end
+
+  def register_run(repo, attrs) do
+    project_id = fetch!(attrs, :project_id)
+    owner = fetch!(attrs, :owner_id)
+    explicit_display_key = value(attrs, :display_key)
+
+    result =
+      repo.transaction(fn ->
+        if is_nil(explicit_display_key) do
+          SQL.query!(
+            repo,
+            "SELECT pg_advisory_xact_lock(hashtext($1))",
+            ["fount-task:" <> owner <> ":" <> project_id],
+            log: false
+          )
+        end
+
+        display_key = explicit_display_key || next_task_key(repo, owner, project_id)
+        display_label = value(attrs, :display_label) || "Task " <> String.replace_prefix(display_key, "task-", "")
+
+        values = [
+          fetch!(attrs, :run_id),
+          project_id,
+          owner,
+          fetch!(attrs, :preset),
+          fetch!(attrs, :journey),
+          display_key,
+          display_label
+        ]
+
+        case SQL.query(
+               repo,
+               "INSERT INTO fount_web_runs(run_id,project_id,owner_id,preset,journey,display_key,display_label,inserted_at,updated_at) VALUES($1::text::uuid,$2::text::uuid,$3,$4,$5,$6,$7,now(),now()) RETURNING *",
+               values,
+               log: false
+             ) do
+          {:ok, query_result} -> one(query_result)
+          {:error, reason} -> repo.rollback(reason)
+        end
+      end)
+
+    case result do
+      {:ok, row} ->
+        {:ok, row}
 
       {:error, %Postgrex.Error{postgres: %{code: :unique_violation}}} ->
-        run_access(repo, fetch!(attrs, :owner_id), fetch!(attrs, :run_id))
+        run_access(repo, owner, fetch!(attrs, :run_id))
 
       {:error, reason} ->
         {:error, storage_reason(reason)}
@@ -286,6 +420,34 @@ defmodule FountWeb.Store do
     end
   end
 
+  @doc "Resolves an owner-bound delivery through its project/task and stable ordinal display reference."
+  def delivery_by_ref(repo, owner, project_key, task_key, "delivery-" <> ordinal_text) do
+    with {ordinal, ""} when ordinal > 0 <- Integer.parse(ordinal_text) do
+      case query(
+             repo,
+             """
+             SELECT ranked.* FROM (
+               SELECT d.*,row_number() OVER (ORDER BY d.inserted_at,d.id)::bigint AS display_ordinal
+               FROM fount_run_deliveries d
+               JOIN fount_web_runs wr ON wr.run_id=d.run_id
+               JOIN fount_web_projects p ON p.id=wr.project_id
+               WHERE wr.owner_id=$1 AND p.owner_id=$1 AND p.key=$2 AND wr.display_key=$3
+             ) ranked
+             WHERE ranked.display_ordinal=$4
+             """,
+             [owner, project_key, task_key, ordinal]
+           ) do
+        [row] -> {:ok, row}
+        [] -> {:error, :not_found}
+        {:error, _} = error -> error
+      end
+    else
+      _ -> {:error, :not_found}
+    end
+  end
+
+  def delivery_by_ref(_repo, _owner, _project_key, _task_key, _ref), do: {:error, :not_found}
+
   def delivery(repo, owner, run_id, delivery_id) do
     rows =
       query(
@@ -305,6 +467,22 @@ defmodule FountWeb.Store do
       [] -> {:error, :not_found}
       {:error, _} = error -> error
     end
+  end
+
+
+  defp next_task_key(repo, owner, project_id) do
+    count =
+      case SQL.query(
+             repo,
+             "SELECT count(*)::bigint FROM fount_web_runs WHERE owner_id=$1 AND project_id=$2::text::uuid",
+             [owner, project_id],
+             log: false
+           ) do
+        {:ok, %{rows: [[value]]}} when is_integer(value) -> value
+        _ -> 0
+      end
+
+    "task-" <> Integer.to_string(count + 1)
   end
 
   defp query(repo, statement, params) do

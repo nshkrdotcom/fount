@@ -31,6 +31,9 @@ import json,os,sys
 with open(os.environ['DEV_TEST_LOG'],'a') as out:
  out.write(json.dumps(dict(tool=os.path.basename(sys.argv[0]),args=sys.argv[1:],cwd=os.getcwd(),sdk=os.environ.get('FOUNT_SYSTEM_ONE_SDK_PATH'),mode=os.environ.get('MIX_ENV'),observe=os.environ.get('FOUNT_OBSERVE_MODE'),port=os.environ.get('PORT'),database=os.environ.get('FOUNT_DATABASE_URL'),package=os.environ.get('FOUNT_PACKAGE_BUILD')))+'\\n')
 if sys.argv[1:]==['deps.get'] and os.environ.get('DEV_TEST_FAIL'): sys.exit(7)
+if sys.argv[1:3]==['run','--no-start']:
+ if os.environ.get('DEV_TEST_DB_FAIL'): sys.exit(6)
+ with open(sys.argv[-1],'w') as out: out.write(os.environ.get('FOUNT_DATABASE_URL','ecto://fixture@localhost:5433/fount_dev'))
 '''
         for tool in ('mix', 'npm'):
             p = bindir / tool
@@ -57,7 +60,10 @@ if sys.argv[1:]==['deps.get'] and os.environ.get('DEV_TEST_FAIL'): sys.exit(7)
         p = self.run_script('setup')
         self.assertEqual(p.returncode, 0, p.stderr)
         r = self.records()
-        self.assertEqual([x['args'] for x in r], [['deps.get'], ['ecto.create', '-r', 'Fount.Repo'], ['fount_web.migrate'], ['ci'], ['assets.setup'], ['assets.build']])
+        self.assertEqual(r[0]['args'], ['deps.get'])
+        self.assertEqual(r[1]['args'][:2], ['run', '--no-start'])
+        self.assertEqual([x['args'] for x in r[2:]], [['ecto.create', '-r', 'Fount.Repo'], ['fount_web.migrate'], ['ci'], ['assets.setup'], ['assets.build']])
+        self.assertFalse(Path(r[1]['args'][-1]).exists())
         self.assertTrue(all(x['mode']=='dev' and x['observe']=='sandbox' and x['package'] is None for x in r))
         self.assertTrue(all(x['sdk'] is None for x in r))
         self.assertFalse(any(x['args']==['phx.server'] for x in r))
@@ -99,3 +105,26 @@ if sys.argv[1:]==['deps.get'] and os.environ.get('DEV_TEST_FAIL'): sys.exit(7)
                 p=self.run_script(*args)
                 self.assertNotEqual(p.returncode,0)
                 self.assertFalse(self.log.exists())
+
+    def test_start_resolves_database_before_compilation_and_server(self):
+        p = self.run_script('start')
+        self.assertEqual(p.returncode, 0, p.stderr)
+        r = self.records()
+        self.assertEqual(r[0]['args'][:2], ['run', '--no-start'])
+        self.assertEqual([x['args'] for x in r[1:]], [['compile'], ['phx.server']])
+        self.assertEqual(r[-1]['database'], 'ecto://fixture@localhost:5433/fount_dev')
+
+    def test_database_preflight_failure_stops_before_migrations_or_server(self):
+        self.env['DEV_TEST_DB_FAIL'] = '1'
+        p = self.run_script('up')
+        self.assertEqual(p.returncode, 6)
+        r = self.records()
+        self.assertEqual(len(r), 2)
+        self.assertFalse(Path(r[-1]['args'][-1]).exists())
+        self.assertIn('PostgreSQL connection', p.stderr)
+
+    def test_environment_url_is_preserved_and_cli_overrides_it(self):
+        self.env['FOUNT_DATABASE_URL'] = 'ecto://localhost/environment_dev'
+        p = self.run_script('start', '--database-url', 'ecto://localhost/cli_dev')
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertTrue(all(x['database']=='ecto://localhost/cli_dev' for x in self.records()))

@@ -15,7 +15,7 @@ Usage: ./scripts/dev.sh [up|setup|start|help] [options]
 Options:
   --sdk-path PATH      System One SDK package directory containing mix.exs.
                        Optional override; defaults to system_one_sdk from Hex.
-  --database-url URL   PostgreSQL URL (default: local fount_dev, postgres/postgres).
+  --database-url URL   PostgreSQL URL. Overrides discovery and FOUNT_DATABASE_URL.
   --port PORT         Local HTTP port (default: 4000).
 
 Examples:
@@ -27,6 +27,10 @@ Examples:
 Run from any directory using this script's path. Requires Elixir/Mix, npm,
 and a running PostgreSQL server. Setup creates the database if missing and
 applies Core -> Run -> host migrations; it never drops or resets a database.
+Explicit database URLs are verified without fallback. Otherwise, the launcher
+tries PGHOST/PGPORT/PGUSER/PGPASSWORD, then discovers local PostgreSQL sockets
+and cluster ports (including 5432 and 5433). It uses existing authentication,
+never changes database roles/passwords, and rejects ambiguous server choices.
 This launcher uses development mode and deterministic Sandbox providers.
 Settings apply only to this script and its children, not your calling shell.
 The server stays in the foreground; press Ctrl+C to stop it.
@@ -38,7 +42,7 @@ root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)
 action=up
 if (($#)) && [[ $1 != -* ]]; then action=$1; shift; fi
 sdk_path=${FOUNT_SYSTEM_ONE_SDK_PATH:-}
-database_url=${FOUNT_DATABASE_URL:-ecto://postgres:postgres@localhost/fount_dev}
+database_url=${FOUNT_DATABASE_URL:-}
 port=${PORT:-4000}
 while (($#)); do
   case $1 in
@@ -69,7 +73,8 @@ fi
 
 # Process-local build/runtime inputs. Never source this script into your shell.
 export MIX_ENV=dev FOUNT_OBSERVE_MODE=sandbox
-export FOUNT_DATABASE_URL="$database_url" PORT="$port"
+export PORT="$port"
+if [[ -n $database_url ]]; then export FOUNT_DATABASE_URL="$database_url"; else unset FOUNT_DATABASE_URL; fi
 if [[ -n $sdk_path ]]; then
   export FOUNT_SYSTEM_ONE_SDK_PATH="$sdk_path"
 else
@@ -95,6 +100,15 @@ run() {
 printf 'Fount development | SDK: %s | port: %s | Sandbox analysis\n' "${sdk_path:-Hex system_one_sdk ~> 0.6.0}" "$port"
 if [[ $action != start ]]; then
   run 'Fetching Elixir dependencies' mix deps.get
+fi
+# A private temporary file keeps credentials out of command output and arguments.
+connection_file=$(umask 077; mktemp)
+trap 'rm -f -- "$connection_file"' EXIT
+run 'Checking PostgreSQL connection' mix run --no-start "$root/scripts/dev_database.exs" "$connection_file"
+export FOUNT_DATABASE_URL="$(cat -- "$connection_file")"
+rm -f -- "$connection_file"
+trap - EXIT
+if [[ $action != start ]]; then
   run 'Creating development database if missing' mix ecto.create -r Fount.Repo
   run 'Migrating development database (Core -> Run -> host)' mix fount_web.migrate
   (cd -- "$root/packages/fount_workshop" && run 'Installing PDF renderer dependencies' npm ci)

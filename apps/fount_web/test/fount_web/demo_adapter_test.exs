@@ -77,4 +77,49 @@ defmodule FountWeb.DemoAdapterTest do
     refute Jason.encode!(primary) =~ "abandons the platform"
     assert dependent["depends_on"] == [primary["id"]]
   end
+
+  test "source alternatives edit only selected unprotected text and remain distinct" do
+    id = Fount.ID.v4()
+    protected_id = Fount.ID.v4()
+    base = Fount.ID.v4()
+
+    context = %{
+      "base_revision_id" => base,
+      "request" => %{
+        "workflow" => "alternatives",
+        "options" => %{"protected_text" => [%{"target" => %{"id" => protected_id}}]}
+      },
+      "selected_pages" => [
+        %{
+          "type" => "dialogue",
+          "target" => %{"kind" => "element", "id" => id},
+          "text" => "Try me."
+        },
+        %{
+          "type" => "dialogue",
+          "target" => %{"kind" => "element", "id" => protected_id},
+          "text" => "Exact surroundings."
+        }
+      ]
+    }
+
+    proposals =
+      for strategy <- ["route-a", "route-b"] do
+        prompt =
+          "Write actual complete screenplay pages as canonical typed edits\n" <>
+            Jason.encode!(%{"context" => context, "strategy" => %{"id" => strategy}})
+
+        {:ok, response} =
+          FountWeb.DemoAdapter.complete(nil, Inference.Request.from_prompt!(prompt))
+
+        proposal = Jason.decode!(response.text)
+        assert proposal["base_revision_id"] == base
+        [group] = proposal["groups"]
+        [operation] = group["operations"]
+        assert operation["target"]["id"] == id
+        operation["value"]
+      end
+
+    assert length(Enum.uniq(proposals)) == 2
+  end
 end

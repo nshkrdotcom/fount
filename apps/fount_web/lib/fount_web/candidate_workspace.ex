@@ -21,12 +21,15 @@ defmodule FountWeb.CandidateWorkspace do
 
   def audition(repo, run, progress, candidate_id)
       when is_map(run) and is_map(progress) and is_binary(candidate_id) do
-    with true <- candidate_allowed?(repo, progress, candidate_id) or {:error, :candidate_not_in_task},
+    with true <-
+           candidate_allowed?(repo, progress, candidate_id) or {:error, :candidate_not_in_task},
          selection when is_map(selection) <- get_in(run, ["plan", "scope"]),
          root <- Application.fetch_env!(:fount_web, :artifact_root),
          output <- Path.join([root, "runs", run["id"], "auditions"]),
          {:ok, result} <-
-           FountWorkshop.Audition.build(candidate_id, selection, services(repo), output_dir: output),
+           FountWorkshop.Audition.build(candidate_id, selection, services(repo),
+             output_dir: output
+           ),
          {:ok, source} <- File.read(result["fountain"]) do
       {:ok,
        %{
@@ -46,7 +49,8 @@ defmodule FountWeb.CandidateWorkspace do
       when is_map(progress) and is_binary(candidate_id) and is_list(group_ids) do
     group_ids = group_ids |> Enum.uniq() |> Enum.take(@max_groups)
 
-    with true <- candidate_allowed?(repo, progress, candidate_id) or {:error, :candidate_not_in_task},
+    with true <-
+           candidate_allowed?(repo, progress, candidate_id) or {:error, :candidate_not_in_task},
          true <- group_ids != [] or {:error, :change_group_required},
          {:ok, candidate} <-
            FountWorkshop.CandidateAPI.select(candidate_id, group_ids, services(repo),
@@ -75,7 +79,9 @@ defmodule FountWeb.CandidateWorkspace do
 
     with true <- length(picks) >= 2 or {:error, :combination_requires_two_sources},
          true <- Enum.uniq(ids) == ids or {:error, :duplicate_combination_source},
-         true <- Enum.all?(ids, &candidate_allowed?(repo, progress, &1)) or {:error, :candidate_not_in_task},
+         true <-
+           Enum.all?(ids, &candidate_allowed?(repo, progress, &1)) or
+             {:error, :candidate_not_in_task},
          {:ok, candidate} <-
            FountWorkshop.CandidateAPI.combine(
              ids,

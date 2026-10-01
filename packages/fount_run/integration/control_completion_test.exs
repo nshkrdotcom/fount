@@ -1482,6 +1482,15 @@ defmodule FountRun.ControlCompletionIntegrationTest do
 
     assert checked_candidate == rebased["candidate_id"]
 
+    assert [[candidate_ids]] =
+             sql(
+               repo,
+               "SELECT request->'candidate_ids' FROM fount_run_steps WHERE id=$1::text::uuid",
+               [rebased["check_step_id"]]
+             )
+
+    assert candidate_ids == [rebased["candidate_id"]]
+
     assert {:ok, remaining} =
              FountRun.ExecutionStore.remaining_limits(repo, %{
                "run_id" => rebased["run_id"],

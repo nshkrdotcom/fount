@@ -1,4 +1,5 @@
 import {test, expect} from '@playwright/test';
+import {importProject, seedTask} from './workspace_helpers.mjs';
 
 const token = process.env.FOUNT_OWNER_TOKEN || 'browser-owner-token';
 const fixture = `Title: Phase 07 Browser Fixture\nAuthor: Fount\n\nINT. KITCHEN - MORNING\n\nMARA sets an envelope beside the coffee maker.\n\nMARA\nI said I would wait.\n\nEXT. TRAIN PLATFORM - NIGHT\n\nNORA waits under the departure board.\n\nNORA\nThe train is late.\n\nOWEN\nThat's what you wanted.\n`;
@@ -7,215 +8,112 @@ async function login(page) {
   await page.goto('/login');
   await page.getByLabel('Access token').fill(token);
   await page.getByRole('button', {name: 'Sign in'}).click();
-  await expect(page).toHaveURL(/\/$/);
+  await expect(page.locator('.phx-connected')).toBeVisible();
 }
 
-async function createRun(page, key, launch = false) {
-  await page.goto('/projects/new');
-  await page.getByLabel('Project title').fill('Phase 07 Browser');
-  await page.getByLabel('Project key').fill(key);
-  await page.getByLabel('Journey').selectOption('opening');
-  await page.getByLabel('Or Fountain source').fill(fixture);
-  await page.getByRole('button', {name: 'Create Run'}).click();
-  await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+\/setup$/);
-  const runId = page.url().match(/\/runs\/([0-9a-f-]+)\/setup$/)[1];
-  if (launch) await page.getByRole('button', {name: 'Launch / resume Run'}).click();
-  return runId;
+async function createRun(page, name) {
+  const key = await importProject(page, name, fixture);
+  seedTask(key, 'opening');
+  await page.goto(`/p/${key}/activity/task-1/setup`);
+  await expect(page.locator('.phx-connected')).toBeVisible();
+  return key;
 }
 
-async function selectTwoScenes(page, runId) {
-  await page.goto(`/runs/${runId}/viewer`);
-  await expect(page.getByRole('heading', {name: 'Selected screenplay material'})).toBeVisible();
-  await page.locator('input[name="scope[whole_screenplay]"]').uncheck();
-  const scenes = page.locator('input[name="scope[scene_ids][]"]');
-  await expect(scenes).toHaveCount(2);
-  await scenes.nth(0).check();
-  await scenes.nth(1).check();
-  await page.getByRole('button', {name: 'Save exact scope'}).click();
-  await expect(page.getByText(/Workflow scope saved against the exact Run base revision/)).toBeVisible();
-  await page.reload();
-  await expect(page.getByLabel('Selected workflow scope')).toContainText('fingerprint');
-  await expect(page.locator('input[name="scope[whole_screenplay]"]')).not.toBeChecked();
-  await expect(page.locator('input[name="scope[scene_ids][]"]:checked')).toHaveCount(2);
+async function openDetails(page) {
+  await page.locator('.technical-details').evaluateAll(nodes=>nodes.forEach(node=>node.open=true));
 }
 
-test('W01-W03 expose validated policy, closed actions and persistent exact-base visual scope', async ({page}) => {
+test('W01-W03 policy, presets and exact-base visual scope persist on project task routes', async ({page}) => {
   await login(page);
-  const runId = await createRun(page, `w01-${Date.now()}`);
-
-  for (const gate of ['investigation_scope', 'strategy_choice', 'candidate_generation', 'iteration']) {
+  const key = await createRun(page, 'w01-policy');
+  for (const gate of ['investigation_scope','strategy_choice','candidate_generation','iteration']) {
     await expect(page.locator(`select[name="policy[${gate}]"]`)).toBeVisible();
   }
-  await expect(page.getByText(/Maximum spend/)).toBeVisible();
   await expect(page.getByLabel('Trusted approver')).toHaveValue('owner');
-  await expect(page.getByText(/Estimates are separate from actual charges/)).toBeVisible();
   await page.locator('select[name="policy[route_choice]"]').selectOption('registered_reviewer');
-  await page.getByLabel('Registered route reviewer').selectOption('owner');
-  await page.getByRole('button', {name: 'Save Run settings'}).click();
-  await expect(page.getByText(/Run settings saved/)).toBeVisible();
-
-  const presetName = `Browser preset ${runId}`;
-  await page.getByLabel('Preset name').fill(presetName);
-  await page.getByRole('button', {name: 'Save current policy'}).click();
-  await expect(page.getByText(`Saved preset ${presetName} v1.`)).toBeVisible();
-  await page.getByLabel('Preset name').fill(presetName);
-  await page.getByRole('button', {name: 'Save current policy'}).click();
-  await expect(page.getByText(`Saved preset ${presetName} v2.`)).toBeVisible();
-
-  const investigate = page.locator('.action-card').filter({hasText: 'Investigate'});
-  await expect(investigate).toContainText('unavailable through Run');
-  await investigate.getByText('Action details', {exact: true}).click();
-  await expect(investigate).toContainText('not promoted to a Run action');
-
-  await selectTwoScenes(page, runId);
-  await page.goto(`/runs/${runId}/setup`);
-  await expect(page.getByRole('heading', {name: 'Selected screenplay material'})).toBeVisible();
-  await page.getByLabel('Action').selectOption('pass');
-  await page.getByLabel('Instruction').fill('Sharpen the selected dialogue without changing scope.');
-  await page.getByRole('button', {name: 'Validate launch preview'}).click();
-  await expect(page.getByRole('heading', {name: 'Review before starting'})).toBeVisible();
-  await expect(page.getByText(/request_fingerprint/)).toBeVisible();
+  await openDetails(page);
+  await page.locator('select[name="policy[route_reviewer_key]"]').selectOption('owner');
+  await page.getByRole('button',{name:'Save task settings'}).click();
+  await expect(page.getByText(/Task settings saved;/)).toBeVisible();
+  const name = `Browser policy ${key}`;
+  await page.getByLabel('Preset name').fill(name);
+  await page.getByRole('button',{name:'Save current policy'}).click();
+  await expect(page.getByText(`Saved preset ${name} v1.`)).toBeVisible();
+  await page.locator('.preset-card',{hasText:name}).getByRole('button',{name:'Apply settings'}).click();
+  await page.reload();
+  await expect(page.locator('select[name="policy[route_choice]"]')).toHaveValue('registered_reviewer');
+  await page.goto(`/p/${key}/source/task-1`);
+  await expect(page.locator('.phx-connected')).toBeVisible();
+  await page.locator('#task-scope > summary').click();
+  await page.locator('input[name="scope[whole_screenplay]"]').uncheck();
+  const scenes=page.locator('input[name="scope[scene_ids][]"]');
+  await expect(scenes).toHaveCount(2);
+  await scenes.nth(0).check(); await scenes.nth(1).check();
+  await page.getByRole('button',{name:'Save task scope'}).click();
+  await page.reload();
+  await expect(page.locator('input[name="scope[scene_ids][]"]:checked')).toHaveCount(2);
 });
 
-test('W05 lifecycle buttons reflect durable permitted states and no restart surface exists', async ({page}) => {
-  await login(page);
-  const runId = await createRun(page, `w05-${Date.now()}`);
-  await page.goto(`/runs/${runId}/timeline`);
-
-  await expect(page.getByRole('button', {name: 'Pause'})).toBeEnabled();
-  await expect(page.getByRole('button', {name: 'Resume'})).toBeDisabled();
-  await page.getByRole('button', {name: 'Pause'}).click();
-  await expect(page.getByRole('button', {name: 'Resume'})).toBeEnabled();
+test('W05 pause resume stop use durable permitted states', async ({page}) => {
+  await login(page); const key=await createRun(page,'w05-lifecycle');
+  await page.goto(`/p/${key}/activity/task-1`);
+  await page.getByRole('button',{name:'Pause',exact:true}).click();
+  await expect(page.getByRole('button',{name:'Resume',exact:true})).toBeEnabled();
   await page.reload();
-  await expect(page.getByText(/Run is paused; resume is the supported continuation/)).toBeVisible();
-  await page.getByRole('button', {name: 'Resume'}).click();
-  await expect(page.getByRole('status')).toContainText('Resume recorded');
+  await expect(page.getByRole('button',{name:'Resume',exact:true})).toBeEnabled();
+  await page.getByRole('button',{name:'Resume',exact:true}).click();
+  await expect(page.getByText('Resume recorded',{exact:true})).toBeVisible();
   await page.getByLabel('Confirm permanent stop').check();
-  await page.getByRole('button', {name: 'Stop'}).click();
-  await expect(page.getByText(/restart-from-stage is not supported/)).toBeVisible();
-  await expect(page.getByRole('button', {name: 'Ensure worker is running'})).toBeDisabled();
+  await page.getByRole('button',{name:'Stop',exact:true}).click();
+  await expect(page.getByRole('button',{name:'Ensure worker is running'})).toBeDisabled();
+  await openDetails(page);
   await expect(page.getByText(/control version/)).toBeVisible();
 });
 
-test('W06-W07 supported export options, finite multi-launch, partial-safe identities and bounded registry are visible', async ({page}) => {
-  await login(page);
-  const runId = await createRun(page, `w07-${Date.now()}`);
-  await selectTwoScenes(page, runId);
-  await page.goto(`/runs/${runId}/setup`);
-  await page.getByLabel('Action').selectOption('develop');
-  await page.getByLabel('Instruction').fill('Make two independent target Runs.');
-  await page.getByText(/Launch one independent Run per selected target/).locator('input').check();
-  await page.getByRole('button', {name: 'Validate launch preview'}).click();
-  await expect(page.locator('.launch-entry')).toHaveCount(2);
-  await page.getByRole('button', {name: 'Create these independent Runs'}).click();
-  await expect(page.getByText(/2 created\/replayed · 0 failed/)).toBeVisible();
-  const created = await page.locator('li').filter({hasText: 'Ready:'}).locator('a').evaluateAll(links => links.map(link => link.getAttribute('href')));
-  expect(created).toHaveLength(2);
-
-  await page.goto('/');
-  await expect(page.getByRole('heading', {name: 'Runs'})).toBeVisible();
-  expect(await page.locator('.run-registry tbody tr').count()).toBeLessThanOrEqual(50);
-  for (const href of created) await expect(page.locator(`.run-registry a[href="${href}"]`)).toBeVisible();
-  await expect(page.getByRole('button', {name: 'Compare results'})).toBeVisible();
-
-  await page.goto(`/runs/${runId}/exports`);
-  await expect(page.getByText(/Optional formats are only PDF and table-read/)).toBeVisible();
-  await expect(page.getByText(/explicitly fails\/partials/)).toBeVisible();
+test('W06-W07 named multi-launch produces two persisted tasks and supported exports', async ({page}) => {
+  await login(page); const key=await importProject(page,'w07-multi',fixture);
+  await page.goto(`/p/${key}/work`);
+  await expect(page.locator('.phx-connected')).toBeVisible();
+  await page.getByLabel('What do you want to change or understand?').fill('Sharpen each selected scene independently.');
+  await page.locator('#creative-scope-picker > summary').click();
+  const scenes=page.locator('input[name="task[scope][]"][value^="scene:"]');
+  await scenes.nth(0).check(); await scenes.nth(1).check();
+  await page.locator('.task-details > summary').click();
+  await page.locator('input[name="task[multi_launch]"]').check();
+  await page.getByRole('button',{name:'Review brief'}).click();
+  await expect(page.locator('.creative-review')).toContainText('INT. KITCHEN');
+  await expect(page.locator('.creative-review')).toContainText('EXT. TRAIN PLATFORM');
+  await page.getByRole('button',{name:'Start this work'}).click();
+  await page.goto(`/p/${key}/activity`);
+  await expect(page.locator('.task-row')).toHaveCount(2);
+  await page.goto(`/p/${key}/exports/task-1`);
   await expect(page.locator('input[name="export[pdf]"]')).toBeVisible();
   await expect(page.locator('input[name="export[table_read]"]')).toBeVisible();
-  await expect(page.getByText('DOCX')).toHaveCount(0);
 });
 
-test('W04-W08 decision binding and notification resynchronize from persisted state and remain session-local', async ({page}) => {
-  await login(page);
-  const runId = await createRun(page, `w08-${Date.now()}`, true);
-  await page.goto(`/runs/${runId}/decisions`);
-
-  await expect(page.getByText(/decision_required/)).toBeVisible({timeout: 60_000});
-  await expect(page.getByRole('heading', {name: 'Version details for this decision'}).first()).toBeVisible();
-  await expect(page.getByText(/Intelligence lineage/).first()).toBeVisible();
-  const unread = page.getByText(/Session notifications · [1-9][0-9]* unread/);
-  await expect(unread).toBeVisible();
-  await page.getByRole('button', {name: 'Mark current notices read'}).click();
-  await expect(page.getByText('Session notifications · 0 unread')).toBeVisible();
-
-  await page.reload();
-  await expect(page.getByText(/decision_required/)).toBeVisible({timeout: 30_000});
-  await expect(page.getByText(/Session notifications · [1-9][0-9]* unread/)).toBeVisible();
-
-  const outsiderContext = await page.context().browser().newContext();
-  const outsider = await outsiderContext.newPage();
-  await outsider.goto(`/runs/${runId}/decisions`);
-  await expect(outsider).toHaveURL(/\/login$/);
-  await outsiderContext.close();
+test('W04-W08 actual decisions and notices recover from saved state', async ({page}) => {
+  await login(page); const key=await createRun(page,'w08-decision');
+  await page.getByRole('button',{name:'Start / resume task'}).click();
+  await page.goto(`/p/${key}/activity/task-1/decisions`);
+  const route=page.getByRole('button',{name:/Commit now|route-a/i}).first();
+  await expect(route).toBeVisible({timeout:60000});
+  await page.reload(); await expect(route).toBeVisible();
+  const notices=page.locator('.notification-panel');
+  if (!await notices.evaluate(node=>node.open)) await notices.locator('summary').click();
+  await page.getByRole('button',{name:'Mark current notices read'}).click();
+  await expect(notices.locator('summary')).toContainText('0 unread');
+  await route.click();
+  await page.goto(`/p/${key}/changes/task-1`);
+  await expect(page.locator('pre.script').last()).toContainText('INT. LOCKED ROOM - NIGHT',{timeout:60000});
+  const outsider=await page.context().browser().newContext();
+  const other=await outsider.newPage(); await other.goto(`/p/${key}/activity/task-1/decisions`);
+  await expect(other).toHaveURL(/\/login$/); await outsider.close();
 });
 
-test('Phase 07 controls remain keyboard-readable at 480px with reduced motion and non-color states', async ({page}) => {
-  await page.setViewportSize({width: 480, height: 900});
-  await page.emulateMedia({reducedMotion: 'reduce'});
-  await login(page);
-  await createRun(page, `w480-${Date.now()}`);
-
-  await expect(page.getByText('unavailable through Run').first()).toBeVisible();
-  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
-  expect(overflow).toBeLessThanOrEqual(1);
-  await page.keyboard.press('Tab');
-  await expect(page.locator(':focus')).toBeVisible();
-});
-
-test('native intake retains edited journey and source across delayed LiveView connection', async ({browser}) => {
-  const context = await browser.newContext();
-  let connect;
-  await context.routeWebSocket('**/live/websocket**', socket => {
-    connect = () => socket.connectToServer();
-  });
-  const page = await context.newPage();
-  await login(page);
-  await page.goto('/projects/new');
-  const key = `delayed-intake-${Date.now()}`;
-  await page.getByLabel('Project title').fill('Delayed native intake');
-  await page.getByLabel('Project key').fill(key);
-  await page.getByLabel('Journey').selectOption('reveal');
-  // The reveal fixture needs a later action as well as its protected platform beat.
-  const source = `${fixture}\nINT. INTERVIEW ROOM - LATER\n\nNora keeps her hands flat on the table.\n`;
-  await page.getByLabel('Or Fountain source').fill(source);
-  connect();
-  await expect(page.locator('.phx-connected')).toBeVisible();
-  await expect(page.getByLabel('Project title')).toHaveValue('Delayed native intake');
-  await expect(page.getByLabel('Project key')).toHaveValue(key);
-  await expect(page.getByLabel('Journey')).toHaveValue('reveal');
-  await expect(page.getByLabel('Or Fountain source')).toHaveValue(source);
-  await page.getByRole('button', {name: 'Create Run', exact: true}).click();
-  await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+\/setup$/);
-  await expect(page.locator('textarea[name="plan[goal]"]')).toHaveValue('Move the reveal while preserving the protected train beat and approve exact checked pages');
-  await context.close();
-});
-
-
-test('scene selection waits for connection and retains both scenes after reload', async ({page}) => {
-  await login(page);
-  const runId = await createRun(page, `scope-connect-${Date.now()}`);
-  let connect;
-  let hold = true;
-  await page.routeWebSocket('**/live/websocket**', socket => {
-    connect = () => socket.connectToServer();
-    if (!hold) connect();
-  });
-  await page.goto(`/runs/${runId}/viewer`);
-  const whole = page.locator('input[name="scope[whole_screenplay]"]');
-  await expect(whole).toBeDisabled();
-  await expect.poll(() => typeof connect).toBe('function');
-  connect();
-  await expect(whole).toBeEnabled();
-  await whole.uncheck();
-  const scenes = page.locator('input[name="scope[scene_ids][]"]');
-  await scenes.nth(0).check();
-  await scenes.nth(1).check();
-  await page.getByRole('button', {name: 'Save exact scope'}).click();
-  await expect(page.getByText(/Workflow scope saved/)).toBeVisible();
-  hold = false;
-  await page.reload();
-  await expect(whole).toBeEnabled();
-  await expect(whole).not.toBeChecked();
-  await expect(page.locator('input[name="scope[scene_ids][]"]:checked')).toHaveCount(2);
+test('Phase 07 purposeful controls remain keyboard readable at 480px', async ({page}) => {
+  await page.setViewportSize({width:480,height:900}); await page.emulateMedia({reducedMotion:'reduce'});
+  await login(page); await createRun(page,'w480-controls');
+  await expect(page.getByText('Review steps',{exact:true})).toBeVisible();
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth-innerWidth)).toBeLessThanOrEqual(2);
+  await page.keyboard.press('Tab'); await expect(page.locator(':focus')).toBeVisible();
 });

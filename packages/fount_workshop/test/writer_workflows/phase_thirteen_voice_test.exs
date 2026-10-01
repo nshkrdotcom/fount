@@ -57,6 +57,12 @@ defmodule FountWorkshop.PhaseThirteenVoiceTest do
     }
 
     assert {:ok, validated} = Request.validate(base, request)
+    assert {:ok, ^validated} = Request.validate(base, validated)
+    [pin | rest] = validated["constraints"]
+    conflicting = %{pin | "severity" => "advisory"}
+
+    assert {:error, :duplicate_constraint_id} =
+             Request.validate(base, %{validated | "constraints" => [conflicting | rest]})
 
     assert {:error, :invalid_voice_exemplars} =
              Request.validate(base, put_in(request, ["options", "voice_exemplars"], "not a list"))

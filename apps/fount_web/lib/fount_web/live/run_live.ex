@@ -35,6 +35,8 @@ defmodule FountWeb.RunLive do
          |> assign(:launch_preview, nil)
          |> assign(:launch_results, nil)
          |> assign(:audition, nil)
+         |> assign(:candidate_selections, %{})
+         |> assign(:combine_selections, %{})
          |> refresh()}
 
       {:error, _} ->
@@ -123,14 +125,7 @@ defmodule FountWeb.RunLive do
       {:ok, value} ->
         FountWeb.RunEvents.notify(socket.assigns.run_id)
 
-        {:noreply,
-         socket
-         |> assign(
-           :notice,
-           "Decision recorded#{if value["replay"], do: " (idempotent replay)", else: ""}."
-         )
-         |> assign(:error, nil)
-         |> refresh()}
+        decision_recorded(socket, value)
 
       {:error, reason}
       when reason in [:stale_decision, :stale_decision_context, :decision_conflict] ->
@@ -158,13 +153,30 @@ defmodule FountWeb.RunLive do
         {:noreply,
          socket
          |> assign(:audition, audition)
-         |> assign(:notice, "Audition prepared from the exact saved task scope. Nothing was accepted.")
+         |> assign(
+           :notice,
+           "Audition prepared from the exact saved task scope. Nothing was accepted."
+         )
          |> assign(:error, nil)}
 
       {:error, reason} ->
         {:noreply, assign(socket, :error, candidate_work_error(reason))}
     end
   end
+
+  def handle_event("candidate_selection_changed", %{"candidate" => params}, socket) do
+    selections =
+      Map.put(socket.assigns.candidate_selections, params["id"], List.wrap(params["groups"]))
+
+    {:noreply, assign(socket, :candidate_selections, selections)}
+  end
+
+  def handle_event("combine_selection_changed", %{"combine" => params}, socket) do
+    {:noreply, assign(socket, :combine_selections, params["groups"] || %{})}
+  end
+
+  def handle_event("combine_selection_changed", _params, socket),
+    do: {:noreply, assign(socket, :combine_selections, %{})}
 
   def handle_event("select_candidate_groups", %{"candidate" => params}, socket) do
     candidate_id = params["id"]
@@ -179,7 +191,10 @@ defmodule FountWeb.RunLive do
       {:ok, candidate} ->
         {:noreply,
          socket
-         |> assign(:notice, "Selected changes saved as related proposed writing. The current screenplay is unchanged.")
+         |> assign(
+           :notice,
+           "Selected changes saved as related proposed writing. The current screenplay is unchanged."
+         )
          |> assign(:error, nil)
          |> assign(:audition, nil)
          |> refresh()
@@ -202,7 +217,10 @@ defmodule FountWeb.RunLive do
       {:ok, candidate} ->
         {:noreply,
          socket
-         |> assign(:notice, "Combined changes saved as related proposed writing. The current screenplay is unchanged.")
+         |> assign(
+           :notice,
+           "Combined changes saved as related proposed writing. The current screenplay is unchanged."
+         )
          |> assign(:error, nil)
          |> assign(:audition, nil)
          |> refresh()
@@ -216,11 +234,14 @@ defmodule FountWeb.RunLive do
   def handle_event("use_related_candidate", %{"candidate_id" => candidate_id}, socket) do
     related = FountWeb.CandidateWorkspace.related(Fount.Repo, socket.assigns.progress)
     candidate = Enum.find(related, &(&1["id"] == candidate_id))
-    decision = Enum.find(pending_decisions(socket.assigns.progress), &(&1["kind"] == "final_approval"))
+
+    decision =
+      Enum.find(pending_decisions(socket.assigns.progress), &(&1["kind"] == "final_approval"))
 
     cond do
       is_nil(candidate) ->
-        {:noreply, assign(socket, :error, "That related proposal no longer belongs to this task.")}
+        {:noreply,
+         assign(socket, :error, "That related proposal no longer belongs to this task.")}
 
       is_nil(decision) ->
         {:noreply,
@@ -239,7 +260,12 @@ defmodule FountWeb.RunLive do
           "replacement_fountain" => candidate["fountain"]
         }
 
-        case FountRun.submit_decision(Fount.Repo, decision["id"], response, socket.assigns.context) do
+        case FountRun.submit_decision(
+               Fount.Repo,
+               decision["id"],
+               response,
+               socket.assigns.context
+             ) do
           {:ok, _value} ->
             FountWeb.RunEvents.notify(socket.assigns.run_id)
 
@@ -531,6 +557,43 @@ defmodule FountWeb.RunLive do
     end
   end
 
+  defp decision_recorded(socket, %{"outcome" => "rebased", "run_id" => run_id}) do
+    access = socket.assigns.access
+
+    with {:ok, _} <-
+           FountWeb.Store.register_run(Fount.Repo, %{
+             run_id: run_id,
+             project_id: access["project_id"],
+             owner_id: socket.assigns.current_owner,
+             preset: access["preset"],
+             journey: access["journey"]
+           }),
+         {:ok, _} <-
+           FountWeb.Store.mark_launched(Fount.Repo, socket.assigns.current_owner, run_id),
+         {:ok, successor} <-
+           FountWeb.Store.run_access(Fount.Repo, socket.assigns.current_owner, run_id),
+         {:ok, _} <- normalize_started(FountWeb.WorkerSupervisor.start_run(successor)) do
+      {:noreply,
+       push_navigate(socket,
+         to: "/p/#{socket.assigns.project_key}/activity/#{successor["display_key"]}/decisions"
+       )}
+    else
+      {:error, reason} ->
+        {:noreply, socket |> assign(:error, friendly_error(reason)) |> refresh()}
+    end
+  end
+
+  defp decision_recorded(socket, value) do
+    {:noreply,
+     socket
+     |> assign(
+       :notice,
+       "Decision recorded#{if value["replay"], do: " (idempotent replay)", else: ""}."
+     )
+     |> assign(:error, nil)
+     |> refresh()}
+  end
+
   defp command_result(socket, {:ok, _}, notice) do
     FountWeb.RunEvents.notify(socket.assigns.run_id)
     {:noreply, socket |> assign(:notice, notice) |> assign(:error, nil) |> refresh()}
@@ -778,6 +841,7 @@ defmodule FountWeb.RunLive do
   defp review_step_label("strategy_choice"), do: "Approach choice"
   defp review_step_label("candidate_generation"), do: "Proposed-writing generation"
   defp review_step_label("iteration"), do: "Further iteration"
+  defp review_step_label(gate), do: gate |> String.replace("_", " ") |> String.capitalize()
   defp decision_kind_label("strategy"), do: "Choose an approach"
   defp decision_kind_label("routing"), do: "Choose where the work runs"
   defp decision_kind_label("investigation_scope"), do: "Confirm what to investigate"
@@ -788,19 +852,23 @@ defmodule FountWeb.RunLive do
   defp decision_kind_label(kind), do: kind |> String.replace("_", " ") |> String.capitalize()
 
   defp decision_option_label(option) do
-    option["title"] || option["label"] ||
-      case option["id"] || option["value"] || option["choice"] do
-        "approve" -> "Make this exact checked proposal current"
-        "reject" -> "Keep as proposed writing"
-        "replace" -> "Save manual adjustment and re-check"
-        "rebase" -> "Rebase onto the current screenplay"
-        "stop" -> "Stop this task"
-        value when is_binary(value) -> value |> String.replace("_", " ") |> String.capitalize()
-        _ -> "Choose"
-      end
+    value = option["id"] || option["value"] || option["choice"]
+
+    if value in ~w(approve reject replace rebase stop),
+      do: decision_value_label(value),
+      else: option["title"] || option["label"] || decision_value_label(value)
   end
 
-  defp review_step_label(gate), do: gate |> String.replace("_", " ") |> String.capitalize()
+  defp decision_value_label("approve"), do: "Make this exact checked proposal current"
+  defp decision_value_label("reject"), do: "Keep as proposed writing"
+  defp decision_value_label("replace"), do: "Save manual adjustment and re-check"
+  defp decision_value_label("rebase"), do: "Rebase onto the current screenplay"
+  defp decision_value_label("stop"), do: "Stop this task"
+
+  defp decision_value_label(value) when is_binary(value),
+    do: value |> String.replace("_", " ") |> String.capitalize()
+
+  defp decision_value_label(_), do: "Choose"
 
   defp money_value(policy, key), do: get_in(policy, ["limits", "money", key])
 
@@ -830,25 +898,48 @@ defmodule FountWeb.RunLive do
     "#{human_gates} human review stop#{if human_gates == 1, do: "", else: "s"}; #{completion}; #{inference_calls} inference-call ceiling; #{money}."
   end
 
-  defp preset_effect_summary(current, proposed) when current == proposed, do: "Same as the current settings."
+  defp preset_effect_summary(current, proposed) when current == proposed,
+    do: "Same as the current settings."
 
   defp preset_effect_summary(current, proposed) do
-    current_human = current |> Map.get("gates", %{}) |> Enum.count(fn {_key, value} -> value == "human" end)
-    proposed_human = proposed |> Map.get("gates", %{}) |> Enum.count(fn {_key, value} -> value == "human" end)
+    current_human =
+      current |> Map.get("gates", %{}) |> Enum.count(fn {_key, value} -> value == "human" end)
+
+    proposed_human =
+      proposed |> Map.get("gates", %{}) |> Enum.count(fn {_key, value} -> value == "human" end)
+
     current_calls = get_in(current, ["limits", "max_inference_calls"])
     proposed_calls = get_in(proposed, ["limits", "max_inference_calls"])
 
     changes =
       []
-      |> maybe_effect(current_human != proposed_human, "human review stops #{current_human} → #{proposed_human}")
-      |> maybe_effect(current["completion"] != proposed["completion"], "result #{completion_label(current["completion"])} → #{completion_label(proposed["completion"])}")
-      |> maybe_effect(current_calls != proposed_calls, "inference-call ceiling #{current_calls || 0} → #{proposed_calls || 0}")
-      |> maybe_effect(get_in(current, ["limits", "money"]) != get_in(proposed, ["limits", "money"]), "spending ceiling changes")
-      |> maybe_effect(current["route_choice"] != proposed["route_choice"], "tradeoff routing changes")
+      |> maybe_effect(
+        current_human != proposed_human,
+        "human review stops #{current_human} → #{proposed_human}"
+      )
+      |> maybe_effect(
+        current["completion"] != proposed["completion"],
+        "result #{completion_label(current["completion"])} → #{completion_label(proposed["completion"])}"
+      )
+      |> maybe_effect(
+        current_calls != proposed_calls,
+        "inference-call ceiling #{current_calls || 0} → #{proposed_calls || 0}"
+      )
+      |> maybe_effect(
+        get_in(current, ["limits", "money"]) != get_in(proposed, ["limits", "money"]),
+        "spending ceiling changes"
+      )
+      |> maybe_effect(
+        current["route_choice"] != proposed["route_choice"],
+        "tradeoff routing changes"
+      )
 
     case changes do
-      [] -> "Other validated settings change; open Technical details for the exact policy snapshot."
-      values -> "Would change: " <> Enum.join(values, "; ") <> "."
+      [] ->
+        "Other validated settings change; open Technical details for the exact policy snapshot."
+
+      values ->
+        "Would change: " <> Enum.join(values, "; ") <> "."
     end
   end
 
@@ -991,6 +1082,14 @@ defmodule FountWeb.RunLive do
 
       <section :if={@live_action == :setup} class="stack">
         <h2>Task controls</h2>
+        <button
+          type="button"
+          phx-click="launch"
+          disabled={
+            !@live_connected ||
+              @run["status"] in ~w(completed_candidate completed_accepted stopped failed)
+          }
+        >Start / resume task</button>
         <p class="warning">
           Proposed pages replace the approved screenplay only after your approval.
           Changing settings creates a saved version and prevents affected work from continuing with old settings.
@@ -1041,42 +1140,96 @@ defmodule FountWeb.RunLive do
           <div>
             <p class="eyebrow">Purposeful controls</p>
             <h3>Task settings</h3>
-            <p>Settings version {@run["current_policy_version"]}. Changes are saved as a new version and fence affected old work.</p>
+            <p>
+              Settings version {@run["current_policy_version"]}. Changes are saved as a new version and fence affected old work.
+            </p>
           </div>
 
           <fieldset>
             <legend>Review steps</legend>
-            <p class="scope-note">Choose where the task must stop for a person. Candidate completion keeps proposed writing separate from the current screenplay.</p>
-            <p class="scope-note"><strong>Effective now:</strong> {policy_effect_summary(@current_policy)}</p>
+            <p class="scope-note">
+              Choose where the task must stop for a person. Candidate completion keeps proposed writing separate from the current screenplay.
+            </p>
+            <p class="scope-note">
+              <strong>Effective now:</strong> {policy_effect_summary(@current_policy)}
+            </p>
             <div class="policy-grid">
-              <label :for={gate <- ~w(investigation_scope strategy_choice candidate_generation iteration)}>
+              <label :for={
+                gate <- ~w(investigation_scope strategy_choice candidate_generation iteration)
+              }>
                 {review_step_label(gate)}
                 <select name={"policy[#{gate}]"}>
-                  <option value="human" selected={get_in(@current_policy, ["gates", gate]) == "human"}>Ask me</option>
-                  <option value="automatic" selected={get_in(@current_policy, ["gates", gate]) == "automatic"}>Continue automatically</option>
+                  <option value="human" selected={get_in(@current_policy, ["gates", gate]) == "human"}>
+                    Ask me
+                  </option>
+                  <option
+                    value="automatic"
+                    selected={get_in(@current_policy, ["gates", gate]) == "automatic"}
+                  >
+                    Continue automatically
+                  </option>
                 </select>
               </label>
-              <label>Completion
+              <label>
+                Completion
                 <select name="policy[completion]">
-                  <option value="candidate" selected={@current_policy["completion"] == "candidate"}>Save proposed writing — review required</option>
-                  <option value="accept" selected={@current_policy["completion"] == "accept"}>Accept only with the exact authorized approver</option>
+                  <option value="candidate" selected={@current_policy["completion"] == "candidate"}>
+                    Save proposed writing — review required
+                  </option>
+                  <option value="accept" selected={@current_policy["completion"] == "accept"}>
+                    Accept only with the exact authorized approver
+                  </option>
                 </select>
               </label>
-              <label>Trusted approver
+              <label>
+                Trusted approver
                 <select name="policy[approver]">
-                  <option :for={option <- @policy_principals} value={option["key"]} selected={policy_principal_key(@current_policy, @policy_principals) == option["key"]}>{option["label"]}</option>
+                  <option
+                    :for={option <- @policy_principals}
+                    value={option["key"]}
+                    selected={
+                      policy_principal_key(@current_policy, @policy_principals) == option["key"]
+                    }
+                  >
+                    {option["label"]}
+                  </option>
                 </select>
               </label>
-              <label class="inline-check"><input type="checkbox" name="policy[owner_fallback_enabled]" value="true" checked={not is_nil(@current_policy["fallback_approver"])} /> Allow the authenticated owner as fallback approver</label>
-              <label>When a material tradeoff appears
+              <label class="inline-check"><input
+                type="checkbox"
+                name="policy[owner_fallback_enabled]"
+                value="true"
+                checked={not is_nil(@current_policy["fallback_approver"])}
+              /> Allow the authenticated owner as fallback approver</label>
+              <label>
+                When a material tradeoff appears
                 <select name="policy[route_choice]">
-                  <option value="pause_on_material_tradeoff" selected={policy_route_rule(@current_policy) == "pause_on_material_tradeoff"}>Pause for review</option>
-                  <option value="registered_reviewer" selected={policy_route_rule(@current_policy) == "registered_reviewer"}>Route to a registered human reviewer</option>
+                  <option
+                    value="pause_on_material_tradeoff"
+                    selected={policy_route_rule(@current_policy) == "pause_on_material_tradeoff"}
+                  >
+                    Pause for review
+                  </option>
+                  <option
+                    value="registered_reviewer"
+                    selected={policy_route_rule(@current_policy) == "registered_reviewer"}
+                  >
+                    Route to a registered human reviewer
+                  </option>
                 </select>
               </label>
-              <label>Registered reviewer
+              <label>
+                Registered reviewer
                 <select name="policy[route_reviewer_key]">
-                  <option :for={option <- @policy_reviewers} value={option["key"]} selected={policy_reviewer_key(@current_policy, @policy_reviewers) == option["key"]}>{option["label"]}</option>
+                  <option
+                    :for={option <- @policy_reviewers}
+                    value={option["key"]}
+                    selected={
+                      policy_reviewer_key(@current_policy, @policy_reviewers) == option["key"]
+                    }
+                  >
+                    {option["label"]}
+                  </option>
                 </select>
               </label>
             </div>
@@ -1085,25 +1238,80 @@ defmodule FountWeb.RunLive do
           <fieldset>
             <legend>Time and spending limits</legend>
             <p class="eyebrow">Effective limits and estimates</p>
-            <p class="scope-note">These are hard task ceilings. Estimated cost is shown only when available; missing cost estimates remain unknown rather than being invented.</p>
+            <p class="scope-note">
+              These are hard task ceilings. Estimated cost is shown only when available; missing cost estimates remain unknown rather than being invented.
+            </p>
             <div class="policy-grid">
-              <label>Writing iterations <input type="number" min="0" name="policy[max_iterations]" value={limit_value(@current_policy, "max_iterations", 3)} /></label>
-              <label>Malformed-response repairs per call <input type="number" min="0" name="policy[max_malformed_repairs_per_call]" value={limit_value(@current_policy, "max_malformed_repairs_per_call", 1)} /></label>
-              <label>Transient retries <input type="number" min="0" name="policy[max_transient_retries]" value={limit_value(@current_policy, "max_transient_retries", 2)} /></label>
-              <label>Inference calls <input type="number" min="0" name="policy[max_inference_calls]" value={limit_value(@current_policy, "max_inference_calls", 12)} /></label>
-              <label>Measurement states <input type="number" min="0" name="policy[max_measurement_states]" value={limit_value(@current_policy, "max_measurement_states", 500)} /></label>
+              <label>Writing iterations
+              <input
+                type="number"
+                min="0"
+                name="policy[max_iterations]"
+                value={limit_value(@current_policy, "max_iterations", 3)}
+              /></label>
+              <label>Malformed-response repairs per call
+              <input
+                type="number"
+                min="0"
+                name="policy[max_malformed_repairs_per_call]"
+                value={limit_value(@current_policy, "max_malformed_repairs_per_call", 1)}
+              /></label>
+              <label>Transient retries
+              <input
+                type="number"
+                min="0"
+                name="policy[max_transient_retries]"
+                value={limit_value(@current_policy, "max_transient_retries", 2)}
+              /></label>
+              <label>Inference calls
+              <input
+                type="number"
+                min="0"
+                name="policy[max_inference_calls]"
+                value={limit_value(@current_policy, "max_inference_calls", 12)}
+              /></label>
+              <label>Measurement states
+              <input
+                type="number"
+                min="0"
+                name="policy[max_measurement_states]"
+                value={limit_value(@current_policy, "max_measurement_states", 500)}
+              /></label>
             </div>
-            <label class="inline-check"><input type="checkbox" name="policy[money_enabled]" value="true" checked={not is_nil(get_in(@current_policy, ["limits", "money"]))} /> Set a spending ceiling</label>
+            <label class="inline-check"><input
+              type="checkbox"
+              name="policy[money_enabled]"
+              value="true"
+              checked={not is_nil(get_in(@current_policy, ["limits", "money"]))}
+            /> Set a spending ceiling</label>
             <div class="policy-grid">
-              <label>Currency <input name="policy[currency]" maxlength="3" value={money_value(@current_policy, "currency") || "USD"} /></label>
-              <label>Maximum spend <input inputmode="decimal" name="policy[max_currency_units]" value={FountWeb.WorkflowManagement.money_units(money_value(@current_policy, "max_microunits") || 0)} /></label>
+              <label>Currency
+              <input
+                name="policy[currency]"
+                maxlength="3"
+                value={money_value(@current_policy, "currency") || "USD"}
+              /></label>
+              <label>Maximum spend
+              <input
+                inputmode="decimal"
+                name="policy[max_currency_units]"
+                value={
+                  FountWeb.WorkflowManagement.money_units(
+                    money_value(@current_policy, "max_microunits") || 0
+                  )
+                }
+              /></label>
             </div>
-            <p>Enter ordinary currency units, for example <code>12.50</code>. Fount converts that value exactly to the existing microunit contract before validation.</p>
+            <p>
+              Enter ordinary currency units, for example <code>12.50</code>. Fount converts that value exactly to the existing microunit contract before validation.
+            </p>
           </fieldset>
 
           <details class="technical-details">
             <summary>Technical details</summary>
-            <p>Policy fingerprint <code>{get_in(@run, ["policy", "fingerprint"]) || "recorded"}</code></p>
+            <p>
+              Policy fingerprint <code>{get_in(@run, ["policy", "fingerprint"]) || "recorded"}</code>
+            </p>
             <pre><%= json(@current_policy) %></pre>
           </details>
           <button disabled={!@live_connected || !@lifecycle["update_policy"]} type="submit">Save task settings</button>
@@ -1122,7 +1330,9 @@ defmodule FountWeb.RunLive do
             <article :for={preset <- @policy_presets} class="preset-card">
               <p><strong>{preset["name"]}</strong> · {preset["source"]} v{preset["version"]}</p>
               <p>Status: {if(preset["compatible"], do: "compatible", else: "incompatible")}</p>
-              <p :if={preset["compatible"]} class="scope-note">{preset_effect_summary(@current_policy, preset["policy"])}</p>
+              <p :if={preset["compatible"]} class="scope-note">
+                {preset_effect_summary(@current_policy, preset["policy"])}
+              </p>
               <details class="technical-details">
                 <summary>Technical details</summary><code>{preset["fingerprint"]}</code>
               </details>
@@ -1167,7 +1377,9 @@ defmodule FountWeb.RunLive do
 
         <div class="card stack">
           <h3>Related creative work</h3>
-          <p>The complete creative catalog, exact screenplay selection, protections, approaches and recovery inputs live beside the pages rather than inside this task-policy screen.</p>
+          <p>
+            The complete creative catalog, exact screenplay selection, protections, approaches and recovery inputs live beside the pages rather than inside this task-policy screen.
+          </p>
           <a class="button-link" href={"/p/#{@project_key}/work"}>Open Work on it</a>
         </div>
       </section>
@@ -1450,7 +1662,10 @@ defmodule FountWeb.RunLive do
             mode="side-by-side"
           />
         </div>
-        <section :if={@review.candidate && @related_candidates != []} class="card stack candidate-workshop">
+        <section
+          :if={@review.candidate && @related_candidates != []}
+          class="card stack candidate-workshop"
+        >
           <div>
             <p class="eyebrow">Related work</p>
             <h3>Audition, select or recombine proposed writing</h3>
@@ -1474,12 +1689,22 @@ defmodule FountWeb.RunLive do
               >Audition in context</button>
             </div>
 
-            <form :if={candidate["groups"] != []} phx-submit="select_candidate_groups" class="stack">
+            <form
+              :if={candidate["groups"] != []}
+              phx-submit="select_candidate_groups"
+              phx-change="candidate_selection_changed"
+              class="stack"
+            >
               <input type="hidden" name="candidate[id]" value={candidate["id"]} />
               <fieldset>
                 <legend>Select saved changes</legend>
                 <label :for={group <- candidate["groups"]} class="candidate-group">
-                  <input type="checkbox" name="candidate[groups][]" value={group["id"]} />
+                  <input
+                    type="checkbox"
+                    name="candidate[groups][]"
+                    value={group["id"]}
+                    checked={group["id"] in Map.get(@candidate_selections, candidate["id"], [])}
+                  />
                   <span><strong>{group["title"]}</strong> — {group["reason"]}</span>
                 </label>
               </fieldset>
@@ -1494,10 +1719,17 @@ defmodule FountWeb.RunLive do
             >Use this as the task proposal and re-check</button>
           </article>
 
-          <form :if={length(@related_candidates) >= 2} phx-submit="combine_candidates" class="stack combine-candidates">
+          <form
+            :if={length(@related_candidates) >= 2}
+            phx-submit="combine_candidates"
+            phx-change="combine_selection_changed"
+            class="stack combine-candidates"
+          >
             <fieldset>
               <legend>Recombine selected change groups</legend>
-              <p class="scope-note">Choose groups from at least two proposals. Conflicting edits are rejected rather than guessed.</p>
+              <p class="scope-note">
+                Choose groups from at least two proposals. Conflicting edits are rejected rather than guessed.
+              </p>
               <div :for={candidate <- @related_candidates} class="candidate-combine-source">
                 <strong>{candidate["label"]}</strong>
                 <label :for={group <- candidate["groups"]} class="candidate-group">
@@ -1505,6 +1737,7 @@ defmodule FountWeb.RunLive do
                     type="checkbox"
                     name={"combine[groups][#{candidate["id"]}][]"}
                     value={group["id"]}
+                    checked={group["id"] in List.wrap(Map.get(@combine_selections, candidate["id"]))}
                   />
                   <span>{group["title"]}</span>
                 </label>

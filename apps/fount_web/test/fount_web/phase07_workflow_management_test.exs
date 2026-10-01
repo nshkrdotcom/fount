@@ -121,11 +121,11 @@ defmodule FountWeb.Phase07WorkflowManagementTest do
     catalog = Workflow.action_catalog()
 
     assert Enum.map(catalog, & &1["id"]) |> Enum.sort() ==
-             ~w(alternatives character develop investigate notes pass propagate recover sequence)
+             ~w(alternatives character develop investigate notes pass propagate recover rewrite sequence)
              |> Enum.sort()
 
     assert Enum.map(Workflow.enabled_actions(), & &1["id"]) |> Enum.sort() ==
-             ~w(develop pass propagate)
+             ~w(alternatives character develop investigate notes pass propagate recover rewrite sequence)
 
     assert Enum.all?(catalog, &Map.has_key?(&1, "handler"))
 
@@ -146,8 +146,10 @@ defmodule FountWeb.Phase07WorkflowManagementTest do
       assert request["selection"] == selection
     end
 
-    assert {:error, :unsupported_run_action} =
+    assert {:ok, request} =
              Workflow.build_workshop_request(screenplay, "investigate", "Inspect.", selection)
+
+    assert request["options"]["write_fixes"] == false
   end
 
   test "W03 uses the existing scene/element selection schema and rejects guessed page ids" do

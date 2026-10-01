@@ -3,7 +3,9 @@ defmodule FountWeb.UX02WritingWorkshopIntegrationTest do
 
   alias FountWeb.{CreativeWorkspace, ProductionTools, WorkflowManagement}
 
-  test "UX02 Work stays question-first while the complete validated catalog is reachable", %{conn: conn} do
+  test "UX02 Work stays question-first while the complete validated catalog is reachable", %{
+    conn: conn
+  } do
     assert {:ok, %{access: access}} = launch("brief")
     conn = FountWeb.ConnCase.login(conn)
 
@@ -76,6 +78,7 @@ defmodule FountWeb.UX02WritingWorkshopIntegrationTest do
 
   test "UX02 exact source and protections validate the supported creative families" do
     assert {:ok, %{run: run}} = launch("catalog")
+
     assert {:ok, model} =
              Fount.Persistence.load_revision(
                Fount.Repo,
@@ -99,11 +102,18 @@ defmodule FountWeb.UX02WritingWorkshopIntegrationTest do
       {"develop", %{"placement" => %{"kind" => "start"}, "brief" => "Open with more pressure."}},
       {"rewrite", %{"direction" => "Make the scene more oblique."}},
       {"pass", %{"profile" => "dialogue_subtext", "direction" => "Let the dialogue imply more."}},
-      {"alternatives", %{"alternatives" => 3, "approaches" => ["quiet", "hostile", "comic"], "allow_brief_departure" => false}},
+      {"alternatives",
+       %{
+         "alternatives" => 3,
+         "approaches" => ["quiet", "hostile", "comic"],
+         "allow_brief_departure" => false
+       }},
       {"sequence", %{"target_scene_count" => 2}},
-      {"character", %{"character_id" => character_id, "direction" => "Clarify the character's leverage."}},
+      {"character",
+       %{"character_id" => character_id, "direction" => "Clarify the character's leverage."}},
       {"propagate", %{"repair_scope" => selection}},
-      {"investigate", %{"concern" => "Where is exposition doing too much work?", "write_fixes" => false}}
+      {"investigate",
+       %{"concern" => "Where is exposition doing too much work?", "write_fixes" => false}}
     ]
 
     for {action, attrs} <- action_attrs do
@@ -232,6 +242,60 @@ defmodule FountWeb.UX02WritingWorkshopIntegrationTest do
     assert link["source_revision_id"] == current.revision.id
     assert link["source_fingerprint"] == current.revision.content_hash
     assert link["note_id"] == note_result.note_id
+
+    # Recovery must use persisted pipeline requests, including a missing host link.
+    Ecto.Adapters.SQL.query!(
+      Fount.Repo,
+      "DELETE FROM fount_web_note_work_links WHERE run_id=$1::text::uuid",
+      [note_run["id"]]
+    )
+
+    assert :ok =
+             ProductionTools.reconcile_note_work_links(
+               Fount.Repo,
+               "test-owner",
+               project["id"],
+               current.id
+             )
+
+    assert [recovered] =
+             ProductionTools.note_work_links(
+               Fount.Repo,
+               "test-owner",
+               project["id"],
+               note_result.note_id
+             )
+
+    assert recovered["run_id"] == note_run["id"]
+    assert recovered["source_fingerprint"] == current.revision.content_hash
+
+    assert :ok =
+             ProductionTools.reconcile_note_work_links(
+               Fount.Repo,
+               "test-owner",
+               project["id"],
+               current.id
+             )
+
+    assert length(
+             ProductionTools.note_work_links(
+               Fount.Repo,
+               "test-owner",
+               project["id"],
+               note_result.note_id
+             )
+           ) == 1
+
+    assert {:error, :note_not_found} =
+             ProductionTools.link_note_work(
+               Fount.Repo,
+               "test-owner",
+               project["id"],
+               current.id,
+               original.revision.id,
+               note_result.note_id,
+               note_run["id"]
+             )
 
     assert {:error, _} =
              ProductionTools.link_note_work(

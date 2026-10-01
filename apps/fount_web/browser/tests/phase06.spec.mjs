@@ -61,7 +61,7 @@ test('U02 protected reveal repairs then exact human approval survives refresh', 
   await expect(page.locator('pre.script').last()).toContainText('departure board');
 
   await page.goto(`/p/${runId}/activity/task-1/decisions`);
-  const approve = page.getByRole('button', {name: /Accept candidate|approve/i}).first();
+  const approve = page.getByRole('button', {name: /Make this exact checked proposal current|Accept candidate|approve/i}).first();
   await expect(approve).toBeVisible({timeout: 60_000});
   await approve.click();
   await page.reload();
@@ -104,8 +104,8 @@ test('U04 duplicate tabs replay exact decision and unauthenticated client is den
   const two = second.getByRole('button', {name: /Commit now|route-a/i}).first();
   await expect(one).toBeVisible();
   await expect(two).toBeVisible();
-  await Promise.allSettled([one.click(), two.click()]);
-  await expect(second.getByText(/idempotent replay|conflict\/stale form|No pending decisions/i).first()).toBeVisible();
+  await Promise.allSettled([one.click({timeout:2000}), two.click({timeout:2000})]);
+  await expect(second.getByText(/idempotent replay|conflict\/stale form|This decision changed|No pending decisions/i).first()).toBeVisible();
 
   const outsider = await browser.newPage();
   await outsider.goto(`/p/${runId}/activity/task-1`);

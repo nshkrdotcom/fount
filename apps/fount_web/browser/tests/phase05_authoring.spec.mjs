@@ -29,7 +29,7 @@ test('E01-E03/E07 editor handles Unicode, paste, composition, invalid source, mo
 
   const unicode = fixture.replace('I can revise this.', 'I can revise this — café 漢字 🙂.');
   await source.fill(unicode);
-  await expect(page.getByText('Unsaved local changes')).toBeVisible({timeout: 2_000});
+  await expect(page.locator('.authoring-status').getByText('Unsaved local changes')).toBeVisible({timeout: 2_000});
   await expect(page.locator('[data-authoring-preview]')).toContainText('café 漢字 🙂', {timeout: 3_000});
 
   await source.evaluate((node) => {
@@ -106,10 +106,13 @@ test('E04-E06 candidate save leaves canon unchanged, creative work uses Run, and
 
   await page.goto(`/p/${runId}/work`);
   await page.getByLabel('What do you want to change or understand?').fill('Tighten the opening beat without changing its facts.');
+  await page.locator('.all-tasks > summary').click();
+  await page.locator('input[name="task[action]"][value="develop"]').check();
   await page.getByRole('button', {name: 'Review brief'}).click();
   await expect(page.getByText('Validated brief', {exact: true})).toBeVisible();
   await page.getByRole('button', {name: 'Start this work'}).click();
   await expect(page).toHaveURL(new RegExp(`/p/${runId}/activity/task-1/setup$`));
+  await page.getByRole('button', {name: 'Start / resume task'}).click();
   const aiRunId = 'task-1';
   await page.goto(`/p/${runId}/activity/${aiRunId}/decisions`);
   const route = page.getByRole('button', {name: /Commit now|route-a/i}).first();
@@ -118,13 +121,11 @@ test('E04-E06 candidate save leaves canon unchanged, creative work uses Run, and
   await page.goto(`/p/${runId}/changes/${aiRunId}`);
   await expect(page.locator('pre.script').last()).toContainText('INT. LOCKED ROOM - NIGHT', {timeout: 60_000});
   await expect(page.locator('pre.script').first()).toContainText('departure board');
-  await expect(page.locator('p.status')).toContainText('stage: decide', {timeout: 60_000});
+  await expect(page.locator('p.status')).toContainText('stage: deliver', {timeout: 60_000});
   await expect(page.getByRole('heading', {name: /Analysis before writing/i})).toBeVisible();
   await page.goto(`/p/${runId}/activity/${aiRunId}/decisions`);
-  await expect(page.getByRole('button', {name: 'Rebase candidate onto current canon'})).toBeVisible();
-  await page.getByLabel('Confirm permanent stop').check();
-  await page.getByRole('button', {name: 'Stop this run'}).click();
-  await expect(page.locator('p.status')).toContainText('stopped');
+  await page.goto(`/p/${runId}/activity/${aiRunId}`);
+  await expect(page.getByRole('button', {name:'Ensure worker is running'})).toBeDisabled();
   await page.goto(`/p/${runId}`);
   await expect(page.locator('.screenplay')).not.toContainText('blue departure board');
 

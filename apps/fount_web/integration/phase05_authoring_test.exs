@@ -402,7 +402,7 @@ defmodule FountWeb.Phase05AuthoringIntegrationTest do
           "edit" => %{"kind" => kind, "target" => target, "value" => value}
         })
 
-      assert html =~ "Affected elements are recorded internally"
+      assert html =~ "Affected source elements are retained internally"
       {:ok, current} = Authoring.open_workspace("test-owner", access["project_id"])
       assert current.preview.screenplay.id == base.id
       assert Fount.Query.node(current.preview.screenplay, unaffected)

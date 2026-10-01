@@ -4,7 +4,7 @@ defmodule FountRun.DecisionCommand do
   alias Ecto.Adapters.SQL
   alias Fount.ID
   alias Fount.Persistence, as: CorePersistence
-  alias Fount.Screenplay.Model
+  alias Fount.Screenplay.{Model, SourceReconciler}
   alias Fount.Writing.{Approval, CanonicalJSON, Principal, Review}
   alias FountRun.{ActorContext, ApprovalBridge, Control, Persistence}
 
@@ -316,23 +316,15 @@ defmodule FountRun.DecisionCommand do
         {:error, reason} -> rollback(repo, reason)
       end
 
-    doc =
-      case Fount.parse(source,
-             document_id: current.id,
-             parent_revision_id: current.revision.id,
+    draft =
+      case SourceReconciler.reconcile(current, source,
+             revision_id: ID.v5(candidate_id, "replacement-revision"),
              actor: context.principal.id,
              message: "Run final-decision replacement"
            ) do
-        {:ok, value} -> value
+        {:ok, value} -> value.screenplay
         {:error, reason} -> rollback(repo, {:invalid_replacement_fountain, reason})
       end
-
-    draft =
-      doc
-      |> Fount.Screenplay.from_document()
-      |> Map.put(:revision, doc.revision)
-      |> Map.put(:import, nil)
-      |> Model.refresh()
 
     key =
       one(repo, "SELECT key FROM screenplays WHERE id=$1::text::uuid", [run["screenplay_id"]])[
@@ -347,7 +339,7 @@ defmodule FountRun.DecisionCommand do
              label: "Run human replacement",
              operations: []
            ) do
-        {:ok, value} -> value
+        {:ok, value} -> unwrap!(repo, CorePersistence.candidate(repo, value.id))
         {:error, reason} -> rollback(repo, reason)
       end
 
@@ -826,7 +818,7 @@ defmodule FountRun.DecisionCommand do
       "branch_id" => "main",
       "input_revision_id" => nil,
       "input_candidate_id" => candidate_id,
-      "request" => request,
+      "request" => Map.put(request, "candidate_ids", [candidate_id]),
       "idempotency_key" => key
     }
 

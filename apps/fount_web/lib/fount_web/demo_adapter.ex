@@ -121,13 +121,13 @@ defmodule FountWeb.DemoAdapter do
       strategy("route-c", "Reverse then answer")
     ]
 
-    %{
-      "strategies" =>
-        if(String.contains?(prompt, "Create exactly 1 "),
-          do: Enum.take(strategies, 1),
-          else: strategies
-        )
-    }
+    count =
+      case capture(prompt, ~r/Create exactly ([0-9]+) /) do
+        nil -> 3
+        count -> String.to_integer(count)
+      end
+
+    %{"strategies" => Enum.take(strategies, count)}
   end
 
   defp strategy(id, title) do
@@ -164,7 +164,7 @@ defmodule FountWeb.DemoAdapter do
           [group("demo-change", "Dialogue change", [], dialogue_ops(prompt))]
 
         _ ->
-          [group("demo-change", "Opening change", [], opening_ops())]
+          demo_source_groups(prompt, strategy)
       end
 
     %{
@@ -181,6 +181,50 @@ defmodule FountWeb.DemoAdapter do
       "unresolved_questions" => [],
       "groups" => groups
     }
+  end
+
+  defp demo_source_groups(prompt, strategy) do
+    context = prompt |> String.split("\n") |> Enum.find_value(%{}, &prompt_context/1)
+    request = context["request"] || %{}
+
+    if String.contains?(prompt, "JOURNEY:") || request["workflow"] == "develop" do
+      [group("demo-change", "Opening change", [], opening_ops())]
+    else
+      protected_ids = get_in(request, ["options", "protected_text"]) || []
+      protected_ids = Enum.map(protected_ids, &get_in(&1, ["target", "id"]))
+
+      context["selected_pages"]
+      |> List.wrap()
+      |> Enum.filter(&editable_demo_page?(&1, protected_ids))
+      |> Enum.take(2)
+      |> Enum.with_index(1)
+      |> Enum.map(&demo_source_group(&1, strategy))
+      |> Enum.map(&Map.put(&1, "addresses_notes", get_in(request, ["options", "note_ids"]) || []))
+    end
+  end
+
+  defp prompt_context(line) do
+    case Jason.decode(line) do
+      {:ok, %{"context" => context}} -> context
+      _ -> nil
+    end
+  end
+
+  defp editable_demo_page?(page, protected_ids),
+    do:
+      page["type"] in ["action", "dialogue", "parenthetical"] &&
+        get_in(page, ["target", "id"]) not in protected_ids
+
+  defp demo_source_group({page, ordinal}, strategy) do
+    suffix = if strategy == "route-b", do: " A beat passes.", else: " The silence holds."
+
+    operation = %{
+      "kind" => "replace_text",
+      "target" => page["target"],
+      "value" => page["text"] <> suffix
+    }
+
+    group("demo-source-#{ordinal}", "Deterministic source alternative #{ordinal}", [], [operation])
   end
 
   defp opening_ops do

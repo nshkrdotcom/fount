@@ -336,7 +336,6 @@ defmodule FountWeb.Launch do
       "operation_parameters" => %{
         "workflow" => request["workflow"],
         "request_fingerprint" => CanonicalJSON.hash(request),
-        "request_options" => request["options"],
         "selection_fingerprint" => CanonicalJSON.hash(request["selection"])
       },
       "policy" => policy

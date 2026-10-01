@@ -138,6 +138,7 @@ test('UX01 shell, supplied About, no-task destinations, Help dismissal and phone
   await page.getByRole('button',{name:'Save project details'}).click();
   await expect(page.getByText('Project details saved.')).toBeVisible();
   await page.goto(`/p/${key}`);
+  await expect(page.locator('.phx-connected')).toBeVisible();
   const about=page.locator('#about-screenplay');
   await expect(about).not.toHaveAttribute('open','');
   await about.locator(':scope > summary').focus(); await page.keyboard.press('Enter');
@@ -153,11 +154,15 @@ test('UX01 shell, supplied About, no-task destinations, Help dismissal and phone
   await page.getByRole('button',{name:'Show dismissed hints again'}).click();
   await page.getByRole('link',{name:/Back to LAST RETURN/}).click();
   await expect(page.locator('.context-help')).toBeVisible();
-  for (const destination of ['work','changes','notes','analysis','read','exports','activity']) {
+  for (const destination of ['changes','analysis','read','exports','activity']) {
     await page.goto(`/p/${key}/${destination}`);
     await expect(page.getByText('No saved tasks yet. The screenplay is still fully available for reading and writing.')).toBeVisible();
     noMachineIdentity(await page.locator('main').innerText());
   }
+  await page.goto(`/p/${key}/work`);
+  await expect(page.locator('#creative-brief')).toBeVisible();
+  await page.goto(`/p/${key}/notes`);
+  await expect(page.getByRole('button', {name:'Save proposed note'})).toBeVisible();
   await page.goto(`/p/${key}`);
   await page.setViewportSize({width:1024,height:768}); await capture(page,'ux01-tablet-landscape');
   await page.setViewportSize({width:360,height:800});

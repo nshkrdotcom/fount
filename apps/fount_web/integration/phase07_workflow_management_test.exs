@@ -44,7 +44,7 @@ defmodule FountWeb.Phase07WorkflowManagementIntegrationTest do
     assert html =~ "Authenticated owner"
     assert html =~ "Saved settings"
     assert html =~ "registered_reviewer"
-    assert html =~ "Registered route reviewer"
+    assert html =~ "Registered reviewer"
 
     render_submit(element(view, "form[phx-submit=save_current_preset]"), %{
       "preset" => %{"name" => "Writer safe"}

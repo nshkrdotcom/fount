@@ -55,7 +55,8 @@ defmodule FountWeb.Help do
     %{
       slug: "work-on-it",
       title: "Work on it",
-      summary: "Ask a short question, bind it to named screenplay material, then review the exact brief before starting.",
+      summary:
+        "Ask a short question, bind it to named screenplay material, then review the exact brief before starting.",
       body:
         "Develop, targeted rewrite, focused pass, alternatives, sequence, character, propagate, notes, recover and investigate all use the existing durable Run → Workshop path. Scope and protected passages resolve against the selected exact revision. Starting saves a task; proposed writing never becomes current merely because it was generated or saved."
     },
@@ -69,14 +70,16 @@ defmodule FountWeb.Help do
     %{
       slug: "scene-cards",
       title: "Scene cards and structural edits",
-      summary: "Move, omit/include, insert, replace or delete by screenplay name instead of copying internal IDs.",
+      summary:
+        "Move, omit/include, insert, replace or delete by screenplay name instead of copying internal IDs.",
       body:
         "Scene cards are source-bound to the working draft. Use Up/Down buttons or Alt+Arrow Up/Down from a focused scene card. Exact element edits use named pickers. Structural and text undo/redo remain separate, and every change stays in the working draft until a proposal is deliberately accepted."
     },
     %{
       slug: "creative-catalog",
       title: "Creative task families",
-      summary: "Each creative card has real validated inputs and the same durable task/review authority boundary.",
+      summary:
+        "Each creative card has real validated inputs and the same durable task/review authority boundary.",
       body:
         "The default brief keeps three common choices visible and preserves what you typed when you change task type. All tasks opens the complete searchable catalog, grouped as Write, Explore, Revise and Restore. Task-specific details appear only when needed: pass profile, alternative count, target scene count, character, placement, notes or historical recovery source. Investigate saves findings without granting mutation authority. Unavailable analysis never counts as successful analysis."
     },
@@ -90,14 +93,16 @@ defmodule FountWeb.Help do
     %{
       slug: "line-alternatives",
       title: "Try another line",
-      summary: "A dialogue or parenthetical line can launch finite alternatives while surrounding dialogue is protected.",
+      summary:
+        "A dialogue or parenthetical line can launch finite alternatives while surrounding dialogue is protected.",
       body:
         "Try another line binds the exact selected element and byte-exact surrounding cue/body protections to the existing alternatives workflow. Results are proposed candidate work. Auditioning or choosing an alternative does not advance the current screenplay; comparison and acceptance remain separate."
     },
     %{
       slug: "character-dialogue",
       title: "Read a character's dialogue",
-      summary: "Read literal confirmed cue blocks with scene context and return links, without a provider call.",
+      summary:
+        "Read literal confirmed cue blocks with scene context and return links, without a provider call.",
       body:
         "Character dialogue is derived from the selected screenplay source using confirmed cast identity and existing dialogue blocks. It does not infer performance, intent or character quality. Each displayed line returns to its exact source passage."
     },

@@ -23,7 +23,7 @@ defmodule FountWeb.Phase06IntegrationTest do
         "source" => FountWeb.Journeys.fixture_fountain()
       })
 
-    path = run_path(run, :setup)
+    path = run_path(run, :timeline)
     html = conn |> get(path) |> html_response(200)
     assert html =~ "Connecting live controls"
     assert html =~ ~r/<button[^>]*disabled[^>]*phx-click="launch"/
@@ -70,7 +70,7 @@ defmodule FountWeb.Phase06IntegrationTest do
     assert get_in(run, ["policy", "policy", "completion"]) == "candidate"
     assert {:ok, _view, html} = live(conn, run_path(run, :setup))
     assert html =~ "Propose an opening, check it and leave the approved screenplay unchanged"
-    assert html =~ "Proposed changes"
+    assert html =~ "Proposed pages"
     assert html =~ "Proposed pages replace the approved screenplay only after your approval."
   end
 

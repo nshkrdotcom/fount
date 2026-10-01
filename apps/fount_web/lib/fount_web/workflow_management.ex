@@ -84,8 +84,7 @@ defmodule FountWeb.WorkflowManagement do
       "label" => "Character work",
       "enabled" => true,
       "mode" => "revise",
-      "summary" =>
-        "Work on one named character using literal cast identity and selected scope.",
+      "summary" => "Work on one named character using literal cast identity and selected scope.",
       "request" => "character",
       "handler" => "durable Run → Workshop",
       "preconditions" => "character, direction and exact selection"
@@ -954,7 +953,9 @@ defmodule FountWeb.WorkflowManagement do
 
   defp common_options(attrs) do
     attrs
-    |> Map.take(~w(protected_strengths intended_effect pending_question voice_exemplars protected_text style_preferences))
+    |> Map.take(
+      ~w(protected_strengths intended_effect pending_question voice_exemplars protected_text style_preferences)
+    )
     |> compact()
   end
 
@@ -971,12 +972,14 @@ defmodule FountWeb.WorkflowManagement do
 
   def money_units(max_microunits) when is_integer(max_microunits) and max_microunits >= 0 do
     whole = div(max_microunits, 1_000_000)
+
     fraction =
       max_microunits
       |> rem(1_000_000)
       |> Integer.to_string()
       |> String.pad_leading(6, "0")
       |> String.trim_trailing("0")
+
     if fraction == "", do: Integer.to_string(whole), else: "#{whole}.#{fraction}"
   end
 

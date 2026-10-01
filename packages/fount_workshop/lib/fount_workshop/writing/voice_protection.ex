@@ -28,8 +28,9 @@ defmodule FountWorkshop.Writing.VoiceProtection do
 
     with {:ok, resolved} <- Constraints.resolve(model, constraints),
          {:ok, resolved_pins} <- Constraints.resolve(model, pins),
-         :ok <- unique_constraint_ids(resolved ++ resolved_pins) do
-      {:ok, resolved ++ resolved_pins}
+         new_pins = Enum.reject(resolved_pins, &(&1 in resolved)),
+         :ok <- unique_constraint_ids(resolved ++ new_pins) do
+      {:ok, resolved ++ new_pins}
     end
   end
 

@@ -62,7 +62,6 @@ defmodule FountWeb.ProductionStore do
     )
   end
 
-
   def link_note_work(repo, attrs) do
     id = value(attrs, :id) || Fount.ID.v4()
 

@@ -58,7 +58,14 @@ defmodule FountWeb.ProjectContext do
   def source_token(_), do: "current"
 
   defp sources(owner, project, current) do
-    [%{token: "current", label: current_source_label(project), kind: :current, screenplay: current}]
+    [
+      %{
+        token: "current",
+        label: current_source_label(project),
+        kind: :current,
+        screenplay: current
+      }
+    ]
     |> maybe_working(owner, project)
     |> maybe_proposed(owner, project)
   end

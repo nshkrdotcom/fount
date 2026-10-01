@@ -8,7 +8,9 @@ defmodule FountWeb.AnalysisLive do
     case FountWeb.Store.run_access_by_task_key(Fount.Repo, owner, project_key, task_key) do
       {:ok, access} ->
         run_id = access["run_id"]
-        if connected?(socket), do: Phoenix.PubSub.subscribe(FountWeb.PubSub, FountWeb.RunEvents.topic(run_id))
+
+        if connected?(socket),
+          do: Phoenix.PubSub.subscribe(FountWeb.PubSub, FountWeb.RunEvents.topic(run_id))
 
         {:ok,
          socket
@@ -22,7 +24,8 @@ defmodule FountWeb.AnalysisLive do
          |> refresh()}
 
       _ ->
-        {:ok, socket |> put_flash(:error, "That analysis task is not available.") |> redirect(to: "/")}
+        {:ok,
+         socket |> put_flash(:error, "That analysis task is not available.") |> redirect(to: "/")}
     end
   end
 
@@ -55,8 +58,8 @@ defmodule FountWeb.AnalysisLive do
     end
   end
 
-  defp analysis_error(:not_found), do: "Saved analysis is no longer available for this task."
-  defp analysis_error(_), do: "Saved analysis could not be loaded. Manual reading and writing are unaffected."
+  defp analysis_error(_),
+    do: "Saved analysis could not be loaded. Manual reading and writing are unaffected."
 
   defp selection_params(params) do
     Map.take(params, ~w(packet left right target))
@@ -110,7 +113,8 @@ defmodule FountWeb.AnalysisLive do
     end
   end
 
-  defp evidence_href(project_key, task_key, _selected, _item), do: "/p/#{project_key}/source/#{task_key}"
+  defp evidence_href(project_key, task_key, _selected, _item),
+    do: "/p/#{project_key}/source/#{task_key}"
 
   defp evidence_focus_href(project_key, task_key, selected, item) do
     query =
@@ -181,7 +185,9 @@ defmodule FountWeb.AnalysisLive do
     ~H"""
     <main id="project-analysis" class="analysis-shell project-workspace">
       <FountWeb.CoreComponents.project_header
-        project={%{"key" => @project_key, "title" => @task_access["title"], "project_kind" => "screenplay"}}
+        project={
+          %{"key" => @project_key, "title" => @task_access["title"], "project_kind" => "screenplay"}
+        }
         section="work"
         view="reading"
         source_label="Current draft"
@@ -203,7 +209,10 @@ defmodule FountWeb.AnalysisLive do
           <div class="analysis-mast__title">
             <p class="eyebrow">Script analysis</p>
             <h1>{@dashboard.access["title"]}</h1>
-            <p><strong>{@task_access["display_label"] || "Saved task"}</strong> · saved evidence for this screenplay</p>
+            <p>
+              <strong>{@task_access["display_label"] || "Saved task"}</strong>
+              · saved evidence for this screenplay
+            </p>
           </div>
           <div class="analysis-mast__signals" aria-label="Evidence status">
             <FountWeb.CoreComponents.status_badge
@@ -215,13 +224,33 @@ defmodule FountWeb.AnalysisLive do
         </header>
 
         <section class="analysis-strip" aria-label="Analysis state">
-          <div><span class="micro-label">saved analysis</span><strong>{@dashboard.selected.stored_status || "not saved"}</strong></div>
-          <div><span class="micro-label">playbook</span><strong>{(@dashboard.selected.run && @dashboard.selected.run["playbook"]) || "—"}</strong></div>
-          <details class="technical-details"><summary>Technical details</summary>
+          <div>
+            <span class="micro-label">saved analysis</span><strong>{@dashboard.selected.stored_status ||
+              "not saved"}</strong>
+          </div>
+          <div>
+            <span class="micro-label">playbook</span><strong>{(@dashboard.selected.run &&
+                                                                 @dashboard.selected.run["playbook"]) ||
+              "—"}</strong>
+          </div>
+          <details class="technical-details">
+            <summary>Technical details</summary>
             <dl>
-              <div><dt>Report</dt><dd><code>{short(@dashboard.selected.packet && @dashboard.selected.packet["id"])}</code></dd></div>
-              <div><dt>Analysis run</dt><dd><code>{short(@dashboard.selected.run && @dashboard.selected.run["id"])}</code></dd></div>
-              <div><dt>Revision</dt><dd><code>{short(@dashboard.selected.run && @dashboard.selected.run["revision_id"])}</code></dd></div>
+              <div>
+                <dt>Report</dt><dd>
+                  <code>{short(@dashboard.selected.packet && @dashboard.selected.packet["id"])}</code>
+                </dd>
+              </div>
+              <div>
+                <dt>Analysis run</dt><dd>
+                  <code>{short(@dashboard.selected.run && @dashboard.selected.run["id"])}</code>
+                </dd>
+              </div>
+              <div>
+                <dt>Revision</dt><dd>
+                  <code>{short(@dashboard.selected.run && @dashboard.selected.run["revision_id"])}</code>
+                </dd>
+              </div>
             </dl>
           </details>
         </section>
@@ -252,7 +281,11 @@ defmodule FountWeb.AnalysisLive do
               <span>Saved analysis</span>
               <strong>{length(@dashboard.history)}</strong>
             </div>
-            <form action={"/p/#{@project_key}/analysis/#{@task_key}"} method="get" class="compact-form">
+            <form
+              action={"/p/#{@project_key}/analysis/#{@task_key}"}
+              method="get"
+              class="compact-form"
+            >
               <label for="analysis-packet">Packet</label>
               <select id="analysis-packet" name="packet">
                 <option
@@ -266,28 +299,31 @@ defmodule FountWeb.AnalysisLive do
               <button type="submit">Inspect</button>
             </form>
 
-            <details :if={@dashboard.selected.run} class="technical-details"><summary>Technical details</summary>
-            <dl class="identity-ledger">
-              <div>
-                <dt>Revision</dt><dd><code>{@dashboard.selected.run["revision_id"]}</code></dd>
-              </div>
-              <div>
-                <dt>Candidate</dt><dd>
-                  <code>{@dashboard.selected.run["candidate_id"] || "—"}</code>
-                </dd>
-              </div>
-              <div>
-                <dt>Session</dt><dd><code>{@dashboard.selected.run["session_id"] || "—"}</code></dd>
-              </div>
-              <div>
-                <dt>Task lineage</dt><dd>{lineage_label(@dashboard.selected.run["lineage_kind"])}</dd>
-              </div>
-              <div>
-                <dt>Output contract</dt><dd>
-                  {@dashboard.selected.run["output_contract_id"] || "legacy / unavailable"}
-                </dd>
-              </div>
-            </dl>
+            <details :if={@dashboard.selected.run} class="technical-details">
+              <summary>Technical details</summary>
+              <dl class="identity-ledger">
+                <div>
+                  <dt>Revision</dt><dd><code>{@dashboard.selected.run["revision_id"]}</code></dd>
+                </div>
+                <div>
+                  <dt>Candidate</dt><dd>
+                    <code>{@dashboard.selected.run["candidate_id"] || "—"}</code>
+                  </dd>
+                </div>
+                <div>
+                  <dt>Session</dt><dd><code>{@dashboard.selected.run["session_id"] || "—"}</code></dd>
+                </div>
+                <div>
+                  <dt>Task lineage</dt><dd>
+                    {lineage_label(@dashboard.selected.run["lineage_kind"])}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Output contract</dt><dd>
+                    {@dashboard.selected.run["output_contract_id"] || "legacy / unavailable"}
+                  </dd>
+                </div>
+              </dl>
             </details>
 
             <div class="rail-note">
@@ -539,7 +575,10 @@ defmodule FountWeb.AnalysisLive do
                   <li :for={event <- @dashboard.graph.events}>
                     <span>{event.order}</span>
                     <strong>{event.label}</strong>
-                    <small>{if event.evidence_ids == [], do: "no evidence references", else: "#{length(event.evidence_ids)} evidence reference(s)"} · {event.uncertainty || "uncertainty not recorded"}</small>
+                    <small>{if event.evidence_ids == [],
+                      do: "no evidence references",
+                      else: "#{length(event.evidence_ids)} evidence reference(s)"} · {event.uncertainty ||
+                      "uncertainty not recorded"}</small>
                   </li>
                 </ol>
                 <p :if={@dashboard.graph.events == []}>

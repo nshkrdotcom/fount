@@ -277,7 +277,7 @@ defmodule FountWeb.Phase05AuthoringIntegrationTest do
         "client_seq" => 2
       })
 
-    assert html =~ "No blocking source diagnostics"
+    assert html =~ "No blocking Fountain diagnostics"
     render_hook(view, "preview_source", %{"source" => invalid, "client_seq" => 1})
     refute render(view) =~ "unclosed_note"
   end
@@ -412,7 +412,7 @@ defmodule FountWeb.Phase05AuthoringIntegrationTest do
 
       assert render_hook(view, "structural_edit", %{
                "edit" => %{"kind" => kind, "target" => Fount.ID.v4(), "value" => value}
-             }) =~ "Authoring notice"
+             }) =~ "Writing notice"
     end
 
     {:ok, current} = Authoring.open_workspace("test-owner", access["project_id"])
@@ -449,7 +449,7 @@ defmodule FountWeb.Phase05AuthoringIntegrationTest do
 
     assert render_hook(view, "structural_edit", %{
              "edit" => %{"kind" => "delete_scene", "target" => new_scene.id}
-           }) =~ "Authoring notice"
+           }) =~ "Writing notice"
 
     refute has_element?(view, "option[value=move_element]")
     refute has_element?(view, "option[value=split_scene]")
@@ -499,7 +499,7 @@ defmodule FountWeb.Phase05AuthoringIntegrationTest do
     raw = workspace.draft["raw_source"] <> "\nAutosaved action.\n"
     render_hook(view, "preview_source", %{"source" => raw, "client_seq" => 1})
     send(view.pid, :autosave)
-    assert render(view) =~ "Draft synchronized"
+    assert render(view) =~ "Saved working draft"
     {:ok, saved} = AuthoringStore.get(Fount.Repo, "test-owner", workspace.draft["id"])
     assert saved["raw_source"] == raw
 
@@ -508,7 +508,7 @@ defmodule FountWeb.Phase05AuthoringIntegrationTest do
 
     render_hook(view, "preview_source", %{"source" => raw <> "\nChanged.\n", "client_seq" => 2})
     send(view.pid, :autosave)
-    assert render(view) =~ "save-failed"
+    assert render(view) =~ "Save failed · local text kept"
   end
 
   test "E01 persisted draft-created IDs survive source shifts and invalid recovery forks" do

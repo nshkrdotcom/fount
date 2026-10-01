@@ -4,7 +4,8 @@ defmodule FountWeb.UX01ArrivalWorkspaceIntegrationTest do
   alias Ecto.Adapters.SQL
   alias FountWeb.{Authoring, ExampleProject, Launch, ProjectContext, Store}
 
-  test "blank project opens real writing without creating a Run and saving does not advance canon", %{conn: conn} do
+  test "blank project opens real writing without creating a Run and saving does not advance canon",
+       %{conn: conn} do
     assert {:ok, %{project: project, screenplay: created}} =
              Launch.create_project("test-owner", %{
                "kind" => "blank",
@@ -18,7 +19,7 @@ defmodule FountWeb.UX01ArrivalWorkspaceIntegrationTest do
     assert {:ok, view, html} = live(conn, "/p/#{project["key"]}/write")
     assert html =~ "Writing"
     assert html =~ "Save working draft"
-    assert html =~ "Current screenplay"
+    assert html =~ "current screenplay"
 
     source = """
     Title: Untitled screenplay
@@ -49,7 +50,9 @@ defmodule FountWeb.UX01ArrivalWorkspaceIntegrationTest do
     MARA opens the window.
     """
 
-    assert {:ok, fountain_screenplay, fountain_notes} = Launch.preview_import(fountain, "open-window.fountain")
+    assert {:ok, fountain_screenplay, fountain_notes} =
+             Launch.preview_import(fountain, "open-window.fountain")
+
     assert fountain_notes["format"] == "fountain"
     assert length(Fount.Query.scenes(fountain_screenplay)) == 1
 
@@ -75,7 +78,9 @@ defmodule FountWeb.UX01ArrivalWorkspaceIntegrationTest do
     assert context.facts.scene_count == 3
   end
 
-  test "project routes remain owner-isolated and returning preferences are owner-bound", %{conn: conn} do
+  test "project routes remain owner-isolated and returning preferences are owner-bound", %{
+    conn: conn
+  } do
     assert {:ok, %{project: project}} =
              Launch.create_project("test-owner", %{
                "kind" => "blank",
@@ -87,13 +92,15 @@ defmodule FountWeb.UX01ArrivalWorkspaceIntegrationTest do
     assert prefs["last_view"] == "writing"
 
     outsider = Phoenix.ConnTest.init_test_session(conn, %{owner_id: "other-owner"})
-    assert {:error, {kind, %{to: "/"}}} = live(outsider, "/p/#{project["key"]}")
+    assert {:error, {kind, %{to: "/login"}}} = live(outsider, "/p/#{project["key"]}")
     assert kind in [:redirect, :live_redirect]
 
     assert Store.owner_preferences(Fount.Repo, "other-owner") == %{}
   end
 
-  test "task scope remains operable through named task Sources and binds the exact task base", %{conn: conn} do
+  test "task scope remains operable through named task Sources and binds the exact task base", %{
+    conn: conn
+  } do
     assert {:ok, %{run: run, access: access}} =
              Launch.create("test-owner", %{
                "title" => "Scoped work",
@@ -112,13 +119,14 @@ defmodule FountWeb.UX01ArrivalWorkspaceIntegrationTest do
       |> element("form[phx-submit='save_workflow_scope']")
       |> render_submit(%{"scope" => %{"whole_screenplay" => "true"}})
 
-    assert html =~ "Task scope saved against this task's exact base screenplay."
+    assert html =~ "Task scope saved against this task&#39;s exact base screenplay."
     assert {:ok, saved} = Store.workflow_selection(Fount.Repo, "test-owner", run["id"])
     assert saved["selection"] == %{"whole_screenplay" => true}
     assert saved["base_revision_id"] == get_in(run, ["plan", "base_revision_id"])
   end
 
-  test "existing durable work receives a named task reference while exact run identity stays internal", %{conn: conn} do
+  test "existing durable work receives a named task reference while exact run identity stays internal",
+       %{conn: conn} do
     assert {:ok, %{run: run, access: access}} =
              Launch.create("test-owner", %{
                "title" => "Named work",
@@ -132,7 +140,10 @@ defmodule FountWeb.UX01ArrivalWorkspaceIntegrationTest do
     refute access["display_key"] == run["id"]
 
     conn = FountWeb.ConnCase.login(conn)
-    assert {:ok, _view, html} = live(conn, "/p/#{access["key"]}/activity/#{access["display_key"]}")
+
+    assert {:ok, _view, html} =
+             live(conn, "/p/#{access["key"]}/activity/#{access["display_key"]}")
+
     assert html =~ "Task 1"
     assert html =~ "Technical details"
   end

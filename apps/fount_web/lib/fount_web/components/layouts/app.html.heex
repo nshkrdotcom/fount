@@ -1,0 +1,18 @@
+<div class="workspace-notices">
+  <div
+    :for={kind <- [:error, :info]}
+    :if={Phoenix.Flash.get(@flash, kind)}
+    id={"flash-#{kind}"}
+    class={"ui-alert ui-alert--#{kind}"}
+    role={if kind == :error, do: "alert", else: "status"}
+  >
+    <span>{Phoenix.Flash.get(@flash, kind)}</span>
+    <button
+      type="button"
+      phx-click="lv:clear-flash"
+      phx-value-key={kind}
+      aria-label="Dismiss notification"
+    >Dismiss</button>
+  </div>
+</div>
+{@inner_content}

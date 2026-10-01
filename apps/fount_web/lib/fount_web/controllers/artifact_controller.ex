@@ -4,7 +4,8 @@ defmodule FountWeb.ArtifactController do
   def show(conn, %{"key" => key, "task_key" => task_key, "delivery_ref" => delivery_ref}) do
     owner = conn.assigns.current_owner
 
-    with {:ok, delivery} <- FountWeb.Store.delivery_by_ref(Fount.Repo, owner, key, task_key, delivery_ref),
+    with {:ok, delivery} <-
+           FountWeb.Store.delivery_by_ref(Fount.Repo, owner, key, task_key, delivery_ref),
          true <- delivery["state"] == "ready" or {:error, :not_ready},
          {:ok, path} <- safe_artifact(delivery["output_location"]),
          {:ok, bytes} <- File.read(path),
@@ -24,7 +25,8 @@ defmodule FountWeb.ArtifactController do
   def preview(conn, %{"key" => key, "task_key" => task_key, "delivery_ref" => delivery_ref}) do
     owner = conn.assigns.current_owner
 
-    with {:ok, delivery} <- FountWeb.Store.delivery_by_ref(Fount.Repo, owner, key, task_key, delivery_ref),
+    with {:ok, delivery} <-
+           FountWeb.Store.delivery_by_ref(Fount.Repo, owner, key, task_key, delivery_ref),
          true <- delivery["state"] == "ready" or {:error, :not_ready},
          true <- delivery["format"] in @preview_formats or {:error, :unsupported_preview},
          {:ok, path} <- safe_artifact(delivery["output_location"]),

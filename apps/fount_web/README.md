@@ -50,13 +50,13 @@ The Hex and browser dependency locks were resolved during Phase 06 runtime QC an
 
 The signed session contains only the configured owner id after a constant-time token check. Request parameters never construct `FountRun.ActorContext` or a principal. Every Run route is first resolved through `fount_web_runs`/`fount_web_projects` for the authenticated owner; the host then builds the trusted context server-side.
 
-- `/projects/new` — bounded Fountain/FDX intake and deterministic Phase 06 journey selection.
-- `/runs/:id/setup` — gates/completion with an explicit warning that accepted pages may advance canon.
-- `/runs/:id/timeline` — durable PostgreSQL progress plus pause/resume/stop and unknown/partial resource visibility.
-- `/runs/:id/decisions` — exact decision id/context fingerprint/plan version/policy version submission; stale forms reload durable state.
-- `/runs/:id/review` — actual canonical base and stored candidate pages, structural diff, and persisted checks.
-- `/runs/:id/exports` — standard bundle plus optional PDF/table read; format failures remain visible and independently retryable.
-- `/artifacts/:run_id/:delivery_id` — owner-authorized, checksum-verified, server-rooted downloads. Browser-supplied file paths are never accepted.
+- `/` and `/new` — arrival desk, Fountain/FDX import, blank writing and LAST RETURN; these actions create no task.
+- `/p/:key` and `/p/:key/write` — owner-bound current/working pages and manual authoring.
+- `/p/:key/work`, `/changes`, `/notes`, and the named More destinations — project workspace navigation.
+- `/p/:key/activity/:task_key/setup` and `/decisions` — existing durable task settings and exact decisions.
+- `/p/:key/source/:task_key` — exact task-bound sources and scope selection.
+- `/p/:key/changes/:task_key` and `/exports/:task_key` — existing review and delivery paths.
+- `/p/:key/exports/:task_key/:delivery_ref/download` — owner-authorized, checksum-verified downloads. Browser file paths are never accepted.
 
 The LiveView subscribes to Run worker telemetry only as a wakeup. A periodic `FountRun.progress/3` reload is the correctness path, so reconnect/socket loss does not own state.
 
@@ -93,7 +93,7 @@ Project creation is handled by the authenticated LiveView desk and never uses a 
 
 ## Phase 04 read-only screenplay viewer
 
-`/runs/:id/viewer` is an owner-authorized reading workspace over persistent `Fount.Screenplay` revisions. It resolves the Run first, then offers only the Run-bound base, candidates referenced by durable Run state, and accepted revisions for the same Run/screenplay. Query parameters never act as arbitrary revision IDs. Candidate views are labeled non-canonical; choosing a candidate does not submit review or approval.
+`/p/:key/source/:task_key` is an owner-authorized reading workspace over persistent `Fount.Screenplay` revisions. It resolves the Run first, then offers only the Run-bound base, candidates referenced by durable Run state, and accepted revisions for the same Run/screenplay. Query parameters never act as arbitrary revision IDs. Candidate views are labeled non-canonical; choosing a candidate does not submit review or approval.
 
 The viewer uses reusable `FountWeb.CoreComponents`, a pure HEEx screenplay renderer, the existing deterministic Core character/dialogue/location analyzers, stable scene anchors, and `Fount.Screenplay.diff/2`. The existing review page reuses the same diff component without changing its approval bindings. CSS remains the existing plain asset pipeline and includes light/dark, narrow-layout and reduced-motion behavior. Any page or duration number is explicitly labeled as a derived reading approximation rather than screenplay-layout truth.
 
@@ -111,7 +111,7 @@ The output directory must be new and outside the repository. The runner executes
 
 ## Phase 05 interactive authoring
 
-`/runs/:id/edit` is the owner-authorized authoring surface over the current accepted screenplay. The textarea is the working Fountain source and is never a canonical store. Preview reconciliation uses `Fount.Screenplay.SourceReconciler` to reparse against the accepted model, preserving screenplay identity and unaffected source-backed IDs while reporting fidelity. Invalid/intermediate Fountain remains durable raw draft text and the preview stays on the last valid model.
+`/p/:key/write` is the owner-authorized authoring surface over the current accepted screenplay. The textarea is the working Fountain source and is never a canonical store. Preview reconciliation uses `Fount.Screenplay.SourceReconciler` to reparse against the accepted model, preserving screenplay identity and unaffected source-backed IDs while reporting fidelity. Invalid/intermediate Fountain remains durable raw draft text and the preview stays on the last valid model.
 
 Host recovery state is stored in `fount_web_drafts` and bounded `fount_web_draft_history`. Draft saves are optimistic by version; divergent stale saves produce a recoverable conflict rather than last-write-wins. Identical retry acknowledgements are idempotent. The defaults are configurable through `config :fount_web, :authoring`: 60-second autosave, 30 history snapshots, 12 active recovery drafts per project/owner, and a 1 MiB raw source limit. No screenplay body is put in browser shared storage.
 
@@ -121,7 +121,7 @@ Structural commands expose only existing validated operations: text replacement,
 
 ## Phase 06 saved-intelligence console and visual system
 
-`/runs/:id/analysis` is an owner-authorized, read-only projection over already persisted Run and Intelligence evidence. It resolves the Run through the host ownership mapping, then admits saved analysis rows only through recorded Run packet/session/candidate identities plus an explicitly labeled legacy fallback for un-sessioned/un-candidated packets on revisions already bound to that Run. It never scans arbitrary screenplay revisions into the UI and never calls Workshop, Inference, Observe, System One SDK, or a provider while loading, reconnecting, navigating evidence, zooming the graph, or comparing packets.
+`/p/:key/analysis/:task_key` is an owner-authorized, read-only projection over already persisted Run and Intelligence evidence. It resolves the Run through the host ownership mapping, then admits saved analysis rows only through recorded Run packet/session/candidate identities plus an explicitly labeled legacy fallback for un-sessioned/un-candidated packets on revisions already bound to that Run. It never scans arbitrary screenplay revisions into the UI and never calls Workshop, Inference, Observe, System One SDK, or a provider while loading, reconnecting, navigating evidence, zooming the graph, or comparing packets.
 
 The console separates required Run checks, Workshop application checks, and semantic advisory findings. Packet status is derived from stored evidence (`complete`, `partial`, `failed`, `not_run`) and becomes `stale` when its persisted revision differs from the current review target. A `running` analysis row without a completed saved packet remains `not_run`. The Phase 05 editor independently labels unsaved local text as unanalyzed rather than visually rebinding an older packet to changed source.
 

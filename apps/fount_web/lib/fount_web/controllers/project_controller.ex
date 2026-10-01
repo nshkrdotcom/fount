@@ -6,16 +6,35 @@ defmodule FountWeb.ProjectController do
   @doc "Controller fallback for project creation; the primary UX is ProjectLive at /new."
   def create(conn, %{"project" => attrs} = params) when is_map(attrs) do
     with {:ok, attrs} <- source(attrs, params["screenplay"]),
-         attrs <- Map.put_new(attrs, "kind", if(Map.get(attrs, "source", "") == "", do: "blank", else: "import")),
-         {:ok, %{project: project}} <- FountWeb.Launch.create_project(conn.assigns.current_owner, attrs) do
-      destination = if attrs["kind"] == "blank", do: "/p/#{project["key"]}/write", else: "/p/#{project["key"]}"
+         attrs <-
+           Map.put_new(
+             attrs,
+             "kind",
+             if(Map.get(attrs, "source", "") == "", do: "blank", else: "import")
+           ),
+         {:ok, %{project: project}} <-
+           FountWeb.Launch.create_project(conn.assigns.current_owner, attrs) do
+      destination =
+        if attrs["kind"] == "blank",
+          do: "/p/#{project["key"]}/write",
+          else: "/p/#{project["key"]}"
+
       redirect(conn, to: destination)
     else
-      {:error, :upload_too_large} -> reject(conn, "The screenplay upload must be at most 1 MiB.")
-      {:error, :upload_unreadable} -> reject(conn, "The screenplay upload could not be read.")
-      {:error, :unsupported_screenplay_format} -> reject(conn, "Choose a Fountain (.fountain) or Final Draft (.fdx) file.")
-      {:error, {:invalid_fdx, _reason}} -> reject(conn, "This Final Draft file could not be parsed. The project was not created.")
-      {:error, _reason} -> reject(conn, "The screenplay could not be opened. Your source file was not changed.")
+      {:error, :upload_too_large} ->
+        reject(conn, "The screenplay upload must be at most 1 MiB.")
+
+      {:error, :upload_unreadable} ->
+        reject(conn, "The screenplay upload could not be read.")
+
+      {:error, :unsupported_screenplay_format} ->
+        reject(conn, "Choose a Fountain (.fountain) or Final Draft (.fdx) file.")
+
+      {:error, {:invalid_fdx, _reason}} ->
+        reject(conn, "This Final Draft file could not be parsed. The project was not created.")
+
+      {:error, _reason} ->
+        reject(conn, "The screenplay could not be opened. Your source file was not changed.")
     end
   end
 

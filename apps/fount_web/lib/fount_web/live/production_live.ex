@@ -39,7 +39,8 @@ defmodule FountWeb.ProductionLive do
          |> assign(:error, nil)}
 
       _ ->
-        {:ok, socket |> put_flash(:error, "That task's tools are not available.") |> redirect(to: "/")}
+        {:ok,
+         socket |> put_flash(:error, "That task's tools are not available.") |> redirect(to: "/")}
     end
   end
 
@@ -99,7 +100,8 @@ defmodule FountWeb.ProductionLive do
     {:noreply,
      push_patch(socket,
        to:
-         "/p/#{socket.assigns.project_key}/tools/#{socket.assigns.task_key}?" <> URI.encode_query(%{"view" => token, "section" => socket.assigns.section})
+         "/p/#{socket.assigns.project_key}/tools/#{socket.assigns.task_key}?" <>
+           URI.encode_query(%{"view" => token, "section" => socket.assigns.section})
      )}
   end
 
@@ -109,7 +111,8 @@ defmodule FountWeb.ProductionLive do
     {:noreply,
      push_patch(socket,
        to:
-         "/p/#{socket.assigns.project_key}/tools/#{socket.assigns.task_key}?" <> URI.encode_query(%{"view" => socket.assigns.view_token, "section" => section})
+         "/p/#{socket.assigns.project_key}/tools/#{socket.assigns.task_key}?" <>
+           URI.encode_query(%{"view" => socket.assigns.view_token, "section" => section})
      )}
   end
 
@@ -146,7 +149,7 @@ defmodule FountWeb.ProductionLive do
            workspace.screenplay.revision.id,
            attrs
          ) do
-      {:ok, %{candidate: candidate}} ->
+      {:ok, %{candidate: _candidate}} ->
         {:noreply,
          socket
          |> put_flash(
@@ -171,7 +174,7 @@ defmodule FountWeb.ProductionLive do
            workspace.screenplay.revision.id,
            note_id
          ) do
-      {:ok, %{candidate: candidate}} ->
+      {:ok, %{candidate: _candidate}} ->
         {:noreply,
          socket
          |> put_flash(
@@ -197,7 +200,7 @@ defmodule FountWeb.ProductionLive do
            Map.get(attrs, "character_id", ""),
            Map.get(attrs, "name", "")
          ) do
-      {:ok, %{candidate: candidate, plan: plan}} ->
+      {:ok, %{candidate: _candidate, plan: plan}} ->
         {:noreply,
          socket
          |> put_flash(
@@ -233,7 +236,8 @@ defmodule FountWeb.ProductionLive do
          )
          |> push_patch(
            to:
-             "/p/#{socket.assigns.project_key}/tools/#{socket.assigns.task_key}?" <> URI.encode_query(%{"view" => accepted_token, "section" => socket.assigns.section})
+             "/p/#{socket.assigns.project_key}/tools/#{socket.assigns.task_key}?" <>
+               URI.encode_query(%{"view" => accepted_token, "section" => socket.assigns.section})
          )}
 
       {:error, reason} ->
@@ -435,15 +439,18 @@ defmodule FountWeb.ProductionLive do
     "/p/#{project_key}/source/#{task_key}?" <> URI.encode_query(params)
   end
 
-  defp maybe_scene(params, value) when is_integer(value), do: Map.put(params, "scene", Integer.to_string(value))
+  defp maybe_scene(params, value) when is_integer(value),
+    do: Map.put(params, "scene", Integer.to_string(value))
+
   defp maybe_scene(params, _), do: params
 
   defp tool_error(:not_found), do: "The saved item is no longer available."
   defp tool_error(:conflict), do: "The saved item changed. Reload it before trying again."
-  defp tool_error(:stale_revision), do: "The screenplay changed; reopen the current source before saving."
+
+  defp tool_error(:stale_revision),
+    do: "The screenplay changed; reopen the current source before saving."
+
   defp tool_error(_), do: "The action could not be completed. No accepted screenplay was changed."
-
-
 
   defp read_ref(reads, selected) do
     case Enum.find_index(reads, &(&1["id"] == selected["id"])) do
@@ -451,13 +458,16 @@ defmodule FountWeb.ProductionLive do
       index -> "read-#{index + 1}"
     end
   end
+
   @impl true
   def render(assigns) do
     ~H"""
     <main class="production-shell">
       <fieldset class="production-connection" disabled={not connected?(@socket)}>
         <FountWeb.CoreComponents.project_header
-          project={%{"key" => @project_key, "title" => @task_access["title"], "project_kind" => "screenplay"}}
+          project={
+            %{"key" => @project_key, "title" => @task_access["title"], "project_kind" => "screenplay"}
+          }
           section="notes"
           view="reading"
           source_label="Task source"
@@ -478,9 +488,16 @@ defmodule FountWeb.ProductionLive do
             <div>
               <p class="eyebrow">Screenplay tools</p>
               <h1>{@workspace.project["title"]}</h1>
-              <p><strong>{@task_access["display_label"] || "Saved task"}</strong> · {@workspace.selection.label}</p>
-              <details class="technical-details"><summary>Technical details</summary>
-                <p>Screenplay <code>{@workspace.screenplay.id}</code> · revision <code>{@workspace.screenplay.revision.id}</code></p>
+              <p>
+                <strong>{@task_access["display_label"] || "Saved task"}</strong>
+                · {@workspace.selection.label}
+              </p>
+              <details class="technical-details">
+                <summary>Technical details</summary>
+                <p>
+                  Screenplay <code>{@workspace.screenplay.id}</code>
+                  · revision <code>{@workspace.screenplay.revision.id}</code>
+                </p>
               </details>
               <p :if={!@workspace.editable?} class="warning">
                 This selected revision is inspection-only. Note/cast changes require the current accepted head.
@@ -703,7 +720,9 @@ defmodule FountWeb.ProductionLive do
                         {entry.parsed_context}
                       </td><td>{entry.parsed_time}</td>
                       <td>
-                        <a href={source_link(@project_key, @task_key, @view_token, "scene-#{entry.scene_id}")}>Screenplay version</a>
+                        <a href={
+                          source_link(@project_key, @task_key, @view_token, "scene-#{entry.scene_id}")
+                        }>Screenplay version</a>
                       </td>
                     </tr>
                   </tbody>
@@ -754,7 +773,8 @@ defmodule FountWeb.ProductionLive do
                 </label>
                 <details class="technical-details">
                   <summary>Technical target override</summary>
-                  <label>Exact internal target
+                  <label>
+                    Exact internal target
                     <input name="note[target_override]" placeholder="element:internal-id" />
                   </label>
                 </details>
@@ -777,12 +797,18 @@ defmodule FountWeb.ProductionLive do
                 data-note-state={note.target_state}
               >
                 <header>
-                  <h3>{note.title || "Untitled note"}</h3><span class="status-badge status-badge--neutral">{note.target_state |> to_string() |> String.replace("_", " ")}</span>
+                  <h3>{note.title || "Untitled note"}</h3><span class="status-badge status-badge--neutral">{note.target_state
+                  |> to_string()
+                  |> String.replace("_", " ")}</span>
                 </header>
                 <p>{note.text}</p>
                 <p>Target: {note.target["kind"] |> to_string() |> String.replace("_", " ")}</p>
-                <p>Producer: {note.provenance["producer"] || "unknown"} · exact source is recorded.</p>
-                <details class="technical-details"><summary>Technical source binding</summary><code>{note.bound_revision_id}</code></details>
+                <p>
+                  Producer: {note.provenance["producer"] || "unknown"} · exact source is recorded.
+                </p>
+                <details class="technical-details">
+                  <summary>Technical source binding</summary><code>{note.bound_revision_id}</code>
+                </details>
                 <form :if={@workspace.editable?} phx-submit="save_note" class="stack">
                   <input type="hidden" name="note[id]" value={note.id} />
                   <label>Title <input name="note[title]" value={note.title} /></label>
@@ -803,7 +829,8 @@ defmodule FountWeb.ProductionLive do
                   </label>
                   <details class="technical-details">
                     <summary>Technical target override</summary>
-                    <label>Exact internal target
+                    <label>
+                      Exact internal target
                       <input name="note[target_override]" placeholder="element:internal-id" />
                     </label>
                   </details>
@@ -829,7 +856,10 @@ defmodule FountWeb.ProductionLive do
                   <summary>{annotation.namespace} · {annotation.kind}</summary>
                   <p>
                     Saved measured annotation
-                    <details class="technical-details"><summary>Technical source binding</summary><code>{annotation.id}</code> · <code>{annotation.source_revision}</code></details>
+                    <details class="technical-details">
+                      <summary>Technical source binding</summary><code>{annotation.id}</code>
+                      · <code>{annotation.source_revision}</code>
+                    </details>
                   </p>
                   <p>
                     Producer: {get_in(annotation, [:provenance, "producer"]) ||
@@ -958,7 +988,10 @@ defmodule FountWeb.ProductionLive do
                 </li>
               </ul>
               <a href={"/p/#{@project_key}/tools/#{@task_key}/table-reads/#{read_ref(@table_reads, @selected_read)}/export.json"}>Export saved read JSON</a>
-              <details class="technical-details"><summary>Technical details</summary><code>{@selected_read["id"]}</code> · packet <code>{@selected_read["packet_id"]}</code></details>
+              <details class="technical-details">
+                <summary>Technical details</summary><code>{@selected_read["id"]}</code>
+                · packet <code>{@selected_read["packet_id"]}</code>
+              </details>
             </article>
           </section>
 

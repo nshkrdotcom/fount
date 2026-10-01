@@ -83,7 +83,6 @@ defmodule FountWeb.Store do
     end
   end
 
-
   def update_project(repo, owner, project_id, attrs)
       when is_binary(owner) and is_binary(project_id) and is_map(attrs) do
     title = value(attrs, :title)
@@ -202,7 +201,10 @@ defmodule FountWeb.Store do
         end
 
         display_key = explicit_display_key || next_task_key(repo, owner, project_id)
-        display_label = value(attrs, :display_label) || "Task " <> String.replace_prefix(display_key, "task-", "")
+
+        display_label =
+          value(attrs, :display_label) ||
+            "Task " <> String.replace_prefix(display_key, "task-", "")
 
         values = [
           fetch!(attrs, :run_id),
@@ -422,27 +424,29 @@ defmodule FountWeb.Store do
 
   @doc "Resolves an owner-bound delivery through its project/task and stable ordinal display reference."
   def delivery_by_ref(repo, owner, project_key, task_key, "delivery-" <> ordinal_text) do
-    with {ordinal, ""} when ordinal > 0 <- Integer.parse(ordinal_text) do
-      case query(
-             repo,
-             """
-             SELECT ranked.* FROM (
-               SELECT d.*,row_number() OVER (ORDER BY d.inserted_at,d.id)::bigint AS display_ordinal
-               FROM fount_run_deliveries d
-               JOIN fount_web_runs wr ON wr.run_id=d.run_id
-               JOIN fount_web_projects p ON p.id=wr.project_id
-               WHERE wr.owner_id=$1 AND p.owner_id=$1 AND p.key=$2 AND wr.display_key=$3
-             ) ranked
-             WHERE ranked.display_ordinal=$4
-             """,
-             [owner, project_key, task_key, ordinal]
-           ) do
-        [row] -> {:ok, row}
-        [] -> {:error, :not_found}
-        {:error, _} = error -> error
-      end
-    else
-      _ -> {:error, :not_found}
+    case Integer.parse(ordinal_text) do
+      {ordinal, ""} when ordinal > 0 ->
+        case query(
+               repo,
+               """
+               SELECT ranked.* FROM (
+                 SELECT d.*,row_number() OVER (ORDER BY d.inserted_at,d.id)::bigint AS display_ordinal
+                 FROM fount_run_deliveries d
+                 JOIN fount_web_runs wr ON wr.run_id=d.run_id
+                 JOIN fount_web_projects p ON p.id=wr.project_id
+                 WHERE wr.owner_id=$1 AND p.owner_id=$1 AND p.key=$2 AND wr.display_key=$3
+               ) ranked
+               WHERE ranked.display_ordinal=$4
+               """,
+               [owner, project_key, task_key, ordinal]
+             ) do
+          [row] -> {:ok, row}
+          [] -> {:error, :not_found}
+          {:error, _} = error -> error
+        end
+
+      _ ->
+        {:error, :not_found}
     end
   end
 
@@ -468,7 +472,6 @@ defmodule FountWeb.Store do
       {:error, _} = error -> error
     end
   end
-
 
   defp next_task_key(repo, owner, project_id) do
     count =

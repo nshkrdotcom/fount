@@ -11,7 +11,8 @@ defmodule FountWeb.TaskSourceLive do
          {:ok, context} <- FountWeb.Actors.owner_context(owner, access["screenplay_id"]),
          {:ok, run} <- FountRun.get_run(Fount.Repo, access["run_id"], context),
          {:ok, progress} <- FountRun.progress(Fount.Repo, access["run_id"], context),
-         {:ok, workspace} <- ScreenplayViews.load(Fount.Repo, access, run, progress, params["view"]),
+         {:ok, workspace} <-
+           ScreenplayViews.load(Fount.Repo, access, run, progress, nil),
          {:ok, base_screenplay} <- load_base_screenplay(run, access) do
       index = ScreenplayIndex.build(workspace.screenplay)
       {workflow_selection, scope_error} = load_workflow_selection(owner, run, context)
@@ -62,7 +63,8 @@ defmodule FountWeb.TaskSourceLive do
            |> assign(:error, nil)}
 
         {:error, _} ->
-          {:noreply, assign(socket, :error, "That saved source is stale or no longer bound to this task.")}
+          {:noreply,
+           assign(socket, :error, "That saved source is stale or no longer bound to this task.")}
       end
     else
       {:noreply, socket}
@@ -88,10 +90,16 @@ defmodule FountWeb.TaskSourceLive do
        |> assign(:error, nil)}
     else
       {:error, :invalid_scope_selection} ->
-        {:noreply, assign(socket, :error, "Choose the whole screenplay or at least one scene or element.")}
+        {:noreply,
+         assign(socket, :error, "Choose the whole screenplay or at least one scene or element.")}
 
       {:error, _} ->
-        {:noreply, assign(socket, :error, "That scope no longer matches this task's base screenplay. Choose it again.")}
+        {:noreply,
+         assign(
+           socket,
+           :error,
+           "That scope no longer matches this task's base screenplay. Choose it again."
+         )}
     end
   end
 
@@ -109,9 +117,17 @@ defmodule FountWeb.TaskSourceLive do
       {:ok, saved} ->
         {saved, nil}
 
-      {:error, reason} when reason in [:selection_screenplay_stale, :selection_base_stale, :selection_stale, :invalid_scope_selection] ->
+      {:error, reason}
+      when reason in [
+             :selection_screenplay_stale,
+             :selection_base_stale,
+             :selection_stale,
+             :invalid_scope_selection
+           ] ->
         _ = Store.delete_workflow_selection(Fount.Repo, owner, run["id"])
-        {nil, "Saved task scope is stale. Choose material again from this task's exact base screenplay."}
+
+        {nil,
+         "Saved task scope is stale. Choose material again from this task's exact base screenplay."}
 
       {:error, _} ->
         {nil, nil}
@@ -137,16 +153,32 @@ defmodule FountWeb.TaskSourceLive do
   end
 
   defp scope_element_label(element, ordinal) do
-    text = element.text |> to_string() |> String.replace(~r/\s+/u, " ") |> String.trim() |> String.slice(0, 68)
+    text =
+      element.text
+      |> to_string()
+      |> String.replace(~r/\s+/u, " ")
+      |> String.trim()
+      |> String.slice(0, 68)
+
     type = element.type |> to_string() |> String.replace("_", " ")
-    if text == "", do: "Element #{ordinal} · #{type}", else: "Element #{ordinal} · #{type} · #{text}"
+
+    if text == "",
+      do: "Element #{ordinal} · #{type}",
+      else: "Element #{ordinal} · #{type} · #{text}"
   end
 
   defp selected_scene_id(_scenes, nil), do: nil
+
   defp selected_scene_id(scenes, value) when is_binary(value) do
     case Integer.parse(value) do
-      {number, ""} -> case Enum.find(scenes, &(&1.ordinal == number)) do nil -> nil; scene -> scene.id end
-      _ -> nil
+      {number, ""} ->
+        case Enum.find(scenes, &(&1.ordinal == number)) do
+          nil -> nil
+          scene -> scene.id
+        end
+
+      _ ->
+        nil
     end
   end
 
@@ -154,7 +186,10 @@ defmodule FountWeb.TaskSourceLive do
   defp display_label(%{display_ref: "current"}), do: "Current screenplay"
   defp display_label(%{display_ref: "proposal-" <> n}), do: "Proposal #{n}"
   defp display_label(%{display_ref: "accepted-" <> n}), do: "Accepted result #{n}"
-  defp display_label(%{display_ref: "evidence-" <> n, label: label}), do: "Evidence #{n} · #{String.replace_prefix(label, "Analysis evidence · ", "")}"
+
+  defp display_label(%{display_ref: "evidence-" <> n, label: label}),
+    do: "Evidence #{n} · #{String.replace_prefix(label, "Analysis evidence · ", "")}"
+
   defp display_label(option), do: option.label || "Saved source"
 
   defp source_path(project_key, task_key, option) do
@@ -167,9 +202,16 @@ defmodule FountWeb.TaskSourceLive do
     assigns = assign(assigns, :selected, selected)
 
     ~H"""
-    <main class="project-workspace reading-workspace task-source-workspace" phx-hook="SceneNavigator" data-project-key={@project_key}>
+    <main
+      id="task-source-workspace"
+      class="project-workspace reading-workspace task-source-workspace"
+      phx-hook="SceneNavigator"
+      data-project-key={@project_key}
+    >
       <FountWeb.CoreComponents.project_header
-        project={%{"key" => @project_key, "title" => @access["title"], "project_kind" => "screenplay"}}
+        project={
+          %{"key" => @project_key, "title" => @access["title"], "project_kind" => "screenplay"}
+        }
         section="work"
         view="reading"
         source_label={display_label(@selected)}
@@ -183,12 +225,20 @@ defmodule FountWeb.TaskSourceLive do
         <a href={"/p/#{@project_key}/source/#{@task_key}"} aria-current="page">Sources</a>
       </nav>
 
-      <FountWeb.CoreComponents.alert :if={@error} kind="warning" title="Source notice">{@error}</FountWeb.CoreComponents.alert>
-      <FountWeb.CoreComponents.alert :if={@scope_error} kind="warning" title="Task scope">{@scope_error}</FountWeb.CoreComponents.alert>
+      <FountWeb.CoreComponents.alert :if={@error} kind="warning" title="Source notice">
+        {@error}
+      </FountWeb.CoreComponents.alert>
+      <FountWeb.CoreComponents.alert :if={@scope_error} kind="warning" title="Task scope">
+        {@scope_error}
+      </FountWeb.CoreComponents.alert>
       <p :if={@scope_notice} class="save-state" role="status">{@scope_notice}</p>
 
       <section class="script-context">
-        <div><h1>{@access["title"]}</h1><p><strong>{display_label(@selected)}</strong> · exact saved task source</p></div>
+        <div>
+          <h1>{@access["title"]}</h1><p>
+            <strong>{display_label(@selected)}</strong> · exact saved task source
+          </p>
+        </div>
         <div class="named-source-picker" aria-label="Task source">
           <span>Source</span>
           <a
@@ -204,7 +254,9 @@ defmodule FountWeb.TaskSourceLive do
         title="Task scope"
         summary="Choose the exact screenplay material used by this saved task"
       >
-        <p>Scope is saved against this task's base screenplay. Reading another saved source does not change it.</p>
+        <p>
+          Scope is saved against this task's base screenplay. Reading another saved source does not change it.
+        </p>
         <form phx-submit="save_workflow_scope" class="scope-picker named-scope-picker">
           <label class="scope-whole">
             <input
@@ -254,7 +306,9 @@ defmodule FountWeb.TaskSourceLive do
 
       <div class="reader-layout">
         <aside class="reader-outline" aria-label="Scene outline">
-          <div class="reader-outline__title"><strong>Scenes</strong><span>{length(@index.scenes)}</span></div>
+          <div class="reader-outline__title">
+            <strong>Scenes</strong><span>{length(@index.scenes)}</span>
+          </div>
           <ol id="scene-outline">
             <li :for={scene <- @index.scenes}>
               <a
@@ -266,17 +320,28 @@ defmodule FountWeb.TaskSourceLive do
           </ol>
         </aside>
         <section class="reader-paper" aria-label="Saved task screenplay source">
-          <div class="reader-paper__label"><span>Responsive task source</span><a href="/help#sources">Source labels</a></div>
-          <FountWeb.Components.ScreenplayRenderer.screenplay screenplay={@workspace.screenplay} selected_scene_id={@selected_scene_id} />
+          <div class="reader-paper__label">
+            <span>Responsive task source</span><a href="/help#sources">Source labels</a>
+          </div>
+          <FountWeb.Components.ScreenplayRenderer.screenplay
+            screenplay={@workspace.screenplay}
+            selected_scene_id={@selected_scene_id}
+          />
         </section>
       </div>
 
       <details class="technical-details">
         <summary>Technical details</summary>
         <dl>
-          <div><dt>Run identity</dt><dd><code>{@run["id"]}</code></dd></div>
-          <div><dt>Revision identity</dt><dd><code>{@workspace.screenplay.revision.id}</code></dd></div>
-          <div><dt>Internal source token</dt><dd><code>{@selected.token}</code></dd></div>
+          <div>
+            <dt>Run identity</dt><dd><code>{@run["id"]}</code></dd>
+          </div>
+          <div>
+            <dt>Revision identity</dt><dd><code>{@workspace.screenplay.revision.id}</code></dd>
+          </div>
+          <div>
+            <dt>Internal source token</dt><dd><code>{@selected.token}</code></dd>
+          </div>
         </dl>
       </details>
     </main>

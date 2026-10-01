@@ -21,7 +21,7 @@ defmodule FountWeb do
 
   def live_view do
     quote do
-      use Phoenix.LiveView
+      use Phoenix.LiveView, layout: {FountWeb.Layouts, :app}
       import Phoenix.Component
       unquote(verified_routes())
     end

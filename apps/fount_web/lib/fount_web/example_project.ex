@@ -90,10 +90,25 @@ defmodule FountWeb.ExampleProject do
 
   def checklist do
     [
-      %{title: "Read the first exchange", detail: "Open Scene 1 and read Mara's last line. No answer is required."},
-      %{title: "See the source labels", detail: "Current, working and proposed pages remain distinct. Opening a source does not make it current."},
-      %{title: "Open About", detail: "The Script facts are computed from the actual persisted example, not typed demo counters."},
-      %{title: "Continue later", detail: "The prepared dialogue-change and compare exercise arrives with the writing/workshop phase; UX01 does not fabricate that task."}
+      %{
+        title: "Read the first exchange",
+        detail: "Open Scene 1 and read Mara's last line. No answer is required."
+      },
+      %{
+        title: "See the source labels",
+        detail:
+          "Current, working and proposed pages remain distinct. Opening a source does not make it current."
+      },
+      %{
+        title: "Open About",
+        detail:
+          "The Script facts are computed from the actual persisted example, not typed demo counters."
+      },
+      %{
+        title: "Continue later",
+        detail:
+          "The prepared dialogue-change and compare exercise arrives with the writing/workshop phase; UX01 does not fabricate that task."
+      }
     ]
   end
 end

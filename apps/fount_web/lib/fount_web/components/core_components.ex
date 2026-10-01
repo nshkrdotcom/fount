@@ -280,6 +280,7 @@ defmodule FountWeb.CoreComponents do
         else: "/help##{assigns.slug}"
 
     assigns = assign(assigns, :help_href, help_href)
+
     ~H"""
     <aside :if={not @dismissed} class="context-help" aria-labelledby={"help-#{@slug}-title"}>
       <div>

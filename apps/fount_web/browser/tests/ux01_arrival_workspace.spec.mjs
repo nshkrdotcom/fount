@@ -11,6 +11,7 @@ async function login(page) {
   await page.getByLabel('Access token').fill(token);
   await page.getByRole('button', {name: 'Sign in'}).click();
   await expect(page).toHaveURL(/\/$/);
+  await expect(page.locator('.phx-connected')).toBeVisible();
 }
 
 async function capture(page, name) {
@@ -20,6 +21,7 @@ async function capture(page, name) {
 
 async function importFixture(page, name, body, mimeType = 'text/plain') {
   await page.goto('/new');
+  await expect(page.locator('.phx-connected')).toBeVisible();
   await page.locator('input[type=file]').setInputFiles({name, mimeType, buffer: Buffer.from(body)});
   await page.getByRole('button', {name: 'Preview import'}).click();
   await expect(page.getByRole('heading', {name})).toBeVisible();
@@ -38,6 +40,7 @@ test('UX01 import reaches real pages before any workflow setup and keeps ordinar
   await expect(page.getByRole('heading', {name: /Bring your pages|What are you working on/})).toBeVisible();
   await expect(page.getByText(/None of these actions starts AI work/)).toBeVisible();
 
+  await capture(page, 'ux01-desktop-arrival');
   await importFixture(page, 'window-light.fountain', fountain);
   await expect(page.getByText('WINDOW LIGHT', {exact: true}).first()).toBeVisible();
   await expect(page.locator('.screenplay')).toContainText('INT. KITCHEN - NIGHT');
@@ -47,20 +50,27 @@ test('UX01 import reaches real pages before any workflow setup and keeps ordinar
 
   const about = page.locator('#about-screenplay');
   await expect(about).not.toHaveAttribute('open', '');
-  await about.locator('summary').click();
+  await about.locator(':scope > summary').click();
   await expect(about.getByText('Script facts', {exact: true})).toBeVisible();
+  await expect(about.locator('.script-facts')).not.toHaveAttribute('open', '');
+  await about.locator('.script-facts > summary').click();
   await expect(about.getByText('2', {exact: true}).first()).toBeVisible();
   await capture(page, 'ux01-desktop-import-reading');
 
   await page.goto('/new');
+  await expect(page.locator('.phx-connected')).toBeVisible();
   await page.locator('input[type=file]').setInputFiles({name: 'porch.fdx', mimeType: 'application/xml', buffer: Buffer.from(fdx)});
   await page.getByRole('button', {name: 'Preview import'}).click();
   await expect(page.getByText('FDX', {exact: true})).toBeVisible();
+  await page.getByRole('button',{name:'Open screenplay'}).click();
+  await expect(page.locator('.screenplay')).toContainText('Eli waits.');
+  await capture(page,'ux01-desktop-fdx-import');
 });
 
 test('UX01 blank starts with empty source; saving working pages never advances current screenplay', async ({page}) => {
   await login(page);
   await page.goto('/new');
+  await expect(page.locator('.phx-connected')).toBeVisible();
   await page.getByRole('button', {name: 'Start writing'}).click();
   await expect(page).toHaveURL(/\/p\/[a-z0-9-]+\/write$/);
 
@@ -69,7 +79,7 @@ test('UX01 blank starts with empty source; saving working pages never advances c
   const source = `INT. EMPTY ROOM - DAY\n\nA WRITER starts with an actual page.\n`;
   await editor.fill(source);
   await page.getByRole('button', {name: 'Save working draft'}).click();
-  await expect(page.getByRole('status')).toContainText(/Saved working draft/i);
+  await expect(page.locator('.authoring-status')).toContainText(/Saved working draft/i);
   await page.reload();
   await expect(editor).toHaveValue(source);
 
@@ -89,10 +99,11 @@ test('UX01 example is provider-free, Help is reopenable, and phone navigation re
   await expect(page.locator('#scene-outline [data-scene-link]')).toHaveCount(3);
 
   const second = page.locator('#scene-outline [data-scene-link]').nth(1);
+  await page.locator('#reader-scenes > summary').click();
   await second.click();
   await expect(second).toHaveAttribute('aria-current', 'location');
 
-  await page.getByRole('link', {name: 'Help'}).click();
+  await page.getByRole('link', {name: 'Help', exact: true}).click();
   await expect(page.getByText('Optional example checklist')).toBeVisible();
   await page.getByRole('button', {name: 'Show dismissed hints again'}).click();
   await page.getByRole('link', {name: /Back to LAST RETURN/}).click();
@@ -107,4 +118,101 @@ test('UX01 example is provider-free, Help is reopenable, and phone navigation re
   await page.evaluate(() => { document.documentElement.style.zoom = '2'; });
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow).toBeLessThanOrEqual(4);
+});
+
+test('UX01 shell, supplied About, no-task destinations, Help dismissal and phone writing remain usable', async ({page}) => {
+  await login(page);
+  await page.getByRole('button', {name:'Open LAST RETURN'}).click();
+  await expect(page.locator('.screenplay')).toBeVisible();
+  const key=new URL(page.url()).pathname.split('/')[2];
+  await capture(page,'ux01-desktop-default-pages');
+  await page.locator('.project-more > summary').focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('link',{name:'Project settings',exact:true})).toBeVisible();
+  await page.keyboard.press('Tab');
+  await expect(page.getByRole('link',{name:'Analysis',exact:true})).toBeFocused();
+  expect(await page.locator(':focus').evaluate(node=>getComputedStyle(node).outlineStyle)).not.toBe('none');
+  await page.getByRole('link',{name:'Project settings',exact:true}).click();
+  await page.getByLabel('Logline',{exact:true}).fill('A father returns a tape on the last night of a video shop.');
+  await page.getByLabel('Synopsis',{exact:true}).fill('Mara and Eli pack the final cartons together.');
+  await page.getByRole('button',{name:'Save project details'}).click();
+  await expect(page.getByText('Project details saved.')).toBeVisible();
+  await page.goto(`/p/${key}`);
+  const about=page.locator('#about-screenplay');
+  await expect(about).not.toHaveAttribute('open','');
+  await about.locator(':scope > summary').focus(); await page.keyboard.press('Enter');
+  await expect(about.getByText('A father returns a tape on the last night of a video shop.')).toBeVisible();
+  await expect(about.getByText('Mara and Eli pack the final cartons together.')).toBeVisible();
+  await expect(about.locator('.script-facts')).not.toHaveAttribute('open','');
+  await capture(page,'ux01-desktop-about-supplied');
+  await page.getByRole('button',{name:'Dismiss',exact:true}).click();
+  await expect(page.locator('.context-help')).toHaveCount(0);
+  await page.getByRole('link',{name:'Help',exact:true}).click();
+  await page.getByLabel('Search help').fill('Fountain');
+  await expect(page.locator('.help-topic')).not.toHaveCount(0);
+  await page.getByRole('button',{name:'Show dismissed hints again'}).click();
+  await page.getByRole('link',{name:/Back to LAST RETURN/}).click();
+  await expect(page.locator('.context-help')).toBeVisible();
+  for (const destination of ['work','changes','notes','analysis','read','exports','activity']) {
+    await page.goto(`/p/${key}/${destination}`);
+    await expect(page.getByText('No saved tasks yet. The screenplay is still fully available for reading and writing.')).toBeVisible();
+    noMachineIdentity(await page.locator('main').innerText());
+  }
+  await page.goto(`/p/${key}`);
+  await page.setViewportSize({width:1024,height:768}); await capture(page,'ux01-tablet-landscape');
+  await page.setViewportSize({width:360,height:800});
+  await page.locator('.project-more > summary').click();
+  await expect(page.getByRole('link',{name:'History',exact:true})).toBeVisible();
+  await capture(page,'ux01-phone-more');
+  await page.getByRole('link',{name:'History',exact:true}).click();
+  await expect(page.getByRole('heading',{name:'History',exact:true})).toBeVisible();
+  await page.goto('/new'); await expect(page.locator('.phx-connected')).toBeVisible();
+  await capture(page,'ux01-phone-entry');
+  await page.getByRole('button',{name:'Start writing'}).click();
+  const raw='INT. PHONE ROOM - DAY\n\nMARA types café 漢字 on her phone.\n';
+  await page.locator('#source-editor').fill(raw);
+  await page.getByRole('button',{name:'Save working draft',exact:true}).click();
+  await expect(page.locator('.authoring-status')).toContainText('Saved working draft');
+  await page.reload(); await expect(page.locator('#source-editor')).toHaveValue(raw);
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth-innerWidth)).toBeLessThanOrEqual(2);
+  await capture(page,'ux01-phone-writing-saved');
+  await page.goto('/p/missing-project'); await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByText('That screenplay is not available in your workspace.')).toBeVisible();
+  await capture(page,'ux01-no-project-returning-desk');
+});
+
+
+test('UX01 import errors preserve the desk and allow a later successful import',async ({page})=>{
+  await login(page); await page.goto('/new'); await expect(page.locator('.phx-connected')).toBeVisible();
+  await page.getByRole('button',{name:'Preview import'}).click();
+  await expect(page.getByText('Choose a .fountain or .fdx screenplay first.')).toBeVisible();
+  await page.locator('input[type=file]').setInputFiles({name:'broken.fdx',mimeType:'application/xml',buffer:Buffer.from('<FinalDraft><Content>')});
+  await page.getByRole('button',{name:'Preview import'}).click();
+  await expect(page.getByText('This Final Draft file could not be parsed. The project was not created.')).toBeVisible();
+  await capture(page,'ux01-import-error');
+  await importFixture(page,'recovered.fountain',fountain);
+  await expect(page.locator('.screenplay')).toContainText('Leave it open.');
+});
+
+
+test('UX01 touch Help, menus and About work on a phone',async ({browser})=>{
+  const context=await browser.newContext({hasTouch:true,isMobile:true,viewport:{width:390,height:844}});
+  const page=await context.newPage(); await login(page);
+  await page.getByRole('button',{name:'Open LAST RETURN'}).tap(); await expect(page.locator('.screenplay')).toBeVisible();
+  await page.locator('#reader-scenes > summary').tap();
+  await page.locator('#scene-outline [data-scene-link]').nth(1).tap();
+  await page.getByRole('link',{name:'Help',exact:true}).tap();
+  await expect(page.getByText('Optional example checklist')).toBeVisible();
+  await capture(page,'ux01-phone-touch-help');
+  await page.getByRole('link',{name:/Back to LAST RETURN/}).tap();
+  await expect(page.locator('#scene-outline [data-scene-link]').nth(1)).toHaveAttribute('aria-current','location');
+  await page.locator('#about-screenplay > summary').tap();
+  await expect(page.locator('.script-facts')).not.toHaveAttribute('open','');
+  await page.locator('.script-facts > summary').tap();
+  await expect(page.getByText('Literal source facts only.',{exact:false})).toBeVisible();
+  await capture(page,'ux01-phone-touch-about');
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth-innerWidth)).toBeLessThanOrEqual(2);
+  const targets=await page.locator('.project-tabs > a, .project-more > summary').evaluateAll(nodes=>nodes.map(node=>({name:node.textContent.trim(),height:node.getBoundingClientRect().height,width:node.getBoundingClientRect().width})));
+  for (const target of targets) { expect(target.height, target.name).toBeGreaterThanOrEqual(24); }
+  await context.close();
 });

@@ -67,9 +67,9 @@ defmodule FountWeb.Phase05BoundaryRaceTest do
     {:ok, canon} = Fount.Persistence.load(Fount.Repo, access["key"])
     assert canon.revision.id == workspace.base.revision.id
   end
+
   defp editor_path(run) do
     {:ok, access} = FountWeb.Store.run_access(Fount.Repo, "test-owner", run["id"])
     "/p/#{access["key"]}/write"
   end
-
 end

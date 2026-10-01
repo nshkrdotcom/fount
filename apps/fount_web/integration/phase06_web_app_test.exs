@@ -1,7 +1,9 @@
 defmodule FountWeb.Phase06IntegrationTest do
   use FountWeb.ConnCase, async: false
 
-  test "writer desk mounts with import, blank and provider-free example entry points", %{conn: conn} do
+  test "writer desk mounts with import, blank and provider-free example entry points", %{
+    conn: conn
+  } do
     conn = FountWeb.ConnCase.login(conn)
     assert {:ok, _view, html} = live(conn, "/")
     assert html =~ "Import screenplay"
@@ -362,6 +364,7 @@ defmodule FountWeb.Phase06IntegrationTest do
       end
     end
   end
+
   defp run_path(run, surface) do
     {:ok, access} = FountWeb.Store.run_access(Fount.Repo, "test-owner", run["id"])
     base = "/p/#{access["key"]}"
@@ -376,5 +379,4 @@ defmodule FountWeb.Phase06IntegrationTest do
       :artifact_probe -> "#{base}/exports/#{task}/delivery-999/download"
     end
   end
-
 end

@@ -337,7 +337,7 @@ defmodule FountWeb.Phase06AnalysisIntegrationTest do
     refute has_element?(view, "#ai-assist[disabled]")
   end
 
-  defp analysis_path(run, suffix \\ "") do
+  defp analysis_path(run, suffix) do
     {:ok, access} = FountWeb.Store.run_access(Fount.Repo, "test-owner", run["id"])
     "/p/#{access["key"]}/analysis/#{access["display_key"]}" <> suffix
   end

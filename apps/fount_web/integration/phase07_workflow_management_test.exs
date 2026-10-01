@@ -12,7 +12,7 @@ defmodule FountWeb.Phase07WorkflowManagementIntegrationTest do
 
     for params <- [%{"choice" => "stop"}, %{"choice" => "stop", "confirm_stop" => "false"}] do
       assert render_click(view, "submit_decision", %{"decision" => params}) =~
-               "Confirm that you want to stop this Run."
+               "Confirm that you want to stop this task."
     end
 
     {:ok, context} = FountWeb.Actors.owner_context("test-owner", run["screenplay_id"])
@@ -410,6 +410,7 @@ defmodule FountWeb.Phase07WorkflowManagementIntegrationTest do
 
     assert {:error, :not_found} = FountWeb.Store.run_access(Fount.Repo, "other-owner", run["id"])
   end
+
   defp task_path(run, surface) do
     {:ok, access} = FountWeb.Store.run_access(Fount.Repo, "test-owner", run["id"])
     base = "/p/#{access["key"]}"
@@ -421,5 +422,4 @@ defmodule FountWeb.Phase07WorkflowManagementIntegrationTest do
       :exports -> "#{base}/exports/#{task}"
     end
   end
-
 end

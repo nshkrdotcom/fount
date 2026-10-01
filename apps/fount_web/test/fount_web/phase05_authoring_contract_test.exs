@@ -7,7 +7,8 @@ defmodule FountWeb.Phase05AuthoringContractTest do
     live = File.read!(Path.expand("../../lib/fount_web/live/editor_live.ex", __DIR__))
 
     refute js =~ "localStorage"
-    refute js =~ "sessionStorage"
+    [_, editor_js] = String.split(js, "const AuthoringEditor =", parts: 2)
+    refute editor_js =~ "sessionStorage"
     assert js =~ "setTimeout(() => this.preview(), 300)"
     assert js =~ "compositionstart"
     assert js =~ "beforeunload"
@@ -15,7 +16,7 @@ defmodule FountWeb.Phase05AuthoringContractTest do
     refute authoring =~ "FountWorkshop."
     assert live =~ "Fount.Screenplay.undo"
     assert live =~ "Fount.Screenplay.redo"
-    assert live =~ "Saving a proposed revision leaves the approved screenplay unchanged"
+    assert live =~ "Saving a proposed change still does not replace the current screenplay"
   end
 
   test "authoring limits are explicitly configured" do

@@ -286,7 +286,9 @@ defmodule FountWeb.AnalysisDashboard do
     case requested do
       ref when is_binary(ref) and ref != "" ->
         Enum.find(history, &(&1["id"] == ref or &1["_display_ref"] == ref))
-      _ -> Enum.find(history, &(&1["id"] == fallback)) || List.first(history)
+
+      _ ->
+        Enum.find(history, &(&1["id"] == fallback)) || List.first(history)
     end
   end
 

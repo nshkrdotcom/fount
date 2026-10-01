@@ -135,7 +135,12 @@ defmodule FountWeb.ScreenplayIndex do
   def facts(screenplay) do
     scenes = scene_index(screenplay)
     characters = character_index(screenplay)
-    all_words = screenplay.ir.elements |> List.wrap() |> Enum.map_join(" ", &(&1.text || "")) |> word_count()
+
+    all_words =
+      screenplay.ir.elements
+      |> List.wrap()
+      |> Enum.map_join(" ", &(&1.text || ""))
+      |> word_count()
 
     dialogue_words =
       screenplay.ir.dialogue_blocks
@@ -156,17 +161,21 @@ defmodule FountWeb.ScreenplayIndex do
       confirmed_cast_count: length(characters),
       confirmed_cast: Enum.map(characters, &Map.take(&1, [:name, :scene_count, :cue_count])),
       heading_contexts: heading_counts,
-      time_of_day_unknown_count: Enum.count(scenes, &(blank?(&1.time))),
+      time_of_day_unknown_count: Enum.count(scenes, &blank?(&1.time)),
       dialogue_words: dialogue_words,
       screenplay_element_words: all_words,
       dialogue_word_share:
         if(all_words > 0, do: Float.round(dialogue_words * 100 / all_words, 1), else: nil),
       definitions: %{
-        confirmed_cast: "Literal character cues in the selected screenplay source; aliases are not inferred.",
+        confirmed_cast:
+          "Literal character cues in the selected screenplay source; aliases are not inferred.",
         speaking_scenes: "Distinct scenes containing a confirmed literal cue for that character.",
-        dialogue_word_share: "Dialogue-body words divided by words across all screenplay elements in this selected source.",
-        heading_contexts: "Scene headings classified from their literal INT./EXT. prefix; mixed or unrecognized headings are Other/Unknown.",
-        time_of_day_unknown: "Scene headings for which the existing location analyzer did not return a time value."
+        dialogue_word_share:
+          "Dialogue-body words divided by words across all screenplay elements in this selected source.",
+        heading_contexts:
+          "Scene headings classified from their literal INT./EXT. prefix; mixed or unrecognized headings are Other/Unknown.",
+        time_of_day_unknown:
+          "Scene headings for which the existing location analyzer did not return a time value."
       }
     }
   end

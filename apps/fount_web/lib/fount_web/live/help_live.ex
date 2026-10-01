@@ -11,7 +11,10 @@ defmodule FountWeb.HelpLive do
      |> assign(:query, "")
      |> assign(:topics, FountWeb.Help.all())
      |> assign(:project, project)
-     |> assign(:preferences, FountWeb.Store.owner_preferences(Fount.Repo, socket.assigns.current_owner))}
+     |> assign(
+       :preferences,
+       FountWeb.Store.owner_preferences(Fount.Repo, socket.assigns.current_owner)
+     )}
   end
 
   @impl true
@@ -24,7 +27,10 @@ defmodule FountWeb.HelpLive do
            "dismissed_hints" => []
          }) do
       {:ok, prefs} ->
-        {:noreply, socket |> assign(:preferences, prefs) |> put_flash(:info, "Contextual hints will appear again where they apply.")}
+        {:noreply,
+         socket
+         |> assign(:preferences, prefs)
+         |> put_flash(:info, "Contextual hints will appear again where they apply.")}
 
       _ ->
         {:noreply, put_flash(socket, :error, "Hint preferences could not be changed.")}
@@ -32,6 +38,7 @@ defmodule FountWeb.HelpLive do
   end
 
   defp load_project(_owner, nil), do: nil
+
   defp load_project(owner, key) do
     case FountWeb.Store.project_by_key(Fount.Repo, owner, key) do
       {:ok, project} -> project
@@ -57,10 +64,18 @@ defmodule FountWeb.HelpLive do
       <section class="help-intro">
         <p class="eyebrow">At the moment of work</p>
         <h1>Fount help</h1>
-        <p>Short explanations of what an action changes, what it saves and when an external service is actually needed.</p>
+        <p>
+          Short explanations of what an action changes, what it saves and when an external service is actually needed.
+        </p>
         <form phx-change="search" class="help-search">
           <label for="help-query">Search help</label>
-          <input id="help-query" name="help[query]" value={@query} type="search" placeholder="import, working draft, page references…" />
+          <input
+            id="help-query"
+            name="help[query]"
+            value={@query}
+            type="search"
+            placeholder="import, working draft, page references…"
+          />
         </form>
         <button type="button" phx-click="show_hints_again">Show dismissed hints again</button>
       </section>
@@ -70,10 +85,13 @@ defmodule FountWeb.HelpLive do
           <h2>{topic.title}</h2>
           <p class="help-topic__summary">{topic.summary}</p>
           <p>{topic.body}</p>
-          <a :if={@project and topic.slug == "reading"} href={"/p/#{@project["key"]}"}>Open Reading</a>
-          <a :if={@project and topic.slug == "writing"} href={"/p/#{@project["key"]}/write"}>Open Writing</a>
-          <a :if={@project and topic.slug == "work-on-it"} href={"/p/#{@project["key"]}/work"}>Open Work on it</a>
-          <div :if={@project && @project["project_kind"] == "example" && topic.slug == "example"} class="example-checklist">
+          <a :if={@project && topic.slug == "reading"} href={"/p/#{@project["key"]}"}>Open Reading</a>
+          <a :if={@project && topic.slug == "writing"} href={"/p/#{@project["key"]}/write"}>Open Writing</a>
+          <a :if={@project && topic.slug == "work-on-it"} href={"/p/#{@project["key"]}/work"}>Open Work on it</a>
+          <div
+            :if={@project && @project["project_kind"] == "example" && topic.slug == "example"}
+            class="example-checklist"
+          >
             <h3>Optional example checklist</h3>
             <ol>
               <li :for={step <- FountWeb.ExampleProject.checklist()}>

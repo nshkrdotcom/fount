@@ -104,7 +104,8 @@ defmodule FountWeb.ProductionStore do
   def table_read_by_ref(repo, owner, project_id, run_id, "read-" <> ordinal_text) do
     with {ordinal, ""} when ordinal > 0 <- Integer.parse(ordinal_text),
          rows when is_list(rows) <- list_table_reads(repo, owner, project_id, limit: 100),
-         row when is_map(row) <- rows |> Enum.filter(&(&1["run_id"] == run_id)) |> Enum.at(ordinal - 1) do
+         row when is_map(row) <-
+           rows |> Enum.filter(&(&1["run_id"] == run_id)) |> Enum.at(ordinal - 1) do
       {:ok, row}
     else
       _ -> {:error, :not_found}

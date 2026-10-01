@@ -17,7 +17,9 @@ mkdir -p "$FOUNT_ARTIFACT_ROOT"
 cd "$APP"
 mix fount_web.migrate
 mix assets.build
-mix run priv/phase06_browser_fixtures.exs
+if [ "${FOUNT_PLAYWRIGHT_SPEC:-}" != "tests/ux01_arrival_workspace.spec.mjs" ]; then
+  mix run priv/phase06_browser_fixtures.exs
+fi
 FOUNT_BROWSER_SERVER_LOG="${FOUNT_BROWSER_SERVER_LOG:-$ROOT/_phase06_browser_server.log}"
 mix phx.server >"$FOUNT_BROWSER_SERVER_LOG" 2>&1 &
 SERVER_PID=$!

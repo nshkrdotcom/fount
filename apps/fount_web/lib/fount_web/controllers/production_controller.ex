@@ -4,9 +4,15 @@ defmodule FountWeb.ProductionController do
   alias FountWeb.{ProductionStore, ProductionTools, Store}
 
   def notes(conn, %{"key" => key, "task_key" => task_key} = params) do
-    with {:ok, access} <- Store.run_access_by_task_key(Fount.Repo, conn.assigns.current_owner, key, task_key),
+    with {:ok, access} <-
+           Store.run_access_by_task_key(Fount.Repo, conn.assigns.current_owner, key, task_key),
          {:ok, workspace} <-
-           ProductionTools.workspace(Fount.Repo, conn.assigns.current_owner, access["run_id"], params["view"]) do
+           ProductionTools.workspace(
+             Fount.Repo,
+             conn.assigns.current_owner,
+             access["run_id"],
+             params["view"]
+           ) do
       json(conn, %{
         "kind" => "fount.authored_notes_export",
         "screenplay_id" => workspace.screenplay.id,
@@ -20,8 +26,16 @@ defmodule FountWeb.ProductionController do
   end
 
   def table_read(conn, %{"key" => key, "task_key" => task_key, "read_ref" => read_ref}) do
-    with {:ok, access} <- Store.run_access_by_task_key(Fount.Repo, conn.assigns.current_owner, key, task_key),
-         {:ok, row} <- ProductionStore.table_read_by_ref(Fount.Repo, conn.assigns.current_owner, access["project_id"], access["run_id"], read_ref) do
+    with {:ok, access} <-
+           Store.run_access_by_task_key(Fount.Repo, conn.assigns.current_owner, key, task_key),
+         {:ok, row} <-
+           ProductionStore.table_read_by_ref(
+             Fount.Repo,
+             conn.assigns.current_owner,
+             access["project_id"],
+             access["run_id"],
+             read_ref
+           ) do
       json(conn, %{
         "kind" => "fount.saved_table_read",
         "identity" =>
@@ -37,7 +51,8 @@ defmodule FountWeb.ProductionController do
   end
 
   def usefulness(conn, %{"key" => key, "task_key" => task_key}) do
-    with {:ok, access} <- Store.run_access_by_task_key(Fount.Repo, conn.assigns.current_owner, key, task_key),
+    with {:ok, access} <-
+           Store.run_access_by_task_key(Fount.Repo, conn.assigns.current_owner, key, task_key),
          {:ok, report} <-
            ProductionTools.usefulness_report(
              Fount.Repo,
@@ -73,7 +88,10 @@ defmodule FountWeb.ProductionController do
   defp plain(%DateTime{} = value), do: DateTime.to_iso8601(value)
   defp plain(%NaiveDateTime{} = value), do: NaiveDateTime.to_iso8601(value)
   defp plain(value) when is_struct(value), do: value |> Map.from_struct() |> plain()
-  defp plain(value) when is_map(value), do: Map.new(value, fn {key, item} -> {to_string(key), plain(item)} end)
+
+  defp plain(value) when is_map(value),
+    do: Map.new(value, fn {key, item} -> {to_string(key), plain(item)} end)
+
   defp plain(value) when is_list(value), do: Enum.map(value, &plain/1)
   defp plain(value) when is_atom(value), do: Atom.to_string(value)
   defp plain(value), do: value

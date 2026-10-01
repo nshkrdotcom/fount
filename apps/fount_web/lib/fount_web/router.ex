@@ -54,7 +54,11 @@ defmodule FountWeb.Router do
     end
 
     get "/p/:key/tools/:task_key/notes.json", ProductionController, :notes
-    get "/p/:key/tools/:task_key/table-reads/:read_ref/export.json", ProductionController, :table_read
+
+    get "/p/:key/tools/:task_key/table-reads/:read_ref/export.json",
+        ProductionController,
+        :table_read
+
     get "/p/:key/tools/:task_key/usefulness.json", ProductionController, :usefulness
 
     get "/p/:key/exports/:task_key/:delivery_ref/preview", ArtifactController, :preview

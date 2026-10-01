@@ -36,9 +36,14 @@ defmodule FountWeb.ViewerLive do
   @impl true
   def handle_params(params, _uri, socket) do
     if socket.assigns[:project] do
-      source = ProjectContext.source_token(Map.get(params, "source", socket.assigns.selected_source.token))
+      source =
+        ProjectContext.source_token(
+          Map.get(params, "source", socket.assigns.selected_source.token)
+        )
 
-      case ProjectContext.load(socket.assigns.current_owner, socket.assigns.project["key"], source: source) do
+      case ProjectContext.load(socket.assigns.current_owner, socket.assigns.project["key"],
+             source: source
+           ) do
         {:ok, context} ->
           {:noreply,
            socket
@@ -51,7 +56,12 @@ defmodule FountWeb.ViewerLive do
            |> assign(:error, nil)}
 
         {:error, _} ->
-          {:noreply, assign(socket, :error, "That saved source is no longer available. Showing the current screenplay.")}
+          {:noreply,
+           assign(
+             socket,
+             :error,
+             "That saved source is no longer available. Showing the current screenplay."
+           )}
       end
     else
       {:noreply, socket}
@@ -92,7 +102,9 @@ defmodule FountWeb.ViewerLive do
   end
 
   defp source_path(project, token) do
-    if token == "current", do: "/p/#{project["key"]}", else: "/p/#{project["key"]}?source=#{token}"
+    if token == "current",
+      do: "/p/#{project["key"]}",
+      else: "/p/#{project["key"]}?source=#{token}"
   end
 
   defp dismissed?(prefs, slug) do
@@ -110,7 +122,10 @@ defmodule FountWeb.ViewerLive do
 
   defp source_status(%{kind: :current}), do: "Accepted screenplay"
   defp source_status(%{kind: :working, valid?: true}), do: "Saved working draft · not current"
-  defp source_status(%{kind: :working, valid?: false}), do: "Working draft has invalid Fountain · last valid preview shown"
+
+  defp source_status(%{kind: :working, valid?: false}),
+    do: "Working draft has invalid Fountain · last valid preview shown"
+
   defp source_status(%{kind: :proposed}), do: "Saved proposed change · not current"
 
   @impl true
@@ -161,31 +176,61 @@ defmodule FountWeb.ViewerLive do
         dismissed={@reading_hint_dismissed}
         project_key={@project["key"]}
       >
-        <p>Use Writing to edit recovery text. Reading another source never changes what is current.</p>
+        <p>
+          Use Writing to edit recovery text. Reading another source never changes what is current.
+        </p>
       </FountWeb.CoreComponents.contextual_help>
 
-      <FountWeb.CoreComponents.disclosure id="about-screenplay" title="About this screenplay" summary="Optional context and script facts">
+      <FountWeb.CoreComponents.disclosure
+        id="about-screenplay"
+        title="About this screenplay"
+        summary="Optional context and script facts"
+      >
         <div class="about-grid">
           <section>
             <h2>Supplied context</h2>
             <dl class="about-copy">
-              <div><dt>Title</dt><dd>{@project["title"]}</dd></div>
-              <div :if={@project["logline"]}><dt>Logline</dt><dd>{@project["logline"]}</dd></div>
-              <div :if={@project["synopsis"]}><dt>Synopsis</dt><dd>{@project["synopsis"]}</dd></div>
-              <div :if={@project["source_name"]}><dt>Source file</dt><dd>{@project["source_name"]}</dd></div>
+              <div>
+                <dt>Title</dt><dd>{@project["title"]}</dd>
+              </div>
+              <div :if={@project["logline"]}>
+                <dt>Logline</dt><dd>{@project["logline"]}</dd>
+              </div>
+              <div :if={@project["synopsis"]}>
+                <dt>Synopsis</dt><dd>{@project["synopsis"]}</dd>
+              </div>
+              <div :if={@project["source_name"]}>
+                <dt>Source file</dt><dd>{@project["source_name"]}</dd>
+              </div>
             </dl>
-            <p :if={!@project["logline"] and !@project["synopsis"]} class="muted">No logline or synopsis has been supplied. Pages remain the primary view.</p>
+            <p :if={!@project["logline"] and !@project["synopsis"]} class="muted">
+              No logline or synopsis has been supplied. Pages remain the primary view.
+            </p>
           </section>
           <details class="script-facts">
             <summary>Script facts</summary>
             <dl>
-              <div><dt>Scenes</dt><dd>{@facts.scene_count}</dd></div>
-              <div><dt>Confirmed cast cues</dt><dd>{@facts.confirmed_cast_count}</dd></div>
-              <div><dt>Interior headings</dt><dd>{@facts.heading_contexts.interior}</dd></div>
-              <div><dt>Exterior headings</dt><dd>{@facts.heading_contexts.exterior}</dd></div>
-              <div><dt>Other headings</dt><dd>{@facts.heading_contexts.other}</dd></div>
-              <div><dt>Unknown heading context</dt><dd>{@facts.heading_contexts.unknown}</dd></div>
-              <div><dt>Unknown time of day</dt><dd>{@facts.time_of_day_unknown_count}</dd></div>
+              <div>
+                <dt>Scenes</dt><dd>{@facts.scene_count}</dd>
+              </div>
+              <div>
+                <dt>Confirmed cast cues</dt><dd>{@facts.confirmed_cast_count}</dd>
+              </div>
+              <div>
+                <dt>Interior headings</dt><dd>{@facts.heading_contexts.interior}</dd>
+              </div>
+              <div>
+                <dt>Exterior headings</dt><dd>{@facts.heading_contexts.exterior}</dd>
+              </div>
+              <div>
+                <dt>Other headings</dt><dd>{@facts.heading_contexts.other}</dd>
+              </div>
+              <div>
+                <dt>Unknown heading context</dt><dd>{@facts.heading_contexts.unknown}</dd>
+              </div>
+              <div>
+                <dt>Unknown time of day</dt><dd>{@facts.time_of_day_unknown_count}</dd>
+              </div>
               <div>
                 <dt>Dialogue word share</dt>
                 <dd>
@@ -201,20 +246,23 @@ defmodule FountWeb.ViewerLive do
               <summary>Confirmed character cues</summary>
               <ul>
                 <li :for={character <- @facts.confirmed_cast}>
-                  <strong>{character.name}</strong> · {character.scene_count} speaking scenes · {character.cue_count} cues
+                  <strong>{character.name}</strong>
+                  · {character.scene_count} speaking scenes · {character.cue_count} cues
                 </li>
               </ul>
             </details>
-            <p class="scope-note">Literal source facts only. No alias inference, coverage score, page/minute guarantee or production estimate.</p>
+            <p class="scope-note">
+              Literal source facts only. No alias inference, coverage score, page/minute guarantee or production estimate.
+            </p>
           </details>
         </div>
       </FountWeb.CoreComponents.disclosure>
 
       <div class="reader-layout">
-        <aside class="reader-outline" aria-label="Scene outline">
-          <div class="reader-outline__title">
+        <details id="reader-scenes" class="reader-outline" aria-label="Scene outline">
+          <summary class="reader-outline__title">
             <strong>Scenes</strong><span>{@facts.scene_count}</span>
-          </div>
+          </summary>
           <ol id="scene-outline">
             <li :for={scene <- @index.scenes}>
               <a
@@ -228,7 +276,7 @@ defmodule FountWeb.ViewerLive do
               </a>
             </li>
           </ol>
-        </aside>
+        </details>
 
         <section class="reader-paper" aria-label="Responsive screenplay pages">
           <div class="reader-paper__label">
@@ -245,9 +293,15 @@ defmodule FountWeb.ViewerLive do
       <details class="technical-details">
         <summary>Technical details</summary>
         <dl>
-          <div><dt>Project identity</dt><dd><code>{@project["id"]}</code></dd></div>
-          <div><dt>Screenplay identity</dt><dd><code>{@selected_source.screenplay.id}</code></dd></div>
-          <div><dt>Revision identity</dt><dd><code>{@selected_source.screenplay.revision.id}</code></dd></div>
+          <div>
+            <dt>Project identity</dt><dd><code>{@project["id"]}</code></dd>
+          </div>
+          <div>
+            <dt>Screenplay identity</dt><dd><code>{@selected_source.screenplay.id}</code></dd>
+          </div>
+          <div>
+            <dt>Revision identity</dt><dd><code>{@selected_source.screenplay.revision.id}</code></dd>
+          </div>
         </dl>
       </details>
     </main>

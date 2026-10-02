@@ -1,7 +1,7 @@
 defmodule FountWeb do
   @moduledoc false
 
-  def static_paths, do: ~w(assets favicon.ico robots.txt)
+  def static_paths, do: ~w(assets favicon.ico robots.txt fount-icons)
 
   def controller do
     quote do

@@ -84,6 +84,7 @@ test('W06-W07 named multi-launch produces two persisted tasks and supported expo
   await expect(page.locator('.creative-review')).toContainText('INT. KITCHEN');
   await expect(page.locator('.creative-review')).toContainText('EXT. TRAIN PLATFORM');
   await page.getByRole('button',{name:'Start this work'}).click();
+  await expect(page).toHaveURL(new RegExp(`/p/${key}/activity/task-\\d+/setup$`));
   await page.goto(`/p/${key}/activity`);
   await expect(page.locator('.task-row')).toHaveCount(2);
   await page.goto(`/p/${key}/exports/task-1`);

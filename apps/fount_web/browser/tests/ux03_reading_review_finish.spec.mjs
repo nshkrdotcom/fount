@@ -207,6 +207,7 @@ test('UX03 optional feedback stays attached to a real task and keeps independent
   await page.getByRole('button', {name: 'Publish / retry bundle'}).click();
   await expect(page.getByRole('status')).toContainText('Delivery bundle published.');
   await page.goto(`/p/${key}/feedback`);
+  await expect(page.locator('.phx-connected')).toBeVisible();
   await expect(page.getByRole('heading', {name: 'Feedback'})).toBeVisible();
   const form = page.locator('.feedback-form').first();
   await form.getByLabel('Useful', {exact: true}).check();
@@ -217,9 +218,11 @@ test('UX03 optional feedback stays attached to a real task and keeps independent
   await form.locator('details > summary', {hasText: 'More detail'}).click();
   await form.getByLabel('Task completion').fill('It made the tradeoff clear.');
   await form.getByRole('button', {name: 'Save optional feedback'}).click();
+  await expect(page.getByRole('status')).toContainText('Human feedback saved.');
   await expect(page.getByRole('heading', {name: 'Saved responses'})).toBeVisible();
   await expect(page.locator('.feedback-report')).toContainText(/No combined quality, learning or preference score/);
   await page.reload();
+  await expect(page.locator('.phx-connected')).toBeVisible();
   const reopened = page.locator('.feedback-form').first();
   await expect(reopened.getByLabel('Useful', {exact: true})).toBeChecked();
   await expect(reopened.getByLabel('I kept my original')).toBeChecked();
@@ -231,7 +234,9 @@ test('UX03 optional feedback stays attached to a real task and keeps independent
   const clearVoice = reopened.locator('input[name="feedback[dimensions][voice_retention]"][value=""]');
   if (await clearVoice.count()) await clearVoice.check();
   await reopened.getByRole('button',{name:'Update optional feedback'}).click();
+  await expect(page.getByRole('status')).toContainText('Human feedback saved.');
   await page.reload();
+  await expect(page.locator('.phx-connected')).toBeVisible();
   await expect(page.locator('.feedback-form').first().getByLabel('Mixed',{exact:true})).toBeChecked();
   const recordFacts = hostFixture('owner = System.fetch_env!("FOUNT_OWNER_ID"); {:ok, project} = FountWeb.Store.project_by_key(Fount.Repo, owner, System.fetch_env!("FOUNT_FIXTURE_KEY")); rows = FountWeb.ProductionStore.list_usefulness(Fount.Repo, owner, project["id"]); IO.puts("FEEDBACK=" <> Jason.encode!(Enum.map(rows, & &1["record"]["human_response"])))', {FOUNT_FIXTURE_KEY:key});
   expect(recordFacts.split('FEEDBACK=').at(-1).trim()).not.toContain('task_completion');

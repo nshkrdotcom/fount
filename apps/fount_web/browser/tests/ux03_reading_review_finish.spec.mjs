@@ -266,6 +266,11 @@ test('UX03 exact Fountain, FDX and PDF exports preview/download from the named c
   const bytes = readFileSync(await download.path());
   expect(bytes.subarray(0, 5).toString()).toBe('%PDF-');
   await capture(page, 'ux03-exported-pdf-pages');
+  await page.goto(`/p/${key}`);
+  await expect(page.getByRole('navigation',{name:'Page layout'}).getByRole('link',{name:'Exported pages',exact:true})).toBeVisible();
+  await expect(page.getByRole('link',{name:'Build exported pages',exact:true})).toHaveCount(0);
+  await page.getByRole('navigation',{name:'Page layout'}).getByRole('link',{name:'Exported pages',exact:true}).click();
+  await expect(page.getByTitle(/exported PDF page 1/)).toBeVisible();
 });
 
 function sourceMutation(key, operation) {

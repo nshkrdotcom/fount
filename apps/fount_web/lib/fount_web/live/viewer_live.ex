@@ -485,30 +485,48 @@ defmodule FountWeb.ViewerLive do
           data-project-key={@project["key"]}
           data-source-revision={@selected_source.screenplay.revision.id}
         >
-          <div class="reader-paper__label">
-            <span>Responsive reading view</span>
-            <span class="reader-layout-choice" aria-label="Page layout">
-              <strong>Page layout</strong>
-              <span aria-current="page">Responsive</span>
-              <a
-                :if={@selected_source.kind == :current and @current_pdf}
-                href={"/p/#{@project["key"]}/pages/#{@current_pdf.ref}"}
-              >Exported pages</a>
+          <div class="reader-paper__label reader-utilities">
+            <span class="sr-only">Responsive reading view</span>
+            <div class="reader-page-tools">
+              <nav class="reader-layout-choice" aria-label="Page layout">
+                <span aria-current="page">Responsive</span>
+                <a
+                  :if={@selected_source.kind == :current and @current_pdf}
+                  href={"/p/#{@project["key"]}/pages/#{@current_pdf.ref}"}
+                >Exported pages</a>
+                <span
+                  :if={@selected_source.kind != :current or is_nil(@current_pdf)}
+                  role="link"
+                  aria-disabled="true"
+                  title="Exported pages require an exact built PDF for this saved source."
+                >Exported pages</span>
+              </nav>
               <a
                 :if={@selected_source.kind == :current and is_nil(@current_pdf)}
+                class="reader-build-pages"
                 href={"/p/#{@project["key"]}/exports"}
               >Build exported pages</a>
-              <span
-                :if={@selected_source.kind != :current}
-                title="Fixed-layout PDF is only shown for an exact built artifact of the selected saved source."
-              >Exported pages unavailable for this selected source</span>
-            </span>
-            <button type="button" data-note-selection disabled>Note selected passage</button>
+              <span :if={@selected_source.kind != :current} class="sr-only">
+                Exported pages unavailable for this selected source
+              </span>
+            </div>
+            <div class="reader-note-tools">
+              <button
+                type="button"
+                data-note-selection
+                aria-describedby="passage-note-help"
+                disabled
+              >Note selected passage</button>
+              <details class="reader-selection-help">
+                <summary>How to add a note</summary>
+                <p id="passage-note-help">
+                  Select text within one screenplay passage to attach a note, or use the named passage picker in Notes.
+                </p>
+              </details>
+              <p class="selection-note-status" data-note-selection-status aria-live="polite"></p>
+            </div>
             <a href="/help#reading">How page references work</a>
           </div>
-          <p class="selection-note-status" data-note-selection-status aria-live="polite">
-            Select text within one screenplay passage to attach a note, or use the named passage picker in Notes.
-          </p>
           <FountWeb.Components.ScreenplayRenderer.screenplay
             screenplay={@selected_source.screenplay}
             selected_scene_id={@selected_scene_id}

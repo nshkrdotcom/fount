@@ -87,3 +87,43 @@ test('project navigation and Reading actions have symmetric vertical insets', as
   }
   expect(projectRunCount(key)).toBe(0);
 });
+
+test('Reading groups paper utilities, distinguishes active levels and keeps selection help contextual', async ({page}) => {
+  await page.goto('/login');
+  await page.getByLabel('Access token').fill(process.env.FOUNT_OWNER_TOKEN || 'browser-owner-token');
+  await page.getByRole('button', {name:'Sign in'}).click();
+  const key = await importProject(page, `reader-refinement-${Date.now()}`, source);
+  await page.setViewportSize({width:1440,height:900});
+  await page.goto(`/p/${key}`);
+  const mode=page.locator('.project-header__view [aria-current=page]');
+  const destination=page.locator('.project-tabs > [aria-current=page]');
+  const backgrounds=await Promise.all([mode,destination].map(el=>el.evaluate(e=>getComputedStyle(e).backgroundColor)));
+  expect(backgrounds[0]).not.toBe(backgrounds[1]);
+  const layout=page.getByRole('navigation',{name:'Page layout'});
+  await expect(layout.locator('[aria-current=page]')).toHaveText('Responsive');
+  await expect(layout.locator('[aria-disabled=true]')).toHaveText('Exported pages');
+  await expect(page.getByRole('link',{name:'Build exported pages',exact:true})).toBeVisible();
+  await expect(page.locator('[data-note-selection-status]')).toHaveText('');
+  await page.locator('.reader-selection-help > summary').focus();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#passage-note-help')).toBeVisible();
+  await page.locator('.reader-selection-help > summary').click();
+  const scaled=await page.locator('.reader-paper .screenplay').evaluate(e=>({width:e.getBoundingClientRect().width,font:parseFloat(getComputedStyle(e).fontSize)}));
+  expect(scaled.width).toBeCloseTo(784*1.08,1);
+  for (const width of [390,768,1024,1440,1920]) {
+    await page.setViewportSize({width,height:900});
+    const r=await page.locator('.reader-utilities').boundingBox();
+    expect(r.width).toBeLessThanOrEqual(784*1.08+32+1);
+    expect(r.x).toBeGreaterThanOrEqual(0);expect(r.x+r.width).toBeLessThanOrEqual(width);
+    expect(await page.evaluate(()=>document.documentElement.scrollWidth-innerWidth)).toBeLessThanOrEqual(2);
+  }
+  await page.setViewportSize({width:1024,height:900});
+  const standard=await page.locator('.reader-paper .screenplay').evaluate(e=>({width:e.getBoundingClientRect().width,font:parseFloat(getComputedStyle(e).fontSize)}));
+  expect(scaled.width/standard.width).toBeCloseTo(1.08,2);
+  expect(scaled.font/standard.font).toBeCloseTo(1.08,2);
+  const passage=page.locator('.screenplay-element__text',{hasText:'MARA waits.'}).first();
+  await passage.evaluate(e=>{const r=document.createRange();r.selectNodeContents(e);const selection=window.getSelection();selection.removeAllRanges();selection.addRange(r);e.dispatchEvent(new MouseEvent('mouseup',{bubbles:true}));});
+  await expect(page.locator('[data-note-selection-status]')).toContainText('Selected passage ready');
+  await expect(page.getByRole('button',{name:'Note selected passage'})).toBeEnabled();
+  expect(projectRunCount(key)).toBe(0);
+});

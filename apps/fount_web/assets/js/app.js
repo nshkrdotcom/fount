@@ -651,7 +651,7 @@ const PassageNote = {
           ? `Selected passage ready for a note: ${text.slice(0, 120)}${text.length > 120 ? "…" : ""}`
           : text && within
             ? "Selection crosses more than one screenplay passage. Select within one passage, or use the named passage picker in Notes."
-            : "Select text within one screenplay passage to attach a note, or use the named passage picker in Notes."
+            : ""
       }
     }
     this.openNote = () => {

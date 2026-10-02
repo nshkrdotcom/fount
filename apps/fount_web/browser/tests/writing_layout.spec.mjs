@@ -48,3 +48,42 @@ test('writing chrome, scene margins and sticky controls remain usable at respons
   await expect(page.getByRole('button',{name:'Undo text',exact:true})).toBeVisible();
   expect(projectRunCount(key)).toBe(0);
 });
+
+test('project navigation and Reading actions have symmetric vertical insets', async ({page}) => {
+  await page.goto('/login');
+  await page.getByLabel('Access token').fill(process.env.FOUNT_OWNER_TOKEN || 'browser-owner-token');
+  await page.getByRole('button', {name:'Sign in'}).click();
+  const key = await importProject(page, `navigation-alignment-${Date.now()}`, source);
+  for (const width of [390,640,641,720,768,920,921,1024,1440]) {
+    await page.setViewportSize({width,height:900});
+    await page.goto(`/p/${key}`);
+    await expect(page.locator('.project-header')).toBeVisible();
+    const geometry = await page.evaluate(() => {
+      const rect = e => e.getBoundingClientRect();
+      const center = e => {const r=rect(e);return (r.top+r.bottom)/2;};
+      const header=document.querySelector('.project-header');
+      const view=document.querySelector('.project-header__view');
+      const tabs=document.querySelector('.project-tabs');
+      const links=[...tabs.querySelectorAll(':scope > a, :scope > details > summary')].map(rect);
+      const actionLinks=[...document.querySelectorAll('.reading-primary-actions a')].map(rect);
+      const first=Math.min(...actionLinks.map(r=>r.top));
+      const last=Math.max(...actionLinks.map(r=>r.bottom));
+      return {
+        desktopHeaderOffset:center(view)-center(header),
+        viewOffsets:[...view.querySelectorAll('a')].map(e=>center(e)-center(view)),
+        tabTop:Math.min(...links.map(r=>r.top))-rect(tabs).top,
+        tabBottom:rect(tabs).bottom-Math.max(...links.map(r=>r.bottom)),
+        actionTop:first-rect(document.querySelector('.script-context')).bottom,
+        actionBottom:rect(document.querySelector('#script-search')).top-last,
+        overflow:document.documentElement.scrollWidth-innerWidth
+      };
+    });
+    if (width>920) expect(Math.abs(geometry.desktopHeaderOffset)).toBeLessThanOrEqual(0.02);
+    for (const offset of geometry.viewOffsets) expect(Math.abs(offset)).toBeLessThanOrEqual(0.02);
+    expect(Math.abs(geometry.tabTop-geometry.tabBottom)).toBeLessThanOrEqual(0.02);
+    expect(geometry.actionTop).toBeGreaterThan(0);
+    expect(Math.abs(geometry.actionTop-geometry.actionBottom)).toBeLessThanOrEqual(0.02);
+    expect(geometry.overflow).toBeLessThanOrEqual(2);
+  }
+  expect(projectRunCount(key)).toBe(0);
+});

@@ -8,6 +8,15 @@ defmodule FountWeb.Launch do
 
   @doc "Creates an owner-bound screenplay project without creating an AI Run."
   def create_project(owner_id, attrs) when is_binary(owner_id) and is_map(attrs) do
+    Fount.Repo.transaction(fn ->
+      case persist_project(owner_id, attrs) do
+        {:ok, created} -> created
+        {:error, reason} -> Fount.Repo.rollback(reason)
+      end
+    end)
+  end
+
+  defp persist_project(owner_id, attrs) do
     title = Map.get(attrs, "title", "Untitled screenplay") |> String.trim()
     kind = Map.get(attrs, "kind", "import")
     filename = Map.get(attrs, "filename", "project.fountain")

@@ -41,6 +41,42 @@ defmodule FountWeb.UX01ArrivalWorkspaceIntegrationTest do
     assert run_count(project["id"]) == 0
   end
 
+  test "failed host project creation rolls back Core genesis and permits retry" do
+    SQL.query!(Fount.Repo, """
+    CREATE FUNCTION pg_temp.reject_import_project() RETURNS trigger LANGUAGE plpgsql AS $$
+    BEGIN
+      IF NEW.title = 'Recoverable import' THEN
+        RAISE EXCEPTION 'simulated host failure' USING ERRCODE = '23514';
+      END IF;
+      RETURN NEW;
+    END;
+    $$
+    """)
+
+    SQL.query!(Fount.Repo, """
+    CREATE TRIGGER reject_import_project BEFORE INSERT ON fount_web_projects
+    FOR EACH ROW EXECUTE FUNCTION pg_temp.reject_import_project()
+    """)
+
+    attrs = %{
+      "kind" => "import",
+      "title" => "Recoverable import",
+      "filename" => "recoverable.fountain",
+      "source" => "INT. ROOM - DAY\n\nA writer opens a screenplay.\n"
+    }
+
+    assert {:error, :storage_error} = Launch.create_project("test-owner", attrs)
+
+    assert SQL.query!(Fount.Repo, "SELECT id FROM screenplays WHERE key=$1", [
+             "recoverable-import"
+           ]).rows == []
+
+    SQL.query!(Fount.Repo, "DROP TRIGGER reject_import_project ON fount_web_projects")
+    assert {:ok, %{project: project}} = Launch.create_project("test-owner", attrs)
+    assert project["key"] == "recoverable-import"
+    assert run_count(project["id"]) == 0
+  end
+
   test "Fountain and FDX import previews use the actual parser before persistence" do
     fountain = """
     Title: OPEN WINDOW

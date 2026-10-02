@@ -132,14 +132,15 @@ test('UX03 cast/location facts and manual table read remain provider-free and cr
   const key = await importProject(page, 'ux03-read', source);
 
   await page.goto(`/p/${key}/cast`);
-  await expect(page.getByRole('heading', {name: 'Cast & locations'})).toBeVisible();
-  await expect(page.locator('.character-grid')).toContainText('dialogue blocks');
-  await expect(page.locator('.location-list')).toContainText('KITCHEN');
-  const rename = page.locator('form[phx-submit="preview_cast_rename"]').first();
-  await rename.getByLabel('Prepare name change').fill('MARA VALE');
-  await rename.getByRole('button', {name: 'Preview affected source'}).click();
-  await expect(page.getByText('Proposed name change', {exact: true})).toBeVisible();
-  await expect(page.locator('.creative-review')).toContainText('confirmed cue edits');
+  await expect(page.getByRole('heading', {name: 'Cast', exact: true})).toBeVisible();
+  await expect(page.locator('.character-grid')).toContainText('literal dialogue blocks');
+  await expect(page.locator('.character-grid')).toContainText('unreviewed');
+  const firstIdentity = page.locator('.compact-character-card').first();
+  await firstIdentity.getByRole('button', {name: 'Confirm person'}).click();
+  await expect(firstIdentity).toContainText('confirmed');
+  await page.goto(`/p/${key}/locations`);
+  await expect(page.getByRole('heading', {name: 'Locations', exact: true})).toBeVisible();
+  await expect(page.locator('.location-workspace')).toContainText('KITCHEN');
 
   await page.goto(`/p/${key}/read`);
   await page.locator('select[name="read[scope][]"]').selectOption(['whole']);

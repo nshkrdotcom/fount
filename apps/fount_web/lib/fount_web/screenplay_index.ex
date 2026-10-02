@@ -134,7 +134,23 @@ defmodule FountWeb.ScreenplayIndex do
   @doc "Precise provider-free screenplay facts for the selected screenplay source."
   def facts(screenplay) do
     scenes = scene_index(screenplay)
-    characters = character_index(screenplay)
+    literal_characters = character_index(screenplay)
+
+    confirmed_cast =
+      screenplay.cast
+      |> Map.values()
+      |> Enum.map(fn character ->
+        speaking_scenes = Query.scenes_with_character(screenplay, character.id)
+        mentions = Query.character_mentions(screenplay, character.id)
+
+        %{
+          id: character.id,
+          name: character.display_name,
+          scene_count: length(speaking_scenes),
+          cue_count: Enum.count(mentions, &(&1.role == :speaker_cue and &1.status == :confirmed))
+        }
+      end)
+      |> Enum.sort_by(&{&1.name, &1.id})
 
     all_words =
       screenplay.ir.elements
@@ -158,8 +174,10 @@ defmodule FountWeb.ScreenplayIndex do
 
     %{
       scene_count: length(scenes),
-      confirmed_cast_count: length(characters),
-      confirmed_cast: Enum.map(characters, &Map.take(&1, [:name, :scene_count, :cue_count])),
+      confirmed_cast_count: length(confirmed_cast),
+      confirmed_cast: confirmed_cast,
+      literal_cue_group_count: length(literal_characters),
+      literal_character_cues: Enum.map(literal_characters, &Map.take(&1, [:name, :scene_count, :cue_count])),
       heading_contexts: heading_counts,
       time_of_day_unknown_count: Enum.count(scenes, &blank?(&1.time)),
       dialogue_words: dialogue_words,
@@ -168,7 +186,9 @@ defmodule FountWeb.ScreenplayIndex do
         if(all_words > 0, do: Float.round(dialogue_words * 100 / all_words, 1), else: nil),
       definitions: %{
         confirmed_cast:
-          "Literal character cues in the selected screenplay source; aliases are not inferred.",
+          "Canonical screenplay cast identities only. A literal cue is not counted here until explicitly promoted or author-created.",
+        literal_character_cues:
+          "Literal parsed character-cue spellings in the selected source. Repeated spelling does not prove a person identity.",
         speaking_scenes: "Distinct scenes containing a confirmed literal cue for that character.",
         dialogue_word_share:
           "Dialogue-body words divided by words across all screenplay elements in this selected source.",

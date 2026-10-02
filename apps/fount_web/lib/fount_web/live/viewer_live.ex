@@ -167,9 +167,27 @@ defmodule FountWeb.ViewerLive do
   end
 
   defp search_facets(screenplay) do
+    canonical =
+      ProductionTools.character_profiles(screenplay)
+      |> Enum.map(&Map.put(&1, :filter_label, &1.display_name))
+
+    canonical_names = canonical |> Enum.map(fn character -> String.upcase(character.display_name || "") end) |> MapSet.new()
+
+    literal =
+      screenplay
+      |> FountWeb.ScreenplayIndex.character_index()
+      |> Enum.reject(&MapSet.member?(canonical_names, String.upcase(&1.name || "")))
+      |> Enum.map(fn cue ->
+        %{
+          id: "literal:" <> cue.name,
+          display_name: cue.name,
+          filter_label: cue.name <> " · literal cue spelling"
+        }
+      end)
+
     %{
       scenes: FountWeb.ScreenplayIndex.scene_index(screenplay),
-      characters: ProductionTools.character_profiles(screenplay),
+      characters: canonical ++ literal,
       locations: ProductionTools.location_profiles(screenplay),
       types: ProductionTools.search_types()
     }
@@ -318,7 +336,7 @@ defmodule FountWeb.ViewerLive do
                 :for={character <- @search_facets.characters}
                 value={character.id}
               >
-                {character.display_name}
+                {character.filter_label}
               </option></select>
             </label>
             <label>
@@ -413,7 +431,7 @@ defmodule FountWeb.ViewerLive do
                 <dt>Scenes</dt><dd>{@facts.scene_count}</dd>
               </div>
               <div>
-                <dt>Confirmed cast cues</dt><dd>{@facts.confirmed_cast_count}</dd>
+                <dt>Confirmed Core cast</dt><dd>{@facts.confirmed_cast_count}</dd>
               </div>
               <div>
                 <dt>Interior headings</dt><dd>{@facts.heading_contexts.interior}</dd>
@@ -442,16 +460,18 @@ defmodule FountWeb.ViewerLive do
               </div>
             </dl>
             <details>
-              <summary>Confirmed character cues</summary>
+              <summary>Confirmed Core cast</summary>
+              <p :if={@facts.confirmed_cast == []}>No source cue has been promoted to a confirmed Core identity in this revision.</p>
               <ul>
                 <li :for={character <- @facts.confirmed_cast}>
                   <strong>{character.name}</strong>
-                  · {character.scene_count} speaking scenes · {character.cue_count} cues
+                  · {character.scene_count} speaking scenes · {character.cue_count} linked cues
                 </li>
               </ul>
+              <p>Literal cue groups: {@facts.literal_cue_group_count}. Open Cast to review source identities without changing the screenplay.</p>
             </details>
             <p class="scope-note">
-              Literal source facts only. No alias inference, coverage score, page/minute guarantee or production estimate.
+              Literal and canonical facts are labeled separately. No cue spelling is treated as a person by itself; no coverage score, page/minute guarantee or production estimate is inferred.
             </p>
           </details>
         </div>

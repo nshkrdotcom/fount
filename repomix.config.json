@@ -10,18 +10,19 @@
   },
   "include": [
     "README.md",
-    "CHANGELOG.md",
-    "LICENSE",
     "mix.exs",
-    "mix.lock",
     ".formatter.exs",
     ".gitignore",
-    ".github/**",
     "repomix.config.json",
-    "scripts/**",
-    "handoff/apply_overlay.py",
-    "packages/**",
-    "apps/**"
+    "packages/*/mix.exs",
+    "packages/*/.formatter.exs",
+    "packages/*/lib/**",
+    "packages/*/priv/repo/migrations/**",
+    "apps/fount_web/mix.exs",
+    "apps/fount_web/.formatter.exs",
+    "apps/fount_web/config/**",
+    "apps/fount_web/lib/**",
+    "apps/fount_web/priv/repo/migrations/**"
   ],
   "ignore": {
     "useGitignore": true,
@@ -37,13 +38,11 @@
       "**/__pycache__/**",
       "**/.env*",
       "fount.xml",
+      "fount-architecture.xml",
       "repomix-output*.xml",
       "**/*.pdf",
-      "**/assets/*.svg",
       "**/*.dump",
-      "**/*.tar",
-      "**/examples/_downloads/**",
-      "**/examples/_output/**"
+      "**/*.tar"
     ]
   }
 }

@@ -1,7 +1,7 @@
 defmodule FountWeb.ProjectContext do
   @moduledoc "Owner-bound, run-independent screenplay workspace loading for the project experience."
 
-  alias FountWeb.{Authoring, AuthoringStore, ScreenplayIndex, Store}
+  alias FountWeb.{Authoring, AuthoringStore, ScreenplayIndex, SemanticContext, Store}
 
   @source_tokens ~w(current working proposed)
 
@@ -22,7 +22,8 @@ defmodule FountWeb.ProjectContext do
          selected: selected,
          sources: sources,
          index: ScreenplayIndex.build(selected.screenplay),
-         facts: ScreenplayIndex.facts(selected.screenplay)
+         facts: ScreenplayIndex.facts(selected.screenplay),
+         semantic: semantic_context(owner, project, current, selected)
        }}
     else
       false -> {:error, :project_screenplay_mismatch}
@@ -68,6 +69,27 @@ defmodule FountWeb.ProjectContext do
     ]
     |> maybe_working(owner, project)
     |> maybe_proposed(owner, project)
+  end
+
+  defp semantic_context(owner, project, current, %{kind: :current}) do
+    case SemanticContext.load(Fount.Repo, owner, project, current) do
+      {:ok, semantic} -> semantic
+      {:error, reason} -> %{error: reason, assessment_state: :unavailable}
+    end
+  end
+
+  defp semantic_context(_owner, _project, current, selected) do
+    %{
+      assessment_state: :source_not_persisted,
+      error: :semantic_review_current_source_only,
+      revision_id: current.revision.id,
+      selected_revision_id: selected.screenplay.revision.id,
+      characters: [],
+      locations: [],
+      canonical_cast: [],
+      review_history: [],
+      version: 0
+    }
   end
 
   defp current_source_label(%{"project_kind" => "example"}), do: "Original example"

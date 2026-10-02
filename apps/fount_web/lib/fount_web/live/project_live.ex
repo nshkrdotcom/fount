@@ -228,6 +228,9 @@ defmodule FountWeb.ProjectLive do
   defp human_error(:source_required), do: "The screenplay file is empty."
   defp human_error(:source_too_large), do: "That file is over the 1 MiB import limit."
 
+  defp human_error(:semantic_schema_missing),
+    do: "Fount needs the SI01 database migration before projects can be opened. Apply migrations, then retry; no project or source review was created."
+
   defp human_error(:unsupported_screenplay_format),
     do: "Choose a Fountain (.fountain) or Final Draft (.fdx) file."
 

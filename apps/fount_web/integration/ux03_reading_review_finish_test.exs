@@ -1,7 +1,7 @@
 defmodule FountWeb.UX03ReadingReviewFinishIntegrationTest do
   use FountWeb.ConnCase, async: false
 
-  alias FountWeb.{ProductionStore, ProductionTools, ReadingArtifacts, Store}
+  alias FountWeb.{ProductionStore, ProductionTools, ProjectContext, ReadingArtifacts, Store}
 
   test "UX03 Reading is calm by default and literal search stays bound to the selected revision",
        %{conn: conn} do
@@ -186,15 +186,18 @@ defmodule FountWeb.UX03ReadingReviewFinishIntegrationTest do
              length(before_runs)
   end
 
-  test "UX03 cast facts and rename preview separate confirmed cue edits from suggested prose review" do
+  test "UX03 cast facts keep literal cues distinct from confirmed people and prose presence" do
     assert {:ok, %{access: access}} = launch("cast")
-    assert {:ok, current} = Fount.Persistence.load(Fount.Repo, access["key"])
-    [character | _] = ProductionTools.character_profiles(current)
+    assert {:ok, context} = ProjectContext.load("test-owner", access["key"])
+    [character | _] = context.semantic.characters
 
     assert character.dialogue_block_count > 0
-    assert {:ok, plan} = ProductionTools.cast_rename_preview(current, character.id, "NEW NAME")
-    assert is_list(plan.cue_operations)
-    assert is_list(plan.review)
+    assert character.review_state == "unreviewed"
+    assert character.speaking_occurrences > 0
+    assert character.presence_occurrences == 0
+    assert character.mention_occurrences == 0
+    assert character.core_character_id == nil
+    assert context.current.cast == %{}
   end
 
   test "UX03 deterministic Fountain and FDX project artifacts are exact owner-bound sources" do
@@ -306,7 +309,8 @@ defmodule FountWeb.UX03ReadingReviewFinishIntegrationTest do
 
     for {path, text} <- [
           {"notes", "Notes"},
-          {"cast", "Cast & locations"},
+          {"cast", "Cast"},
+          {"locations", "Locations"},
           {"read", "Table read"},
           {"feedback", "Feedback"},
           {"exports", "Exports"}

@@ -40,11 +40,14 @@ test('S01-S03 literal retrieval, cast and location facts stay source-bound', asy
   await hit.click();
   await expect(page).toHaveURL(/#node-/);
   await openSection(page,key,'cast');
-  await expect(page.getByRole('heading',{name:'Cast & locations'})).toBeVisible();
-  await expect(page.locator('.character-grid')).toContainText('confirmed mentions');
-  await expect(page.locator('.location-list')).toContainText('CAFÉ');
-  await expect(page.locator('.scope-note').first()).toContainText('derived reading approximations');
-  await expect(page.locator('main')).toContainText('not a production schedule');
+  await expect(page.getByRole('heading',{name:'Cast',exact:true})).toBeVisible();
+  await expect(page.locator('.character-grid')).toContainText('literal dialogue blocks');
+  await expect(page.locator('.character-grid')).toContainText('unreviewed');
+  await expect(page.locator('#semantic-assessment-status')).toContainText('Not configured');
+  await openSection(page,key,'locations');
+  await expect(page.getByRole('heading',{name:'Locations',exact:true})).toBeVisible();
+  await expect(page.locator('.location-workspace')).toContainText('CAFÉ');
+  await expect(page.locator('main')).toContainText('never source text or production scheduling');
   expect(projectRunCount(key)).toBe(0);
 });
 

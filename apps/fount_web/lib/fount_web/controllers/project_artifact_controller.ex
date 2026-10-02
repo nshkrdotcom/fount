@@ -1,7 +1,7 @@
 defmodule FountWeb.ProjectArtifactController do
   use FountWeb, :controller
 
-  alias FountWeb.{ProductionStore, ProductionTools, Store}
+  alias FountWeb.{ProductionStore, ProductionTools, ProjectContext, Store}
 
   @preview_bytes 204_800
 
@@ -90,6 +90,45 @@ defmodule FountWeb.ProjectArtifactController do
       })
     else
       _ -> conn |> put_status(:not_found) |> json(%{"error" => "feedback_not_found"})
+    end
+  end
+
+  def source_interpretation(conn, %{"key" => key}) do
+    owner = conn.assigns.current_owner
+
+    with {:ok, context} <- ProjectContext.load(owner, key),
+         %{assessment_id: assessment_id, source_sha256: source_sha256} = semantic <- context.semantic do
+      json(conn, %{
+        "kind" => "fount.semantic_source_review_v1",
+        "project" => context.project["title"],
+        "source" => %{
+          "screenplay_id" => context.current.id,
+          "revision_id" => semantic.revision_id,
+          "assessment_id" => assessment_id,
+          "source_sha256" => source_sha256,
+          "source_name" => context.project["source_name"],
+          "representation" => "manual_source_inventory"
+        },
+        "assessment" => %{
+          "origin" => semantic.assessment["origin"],
+          "status" => semantic.assessment["status"],
+          "parser_version" => semantic.assessment["parser_version"],
+          "model" => semantic.assessment["model"],
+          "run_id" => semantic.assessment["run_id"],
+          "coverage" => semantic.assessment["coverage"]
+        },
+        "review_version" => semantic.version,
+        "entities" => Enum.map(semantic.entities, &plain/1),
+        "review_history" => Enum.map(semantic.review_history, &plain/1),
+        "canonical_cast" => semantic.canonical_cast,
+        "provenance" => %{
+          "manual_review_only" => true,
+          "model_assessment" => "not_configured_until_SI02",
+          "screenplay_accepted_by_review" => false
+        }
+      })
+    else
+      _ -> conn |> put_status(:not_found) |> json(%{"error" => "source_interpretation_not_found"})
     end
   end
 

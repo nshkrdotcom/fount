@@ -98,7 +98,6 @@ defmodule Fount.Screenplay.SourceReconciler do
           import: nil,
           annotations: Annotations.prune(base.annotations, valid_ids)
       }
-      |> Model.resolve_cast(:literal_cues)
       |> Model.refresh()
 
     import = %{

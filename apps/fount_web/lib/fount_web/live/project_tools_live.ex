@@ -29,6 +29,7 @@ defmodule FountWeb.ProjectToolsLive do
          |> assign(:note_target_results, [])
          |> assign(:note_review_conflict, nil)
          |> assign(:cast_rename_preview, nil)
+         |> assign(:semantic_review_conflict, nil)
          |> assign(:selected_read, nil)
          |> assign(:table_read_conflict, nil)
          |> assign(:reaction_conflict, nil)
@@ -264,7 +265,18 @@ defmodule FountWeb.ProjectToolsLive do
   end
 
   def handle_event("read_character", %{"character_id" => character_id}, socket) do
-    case CreativeWorkspace.character_dialogue(socket.assigns.context.current, character_id) do
+    semantic_profile = Enum.find(socket.assigns.characters, &(&1.id == character_id))
+
+    result =
+      cond do
+        is_map(semantic_profile) and Map.get(semantic_profile, :semantic_handle_id) ->
+          FountWeb.SemanticContext.character_dialogue(socket.assigns.context.current, semantic_profile)
+
+        true ->
+          CreativeWorkspace.character_dialogue(socket.assigns.context.current, character_id)
+      end
+
+    case result do
       {:ok, dialogue} ->
         {:noreply,
          socket
@@ -274,6 +286,73 @@ defmodule FountWeb.ProjectToolsLive do
 
       {:error, reason} ->
         {:noreply, assign(socket, :error, creative_error(reason))}
+    end
+  end
+
+  def handle_event("semantic_review", %{"review" => params}, socket) do
+    semantic = socket.assigns.semantic
+
+    with %{assessment_id: assessment_id, version: version} <- semantic,
+         {:ok, payload} <- semantic_review_payload(params),
+         expected <- parse_semantic_version(params["expected_version"], version),
+         {:ok, _event} <-
+           FountWeb.SemanticStore.review(
+             Fount.Repo,
+             socket.assigns.current_owner,
+             socket.assigns.project["id"],
+             assessment_id,
+             %{
+               "action" => params["action"],
+               "target_handle_id" => blank_to_nil(params["target_handle_id"]),
+               "payload" => payload,
+               "expected_version" => expected,
+               "command_id" => Fount.ID.v4(),
+               "actor" => "human:#{socket.assigns.current_owner}"
+             }
+           ) do
+      {:noreply,
+       socket
+       |> refresh_project_data()
+       |> assign(:semantic_review_conflict, nil)
+       |> assign(:notice, semantic_review_notice(params["action"]))
+       |> assign(:error, nil)}
+    else
+      {:error, {:stale_review, conflict}} ->
+        {:noreply,
+         socket
+         |> refresh_project_data()
+         |> assign(:semantic_review_conflict, conflict)
+         |> assign(:notice, nil)
+         |> assign(:error, "Source review changed in another tab. The latest interpretation is shown; review your choice and submit again.")}
+
+      {:error, reason} ->
+        {:noreply, assign(socket, :error, "Source interpretation was not saved: #{inspect(reason)}")}
+
+      _ ->
+        {:noreply, assign(socket, :error, "Source interpretation is unavailable for this exact revision.")}
+    end
+  end
+
+  def handle_event("promote_semantic_character", %{"handle_id" => handle_id}, socket) do
+    semantic = socket.assigns.semantic
+
+    case FountWeb.SemanticContext.save_character_promotion_candidate(
+           Fount.Repo,
+           socket.assigns.current_owner,
+           socket.assigns.project["id"],
+           socket.assigns.context.current.revision.id,
+           semantic,
+           handle_id
+         ) do
+      {:ok, _} ->
+        {:noreply,
+         socket
+         |> refresh_project_data()
+         |> assign(:notice, "Reviewed identity saved as a screenplay proposal. Current pages remain unchanged until typed Core acceptance.")
+         |> assign(:error, nil)}
+
+      {:error, reason} ->
+        {:noreply, assign(socket, :error, "Identity proposal was not saved: #{inspect(reason)}")}
     end
   end
 
@@ -828,8 +907,9 @@ defmodule FountWeb.ProjectToolsLive do
     |> assign(:scope_options, CreativeWorkspace.scope_options(context.current))
     |> assign(:protection_options, CreativeWorkspace.protection_options(context.current))
     |> assign(:target_options, ProductionTools.target_options(context.current))
-    |> assign(:characters, ProductionTools.character_profiles(context.current))
-    |> assign(:locations, ProductionTools.location_profiles(context.current))
+    |> assign(:semantic, context.semantic)
+    |> assign(:characters, semantic_characters(context))
+    |> assign(:locations, semantic_locations(context))
     |> assign(:estimates, FountWeb.ScreenplayIndex.estimates(context.current))
     |> assign(:note_filters, note_filters)
     |> assign(:note_categories, ProductionTools.note_categories())
@@ -856,6 +936,12 @@ defmodule FountWeb.ProjectToolsLive do
       workflow_action_groups(WorkflowManagement.action_catalog())
     )
   end
+
+  defp semantic_characters(%{semantic: %{characters: characters}}) when is_list(characters), do: characters
+  defp semantic_characters(_context), do: []
+
+  defp semantic_locations(%{semantic: %{locations: locations}}) when is_list(locations), do: locations
+  defp semantic_locations(_context), do: []
 
   defp assign_note_prefill(socket, model, params) do
     target = Map.get(params, "target")
@@ -1381,6 +1467,57 @@ defmodule FountWeb.ProjectToolsLive do
 
   defp creative_error(:note_required), do: "Choose at least one accepted note."
 
+  defp semantic_review_payload(%{"action" => action} = params) do
+    case action do
+      action when action in ~w(confirm reject) -> {:ok, %{}}
+      "change_type" -> required_payload(params, "kind")
+      "merge" -> required_payload(params, "into_handle_id")
+      "split" ->
+        case params["local_id"] do
+          value when is_binary(value) and value != "" -> {:ok, %{"local_ids" => [value]}}
+          _ -> {:error, :occurrence_required}
+        end
+      "set_alias" -> required_payload(params, "alias")
+      "resolve_occurrence" ->
+        with {:ok, local} <- required_value(params, "local_id"),
+             {:ok, role} <- required_value(params, "role") do
+          {:ok, %{"local_id" => local, "role" => role}}
+        end
+      "set_location_parent" -> required_payload(params, "parent_handle_id")
+      "set_time" -> required_payload(params, "value")
+      "undo" -> required_payload(params, "event_id")
+      _ -> {:error, :invalid_review_action}
+    end
+  end
+
+  defp semantic_review_payload(_), do: {:error, :invalid_review_action}
+
+  defp required_payload(params, key) do
+    with {:ok, value} <- required_value(params, key), do: {:ok, %{key => value}}
+  end
+
+  defp required_value(params, key) do
+    value = params |> Map.get(key, "") |> to_string() |> String.trim()
+    if value == "", do: {:error, {String.to_atom(key), :required}}, else: {:ok, value}
+  end
+
+  defp parse_semantic_version(value, fallback) when is_binary(value) do
+    case Integer.parse(value) do
+      {version, ""} when version >= 0 -> version
+      _ -> fallback
+    end
+  end
+
+  defp parse_semantic_version(value, _fallback) when is_integer(value) and value >= 0, do: value
+  defp parse_semantic_version(_, fallback), do: fallback
+
+  defp semantic_review_notice("confirm"), do: "Source identity confirmed for this exact revision. The screenplay itself is unchanged."
+  defp semantic_review_notice("reject"), do: "Source interpretation rejected for this exact revision. The screenplay itself is unchanged."
+  defp semantic_review_notice("merge"), do: "Source identities grouped for review. No screenplay text changed."
+  defp semantic_review_notice("split"), do: "Occurrence split into its own source identity. No screenplay text changed."
+  defp semantic_review_notice("undo"), do: "Review decision undone. No screenplay text changed."
+  defp semantic_review_notice(_), do: "Source interpretation saved. No screenplay text changed and no Run was created."
+
   defp creative_error(:historical_source_required),
     do: "Choose an earlier saved revision to recover from."
 
@@ -1414,6 +1551,13 @@ defmodule FountWeb.ProjectToolsLive do
 
   defp note_error(:note_text_required), do: "Write the note before saving it."
   defp note_error(reason), do: "The note could not be saved or accepted: #{inspect(reason)}"
+
+  defp blank_to_nil(value) when is_binary(value) do
+    value = String.trim(value)
+    if value == "", do: nil, else: value
+  end
+
+  defp blank_to_nil(_), do: nil
 
   defp blank_to_default(value, default) when is_binary(value) do
     value = String.trim(value)
@@ -2103,125 +2247,275 @@ defmodule FountWeb.ProjectToolsLive do
 
       <section :if={@live_action == :cast} class="tool-page character-workspace">
         <header class="compact-page-heading">
-          <div>
-            <p class="eyebrow">Source facts</p><h1>Cast & locations</h1>
-          </div>
-          <a href="/help#cast-locations">Help</a>
+          <div><p class="eyebrow">Source identities</p><h1>Cast</h1></div>
+          <div class="inline-actions"><a href={"/p/#{@project["key"]}/source-review/export.json"}>Export source review JSON</a><a href="/help#cast-locations">Help</a></div>
         </header>
         <p>
-          Confirmed cue names, aliases, appearances and scene headings come from the selected screenplay source. Unknown or unparsed location/time facts stay unknown; this is not a production schedule.
-        </p>
-        <p class="scope-note">
-          Approximate length: {@estimates.pages.label} · Read duration: {@estimates.duration.label}. These are derived reading approximations, not production page locks or schedule estimates.
+          Cast begins with what the source literally says, not an automatic claim that every cue is a person. Confirm, reject, regroup or retype source identities here. These review actions never create a Run or change screenplay text.
         </p>
 
+        <section class="card semantic-assessment-strip" id="semantic-assessment-status">
+          <div><p class="eyebrow">Model assessment</p><strong>Not configured</strong></div>
+          <p>Semantic model assessment comes in SI02. Manual source review is fully available now and remains provider-free.</p>
+        </section>
+
+        <FountWeb.CoreComponents.alert
+          :if={Map.get(@semantic, :error)}
+          kind="warning"
+          title="Source review unavailable"
+        >
+          Apply the SI01 host migration, then reload this exact revision. No fallback identity facts were fabricated.
+        </FountWeb.CoreComponents.alert>
+
         <div class="character-grid">
-          <article :for={character <- @characters} class="card compact-character-card">
-            <h2>{character.display_name}</h2>
+          <article :for={character <- @characters} class="card compact-character-card" id={"semantic-character-#{character.id}"}>
+            <div class="semantic-card-heading">
+              <h2>{character.display_name}</h2>
+              <span class={"semantic-state semantic-state--#{character.review_state}"}>{human_status(character.review_state)}</span>
+            </div>
             <p>
-              {character.dialogue_block_count} dialogue blocks · {character.appearance_count} scenes · {character.confirmed_mentions} confirmed mentions
+              {character.dialogue_block_count} literal dialogue blocks · {character.appearance_count} source scenes · {character.speaking_occurrences} speaking occurrences
+            </p>
+            <p :if={character.presence_occurrences > 0 || character.mention_occurrences > 0}>
+              {character.presence_occurrences} physical-presence assertions · {character.mention_occurrences} mention assertions
             </p>
             <p :if={character.aliases != []}>Aliases: {Enum.join(character.aliases, ", ")}</p>
+            <p class="scope-note">
+              Representation: {human_status(character.representation)}{if character.semantic_handle_id, do: " · source-bound handle", else: " · Core identity"}
+            </p>
+
             <div class="inline-actions">
-              <button type="button" phx-click="read_character" phx-value-character_id={character.id}>Read this character’s dialogue</button>
+              <button type="button" phx-click="read_character" phx-value-character_id={character.id}>Read literal dialogue</button>
+              <button
+                :if={character.semantic_handle_id && character.review_state == "confirmed" && is_nil(character.core_character_id)}
+                type="button"
+                phx-click="promote_semantic_character"
+                phx-value-handle_id={character.semantic_handle_id}
+              >Prepare Core cast proposal</button>
             </div>
-            <form phx-submit="preview_cast_rename" class="compact-form">
-              <input type="hidden" name="rename[character_id]" value={character.id} />
-              <label>Prepare name change <input name="rename[new_name]" maxlength="120" required /></label>
-              <button type="submit">Preview affected source</button>
-            </form>
+
+            <div :if={character.semantic_handle_id} class="semantic-review-controls">
+              <form phx-submit="semantic_review" class="inline-form">
+                <input type="hidden" name="review[target_handle_id]" value={character.semantic_handle_id} />
+                <input type="hidden" name="review[expected_version]" value={Map.get(@semantic, :version, 0)} />
+                <button name="review[action]" value="confirm" type="submit">Confirm person</button>
+                <button name="review[action]" value="reject" type="submit">Reject as cast</button>
+              </form>
+
+              <form phx-submit="semantic_review" class="inline-form">
+                <input type="hidden" name="review[target_handle_id]" value={character.semantic_handle_id} />
+                <input type="hidden" name="review[expected_version]" value={Map.get(@semantic, :version, 0)} />
+                <input type="hidden" name="review[action]" value="change_type" />
+                <label>Interpret as
+                  <select name="review[kind]">
+                    <option value="character">Character</option>
+                    <option value="location">Location</option>
+                    <option value="document_text">Printed/document text</option>
+                    <option value="prop">Prop</option>
+                    <option value="organization">Organization</option>
+                    <option value="unknown">Unknown</option>
+                  </select>
+                </label>
+                <button type="submit">Change type</button>
+              </form>
+
+              <form phx-submit="semantic_review" class="inline-form">
+                <input type="hidden" name="review[target_handle_id]" value={character.semantic_handle_id} />
+                <input type="hidden" name="review[expected_version]" value={Map.get(@semantic, :version, 0)} />
+                <input type="hidden" name="review[action]" value="set_alias" />
+                <input name="review[alias]" maxlength="160" placeholder="Reviewed alias" required />
+                <button type="submit">Add alias</button>
+              </form>
+
+              <form :if={Enum.any?(@characters, &(&1.semantic_handle_id && &1.semantic_handle_id != character.semantic_handle_id))} phx-submit="semantic_review" class="inline-form">
+                <input type="hidden" name="review[target_handle_id]" value={character.semantic_handle_id} />
+                <input type="hidden" name="review[expected_version]" value={Map.get(@semantic, :version, 0)} />
+                <input type="hidden" name="review[action]" value="merge" />
+                <label>Same person as
+                  <select name="review[into_handle_id]" required>
+                    <option value="">Choose source identity</option>
+                    <option
+                      :for={other <- Enum.filter(@characters, &(&1.semantic_handle_id && &1.semantic_handle_id != character.semantic_handle_id))}
+                      value={other.semantic_handle_id}
+                    >{other.display_name}</option>
+                  </select>
+                </label>
+                <button type="submit">Group identities</button>
+              </form>
+
+              <div :for={occurrence <- character.occurrences} class="semantic-occurrence">
+                <a :if={occurrence.element_id} href={"/p/#{@project["key"]}?source=current#node-#{occurrence.element_id}"}>
+                  Scene {occurrence.scene_ordinal || "—"} · {occurrence.literal}
+                </a>
+                <form phx-submit="semantic_review" class="inline-form">
+                  <input type="hidden" name="review[target_handle_id]" value={character.semantic_handle_id} />
+                  <input type="hidden" name="review[expected_version]" value={Map.get(@semantic, :version, 0)} />
+                  <input type="hidden" name="review[action]" value="resolve_occurrence" />
+                  <input type="hidden" name="review[local_id]" value={occurrence.local_id} />
+                  <select name="review[role]">
+                    <option value="speaker" selected={occurrence.role == "speaker"}>Speaker</option>
+                    <option value="physical_presence" selected={occurrence.role == "physical_presence"}>Physical presence</option>
+                    <option value="mentioned" selected={occurrence.role == "mentioned"}>Mentioned</option>
+                    <option value="printed_text" selected={occurrence.role == "printed_text"}>Printed text</option>
+                    <option value="message_sender" selected={occurrence.role == "message_sender"}>Message sender</option>
+                    <option value="unknown" selected={occurrence.role == "unknown"}>Unknown</option>
+                  </select>
+                  <button type="submit">Save role</button>
+                </form>
+                <form :if={length(character.occurrences) > 1} phx-submit="semantic_review" class="inline-form">
+                  <input type="hidden" name="review[target_handle_id]" value={character.semantic_handle_id} />
+                  <input type="hidden" name="review[expected_version]" value={Map.get(@semantic, :version, 0)} />
+                  <input type="hidden" name="review[action]" value="split" />
+                  <input type="hidden" name="review[local_id]" value={occurrence.local_id} />
+                  <button type="submit">Split this occurrence</button>
+                </form>
+              </div>
+            </div>
           </article>
         </div>
 
-        <section :if={@cast_rename_preview} class="card creative-review">
-          <p class="eyebrow">Proposed name change</p>
-          <h2>Prepare {@cast_rename_preview.new_name}</h2>
-          <p>
-            {length(@cast_rename_preview.plan.cue_operations)} confirmed cue edits will be included. {length(
-              @cast_rename_preview.plan.review
-            )} suggested prose mentions remain review-only and are not silently rewritten.
-          </p>
-          <button type="button" phx-click="save_cast_rename">Save proposed name change</button>
-          <p class="scope-note">
-            Saving creates proposed work only. Current pages remain unchanged until deliberate Core acceptance.
-          </p>
-        </section>
+        <p :if={@characters == [] && not Map.get(@semantic, :error)} class="empty-copy">
+          No reviewed or literal character cues are present in this source revision.
+        </p>
 
         <section :if={@cast_candidates != []} class="card">
           <h2>Saved cast proposals</h2>
           <article :for={candidate <- @cast_candidates} class="note-row">
             <div>
-              <strong>{get_in(candidate, ["metadata", "new_name"]) || "Name change"}</strong><span> · {human_status(
-                candidate["decision"]
-              )}</span>
+              <strong>{get_in(candidate, ["metadata", "display_name"]) || get_in(candidate, ["metadata", "new_name"]) || "Cast change"}</strong><span> · {human_status(candidate["decision"])}</span>
             </div>
             <button
               :if={candidate["decision"] == "proposed"}
               type="button"
               phx-click="accept_tool_candidate"
               phx-value-candidate_id={candidate["candidate_id"]}
-            >Make reviewed name change current</button>
+            >Make reviewed proposal current</button>
           </article>
+          <p class="scope-note">Only this explicit typed Core acceptance can change the current screenplay.</p>
         </section>
 
         <section :if={@character_dialogue} class="character-dialogue-reader">
           <header>
-            <p class="eyebrow">Provider-free source reading</p><h2>
-              {@character_dialogue.character.display_name}
-            </h2>
-            <p>
-              Showing {length(@character_dialogue.rows)} of {@character_dialogue.total} dialogue blocks.
-            </p>
+            <p class="eyebrow">Provider-free source reading</p><h2>{@character_dialogue.character.display_name}</h2>
+            <p>Showing {length(@character_dialogue.rows)} of {@character_dialogue.total} literal dialogue blocks.</p>
           </header>
           <article :for={row <- @character_dialogue.rows} class="dialogue-return-card">
             <div class="dialogue-return-heading">
               <strong>{row.scene_heading || "Scene"}</strong><a href={"/p/#{@project["key"]}?source=current#node-#{row.cue_id}"}>Return to passage</a>
             </div>
             <p class="character-cue">{row.character}</p>
-            <div :for={line <- row.lines} class="dialogue-line-audition">
-              <p>{line.text}</p>
-              <form
-                :if={line.type in [:dialogue, :parenthetical]}
-                phx-submit="try_line"
-                class="inline-form"
-              >
-                <input type="hidden" name="line[element_id]" value={line.id} />
-                <input
-                  name="line[direction]"
-                  maxlength="500"
-                  aria-label="Direction for another line"
-                  placeholder="Optional direction"
-                />
-                <button type="submit">Try another line</button>
-              </form>
-            </div>
+            <div :for={line <- row.lines} class="dialogue-line-audition"><p>{line.text}</p></div>
           </article>
         </section>
 
-        <section class="location-list">
-          <header>
-            <p class="eyebrow">Scene headings</p><h2>Locations</h2>
-          </header>
-          <p :if={@locations == []}>No parseable scene locations in this draft.</p>
-          <details :for={location <- @locations} class="card location-card">
-            <summary>
-              <strong>{location.location}</strong><span>{length(location.entries)} scenes</span>
-            </summary>
-            <ol>
-              <li :for={entry <- location.entries}>
-                <a href={"/p/#{@project["key"]}?scene=#{entry.ordinal}"}>Scene {entry.ordinal} · {entry.heading ||
-                  "Untitled"}</a>
-                <span>{entry.parsed_context} · {entry.parsed_time}</span>
-              </li>
-            </ol>
-          </details>
+        <section :if={Map.get(@semantic, :review_history, []) != []} class="card semantic-history">
+          <h2>Interpretation history</h2>
+          <p>History is source-bound and separate from screenplay acceptance.</p>
+          <div :for={event <- Enum.reverse(Map.get(@semantic, :review_history, []))} class="semantic-history-row">
+            <span>{human_status(event["action"])} · {human_status(event["outcome"])} · {event["actor"]} · v{event["new_version"]}</span>
+            <form :if={event["outcome"] == "applied" && event["action"] != "undo"} phx-submit="semantic_review" class="inline-form">
+              <input type="hidden" name="review[action]" value="undo" />
+              <input type="hidden" name="review[event_id]" value={event["id"]} />
+              <input type="hidden" name="review[expected_version]" value={Map.get(@semantic, :version, 0)} />
+              <button type="submit">Undo review decision</button>
+            </form>
+          </div>
+        </section>
+      </section>
+
+      <section :if={@live_action == :locations} class="tool-page location-workspace">
+        <header class="compact-page-heading">
+          <div><p class="eyebrow">Source identities</p><h1>Locations</h1></div>
+          <div class="inline-actions"><a href={"/p/#{@project["key"]}/source-review/export.json"}>Export source review JSON</a><a href="/help#cast-locations">Help</a></div>
+        </header>
+        <p>
+          Scene-heading place, subplace, time, date/era and relative-time facts stay separate. Raw headings remain authoritative. Grouping or setting hierarchy here changes interpretation only, never source text or production scheduling.
+        </p>
+        <section class="card semantic-assessment-strip">
+          <div><p class="eyebrow">Model assessment</p><strong>Not configured</strong></div>
+          <p>Semantic model assessment comes in SI02. Manual location review is available now.</p>
         </section>
 
-        <section :if={@creative_preview} class="card creative-review">
-          <h2>{@creative_review.action}</h2><p>{@creative_review.question}</p>
-          <p>Surrounding source protected: {length(@creative_review.protections)} passages.</p>
-          <button type="button" phx-click="confirm_creative_task">Start line alternatives</button>
-        </section>
+        <p :if={@locations == [] && not Map.get(@semantic, :error)}>No literal scene headings are available in this exact source revision.</p>
+        <article :for={location <- @locations} class="card location-card" id={"semantic-location-#{location.id}"}>
+          <header class="semantic-card-heading">
+            <h2>{location.location}</h2>
+            <span class={"semantic-state semantic-state--#{location.review_state}"}>{human_status(location.review_state)}</span>
+          </header>
+          <p :if={location.aliases != []}>Aliases: {Enum.join(location.aliases, ", ")}</p>
+          <ol>
+            <li :for={entry <- location.entries}>
+              <a href={"/p/#{@project["key"]}?scene=#{entry.ordinal}"}>Scene {entry.ordinal || "—"} · {entry.heading || "Untitled"}</a>
+              <span>{entry.parsed_context} · {entry.parsed_time}</span>
+              <span :if={entry.date_or_era}>Date/era: {entry.date_or_era}</span>
+              <span :if={entry.subplace}>Subplace: {entry.subplace}</span>
+              <span :if={entry.unknown_modifiers != []}>Unparsed: {Enum.join(entry.unknown_modifiers, ", ")}</span>
+            </li>
+          </ol>
+
+          <div class="semantic-review-controls">
+            <form phx-submit="semantic_review" class="inline-form">
+              <input type="hidden" name="review[target_handle_id]" value={location.handle_id} />
+              <input type="hidden" name="review[expected_version]" value={Map.get(@semantic, :version, 0)} />
+              <button name="review[action]" value="confirm" type="submit">Confirm place</button>
+              <button name="review[action]" value="reject" type="submit">Reject place</button>
+            </form>
+            <form phx-submit="semantic_review" class="inline-form">
+              <input type="hidden" name="review[target_handle_id]" value={location.handle_id} />
+              <input type="hidden" name="review[expected_version]" value={Map.get(@semantic, :version, 0)} />
+              <input type="hidden" name="review[action]" value="change_type" />
+              <label>Interpret as
+                <select name="review[kind]">
+                  <option value="location">Location</option>
+                  <option value="character">Character</option>
+                  <option value="document_text">Printed/document text</option>
+                  <option value="prop">Prop</option>
+                  <option value="organization">Organization</option>
+                  <option value="unknown">Unknown</option>
+                </select>
+              </label>
+              <button type="submit">Change type</button>
+            </form>
+            <form phx-submit="semantic_review" class="inline-form">
+              <input type="hidden" name="review[target_handle_id]" value={location.handle_id} />
+              <input type="hidden" name="review[expected_version]" value={Map.get(@semantic, :version, 0)} />
+              <input type="hidden" name="review[action]" value="set_alias" />
+              <input name="review[alias]" maxlength="160" placeholder="Reviewed place alias" required />
+              <button type="submit">Add alias</button>
+            </form>
+            <form phx-submit="semantic_review" class="inline-form">
+              <input type="hidden" name="review[target_handle_id]" value={location.handle_id} />
+              <input type="hidden" name="review[expected_version]" value={Map.get(@semantic, :version, 0)} />
+              <input type="hidden" name="review[action]" value="set_time" />
+              <input name="review[value]" maxlength="160" placeholder="Reviewed time / relative time" required />
+              <button type="submit">Set reviewed time</button>
+            </form>
+            <form :if={Enum.any?(@locations, &(&1.handle_id != location.handle_id))} phx-submit="semantic_review" class="inline-form">
+              <input type="hidden" name="review[target_handle_id]" value={location.handle_id} />
+              <input type="hidden" name="review[expected_version]" value={Map.get(@semantic, :version, 0)} />
+              <input type="hidden" name="review[action]" value="merge" />
+              <label>Same place as
+                <select name="review[into_handle_id]" required>
+                  <option value="">Choose place</option>
+                  <option :for={other <- Enum.reject(@locations, &(&1.handle_id == location.handle_id))} value={other.handle_id}>{other.location}</option>
+                </select>
+              </label>
+              <button type="submit">Group places</button>
+            </form>
+            <form :if={Enum.any?(@locations, &(&1.handle_id != location.handle_id))} phx-submit="semantic_review" class="inline-form">
+              <input type="hidden" name="review[target_handle_id]" value={location.handle_id} />
+              <input type="hidden" name="review[expected_version]" value={Map.get(@semantic, :version, 0)} />
+              <input type="hidden" name="review[action]" value="set_location_parent" />
+              <label>Parent place
+                <select name="review[parent_handle_id]" required>
+                  <option value="">Choose parent</option>
+                  <option :for={other <- Enum.reject(@locations, &(&1.handle_id == location.handle_id))} value={other.handle_id}>{other.location}</option>
+                </select>
+              </label>
+              <button type="submit">Set hierarchy</button>
+            </form>
+          </div>
+        </article>
       </section>
 
       <section :if={@live_action == :read} class="tool-page table-read-destination">

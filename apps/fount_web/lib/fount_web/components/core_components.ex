@@ -244,7 +244,8 @@ defmodule FountWeb.CoreComponents do
             <a :if={@view == "writing"} href={@work_href}>Work on it</a>
             <a :if={@view == "writing"} href={@notes_href}>Notes</a>
             <a href={"/p/#{@project_key}/analysis"}>Analysis</a>
-            <a href={"/p/#{@project_key}/cast"}>Cast &amp; locations</a>
+            <a href={"/p/#{@project_key}/cast"}>Cast</a>
+            <a href={"/p/#{@project_key}/locations"}>Locations</a>
             <a href={"/p/#{@project_key}/read"}>Table read</a>
             <a href={"/p/#{@project_key}/feedback"}>Feedback</a>
             <a href={"/p/#{@project_key}/history"}>History</a>

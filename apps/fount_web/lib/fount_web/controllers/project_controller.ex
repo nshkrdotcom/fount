@@ -33,6 +33,9 @@ defmodule FountWeb.ProjectController do
       {:error, {:invalid_fdx, _reason}} ->
         reject(conn, "This Final Draft file could not be parsed. The project was not created.")
 
+      {:error, :semantic_schema_missing} ->
+        reject(conn, "Fount needs the SI01 database migration before projects can be opened. Apply migrations, then retry; no project or source review was created.")
+
       {:error, _reason} ->
         reject(conn, "The screenplay could not be opened. Your source file was not changed.")
     end

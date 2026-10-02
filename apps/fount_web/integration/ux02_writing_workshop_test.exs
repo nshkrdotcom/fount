@@ -1,7 +1,7 @@
 defmodule FountWeb.UX02WritingWorkshopIntegrationTest do
   use FountWeb.ConnCase, async: false
 
-  alias FountWeb.{CreativeWorkspace, ProductionTools, WorkflowManagement}
+  alias FountWeb.{CreativeWorkspace, Launch, ProductionTools, ProjectContext, SemanticContext, SemanticStore, WorkflowManagement}
 
   test "UX02 Work stays question-first while the complete validated catalog is reachable", %{
     conn: conn
@@ -336,12 +336,46 @@ defmodule FountWeb.UX02WritingWorkshopIntegrationTest do
   end
 
   defp launch(suffix) do
-    FountWeb.Launch.create("test-owner", %{
-      "title" => "UX02 #{suffix}",
-      "key" => "ux02-#{suffix}-#{System.unique_integer([:positive])}",
+    assert {:ok, %{project: project}} =
+             Launch.create_project("test-owner", %{
+               "title" => "UX02 #{suffix}",
+               "kind" => "import",
+               "source" => FountWeb.Journeys.fixture_fountain(),
+               "filename" => "ux02.fountain"
+             })
+
+    assert {:ok, context} = ProjectContext.load("test-owner", project["key"])
+    [source_character | _] = context.semantic.characters
+
+    assert {:ok, _} =
+             SemanticStore.review(Fount.Repo, "test-owner", project["id"], context.semantic.assessment_id, %{
+               "action" => "confirm",
+               "target_handle_id" => source_character.semantic_handle_id,
+               "payload" => %{},
+               "expected_version" => context.semantic.version,
+               "command_id" => "ux02-confirm-#{suffix}-#{System.unique_integer([:positive])}",
+               "actor" => "human:test-owner"
+             })
+
+    assert {:ok, reviewed} = ProjectContext.load("test-owner", project["key"])
+    source_character = Enum.find(reviewed.semantic.characters, &(&1.semantic_handle_id == source_character.semantic_handle_id))
+
+    assert {:ok, proposal} =
+             SemanticContext.save_character_promotion_candidate(
+               Fount.Repo,
+               "test-owner",
+               project["id"],
+               reviewed.current.revision.id,
+               reviewed.semantic,
+               source_character.semantic_handle_id
+             )
+
+    assert {:ok, _} =
+             ProductionTools.accept_tool_candidate(Fount.Repo, "test-owner", proposal.candidate.id, Fount.ID.v4())
+
+    Launch.create_from_project("test-owner", project["id"], %{
       "journey" => "opening",
-      "source" => FountWeb.Journeys.fixture_fountain(),
-      "filename" => "ux02.fountain"
+      "command_id" => "ux02-run-#{suffix}-#{System.unique_integer([:positive])}"
     })
   end
 end

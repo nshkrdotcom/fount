@@ -102,9 +102,9 @@ defmodule FountWeb.Help do
       slug: "character-dialogue",
       title: "Read a character's dialogue",
       summary:
-        "Read literal confirmed cue blocks with scene context and return links, without a provider call.",
+        "Read literal cue blocks with scene context and return links, without a provider call.",
       body:
-        "Character dialogue is derived from the selected screenplay source using confirmed cast identity and existing dialogue blocks. It does not infer performance, intent or character quality. Each displayed line returns to its exact source passage."
+        "Character dialogue can be read from literal source cues before semantic identity is confirmed. Speaking is not the same as physical presence or a prose mention, and O.S./voice-only cues never imply presence. Each displayed line returns to its exact source passage; reading or reviewing creates no Run."
     },
     %{
       slug: "changes",
@@ -131,9 +131,9 @@ defmodule FountWeb.Help do
     %{
       slug: "cast-locations",
       title: "Cast & locations",
-      summary: "Confirmed source facts, human-readable rename proposals and truthful unknowns.",
+      summary: "Literal source facts stay separate from reviewed identities, places and screenplay truth.",
       body:
-        "Cast profiles use stable screenplay cast identities, literal aliases, confirmed cue/mention counts and scene appearances. Prepare name change previews confirmed cue edits separately from suggested prose mentions; saving remains proposed work until exact acceptance. Locations are scene-heading facts in source order. Unknown context or time remains unknown and no production schedule is inferred."
+        "Cast and Locations are separate local destinations. A literal uppercase cue is only a source occurrence until a reviewer confirms what it represents; generic guards, printed words, young/adult variants and aliases are never merged by spelling alone. Historical literal-cue cast is labeled legacy/unreviewed while writer-authored Core identities remain confirmed. Locations preserve raw headings and keep place, subplace, time of day, date/era and relative time separate. Manual confirm/reject/type/merge/split/alias/hierarchy/time review is pinned to the exact owner, project, revision and source hash, has append-only conflict history and creates no Run. If the screenplay revision changes, the old review becomes historical rather than silently rebinding to the new source. Model assessment is intentionally Not configured until SI02, so SI01 source review makes no provider call and sends no screenplay material to a model. Promoting a reviewed identity creates proposed Core work only; deliberate typed acceptance is still required to change the current screenplay."
     },
     %{
       slug: "analysis",

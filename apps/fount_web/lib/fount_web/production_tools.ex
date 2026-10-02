@@ -830,6 +830,13 @@ defmodule FountWeb.ProductionTools do
 
   defp character_scene_filter(_screenplay, value) when value in [nil, ""], do: {:ok, nil}
 
+  defp character_scene_filter(screenplay, "literal:" <> cue_name) do
+    case Enum.find(ScreenplayIndex.character_index(screenplay), &(&1.name == cue_name)) do
+      nil -> {:error, :unknown_character}
+      literal -> {:ok, literal.scene_ids}
+    end
+  end
+
   defp character_scene_filter(screenplay, id) do
     if Query.character(screenplay, id) do
       {:ok, screenplay |> Query.scenes_with_character(id) |> Enum.map(& &1.id)}

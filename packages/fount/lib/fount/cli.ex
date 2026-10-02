@@ -22,7 +22,7 @@ defmodule Fount.CLI do
 
   defp dispatch("import", [path], opts, repo) do
     with {:ok, bytes} <- File.read(path),
-         {:ok, model, diagnostics} <- Fount.Interchange.read(bytes, opts[:format], cast_resolution: :literal_cues),
+         {:ok, model, diagnostics} <- Fount.Interchange.read(bytes, opts[:format], cast_resolution: :manual),
          {:ok, root} <-
            Fount.Persistence.create(repo, opts[:key], model,
              provenance: %{

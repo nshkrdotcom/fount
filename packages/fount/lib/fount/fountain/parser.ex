@@ -251,12 +251,12 @@ defmodule Fount.Fountain.Parser do
         attrs = %{forced?: parts.forced?}
         {[single_node(:transition, line, source, document_id, parts.text, attrs, span)], index + 1, diagnostics}
 
-      Classifier.character?(line, previous, following) ->
-        parse_character_node(line, source, document_id, index, diagnostics)
-
       Classifier.forced_action?(line) ->
         {text, span} = strip_prefix(line, "!")
         {[single_node(:action, line, source, document_id, text, %{forced?: true}, span)], index + 1, diagnostics}
+
+      Classifier.character?(line, previous, following) ->
+        parse_character_node(line, source, document_id, index, diagnostics)
 
       true ->
         {taken, next_index} = take_action_lines(source.lines, index, [])

@@ -37,6 +37,7 @@ defmodule FountWeb.Router do
       live "/p/:key/notes", ProjectToolsLive, :notes
       live "/p/:key/analysis", ProjectToolsLive, :analysis
       live "/p/:key/cast", ProjectToolsLive, :cast
+      live "/p/:key/locations", ProjectToolsLive, :locations
       live "/p/:key/read", ProjectToolsLive, :read
       live "/p/:key/feedback", ProjectToolsLive, :feedback
       live "/p/:key/history", ProjectToolsLive, :history
@@ -56,6 +57,7 @@ defmodule FountWeb.Router do
 
     get "/p/:key/notes/export.json", ProjectArtifactController, :notes
     get "/p/:key/feedback/export.json", ProjectArtifactController, :feedback
+    get "/p/:key/source-review/export.json", ProjectArtifactController, :source_interpretation
     get "/p/:key/table-reads/:read_ref/export.json", ProjectArtifactController, :table_read
     get "/p/:key/artifacts/:artifact_ref/preview", ProjectArtifactController, :preview
     get "/p/:key/artifacts/:artifact_ref/pdf", ProjectArtifactController, :view_pdf

@@ -73,7 +73,8 @@ defmodule Fount.Fountain.Classifier do
     name = body |> strip_character_extension() |> String.trim()
 
     forced or
-      (empty_neighbor?(previous) and not empty_neighbor?(following) and uppercase?(body) and
+      (not forced_action?(line) and not forced_scene_heading?(line) and not forced_transition?(line) and
+         empty_neighbor?(previous) and not empty_neighbor?(following) and uppercase?(body) and
          Regex.match?(~r/\p{L}/u, name))
   rescue
     _ -> false

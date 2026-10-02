@@ -38,6 +38,19 @@ defmodule Fount.Screenplay.SourceReconcilerTest do
     assert Screenplay.to_fountain(result.screenplay) == edited
   end
 
+  test "manual source reconciliation never promotes literal cues into canonical cast" do
+    {:ok, document} = Fount.parse(@source, document_id: Fount.ID.v4())
+    base = Screenplay.from_document(document, cast_resolution: :manual)
+    assert base.cast == %{}
+
+    edited = String.replace(@source, "A monitor blinks.", "A monitor blinks twice.")
+    assert {:ok, result} = SourceReconciler.reconcile(base, edited)
+    assert result.screenplay.cast == %{}
+    assert result.screenplay.mentions == %{}
+    assert result.fidelity["added_cast_ids"] == []
+    assert Screenplay.to_fountain(result.screenplay) == edited
+  end
+
   test "persisted identity anchors keep draft-created node IDs stable after later source shifts" do
     {:ok, document} = Fount.parse(@source, document_id: Fount.ID.v4())
     base = Screenplay.from_document(document, cast_resolution: :literal_cues)

@@ -40,8 +40,11 @@ defmodule FountWeb.Launch do
              import_fidelity: import,
              project_kind: project_kind,
              source_name: import["source_name"]
-           }) do
-      {:ok, %{project: project, screenplay: root, import: import}}
+           }),
+         {:ok, persisted_root} <- Persistence.load(Fount.Repo, key),
+         {:ok, _inventory} <-
+           FountWeb.SemanticStore.ensure_inventory(Fount.Repo, owner_id, project, persisted_root) do
+      {:ok, %{project: project, screenplay: persisted_root, import: import}}
     end
   end
 
@@ -399,7 +402,7 @@ defmodule FountWeb.Launch do
 
       String.ends_with?(lower, ".fountain") ->
         with {:ok, doc} <- Fount.parse(source) do
-          root = Screenplay.from_document(doc, cast_resolution: :literal_cues)
+          root = Screenplay.from_document(doc, cast_resolution: :manual)
 
           {:ok, root,
            %{

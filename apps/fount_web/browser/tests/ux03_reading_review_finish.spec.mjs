@@ -248,6 +248,7 @@ test('UX03 exact Fountain, FDX and PDF exports preview/download from the named c
   await login(page);
   const key = await importProject(page, 'ux03-exports', source);
   await page.goto(`/p/${key}/exports`);
+  await expect(page.locator('.phx-connected')).toBeVisible();
   await expect(page.getByRole('heading', {name: 'Exports'})).toBeVisible();
 
   await page.getByRole('button', {name: 'Build Fountain'}).click();
@@ -257,6 +258,7 @@ test('UX03 exact Fountain, FDX and PDF exports preview/download from the named c
   await expect(page.locator('body')).toContainText('coffee maker');
 
   await page.goto(`/p/${key}/exports`);
+  await expect(page.locator('.phx-connected')).toBeVisible();
   await page.getByRole('button', {name: 'Build FDX'}).click();
   await expect(page.locator('.artifact-list')).toContainText('.fdx');
 

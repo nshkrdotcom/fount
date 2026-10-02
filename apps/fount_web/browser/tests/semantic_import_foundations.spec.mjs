@@ -18,8 +18,8 @@ test('SI01 import keeps source cues unreviewed, manual review creates zero Runs,
 
   await openWorkspace(page, `/p/${key}/cast`);
   await expect(page.getByRole('heading',{name:'Cast',exact:true})).toBeVisible();
-  await expect(page.locator('#semantic-assessment-status')).toContainText('Not configured');
-  await expect(page.locator('#semantic-assessment-status')).toContainText('SI02');
+  await expect(page.locator('#semantic-assessment-status')).toContainText(process.env.FOUNT_SEMANTIC_ASSESSMENT_MODE === 'deterministic_fixture' ? 'Not assessed' : 'Not configured');
+  await expect(page.locator('#semantic-assessment-status')).toContainText(process.env.FOUNT_SEMANTIC_ASSESSMENT_MODE === 'deterministic_fixture' ? 'gpt-6.1-sol' : 'Not configured');
   await expect(page.locator('.character-grid')).toContainText('GUARD');
   await expect(page.locator('.character-grid').getByRole('heading',{name:'GUARD',exact:true})).toHaveCount(2);
   await expect(page.locator('.character-grid')).toContainText('GUARD (O.S.)');

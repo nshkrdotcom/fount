@@ -2,11 +2,13 @@ defmodule FountWeb.SemanticStore do
   @moduledoc "Source-bound semantic inventory, SI02 assessment history and human review persistence."
 
   alias Ecto.Adapters.SQL
+  alias Fount.Intelligence.ImportAssessment
   alias Fount.Screenplay.Model
   alias Fount.Semantics.{SourceInventory, SourceReview}
+  alias Fount.Writing.CanonicalJSON
 
   @manual_schema SourceInventory.schema_version()
-  @model_schema Fount.Intelligence.ImportAssessment.schema_version()
+  @model_schema ImportAssessment.schema_version()
   @uuid_columns ~w(id project_id screenplay_id revision_id source_artifact_id run_id assessment_id handle_id target_handle_id supersedes_assessment_id)
 
   def ensure_inventory(repo, owner, project, screenplay)
@@ -141,71 +143,130 @@ defmodule FountWeb.SemanticStore do
     request_fingerprint = attrs["request_fingerprint"]
     origin = attrs["origin"] || "model"
 
-    with true <- is_binary(command_id) and command_id != "" or {:error, :invalid_command_id},
-         true <- is_binary(request_fingerprint) and byte_size(request_fingerprint) == 64 or {:error, :invalid_request_fingerprint},
-         true <- origin in ["model", "deterministic_fixture"] or {:error, :invalid_assessment_origin},
-         true <- project["screenplay_id"] == screenplay.id or {:error, :project_screenplay_mismatch} do
+    with :ok <-
+           validate_assessment_reservation(
+             project,
+             screenplay,
+             command_id,
+             request_fingerprint,
+             origin
+           ) do
       transaction(repo, fn ->
-        SQL.query!(repo, "SELECT pg_advisory_xact_lock(hashtext($1))", ["semantic-assessment:" <> owner <> ":" <> project["id"] <> ":" <> command_id], log: false)
+        SQL.query!(
+          repo,
+          "SELECT pg_advisory_xact_lock(hashtext($1))",
+          ["semantic-assessment:" <> owner <> ":" <> project["id"] <> ":" <> command_id],
+          log: false
+        )
 
-        case assessment_by_command(repo, owner, project["id"], command_id) do
-          {:ok, row} ->
-            if row["request_fingerprint"] == request_fingerprint and row["revision_id"] == screenplay.revision.id,
-              do: row,
-              else: repo.rollback(:command_id_conflict)
-
-          {:error, :not_found} ->
-            assessment_id = Fount.ID.v5(screenplay.id, ["semantic-model-assessment:", project["id"], ":", command_id])
-            supersedes = newest_usable_model_id(repo, owner, project["id"], screenplay.revision.id)
-
-            SQL.query!(
-              repo,
-              """
-              INSERT INTO fount_web_semantic_assessments(
-                id,owner_id,project_id,screenplay_id,revision_id,source_artifact_id,source_sha256,render_sha256,
-                request_fingerprint,schema_version,prompt_version,parser_version,model,reasoning_effort,provider_family,
-                provider_returned_model,run_id,origin,status,coverage,result,usage,limits,provenance,command_id,
-                supersedes_assessment_id,error,inserted_at,updated_at
-              ) VALUES(
-                $1::text::uuid,$2,$3::text::uuid,$4::text::uuid,$5::text::uuid,$6::text::uuid,$7,$8,$9,$10,$11,$12,
-                $13,$14,$15,NULL,NULL,$16,'queued','{}'::jsonb,'{}'::jsonb,'{}'::jsonb,$17::jsonb,$18::jsonb,$19,
-                $20::text::uuid,'{}'::jsonb,now(),now()
-              ) RETURNING *
-              """,
-              [
-                assessment_id,
-                owner,
-                project["id"],
-                screenplay.id,
-                screenplay.revision.id,
-                attrs["source_artifact_id"],
-                attrs["source_sha256"],
-                attrs["render_sha256"],
-                request_fingerprint,
-                @model_schema,
-                attrs["prompt_version"],
-                Fount.version(),
-                attrs["model"],
-                attrs["reasoning_effort"],
-                attrs["provider_family"],
-                origin,
-                attrs["limits"] || %{},
-                attrs["provenance"] || %{},
-                command_id,
-                supersedes
-              ],
-              log: false
-            )
-            |> one()
-
-          {:error, reason} ->
-            repo.rollback(reason)
-        end
+        reserve_locked(
+          repo,
+          owner,
+          project,
+          screenplay,
+          attrs,
+          command_id,
+          request_fingerprint,
+          origin
+        )
       end)
-    else
-      false -> {:error, :invalid_assessment_request}
-      {:error, _} = error -> error
     end
+  end
+
+  defp validate_assessment_reservation(project, screenplay, command_id, fingerprint, origin) do
+    cond do
+      not (is_binary(command_id) and command_id != "") ->
+        {:error, :invalid_command_id}
+
+      not (is_binary(fingerprint) and byte_size(fingerprint) == 64) ->
+        {:error, :invalid_request_fingerprint}
+
+      origin not in ["model", "deterministic_fixture"] ->
+        {:error, :invalid_assessment_origin}
+
+      project["screenplay_id"] != screenplay.id ->
+        {:error, :project_screenplay_mismatch}
+
+      true ->
+        :ok
+    end
+  end
+
+  defp reserve_locked(
+         repo,
+         owner,
+         project,
+         screenplay,
+         attrs,
+         command_id,
+         request_fingerprint,
+         origin
+       ) do
+    case assessment_by_command(repo, owner, project["id"], command_id) do
+      {:ok, row} ->
+        replay_reservation(repo, row, request_fingerprint, screenplay.revision.id)
+
+      {:error, :not_found} ->
+        assessment_id =
+          Fount.ID.v5(screenplay.id, [
+            "semantic-model-assessment:",
+            project["id"],
+            ":",
+            command_id
+          ])
+
+        supersedes =
+          newest_usable_model_id(repo, owner, project["id"], screenplay.revision.id)
+
+        SQL.query!(
+          repo,
+          """
+          INSERT INTO fount_web_semantic_assessments(
+            id,owner_id,project_id,screenplay_id,revision_id,source_artifact_id,source_sha256,render_sha256,
+            request_fingerprint,schema_version,prompt_version,parser_version,model,reasoning_effort,provider_family,
+            provider_returned_model,run_id,origin,status,coverage,result,usage,limits,provenance,command_id,
+            supersedes_assessment_id,error,inserted_at,updated_at
+          ) VALUES(
+            $1::text::uuid,$2,$3::text::uuid,$4::text::uuid,$5::text::uuid,$6::text::uuid,$7,$8,$9,$10,$11,$12,
+            $13,$14,$15,NULL,NULL,$16,'queued','{}'::jsonb,'{}'::jsonb,'{}'::jsonb,$17::jsonb,$18::jsonb,$19,
+            $20::text::uuid,'{}'::jsonb,now(),now()
+          ) RETURNING *
+          """,
+          [
+            assessment_id,
+            owner,
+            project["id"],
+            screenplay.id,
+            screenplay.revision.id,
+            attrs["source_artifact_id"],
+            attrs["source_sha256"],
+            attrs["render_sha256"],
+            request_fingerprint,
+            @model_schema,
+            attrs["prompt_version"],
+            Fount.version(),
+            attrs["model"],
+            attrs["reasoning_effort"],
+            attrs["provider_family"],
+            origin,
+            attrs["limits"] || %{},
+            attrs["provenance"] || %{},
+            command_id,
+            supersedes
+          ],
+          log: false
+        )
+        |> one()
+
+      {:error, reason} ->
+        repo.rollback(reason)
+    end
+  end
+
+  defp replay_reservation(repo, row, fingerprint, revision_id) do
+    if row["request_fingerprint"] == fingerprint and row["revision_id"] == revision_id,
+      do: row,
+      else: repo.rollback(:command_id_conflict)
   end
 
   def bind_run(repo, owner, project_id, assessment_id, run_id) do
@@ -216,7 +277,7 @@ defmodule FountWeb.SemanticStore do
            SET run_id=$4::text::uuid,updated_at=now()
            WHERE owner_id=$1 AND project_id=$2::text::uuid AND id=$3::text::uuid
              AND (run_id IS NULL OR run_id=$4::text::uuid) AND status='queued'
-             AND EXISTS(SELECT 1 FROM fount_runs r WHERE r.id=$4::text::uuid AND r.screenplay_id=fount_web_semantic_assessments.screenplay_id AND r.base_revision_id=fount_web_semantic_assessments.revision_id)
+             AND EXISTS(SELECT 1 FROM fount_runs r JOIN fount_run_plans p ON p.run_id=r.id AND p.version=r.current_plan_version WHERE r.id=$4::text::uuid AND r.screenplay_id=fount_web_semantic_assessments.screenplay_id AND p.base_revision_id=fount_web_semantic_assessments.revision_id)
            RETURNING id
            """,
            [owner, project_id, assessment_id, run_id],
@@ -237,7 +298,7 @@ defmodule FountWeb.SemanticStore do
            """
            UPDATE fount_web_semantic_assessments
            SET status=$3,error=$4::jsonb,completed_at=CASE WHEN $3 IN ('failed','cancelled') THEN now() ELSE completed_at END,updated_at=now()
-           WHERE owner_id=$1 AND id=$2::text::uuid AND status NOT IN ('ready','partial')
+           WHERE owner_id=$1 AND id=$2::text::uuid AND status IN ('queued','running')
              AND ($5::text IS NULL OR run_id=$5::text::uuid)
            RETURNING id
            """,
@@ -276,63 +337,116 @@ defmodule FountWeb.SemanticStore do
     transaction(repo, fn ->
       assessment_id = payload["assessment_id"]
 
-      SQL.query!(repo, "SELECT pg_advisory_xact_lock(hashtext($1))", ["semantic-result:" <> assessment_id], log: false)
+      SQL.query!(
+        repo,
+        "SELECT pg_advisory_xact_lock(hashtext($1))",
+        ["semantic-result:" <> assessment_id],
+        log: false
+      )
 
-      assessment =
-        case query(repo, "SELECT * FROM fount_web_semantic_assessments WHERE owner_id=$1 AND id=$2::text::uuid FOR UPDATE", [owner, assessment_id]) do
-          [row] -> row
-          [] -> repo.rollback(:assessment_not_found)
-          {:error, reason} -> repo.rollback(reason)
-        end
-
-      run =
-        case query(repo, "SELECT id::text,status,stop_requested_at,screenplay_id::text,base_revision_id::text FROM fount_runs WHERE id=$1::text::uuid FOR UPDATE", [payload["run_id"]]) do
-          [row] -> row
-          [] -> repo.rollback(:assessment_run_not_found)
-          {:error, reason} -> repo.rollback(reason)
-        end
-
-      cond do
-        assessment["run_id"] != payload["run_id"] ->
-          repo.rollback(:assessment_run_binding_conflict)
-
-        run["screenplay_id"] != assessment["screenplay_id"] or run["base_revision_id"] != assessment["revision_id"] ->
-          repo.rollback(:assessment_run_binding_conflict)
-
-        run["status"] in ["stopped", "failed"] or not is_nil(run["stop_requested_at"]) ->
-          repo.rollback(:assessment_run_stopped)
-
-        assessment["status"] in ["ready", "partial"] ->
-          if Fount.Writing.CanonicalJSON.hash(assessment["result"] || %{}) == Fount.Writing.CanonicalJSON.hash(payload["result"] || %{}),
-            do: assessment,
-            else: repo.rollback(:assessment_result_conflict)
-
-        assessment["status"] not in ["queued", "running"] ->
-          repo.rollback(:assessment_state_conflict)
-
-        true ->
-          SQL.query!(repo, "DELETE FROM fount_web_semantic_assessment_entities WHERE assessment_id=$1::text::uuid", [assessment_id], log: false)
-          insert_model_entities(repo, assessment, payload["result"] || %{})
-
-          usage = %{"completion_trace" => sanitize_usage_trace(payload["usage_trace"] || [])}
-          provenance = Map.merge(assessment["provenance"] || %{}, %{"partial_reason" => payload["partial_reason"], "immutable_result" => true})
-
-          SQL.query!(
-            repo,
-            """
-            UPDATE fount_web_semantic_assessments
-            SET status=$3,coverage=$4::jsonb,result=$5::jsonb,usage=$6::jsonb,provider_returned_model=$7,
-                provenance=$8::jsonb,error='{}'::jsonb,completed_at=now(),updated_at=now()
-            WHERE owner_id=$1 AND id=$2::text::uuid
-            RETURNING *
-            """,
-            [owner, assessment_id, payload["status"], payload["coverage"] || %{}, payload["result"] || %{}, usage, payload["provider_returned_model"], provenance],
-            log: false
-          )
-          |> one()
-      end
+      persist_locked_result(repo, owner, assessment_id, payload)
     end)
   end
+
+  defp persist_locked_result(repo, owner, assessment_id, payload) do
+    assessment =
+      case query(
+             repo,
+             "SELECT * FROM fount_web_semantic_assessments WHERE owner_id=$1 AND id=$2::text::uuid FOR UPDATE",
+             [owner, assessment_id]
+           ) do
+        [row] -> row
+        [] -> repo.rollback(:assessment_not_found)
+        {:error, reason} -> repo.rollback(reason)
+      end
+
+    run =
+      case query(
+             repo,
+             "SELECT r.id::text,r.status,r.stop_requested_at,r.screenplay_id::text,p.base_revision_id::text FROM fount_runs r JOIN fount_run_plans p ON p.run_id=r.id AND p.version=r.current_plan_version WHERE r.id=$1::text::uuid FOR UPDATE OF r",
+             [payload["run_id"]]
+           ) do
+        [row] -> row
+        [] -> repo.rollback(:assessment_run_not_found)
+        {:error, reason} -> repo.rollback(reason)
+      end
+
+    validate_result_binding!(repo, assessment, run, payload)
+    persist_terminal_or_new(repo, owner, assessment, payload)
+  end
+
+  defp validate_result_binding!(repo, assessment, run, payload) do
+    cond do
+      assessment["run_id"] != payload["run_id"] ->
+        repo.rollback(:assessment_run_binding_conflict)
+
+      run["screenplay_id"] != assessment["screenplay_id"] or
+          run["base_revision_id"] != assessment["revision_id"] ->
+        repo.rollback(:assessment_run_binding_conflict)
+
+      run["status"] in ["stopped", "failed"] or not is_nil(run["stop_requested_at"]) ->
+        repo.rollback(:assessment_run_stopped)
+
+      true ->
+        :ok
+    end
+  end
+
+  defp persist_terminal_or_new(repo, _owner, %{"status" => status} = assessment, payload)
+       when status in ["ready", "partial"] do
+    if CanonicalJSON.hash(assessment["result"] || %{}) ==
+         CanonicalJSON.hash(payload["result"] || %{}),
+       do: assessment,
+       else: repo.rollback(:assessment_result_conflict)
+  end
+
+  defp persist_terminal_or_new(repo, owner, %{"status" => status} = assessment, payload)
+       when status in ["queued", "running"] do
+    assessment_id = assessment["id"]
+
+    SQL.query!(
+      repo,
+      "DELETE FROM fount_web_semantic_assessment_entities WHERE assessment_id=$1::text::uuid",
+      [assessment_id],
+      log: false
+    )
+
+    insert_model_entities(repo, assessment, payload["result"] || %{})
+
+    usage = %{"completion_trace" => sanitize_usage_trace(payload["usage_trace"] || [])}
+
+    provenance =
+      Map.merge(assessment["provenance"] || %{}, %{
+        "partial_reason" => payload["partial_reason"],
+        "immutable_result" => true
+      })
+
+    SQL.query!(
+      repo,
+      """
+      UPDATE fount_web_semantic_assessments
+      SET status=$3,coverage=$4::jsonb,result=$5::jsonb,usage=$6::jsonb,provider_returned_model=$7,
+          provenance=$8::jsonb,error='{}'::jsonb,completed_at=now(),updated_at=now()
+      WHERE owner_id=$1 AND id=$2::text::uuid
+      RETURNING *
+      """,
+      [
+        owner,
+        assessment_id,
+        payload["status"],
+        payload["coverage"] || %{},
+        payload["result"] || %{},
+        usage,
+        payload["provider_returned_model"],
+        provenance
+      ],
+      log: false
+    )
+    |> one()
+  end
+
+  defp persist_terminal_or_new(repo, _owner, _assessment, _payload),
+    do: repo.rollback(:assessment_state_conflict)
 
   def entities(repo, assessment_id) do
     query(
@@ -547,7 +661,11 @@ defmodule FountWeb.SemanticStore do
   end
 
   defp assessment_by_command(repo, owner, project_id, command_id) do
-    case query(repo, "SELECT * FROM fount_web_semantic_assessments WHERE owner_id=$1 AND project_id=$2::text::uuid AND command_id=$3", [owner, project_id, command_id]) do
+    case query(
+           repo,
+           "SELECT * FROM fount_web_semantic_assessments WHERE owner_id=$1 AND project_id=$2::text::uuid AND command_id=$3",
+           [owner, project_id, command_id]
+         ) do
       [row] -> {:ok, row}
       [] -> {:error, :not_found}
       {:error, _} = error -> error
@@ -555,7 +673,11 @@ defmodule FountWeb.SemanticStore do
   end
 
   defp newest_usable_model_id(repo, owner, project_id, revision_id) do
-    case query(repo, "SELECT id FROM fount_web_semantic_assessments WHERE owner_id=$1 AND project_id=$2::text::uuid AND revision_id=$3::text::uuid AND schema_version=$4 AND status IN ('ready','partial') ORDER BY inserted_at DESC,id DESC LIMIT 1", [owner, project_id, revision_id, @model_schema]) do
+    case query(
+           repo,
+           "SELECT id FROM fount_web_semantic_assessments WHERE owner_id=$1 AND project_id=$2::text::uuid AND revision_id=$3::text::uuid AND schema_version=$4 AND status IN ('ready','partial') ORDER BY inserted_at DESC,id DESC LIMIT 1",
+           [owner, project_id, revision_id, @model_schema]
+         ) do
       [%{"id" => id}] -> id
       _ -> nil
     end
@@ -568,8 +690,17 @@ defmodule FountWeb.SemanticStore do
 
     Enum.each(result["entities"] || [], fn entity ->
       entity_occurrences = Enum.filter(occurrences, &(&1["entity_id"] == entity["local_id"]))
-      linked_literal = entity_occurrences |> Enum.map(& &1["literal_element_id"]) |> Enum.reject(&is_nil/1) |> Enum.find(&Map.has_key?(literal_index, &1))
-      handle_id = if linked_literal, do: literal_index[linked_literal].handle_id, else: model_handle_id(assessment, entity)
+
+      linked_literal =
+        entity_occurrences
+        |> Enum.map(& &1["literal_element_id"])
+        |> Enum.reject(&is_nil/1)
+        |> Enum.find(&Map.has_key?(literal_index, &1))
+
+      handle_id =
+        if linked_literal,
+          do: literal_index[linked_literal].handle_id,
+          else: model_handle_id(assessment, entity)
 
       SQL.query!(
         repo,
@@ -578,12 +709,27 @@ defmodule FountWeb.SemanticStore do
         VALUES($1::text::uuid,$2,$3::text::uuid,$4::text::uuid,$5,$6,now(),now())
         ON CONFLICT(id) DO NOTHING
         """,
-        [handle_id, assessment["owner_id"], assessment["project_id"], assessment["screenplay_id"], entity["kind"], assessment["origin"]],
+        [
+          handle_id,
+          assessment["owner_id"],
+          assessment["project_id"],
+          assessment["screenplay_id"],
+          entity["kind"],
+          assessment["origin"]
+        ],
         log: false
       )
 
-      hydrated = Enum.map(entity_occurrences, &hydrate_model_occurrence(&1, literal_index, headings))
-      payload = entity |> Map.put("occurrences", hydrated) |> Map.put("headings", Enum.filter(headings, &(&1["place_entity_id"] == entity["local_id"])))
+      hydrated =
+        Enum.map(entity_occurrences, &hydrate_model_occurrence(&1, literal_index, headings))
+
+      payload =
+        entity
+        |> Map.put("occurrences", hydrated)
+        |> Map.put(
+          "headings",
+          Enum.filter(headings, &(&1["place_entity_id"] == entity["local_id"]))
+        )
 
       SQL.query!(
         repo,
@@ -591,36 +737,66 @@ defmodule FountWeb.SemanticStore do
         INSERT INTO fount_web_semantic_assessment_entities(assessment_id,local_id,handle_id,kind,label,payload,evidence,inserted_at,updated_at)
         VALUES($1::text::uuid,$2,$3::text::uuid,$4,$5,$6::jsonb,$7::jsonb,now(),now())
         """,
-        [assessment["id"], entity["local_id"], handle_id, entity["kind"], entity["label"], payload, entity["evidence"] || []],
+        [
+          assessment["id"],
+          entity["local_id"],
+          handle_id,
+          entity["kind"],
+          entity["label"],
+          payload,
+          entity["evidence"] || []
+        ],
         log: false
       )
     end)
   end
 
+  defp index_literal_handle(row, acc) do
+    payload = row["payload"] || %{}
+
+    case payload["element_id"] || payload[:element_id] do
+      id when is_binary(id) -> Map.put(acc, id, %{handle_id: row["handle_id"], payload: payload})
+      _ -> acc
+    end
+  end
+
   defp literal_handle_index(repo, assessment) do
-    case assessment_for_revision(repo, assessment["owner_id"], assessment["project_id"], assessment["revision_id"]) do
+    case assessment_for_revision(
+           repo,
+           assessment["owner_id"],
+           assessment["project_id"],
+           assessment["revision_id"]
+         ) do
       {:ok, manual} ->
         case entities(repo, manual["id"]) do
           rows when is_list(rows) ->
-            Enum.reduce(rows, %{}, fn row, acc ->
-              payload = row["payload"] || %{}
-              case payload["element_id"] || payload[:element_id] do
-                id when is_binary(id) -> Map.put(acc, id, %{handle_id: row["handle_id"], payload: payload})
-                _ -> acc
-              end
-            end)
-          _ -> %{}
+            Enum.reduce(rows, %{}, &index_literal_handle/2)
+
+          _ ->
+            %{}
         end
-      _ -> %{}
+
+      _ ->
+        %{}
     end
   end
 
   defp model_handle_id(assessment, entity) do
     first = entity["evidence"] |> List.wrap() |> List.first() || %{}
+
     Fount.ID.v5(assessment["screenplay_id"], [
-      "semantic-model-handle:", assessment["project_id"], ":", assessment["source_sha256"], ":",
-      entity["kind"], ":", first["span_id"] || "none", ":",
-      to_string(first["byte_start"] || 0), ":", to_string(first["byte_end"] || 0)
+      "semantic-model-handle:",
+      assessment["project_id"],
+      ":",
+      assessment["source_sha256"],
+      ":",
+      entity["kind"],
+      ":",
+      first["span_id"] || "none",
+      ":",
+      to_string(first["byte_start"] || 0),
+      ":",
+      to_string(first["byte_end"] || 0)
     ])
   end
 
@@ -628,7 +804,9 @@ defmodule FountWeb.SemanticStore do
     literal_id = occurrence["literal_element_id"]
     manual = if is_binary(literal_id), do: literal_index[literal_id], else: nil
     base = if manual, do: manual.payload, else: %{}
-    heading = Enum.find(headings, fn row -> evidence_overlap?(row["evidence"], occurrence["evidence"]) end)
+
+    heading =
+      Enum.find(headings, fn row -> evidence_overlap?(row["evidence"], occurrence["evidence"]) end)
 
     base
     |> Map.new(fn {key, value} -> {to_string(key), value} end)
@@ -641,6 +819,7 @@ defmodule FountWeb.SemanticStore do
   end
 
   defp maybe_put_heading_parts(payload, nil), do: payload
+
   defp maybe_put_heading_parts(payload, heading) do
     parts = %{
       "parent_place" => heading["parent_place_label"],
@@ -651,21 +830,37 @@ defmodule FountWeb.SemanticStore do
       "relative_time" => heading["relative_time"],
       "unknown_modifiers" => heading["modifiers"] || []
     }
+
     Map.put(payload, "parts", parts)
   end
 
   defp evidence_overlap?(left, right) do
     left = List.wrap(left)
     right = List.wrap(right)
-    Enum.any?(left, fn a -> Enum.any?(right, fn b -> a["span_id"] == b["span_id"] and a["quote"] == b["quote"] end) end)
+
+    Enum.any?(left, fn a ->
+      Enum.any?(right, fn b -> a["span_id"] == b["span_id"] and a["quote"] == b["quote"] end)
+    end)
   end
 
   defp sanitize_usage_trace(trace) do
-    Enum.map(trace, fn row -> Map.take(row, ["mode", "model", "finish_reason", "response_id", "usage", "validation", "request_sha256", "response_sha256"]) end)
+    Enum.map(trace, fn row ->
+      Map.take(row, [
+        "mode",
+        "model",
+        "finish_reason",
+        "response_id",
+        "usage",
+        "validation",
+        "request_sha256",
+        "response_sha256"
+      ])
+    end)
   end
 
   defp map_value(map, key) when is_map(map) do
-    Map.get(map, key) || Enum.find_value(map, fn {candidate, value} -> if to_string(candidate) == key, do: value end)
+    Map.get(map, key) ||
+      Enum.find_value(map, fn {candidate, value} -> if to_string(candidate) == key, do: value end)
   end
 
   defp do_review(repo, owner, project_id, assessment_id, command, expected, command_id, actor) do
@@ -890,11 +1085,21 @@ defmodule FountWeb.SemanticStore do
       )
 
     cond do
-      not is_list(current) -> current
-      not is_list(entities) -> entities
-      not is_list(history) -> history
+      not is_list(current) ->
+        current
+
+      not is_list(entities) ->
+        entities
+
+      not is_list(history) ->
+        history
+
       true ->
-        selected = FountWeb.SemanticContext.select_entity_rows(current, entities, history)
+        selected =
+          current
+          |> FountWeb.SemanticContext.include_partial_literals(entities, assessment)
+          |> FountWeb.SemanticContext.select_entity_rows(entities, history)
+
         {:ok, FountWeb.SemanticContext.project_entities(selected, history)}
     end
   end
@@ -1059,16 +1264,12 @@ defmodule FountWeb.SemanticStore do
   end
 
   defp source_binding(screenplay) do
-    case Fount.Intelligence.ImportAssessment.source_descriptor(screenplay) do
-      {:ok, descriptor} ->
-        %{
-          source_artifact_id: descriptor["source_artifact_id"],
-          source_sha256: descriptor["source_sha256"]
-        }
+    {:ok, descriptor} = ImportAssessment.source_descriptor(screenplay)
 
-      {:error, _} ->
-        %{source_artifact_id: nil, source_sha256: screenplay.revision.content_hash}
-    end
+    %{
+      source_artifact_id: descriptor["source_artifact_id"],
+      source_sha256: descriptor["source_sha256"]
+    }
   end
 
   defp transaction(repo, fun) do
@@ -1104,8 +1305,9 @@ defmodule FountWeb.SemanticStore do
 
   defp normalize_column(_column, value), do: value
 
-  defp storage_reason(%Postgrex.Error{postgres: %{code: :undefined_table}}),
-    do: :semantic_schema_missing
+  defp storage_reason(%Postgrex.Error{postgres: %{code: code}})
+       when code in [:undefined_table, :undefined_column],
+       do: :semantic_schema_missing
 
   defp storage_reason(%Postgrex.Error{postgres: %{code: :foreign_key_violation}}),
     do: :source_binding_conflict

@@ -866,7 +866,18 @@ defmodule FountRun.ExecutionStore do
          "completed_accepted",
          "completed_nonmutating"
        ] or
-         stage not in [nil, "write", "iterate", "decide", "deliver", "semantic_plan", "semantic_extract", "semantic_reconcile", "semantic_validate", "semantic_persist"] do
+         stage not in [
+           nil,
+           "write",
+           "iterate",
+           "decide",
+           "deliver",
+           "semantic_plan",
+           "semantic_extract",
+           "semantic_reconcile",
+           "semantic_validate",
+           "semantic_persist"
+         ] do
       rollback(repo, :invalid_checkpoint_transition)
     end
 

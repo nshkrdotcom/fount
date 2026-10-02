@@ -72,6 +72,11 @@ test('SI02 reassessment is explicit history and never accepts screenplay changes
   const after=await (await context.request.get(`/p/${key}/source-review/export.json`)).json();
   expect(after.source.revision_id).toBe(before.source.revision_id);
   expect(after.source.source_sha256).toBe(before.source.source_sha256);
-  expect(after.assessment.id).not.toBe(before.assessment.id);
+  await expect.poll(async () => {
+    const current = await (await context.request.get(`/p/${key}/source-review/export.json`)).json();
+    return current.assessment.id;
+  }).not.toBe(before.assessment.id);
+  const completed = await (await context.request.get(`/p/${key}/source-review/export.json`)).json();
+  expect(completed.assessment.id).not.toBe(before.assessment.id);
   expect(after.provenance.screenplay_accepted_by_review).toBe(false);
 });

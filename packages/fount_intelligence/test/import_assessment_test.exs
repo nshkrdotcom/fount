@@ -25,13 +25,19 @@ defmodule Fount.Intelligence.ImportAssessmentTest do
     |> Enum.drop(1)
     |> Enum.each(fn chunk ->
       assert Enum.any?(chunk["spans"], & &1["context_only"])
-      assert Enum.all?(Enum.filter(chunk["spans"], & &1["context_only"]), &is_nil(&1["byte_start"]))
+
+      assert Enum.all?(
+               Enum.filter(chunk["spans"], & &1["context_only"]),
+               &is_nil(&1["byte_start"])
+             )
     end)
   end
 
   test "scene-aware planning keeps ordinary scenes whole and splits only an oversized scene" do
-    source = "TITLE\n\nINT. ONE - DAY\n" <> String.duplicate("small action\n", 3) <>
-      "INT. TWO - NIGHT\n" <> String.duplicate("large action café\n", 30)
+    source =
+      "TITLE\n\nINT. ONE - DAY\n" <>
+        String.duplicate("small action\n", 3) <>
+        "INT. TWO - NIGHT\n" <> String.duplicate("large action café\n", 30)
 
     first = :binary.match(source, "INT. ONE - DAY") |> elem(0)
     second = :binary.match(source, "INT. TWO - NIGHT") |> elem(0)
@@ -65,6 +71,7 @@ defmodule Fount.Intelligence.ImportAssessmentTest do
   test "closed limit validation rejects tiny UTF-8 payloads, unknown keys, and excessive call ceilings" do
     assert {:error, :invalid_limits} = ImportAssessment.validate_limits(%{"payload_bytes" => 3})
     assert {:error, :unsupported_limit} = ImportAssessment.validate_limits(%{"unbounded" => 1})
+
     assert {:error, :limit_exceeds_server_cap} =
              ImportAssessment.validate_limits(%{"max_inference_calls" => 131})
 
@@ -74,7 +81,12 @@ defmodule Fount.Intelligence.ImportAssessmentTest do
 
   test "validator accepts exact payload evidence and rejects context-only evidence" do
     source = "GUARD\nStop.\n"
-    assert {:ok, plan} = ImportAssessment.plan_source(source, limits: %{"payload_bytes" => 8, "context_bytes" => 8})
+
+    assert {:ok, plan} =
+             ImportAssessment.plan_source(source,
+               limits: %{"payload_bytes" => 8, "context_bytes" => 8}
+             )
+
     [first, second | _] = plan["chunks"]
 
     assert :ok = ImportAssessment.validate_chunk(valid_result(first, "GUARD"), first)
@@ -84,7 +96,9 @@ defmodule Fount.Intelligence.ImportAssessmentTest do
 
     bad = %{
       valid_result(second, payload_text(second))
-      | "entities" => [entity("person", "GUARD", evidence(context, 0, byte_size(context["text"])))]
+      | "entities" => [
+          entity("person", "GUARD", evidence(context, 0, byte_size(context["text"])))
+        ]
     }
 
     assert {:error, :invalid_entity} = ImportAssessment.validate_chunk(bad, second)
@@ -102,7 +116,9 @@ defmodule Fount.Intelligence.ImportAssessmentTest do
     bad_hidden = %{
       valid_result(chunk, "VISIBLE")
       | "entities" => [hidden],
-        "occurrences" => [occurrence("hidden-occ", "hidden", "mentioned", nil, hd(hidden["evidence"]))]
+        "occurrences" => [
+          occurrence("hidden-occ", "hidden", "mentioned", nil, hd(hidden["evidence"]))
+        ]
     }
 
     assert {:error, :invalid_entity} = ImportAssessment.validate_chunk(bad_hidden, chunk)
@@ -126,7 +142,9 @@ defmodule Fount.Intelligence.ImportAssessmentTest do
 
   test "title-page metadata is typed source context but cannot manufacture cast evidence" do
     source = "Title: PRIVATE DRAFT\nAuthor: PRINTED PERSON\n\nINT. ROOM - DAY\nMIRA enters.\n"
-    screenplay = source |> Fount.parse!() |> Fount.Screenplay.from_document(cast_resolution: :manual)
+
+    screenplay =
+      source |> Fount.parse!() |> Fount.Screenplay.from_document(cast_resolution: :manual)
 
     assert {:ok, descriptor} = ImportAssessment.source_descriptor(screenplay)
     assert descriptor["metadata_ranges"] != []
@@ -209,6 +227,35 @@ defmodule Fount.Intelligence.ImportAssessmentTest do
     assert :ok = ImportAssessment.validate_chunk(result, chunk)
     assert hd(result["entities"])["kind"] == "document_text"
     assert hd(result["occurrences"])["role"] == "printed_text"
+  end
+
+  test "processed chunks with explicitly omitted payload remain partial" do
+    input = chunk("chunk-1", "MIRA")
+    result = valid_result(input, "MIRA")
+
+    result =
+      Map.put(result, "coverage", %{
+        "processed_span_ids" => [],
+        "omitted" => [
+          %{"span_id" => hd(input["payload_span_ids"]), "reason" => "unsupported_scope"}
+        ]
+      })
+
+    assert :ok = ImportAssessment.validate_chunk(result, input)
+
+    assert {:ok, aggregate} =
+             ImportAssessment.assemble([result], nil, %{}, expected_chunk_count: 1)
+
+    assert aggregate["coverage"]["complete"] == false
+  end
+
+  test "oversized decoded objects and forged cross references fail the trusted validator" do
+    input = chunk("chunk-1", "MIRA")
+    result = valid_result(input, "MIRA")
+    oversized = Map.put(result, "unresolved", [String.duplicate("x", 524_289)])
+    assert {:error, :decoded_chunk_too_large} = ImportAssessment.validate_chunk(oversized, input)
+    forged = put_in(result, ["occurrences", Access.at(0), "entity_id"], "other-chunk:person")
+    assert {:error, :invalid_occurrence} = ImportAssessment.validate_chunk(forged, input)
   end
 
   defp valid_result(chunk, quote, id \\ "person", kind \\ "character", role \\ "speaker") do

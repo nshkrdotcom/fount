@@ -52,7 +52,11 @@ defmodule FountRun.PipelineRequest do
          {:ok, request} <- ClosedMap.normalize(request, @semantic_keys),
          true <- ClosedMap.json?(request),
          :ok <- optional_map(value, "semantic_runtime"),
-         true <- Enum.all?(~w(assessment_id project_id screenplay_id revision_id command_id source_sha256 render_sha256 schema_version prompt_version model reasoning_effort provider_family service_key source_basis), &ClosedMap.nonempty_string(request[&1])),
+         true <-
+           Enum.all?(
+             ~w(assessment_id project_id screenplay_id revision_id command_id source_sha256 render_sha256 schema_version prompt_version model reasoning_effort provider_family service_key source_basis),
+             &ClosedMap.nonempty_string(request[&1])
+           ),
          true <- valid_optional_uuid?(request["assessment_id"]),
          true <- valid_optional_uuid?(request["project_id"]),
          true <- valid_optional_uuid?(request["screenplay_id"]),
@@ -62,7 +66,7 @@ defmodule FountRun.PipelineRequest do
          :ok <- optional_hash(request, "render_sha256"),
          limits when is_map(limits) <- request["limits"],
          true <- ClosedMap.json?(limits),
-         {:ok, _resolved_limits} <- Fount.Intelligence.ImportAssessment.validate_limits(limits) do
+         {:ok, _resolved_limits} <- FountWorkshop.SemanticAssessment.validate_limits(limits) do
       {:ok, Map.put(value, "semantic_request", request)}
     else
       {:error, _} = error -> error

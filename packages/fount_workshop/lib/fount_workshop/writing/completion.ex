@@ -94,6 +94,7 @@ defmodule FountWorkshop.Writing.Completion do
         prompt
       end
 
+    options = Keyword.merge(Keyword.get(opts, :inference_options, []), options)
     result = request_completion(client, request, options, state)
 
     case result do
@@ -111,10 +112,10 @@ defmodule FountWorkshop.Writing.Completion do
                 "object" => Map.get(response, :object)
               })
             ),
-          "model" => Map.get(response, :model),
-          "finish_reason" => Map.get(response, :finish_reason),
+          "model" => json_value(Map.get(response, :model)),
+          "finish_reason" => json_value(Map.get(response, :finish_reason)),
           "response_id" => Map.get(response, :id),
-          "usage" => Map.get(response, :usage)
+          "usage" => json_value(Map.get(response, :usage))
         }
 
         decoded = decode_response(mode, response)

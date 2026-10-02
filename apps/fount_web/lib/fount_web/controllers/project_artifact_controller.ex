@@ -133,7 +133,8 @@ defmodule FountWeb.ProjectArtifactController do
         "assessment_state" => to_string(semantic.assessment_state),
         "latest_assessment" => plain(semantic.latest_assessment),
         "assessment_history" => Enum.map(semantic.assessment_history, &plain/1),
-        "historical_model_assessments" => Enum.map(Map.get(semantic, :model_assessment_history, []), &plain/1),
+        "historical_model_assessments" =>
+          Enum.map(Map.get(semantic, :model_assessment_history, []), &plain/1),
         "review_version" => semantic.version,
         "entities" => Enum.map(semantic.entities, &plain/1),
         "review_history" => Enum.map(semantic.review_history, &plain/1),

@@ -46,6 +46,24 @@ defmodule FountWeb.Services do
     end
   end
 
+  defp creative_worker_step_opts(owner_id, screenplay_id, run) do
+    with {:ok, observe} <- observe_provider(screenplay_id, run) do
+      base =
+        [
+          inference: inference_client(),
+          lease_ms: 15_000,
+          heartbeat_ms: 5_000,
+          delivery_destination: Path.join("runs", run["id"]),
+          artifact_root: Application.fetch_env!(:fount_web, :artifact_root)
+        ]
+        |> maybe_put_observe(observe)
+
+      with {:ok, approval_opts} <- approval_opts(owner_id, screenplay_id, run) do
+        {:ok, base ++ approval_opts}
+      end
+    end
+  end
+
   @doc "Returns a secret-free UI summary of the analytical-host configuration."
   def analysis_service_summary do
     case analysis_mode() do
@@ -83,21 +101,7 @@ defmodule FountWeb.Services do
     if semantic_run?(run) do
       semantic_worker_step_opts(owner_id, run)
     else
-      with {:ok, observe} <- observe_provider(screenplay_id, run) do
-        base =
-          [
-            inference: inference_client(),
-            lease_ms: 15_000,
-            heartbeat_ms: 5_000,
-            delivery_destination: Path.join("runs", run["id"]),
-            artifact_root: Application.fetch_env!(:fount_web, :artifact_root)
-          ]
-          |> maybe_put_observe(observe)
-
-        with {:ok, approval_opts} <- approval_opts(owner_id, screenplay_id, run) do
-          {:ok, base ++ approval_opts}
-        end
-      end
+      creative_worker_step_opts(owner_id, screenplay_id, run)
     end
   end
 
@@ -110,7 +114,8 @@ defmodule FountWeb.Services do
           "label" => "Not configured",
           "configured" => false,
           "model" => FountWorkshop.SemanticAssessment.model(),
-          "reasoning_effort" => Atom.to_string(FountWorkshop.SemanticAssessment.reasoning_effort()),
+          "reasoning_effort" =>
+            Atom.to_string(FountWorkshop.SemanticAssessment.reasoning_effort()),
           "reason" => "semantic assessment is disabled"
         }
 
@@ -127,7 +132,8 @@ defmodule FountWeb.Services do
               "label" => "Codex",
               "configured" => true,
               "model" => FountWorkshop.SemanticAssessment.model(),
-              "reasoning_effort" => Atom.to_string(FountWorkshop.SemanticAssessment.reasoning_effort()),
+              "reasoning_effort" =>
+                Atom.to_string(FountWorkshop.SemanticAssessment.reasoning_effort()),
               "provider_family" => "codex"
             }
 
@@ -137,7 +143,8 @@ defmodule FountWeb.Services do
               "label" => "Codex unavailable",
               "configured" => false,
               "model" => FountWorkshop.SemanticAssessment.model(),
-              "reasoning_effort" => Atom.to_string(FountWorkshop.SemanticAssessment.reasoning_effort()),
+              "reasoning_effort" =>
+                Atom.to_string(FountWorkshop.SemanticAssessment.reasoning_effort()),
               "reason" => semantic_reason(reason)
             }
         end
@@ -150,7 +157,8 @@ defmodule FountWeb.Services do
           "label" => "Deterministic fixture",
           "configured" => configured,
           "model" => FountWorkshop.SemanticAssessment.model(),
-          "reasoning_effort" => Atom.to_string(FountWorkshop.SemanticAssessment.reasoning_effort()),
+          "reasoning_effort" =>
+            Atom.to_string(FountWorkshop.SemanticAssessment.reasoning_effort()),
           "provider_family" => "fixture",
           "reason" => if(configured, do: nil, else: "fixture client is not configured")
         }
@@ -161,7 +169,8 @@ defmodule FountWeb.Services do
           "label" => "Invalid assessment configuration",
           "configured" => false,
           "model" => FountWorkshop.SemanticAssessment.model(),
-          "reasoning_effort" => Atom.to_string(FountWorkshop.SemanticAssessment.reasoning_effort()),
+          "reasoning_effort" =>
+            Atom.to_string(FountWorkshop.SemanticAssessment.reasoning_effort()),
           "reason" => semantic_reason(reason)
         }
     end
@@ -177,12 +186,8 @@ defmodule FountWeb.Services do
                FountWorkshop.SemanticAssessment.preflight(
                  cli_path: cli_path,
                  auth_asserted: auth_asserted
-               ),
-             {:ok, client} <-
-               FountWorkshop.SemanticAssessment.build_client(
-                 cli_path: cli_path
                ) do
-          {:ok, client}
+          FountWorkshop.SemanticAssessment.build_client(cli_path: cli_path)
         end
 
       {:ok, :deterministic_fixture, config} ->
@@ -238,14 +243,24 @@ defmodule FountWeb.Services do
 
   defp semantic_assessment_config do
     case Application.fetch_env(:fount_web, :semantic_assessment) do
-      {:ok, config} when is_list(config) and Keyword.keyword?(config) ->
-        case Keyword.get(config, :mode) do
-          mode when mode in [:disabled, :codex, :deterministic_fixture] -> {:ok, mode, config}
-          _ -> {:error, :invalid_mode}
-        end
+      {:ok, config} when is_list(config) ->
+        semantic_config_mode(config)
 
       _ ->
         {:error, :missing_config}
+    end
+  end
+
+  defp semantic_config_mode(config) do
+    if Keyword.keyword?(config),
+      do: configured_semantic_mode(config),
+      else: {:error, :missing_config}
+  end
+
+  defp configured_semantic_mode(config) do
+    case Keyword.get(config, :mode) do
+      mode when mode in [:disabled, :codex, :deterministic_fixture] -> {:ok, mode, config}
+      _ -> {:error, :invalid_mode}
     end
   end
 
@@ -255,7 +270,8 @@ defmodule FountWeb.Services do
 
   defp valid_fixture_factory?(_), do: false
 
-  defp fixture_client({module, function, args}) when is_atom(module) and is_atom(function) and is_list(args) do
+  defp fixture_client({module, function, args})
+       when is_atom(module) and is_atom(function) and is_list(args) do
     case apply(module, function, args) do
       {:ok, client} -> {:ok, client}
       client when is_map(client) or is_struct(client) -> {:ok, client}
@@ -267,8 +283,9 @@ defmodule FountWeb.Services do
 
   defp fixture_client(_), do: {:error, :semantic_fixture_client_invalid}
 
-  defp semantic_reason(reason) when is_atom(reason), do: Atom.to_string(reason) |> String.replace("_", " ")
-  defp semantic_reason({reason, _}) when is_atom(reason), do: semantic_reason(reason)
+  defp semantic_reason(reason) when is_atom(reason),
+    do: Atom.to_string(reason) |> String.replace("_", " ")
+
   defp semantic_reason(_), do: "assessment preflight failed"
 
   defp approval_opts(owner_id, screenplay_id, run) do

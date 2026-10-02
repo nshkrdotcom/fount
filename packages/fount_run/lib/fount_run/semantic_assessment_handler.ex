@@ -3,7 +3,6 @@ defmodule FountRun.SemanticAssessmentHandler do
   @behaviour FountRun.StageHandler
 
   alias Fount.Persistence, as: CorePersistence
-  alias Fount.Intelligence.ImportAssessment
   alias FountRun.{DispatchHook, ExecutionStore, Persistence, PipelineRequest}
   alias FountWorkshop.SemanticAssessment
   alias FountWorkshop.Writing.Budget
@@ -14,7 +13,8 @@ defmodule FountRun.SemanticAssessmentHandler do
   def execute(%{"stage" => stage} = claim, opts) when stage in @stages do
     result =
       with {:ok, envelope} <- PipelineRequest.validate(claim["request"]),
-           "semantic_import_v1" <- envelope["kind"] do
+           "semantic_import_v1" <- envelope["kind"],
+           :ok <- verify_checkpoint(claim, envelope, opts) do
         execute_stage(stage, claim, envelope, opts)
       else
         {:error, _} = error -> error
@@ -32,22 +32,44 @@ defmodule FountRun.SemanticAssessmentHandler do
     repo = Keyword.fetch!(opts, :repo)
 
     with :ok <- enforce_policy(request),
-         {:ok, run} <- FountRun.get_run(repo, claim["run_id"], Keyword.fetch!(opts, :actor_context)),
-         true <- request["screenplay_id"] == run["screenplay_id"] or {:error, :semantic_screenplay_binding_mismatch},
-         true <- request["revision_id"] == run["plan"]["base_revision_id"] or {:error, :semantic_revision_binding_mismatch},
-         {:ok, screenplay} <- CorePersistence.load_revision(repo, run["screenplay_id"], run["plan"]["base_revision_id"]),
-         {:ok, descriptor} <- ImportAssessment.source_descriptor(screenplay),
+         {:ok, run} <-
+           FountRun.get_run(repo, claim["run_id"], Keyword.fetch!(opts, :actor_context)),
+         true <-
+           request["screenplay_id"] == run["screenplay_id"] or
+             {:error, :semantic_screenplay_binding_mismatch},
+         true <-
+           request["revision_id"] == run["plan"]["base_revision_id"] or
+             {:error, :semantic_revision_binding_mismatch},
+         {:ok, screenplay} <-
+           CorePersistence.load_revision(
+             repo,
+             run["screenplay_id"],
+             run["plan"]["base_revision_id"]
+           ),
+         {:ok, descriptor} <- SemanticAssessment.source_descriptor(screenplay),
          :ok <- source_binding(request, descriptor),
-         :ok <- store_action(opts, :status, %{"assessment_id" => request["assessment_id"], "status" => "running"}),
-         {:ok, next} <- schedule(repo, claim, "semantic_plan", Map.put(envelope, "semantic_runtime", %{"source" => descriptor}), opts) do
-      {:ok, %{
-        "status" => "semantic_preflight_saved",
-        "scheduled_step_id" => next["id"],
-        "model" => request["model"],
-        "reasoning_effort" => request["reasoning_effort"],
-        "changes_canon" => false,
-        "next_stage" => "semantic_plan"
-      }}
+         :ok <-
+           store_action(opts, :status, %{
+             "assessment_id" => request["assessment_id"],
+             "status" => "running"
+           }),
+         {:ok, next} <-
+           schedule(
+             repo,
+             claim,
+             "semantic_plan",
+             Map.put(envelope, "semantic_runtime", %{"source" => descriptor}),
+             opts
+           ) do
+      {:ok,
+       %{
+         "status" => "semantic_preflight_saved",
+         "scheduled_step_id" => next["id"],
+         "model" => request["model"],
+         "reasoning_effort" => request["reasoning_effort"],
+         "changes_canon" => false,
+         "next_stage" => "semantic_plan"
+       }}
     end
   end
 
@@ -57,25 +79,44 @@ defmodule FountRun.SemanticAssessmentHandler do
 
     with true <- is_binary(source) or {:error, :semantic_source_missing},
          {:ok, plan} <-
-           ImportAssessment.plan_source(source,
+           SemanticAssessment.plan_source(source,
              limits: envelope["semantic_request"]["limits"] || %{},
              scene_starts: get_in(envelope, ["semantic_runtime", "source", "scene_starts"]) || [],
-             metadata_ranges: get_in(envelope, ["semantic_runtime", "source", "metadata_ranges"]) || []
+             metadata_ranges:
+               get_in(envelope, ["semantic_runtime", "source", "metadata_ranges"]) || []
            ),
          :ok <- validate_inference_ceiling(envelope["semantic_request"], plan),
-         runtime <- Map.merge(envelope["semantic_runtime"] || %{}, %{"plan" => plan, "extract_index" => 0, "chunk_results" => [], "usage_trace" => []}),
-         :ok <- store_action(opts, :progress, %{"assessment_id" => envelope["semantic_request"]["assessment_id"], "coverage" => progress_coverage(plan, 0)}),
-         {:ok, next} <- schedule(repo, claim, "semantic_extract", Map.put(envelope, "semantic_runtime", runtime), opts, "0") do
-      {:ok, %{
-        "status" => "semantic_chunks_planned",
-        "chunk_count" => plan["chunk_count"],
-        "source_bytes" => plan["source_bytes"],
-        "scheduled_step_id" => next["id"],
-        "changes_canon" => false,
-        "next_stage" => "semantic_extract"
-      }}
+         runtime <-
+           Map.merge(envelope["semantic_runtime"] || %{}, %{
+             "plan" => plan,
+             "extract_index" => 0,
+             "chunk_results" => [],
+             "usage_trace" => []
+           }),
+         :ok <-
+           store_action(opts, :progress, %{
+             "assessment_id" => envelope["semantic_request"]["assessment_id"],
+             "coverage" => progress_coverage(plan, 0)
+           }),
+         {:ok, next} <-
+           schedule(
+             repo,
+             claim,
+             "semantic_extract",
+             Map.put(envelope, "semantic_runtime", runtime),
+             opts,
+             "0"
+           ) do
+      {:ok,
+       %{
+         "status" => "semantic_chunks_planned",
+         "chunk_count" => plan["chunk_count"],
+         "source_bytes" => plan["source_bytes"],
+         "scheduled_step_id" => next["id"],
+         "changes_canon" => false,
+         "next_stage" => "semantic_extract"
+       }}
     else
-      false -> {:error, :semantic_source_missing}
       {:error, _} = error -> error
     end
   end
@@ -92,32 +133,7 @@ defmodule FountRun.SemanticAssessmentHandler do
         schedule_reconcile(repo, claim, envelope, runtime, opts)
 
       chunk ->
-        with {:ok, client} <- inference(opts),
-             {:ok, completion_opts} <- completion_opts(repo, claim, opts),
-             binding <- prompt_binding(envelope["semantic_request"], runtime["source"] || %{}),
-             result <- SemanticAssessment.extract(client, chunk, binding, completion_opts),
-             {:ok, object, trace} <- normalize_completion(result),
-             :ok <- validate_returned_models(trace),
-             runtime <- runtime
-               |> Map.put("extract_index", index + 1)
-               |> Map.update("chunk_results", [object], &(&1 ++ [object]))
-               |> Map.update("usage_trace", trace, &(&1 ++ trace)),
-             :ok <- store_action(opts, :progress, %{"assessment_id" => envelope["semantic_request"]["assessment_id"], "coverage" => progress_coverage(plan, index + 1)}),
-             {:ok, next} <-
-               if(index + 1 < length(chunks),
-                 do: schedule(repo, claim, "semantic_extract", Map.put(envelope, "semantic_runtime", runtime), opts, Integer.to_string(index + 1)),
-                 else: schedule(repo, claim, "semantic_reconcile", Map.put(envelope, "semantic_runtime", runtime), opts)
-               ) do
-          {:ok, %{
-            "status" => "semantic_chunk_extracted",
-            "chunk_id" => chunk["chunk_id"],
-            "completed_chunks" => index + 1,
-            "chunk_count" => length(chunks),
-            "scheduled_step_id" => next["id"],
-            "changes_canon" => false,
-            "next_stage" => if(index + 1 < length(chunks), do: "semantic_extract", else: "semantic_reconcile")
-          }}
-        end
+        extract_chunk(repo, claim, envelope, runtime, {plan, index, chunks, chunk}, opts)
     end
   end
 
@@ -128,25 +144,14 @@ defmodule FountRun.SemanticAssessmentHandler do
 
     with {:ok, client} <- inference(opts),
          {:ok, completion_opts} <- completion_opts(repo, claim, opts) do
-      case SemanticAssessment.reconcile(client, results, completion_opts) do
-        {:ok, reconciliation, trace} ->
-          with :ok <- validate_returned_models(trace) do
-            runtime = runtime |> Map.put("reconciliation", reconciliation) |> Map.update("usage_trace", trace, &(&1 ++ trace))
-
-            with {:ok, next} <- schedule(repo, claim, "semantic_validate", Map.put(envelope, "semantic_runtime", runtime), opts) do
-              {:ok, %{"status" => "semantic_reconciled", "scheduled_step_id" => next["id"], "changes_canon" => false, "next_stage" => "semantic_validate"}}
-            end
-          end
-
-        {:partial, reason, bytes} ->
-          runtime = runtime |> Map.put("reconciliation", %{"groups" => [], "unresolved" => [%{"members" => [], "reason" => "unsupported_scope", "explanation" => "Cross-chunk reconciliation was omitted because the validated entity index exceeded the configured context limit (#{bytes} bytes)."}]}) |> Map.put("partial_reason", to_string(reason))
-
-          with {:ok, next} <- schedule(repo, claim, "semantic_validate", Map.put(envelope, "semantic_runtime", runtime), opts) do
-            {:ok, %{"status" => "semantic_reconciliation_partial", "scheduled_step_id" => next["id"], "changes_canon" => false, "next_stage" => "semantic_validate"}}
-          end
-
-        {:error, _} = error -> error
-      end
+      reconcile_result(
+        normalize_reconciliation(SemanticAssessment.reconcile(client, results, completion_opts)),
+        repo,
+        claim,
+        envelope,
+        runtime,
+        opts
+      )
     end
   end
 
@@ -157,7 +162,7 @@ defmodule FountRun.SemanticAssessmentHandler do
     binding = prompt_binding(request, runtime["source"] || %{})
 
     with {:ok, aggregate} <-
-           ImportAssessment.assemble(
+           SemanticAssessment.assemble(
              runtime["chunk_results"] || [],
              runtime["reconciliation"],
              binding,
@@ -165,15 +170,23 @@ defmodule FountRun.SemanticAssessmentHandler do
              expected_chunk_count: get_in(runtime, ["plan", "chunk_count"]) || 0
            ),
          runtime <- Map.put(runtime, "aggregate", aggregate),
-         {:ok, next} <- schedule(repo, claim, "semantic_persist", Map.put(envelope, "semantic_runtime", runtime), opts) do
-      {:ok, %{
-        "status" => "semantic_result_validated",
-        "entities" => length(aggregate["entities"]),
-        "occurrences" => length(aggregate["occurrences"]),
-        "scheduled_step_id" => next["id"],
-        "changes_canon" => false,
-        "next_stage" => "semantic_persist"
-      }}
+         {:ok, next} <-
+           schedule(
+             repo,
+             claim,
+             "semantic_persist",
+             Map.put(envelope, "semantic_runtime", runtime),
+             opts
+           ) do
+      {:ok,
+       %{
+         "status" => "semantic_result_validated",
+         "entities" => length(aggregate["entities"]),
+         "occurrences" => length(aggregate["occurrences"]),
+         "scheduled_step_id" => next["id"],
+         "changes_canon" => false,
+         "next_stage" => "semantic_persist"
+       }}
     end
   end
 
@@ -181,10 +194,12 @@ defmodule FountRun.SemanticAssessmentHandler do
     request = envelope["semantic_request"]
     runtime = envelope["semantic_runtime"] || %{}
     aggregate = runtime["aggregate"]
+
     status =
-      if is_binary(runtime["partial_reason"]) or get_in(aggregate, ["coverage", "complete"]) != true,
-        do: "partial",
-        else: "ready"
+      if is_binary(runtime["partial_reason"]) or
+           get_in(aggregate, ["coverage", "complete"]) != true,
+         do: "partial",
+         else: "ready"
 
     payload = %{
       "assessment_id" => request["assessment_id"],
@@ -198,19 +213,192 @@ defmodule FountRun.SemanticAssessmentHandler do
     }
 
     with :ok <- store_action(opts, :result, payload) do
-      {:ok, %{
-        "status" => "semantic_assessment_persisted",
-        "assessment_id" => request["assessment_id"],
-        "assessment_status" => status,
-        "run_status" => "completed_nonmutating",
-        "changes_canon" => false
-      }}
+      {:ok,
+       %{
+         "status" => "semantic_assessment_persisted",
+         "assessment_id" => request["assessment_id"],
+         "assessment_status" => status,
+         "run_status" => "completed_nonmutating",
+         "changes_canon" => false
+       }}
     end
   end
 
+  defp verify_checkpoint(claim, envelope, opts) do
+    repo = Keyword.fetch!(opts, :repo)
+    request = envelope["semantic_request"]
+    context = Keyword.fetch!(opts, :actor_context)
+
+    with :ok <- enforce_policy(request),
+         {:ok, run} <- FountRun.get_run(repo, claim["run_id"], context),
+         true <-
+           request["revision_id"] == run["plan"]["base_revision_id"] or
+             {:error, :semantic_revision_binding_mismatch},
+         true <-
+           request["screenplay_id"] == run["screenplay_id"] or
+             {:error, :semantic_screenplay_binding_mismatch},
+         {:ok, screenplay} <-
+           CorePersistence.load_revision(repo, run["screenplay_id"], request["revision_id"]),
+         {:ok, source} <- SemanticAssessment.source_descriptor(screenplay),
+         :ok <- source_binding(request, source) do
+      verify_runtime_source(envelope["semantic_runtime"], request, source)
+    end
+  end
+
+  defp verify_runtime_source(nil, _request, _source), do: :ok
+
+  defp verify_runtime_source(runtime, request, source) do
+    with true <- runtime["source"] == source or {:error, :semantic_checkpoint_source_mismatch},
+         {:ok, plan} <-
+           SemanticAssessment.plan_source(source["visible_source"],
+             limits: request["limits"],
+             scene_starts: source["scene_starts"],
+             metadata_ranges: source["metadata_ranges"]
+           ),
+         true <- runtime["plan"] in [nil, plan] or {:error, :semantic_checkpoint_plan_mismatch},
+         :ok <- SemanticAssessment.validate_checkpoint(runtime, prompt_binding(request, source)) do
+      verify_checkpoint_aggregate(runtime, request, source)
+    end
+  end
+
+  defp verify_checkpoint_aggregate(%{"aggregate" => aggregate} = runtime, request, source) do
+    with {:ok, expected} <-
+           SemanticAssessment.assemble(
+             runtime["chunk_results"],
+             runtime["reconciliation"],
+             prompt_binding(request, source),
+             limits: request["limits"],
+             expected_chunk_count: runtime["plan"]["chunk_count"]
+           ),
+         true <- aggregate == expected or {:error, :semantic_checkpoint_aggregate_mismatch} do
+      :ok
+    end
+  end
+
+  defp verify_checkpoint_aggregate(_runtime, _request, _source), do: :ok
+
+  defp extraction_next_stage(index, chunks) do
+    if index + 1 < length(chunks), do: "semantic_extract", else: "semantic_reconcile"
+  end
+
+  defp extract_chunk(repo, claim, envelope, runtime, {plan, index, chunks, chunk}, opts) do
+    with {:ok, client} <- inference(opts),
+         {:ok, completion_opts} <- completion_opts(repo, claim, opts),
+         binding <- prompt_binding(envelope["semantic_request"], runtime["source"] || %{}),
+         result <- SemanticAssessment.extract(client, chunk, binding, completion_opts),
+         {:ok, object, trace} <- normalize_completion(result),
+         :ok <- validate_returned_models(trace),
+         runtime <-
+           runtime
+           |> Map.put("extract_index", index + 1)
+           |> Map.update("chunk_results", [object], &(&1 ++ [object]))
+           |> Map.update("usage_trace", trace, &(&1 ++ trace)),
+         :ok <-
+           store_action(opts, :progress, %{
+             "assessment_id" => envelope["semantic_request"]["assessment_id"],
+             "coverage" => progress_coverage(plan, index + 1)
+           }),
+         next_stage <- extraction_next_stage(index, chunks),
+         {:ok, next} <-
+           schedule(
+             repo,
+             claim,
+             next_stage,
+             Map.put(envelope, "semantic_runtime", runtime),
+             opts,
+             Integer.to_string(index + 1)
+           ) do
+      {:ok,
+       %{
+         "status" => "semantic_chunk_extracted",
+         "chunk_id" => chunk["chunk_id"],
+         "completed_chunks" => index + 1,
+         "chunk_count" => length(chunks),
+         "scheduled_step_id" => next["id"],
+         "changes_canon" => false,
+         "next_stage" => next_stage
+       }}
+    end
+  end
+
+  defp reconcile_result({:ok, reconciliation, trace}, repo, claim, envelope, runtime, opts) do
+    with :ok <- validate_returned_models(trace) do
+      runtime =
+        runtime
+        |> Map.put("reconciliation", reconciliation)
+        |> Map.update("usage_trace", trace, &(&1 ++ trace))
+
+      with {:ok, next} <-
+             schedule(
+               repo,
+               claim,
+               "semantic_validate",
+               Map.put(envelope, "semantic_runtime", runtime),
+               opts
+             ) do
+        {:ok,
+         %{
+           "status" => "semantic_reconciled",
+           "scheduled_step_id" => next["id"],
+           "changes_canon" => false,
+           "next_stage" => "semantic_validate"
+         }}
+      end
+    end
+  end
+
+  defp reconcile_result({:partial, reason, bytes}, repo, claim, envelope, runtime, opts) do
+    runtime =
+      runtime
+      |> Map.put("reconciliation", %{
+        "groups" => [],
+        "unresolved" => [
+          %{
+            "members" => [],
+            "reason" => "unsupported_scope",
+            "explanation" =>
+              "Cross-chunk reconciliation was omitted because the validated entity index exceeded the configured context limit (#{bytes} bytes)."
+          }
+        ]
+      })
+      |> Map.put("partial_reason", to_string(reason))
+
+    with {:ok, next} <-
+           schedule(
+             repo,
+             claim,
+             "semantic_validate",
+             Map.put(envelope, "semantic_runtime", runtime),
+             opts
+           ) do
+      {:ok,
+       %{
+         "status" => "semantic_reconciliation_partial",
+         "scheduled_step_id" => next["id"],
+         "changes_canon" => false,
+         "next_stage" => "semantic_validate"
+       }}
+    end
+  end
+
+  defp reconcile_result({:error, _} = error, _repo, _claim, _envelope, _runtime, _opts), do: error
+
   defp schedule_reconcile(repo, claim, envelope, runtime, opts) do
-    with {:ok, next} <- schedule(repo, claim, "semantic_reconcile", Map.put(envelope, "semantic_runtime", runtime), opts) do
-      {:ok, %{"status" => "semantic_extraction_complete", "scheduled_step_id" => next["id"], "changes_canon" => false, "next_stage" => "semantic_reconcile"}}
+    with {:ok, next} <-
+           schedule(
+             repo,
+             claim,
+             "semantic_reconcile",
+             Map.put(envelope, "semantic_runtime", runtime),
+             opts
+           ) do
+      {:ok,
+       %{
+         "status" => "semantic_extraction_complete",
+         "scheduled_step_id" => next["id"],
+         "changes_canon" => false,
+         "next_stage" => "semantic_reconcile"
+       }}
     end
   end
 
@@ -227,7 +415,8 @@ defmodule FountRun.SemanticAssessmentHandler do
         "branch_id" => claim["branch_id"] || "semantic",
         "input_revision_id" => claim["input_revision_id"],
         "input_candidate_id" => nil,
-        "idempotency_key" => claim["operation_key"] <> ":semantic-next:" <> stage <> ":" <> suffix,
+        "idempotency_key" =>
+          claim["operation_key"] <> ":semantic-next:" <> stage <> ":" <> suffix,
         "request" => request
       },
       context
@@ -238,20 +427,25 @@ defmodule FountRun.SemanticAssessmentHandler do
     with {:ok, limits} <- ExecutionStore.remaining_limits(repo, claim) do
       budget = Budget.new(max_inference_calls: limits.max_inference_calls)
 
-      {:ok, [
-        budget: budget,
-        decode_repairs: min(limits.decode_repairs, 1),
-        transient_retries: limits.transient_retries,
-        dispatch_hook: DispatchHook.new(repo, claim, opts),
-        reserved_cost_microunits: Keyword.get(opts, :reserved_cost_microunits),
-        currency: Keyword.get(opts, :currency)
-      ]}
+      {:ok,
+       [
+         budget: budget,
+         decode_repairs: min(limits.decode_repairs, 1),
+         transient_retries: limits.transient_retries,
+         dispatch_hook: DispatchHook.new(repo, claim, opts),
+         reserved_cost_microunits: Keyword.get(opts, :reserved_cost_microunits),
+         currency: Keyword.get(opts, :currency)
+       ]}
     end
   end
 
-  defp normalize_completion({:ok, object, trace}) when is_map(object) and is_list(trace), do: {:ok, object, trace}
+  defp normalize_reconciliation({:error, reason, _trace}), do: {:error, reason}
+  defp normalize_reconciliation(result), do: result
+
+  defp normalize_completion({:ok, object, trace}) when is_map(object) and is_list(trace),
+    do: {:ok, object, trace}
+
   defp normalize_completion({:error, reason, _trace}), do: {:error, reason}
-  defp normalize_completion({:error, _} = error), do: error
   defp normalize_completion(_), do: {:error, :invalid_semantic_completion}
 
   defp inference(opts) do
@@ -278,7 +472,14 @@ defmodule FountRun.SemanticAssessmentHandler do
 
   defp maybe_mark_failure({:error, reason} = error, claim, opts) do
     request = get_in(claim, ["request", "semantic_request"]) || %{}
-    _ = store_action(opts, :status, %{"assessment_id" => request["assessment_id"], "status" => "failed", "error" => safe_reason(reason)})
+
+    _ =
+      store_action(opts, :status, %{
+        "assessment_id" => request["assessment_id"],
+        "status" => "failed",
+        "error" => safe_reason(reason)
+      })
+
     error
   end
 
@@ -286,12 +487,23 @@ defmodule FountRun.SemanticAssessmentHandler do
 
   defp enforce_policy(request) do
     cond do
-      request["schema_version"] != ImportAssessment.schema_version() -> {:error, :semantic_schema_version_mismatch}
-      request["prompt_version"] != ImportAssessment.prompt_version() -> {:error, :semantic_prompt_version_mismatch}
-      request["model"] != SemanticAssessment.model() -> {:error, :semantic_model_policy_mismatch}
-      request["reasoning_effort"] != Atom.to_string(SemanticAssessment.reasoning_effort()) -> {:error, :semantic_reasoning_policy_mismatch}
-      not valid_provider_policy?(request) -> {:error, :semantic_provider_policy_mismatch}
-      true -> :ok
+      request["schema_version"] != SemanticAssessment.schema_version() ->
+        {:error, :semantic_schema_version_mismatch}
+
+      request["prompt_version"] != SemanticAssessment.prompt_version() ->
+        {:error, :semantic_prompt_version_mismatch}
+
+      request["model"] != SemanticAssessment.model() ->
+        {:error, :semantic_model_policy_mismatch}
+
+      request["reasoning_effort"] != Atom.to_string(SemanticAssessment.reasoning_effort()) ->
+        {:error, :semantic_reasoning_policy_mismatch}
+
+      not valid_provider_policy?(request) ->
+        {:error, :semantic_provider_policy_mismatch}
+
+      true ->
+        :ok
     end
   end
 
@@ -300,8 +512,8 @@ defmodule FountRun.SemanticAssessmentHandler do
          request["render_sha256"] == descriptor["render_sha256"] and
          request["source_basis"] == descriptor["source_basis"] and
          request["source_artifact_id"] == descriptor["source_artifact_id"],
-      do: :ok,
-      else: {:error, :semantic_source_binding_mismatch}
+       do: :ok,
+       else: {:error, :semantic_source_binding_mismatch}
   end
 
   defp prompt_binding(request, source) do
@@ -321,7 +533,12 @@ defmodule FountRun.SemanticAssessmentHandler do
     }
   end
 
-  defp valid_provider_policy?(%{"service_key" => "deterministic_fixture", "provider_family" => "fixture"}), do: true
+  defp valid_provider_policy?(%{
+         "service_key" => "deterministic_fixture",
+         "provider_family" => "fixture"
+       }),
+       do: true
+
   defp valid_provider_policy?(%{"service_key" => "codex", "provider_family" => "codex"}), do: true
   defp valid_provider_policy?(_), do: false
 

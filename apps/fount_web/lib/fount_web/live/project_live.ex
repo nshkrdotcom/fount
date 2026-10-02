@@ -146,8 +146,6 @@ defmodule FountWeb.ProjectLive do
     end
   end
 
-
-
   defp maybe_launch_import_assessment(socket, project, %{"assess_source" => true}, _fallback) do
     case FountWeb.Launch.assess_project(socket.assigns.current_owner, project["id"], %{
            "command_id" => Fount.ID.v4()
@@ -171,7 +169,9 @@ defmodule FountWeb.ProjectLive do
 
   defp maybe_launch_import_assessment(_socket, _project, _attrs, fallback), do: {:info, fallback}
 
-  defp assessment_error(:semantic_assessment_not_configured), do: "assessment service is not configured"
+  defp assessment_error(:semantic_assessment_not_configured),
+    do: "assessment service is not configured"
+
   defp assessment_error(:project_screenplay_mismatch), do: "the source revision changed"
   defp assessment_error(:semantic_schema_missing), do: "the SI02 migration is not applied"
   defp assessment_error(_), do: "the durable assessment launch failed"
@@ -179,7 +179,8 @@ defmodule FountWeb.ProjectLive do
   defp truthy?(value), do: value in [true, "true", "on", "1", 1]
 
   defp maybe_remember_assessment_default(socket, params, assess_source) do
-    if truthy?(params["remember_assessment_default"]) and socket.assigns.assessment_service["configured"] do
+    if truthy?(params["remember_assessment_default"]) and
+         socket.assigns.assessment_service["configured"] do
       case FountWeb.Store.put_owner_preferences(Fount.Repo, socket.assigns.current_owner, %{
              "semantic_assessment_default" => assess_source
            }) do
@@ -191,7 +192,7 @@ defmodule FountWeb.ProjectLive do
     end
   end
 
-    defp load_projects(socket) do
+  defp load_projects(socket) do
     case FountWeb.Store.list_projects(Fount.Repo, socket.assigns.current_owner, limit: 24) do
       projects when is_list(projects) ->
         cards =
@@ -414,19 +415,19 @@ defmodule FountWeb.ProjectLive do
                 name="project[assess_source]"
                 value="true"
                 checked={Map.get(@preferences, "semantic_assessment_default", false) == true}
-              />
-              Assess cast &amp; locations after import
+              /> Assess cast &amp; locations after import
             </label>
             <label :if={@assessment_service["configured"]} class="scope-note">
               <input
                 type="checkbox"
                 name="project[remember_assessment_default]"
                 value="true"
-              />
-              Remember this assessment choice for future imports
+              /> Remember this assessment choice for future imports
             </label>
             <p :if={@assessment_service["configured"]} class="scope-note">
-              Uses {@assessment_service["model"]} with {@assessment_service["reasoning_effort"]} reasoning. The screenplay source ({@pending_import.import["source_bytes"]} bytes) is sent to the configured assessment service after the import commits. Assessment never accepts or rewrites screenplay text.
+              Uses {@assessment_service["model"]} with {@assessment_service["reasoning_effort"]} reasoning. The screenplay source ({@pending_import.import[
+                "source_bytes"
+              ]} bytes) is sent to the configured assessment service after the import commits. Assessment never accepts or rewrites screenplay text.
             </p>
             <p :if={!@assessment_service["configured"]} class="scope-note">
               Model assessment: {@assessment_service["label"]}. Import and manual Cast/Locations review remain provider-free.

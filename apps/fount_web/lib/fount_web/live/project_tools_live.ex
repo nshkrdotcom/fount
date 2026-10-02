@@ -18,6 +18,8 @@ defmodule FountWeb.ProjectToolsLive do
 
     case ProjectContext.load(owner, key) do
       {:ok, context} ->
+        if connected?(socket), do: Process.send_after(self(), :refresh_semantic_assessment, 1_000)
+
         {:ok,
          socket
          |> assign_project(context)
@@ -43,6 +45,18 @@ defmodule FountWeb.ProjectToolsLive do
   end
 
   @impl true
+  def handle_info(:refresh_semantic_assessment, socket) do
+    Process.send_after(self(), :refresh_semantic_assessment, 1_000)
+
+    socket =
+      if semantic_assessment_running?(socket.assigns.semantic),
+        do: reload_semantic_context(socket),
+        else: socket
+
+    {:noreply, socket}
+  end
+
+  @impl true
   def handle_event("assess_source", _params, socket) do
     owner = socket.assigns.current_owner
     project = socket.assigns.project
@@ -54,21 +68,30 @@ defmodule FountWeb.ProjectToolsLive do
             {:noreply,
              socket
              |> reload_semantic_context()
-             |> assign(:notice, "Source assessment started as durable Work. Current screenplay text is unchanged.")
+             |> assign(
+               :notice,
+               "Source assessment started as durable Work. Current screenplay text is unchanged."
+             )
              |> assign(:error, nil)}
 
           {:error, {:already_started, _pid}} ->
             {:noreply,
              socket
              |> reload_semantic_context()
-             |> assign(:notice, "Source assessment is already running. Current screenplay text is unchanged.")
+             |> assign(
+               :notice,
+               "Source assessment is already running. Current screenplay text is unchanged."
+             )
              |> assign(:error, nil)}
 
           {:error, _reason} ->
             {:noreply,
              socket
              |> reload_semantic_context()
-             |> assign(:error, "The assessment task was saved but its worker could not start. Open Work to retry it.")}
+             |> assign(
+               :error,
+               "The assessment task was saved but its worker could not start. Open Work to retry it."
+             )}
         end
 
       {:error, reason} ->
@@ -82,7 +105,10 @@ defmodule FountWeb.ProjectToolsLive do
     with %{"id" => assessment_id, "run_id" => run_id, "status" => status}
          when is_binary(run_id) and status in ["queued", "running"] <- latest,
          {:ok, actor_context} <-
-           FountWeb.Actors.owner_context(socket.assigns.current_owner, socket.assigns.context.current.id),
+           FountWeb.Actors.owner_context(
+             socket.assigns.current_owner,
+             socket.assigns.context.current.id
+           ),
          {:ok, _run} <- FountRun.stop_run(Fount.Repo, run_id, actor_context),
          :ok <-
            FountWeb.SemanticStore.update_assessment_status(
@@ -96,10 +122,19 @@ defmodule FountWeb.ProjectToolsLive do
       {:noreply,
        socket
        |> reload_semantic_context()
-       |> assign(:notice, "Assessment cancelled. Completed source review and screenplay text remain unchanged.")
+       |> assign(
+         :notice,
+         "Assessment cancelled. Completed source review and screenplay text remain unchanged."
+       )
        |> assign(:error, nil)}
     else
-      _ -> {:noreply, assign(socket, :error, "That assessment is no longer cancellable. Reload to see its current state.")}
+      _ ->
+        {:noreply,
+         assign(
+           socket,
+           :error,
+           "That assessment is no longer cancellable. Reload to see its current state."
+         )}
     end
   end
 
@@ -1533,43 +1568,65 @@ defmodule FountWeb.ProjectToolsLive do
   defp semantic_assessment_label(%{assessment_state: :stale}), do: "Stale assessment"
   defp semantic_assessment_label(_), do: "Source review"
 
-  defp semantic_assessment_detail(semantic, service) do
+  defp semantic_assessment_detail(%{latest_assessment: nil}, service) do
+    if service["configured"] == false,
+      do:
+        "No model assessment ran. #{service["label"]}. Literal source review remains available and creates no Run.",
+      else:
+        "No model assessment has run for this exact revision. A request uses #{service["model"]} with #{service["reasoning_effort"]} reasoning and never accepts screenplay changes."
+  end
+
+  defp semantic_assessment_detail(semantic, _service) do
     latest = Map.get(semantic, :latest_assessment)
     coverage = Map.get(semantic, :coverage) || %{}
 
     cond do
-      is_nil(latest) and service["configured"] == false ->
-        "No model assessment ran. #{service["label"]}. Literal source review remains available and creates no Run."
-
-      is_nil(latest) ->
-        "No model assessment has run for this exact revision. A request uses #{service["model"]} with #{service["reasoning_effort"]} reasoning and never accepts screenplay changes."
-
       latest["status"] == "running" ->
-        processed = coverage["completed_chunks"] || coverage["processed_chunks"] || coverage["processed_span_ids"] || []
-        total = coverage["chunk_count"] || coverage["total_chunks"]
-        if is_integer(processed) and is_integer(total), do: "Assessing #{processed} of #{total} source chunks.", else: "Assessment is running as durable Work. Reading and manual review remain available."
+        semantic_assessment_progress_detail(coverage)
 
-      latest["status"] == "queued" ->
-        "Assessment is queued as durable Work. Reading and manual review remain available."
-
-      latest["status"] == "failed" ->
-        "Assessment failed without changing the screenplay. The exact failure is retained in Work; retry creates a new source-bound attempt."
+      latest["status"] in ["queued", "failed"] ->
+        semantic_terminal_detail(latest["status"])
 
       Map.get(semantic, :assessment_state) == :stale ->
         "The newest assessment belongs to an earlier screenplay revision. It remains historical evidence and is not used as current interpretation; reassessment is explicit."
 
-      latest["status"] == "cancelled" ->
-        "Assessment was cancelled. Existing manual review and screenplay text remain unchanged; reassessment is explicit."
-
-      latest["status"] == "partial" ->
-        "Validated suggestions are partial; omitted or unresolved coverage remains explicit. Human review takes precedence."
-
-      latest["status"] == "ready" ->
-        "Validated suggestions are source-bound and remain suggestions until human review. Confirming an interpretation does not accept screenplay changes."
+      latest["status"] in ["cancelled", "partial", "ready"] ->
+        semantic_terminal_detail(latest["status"])
 
       true ->
         "Assessment state is retained with this exact source revision."
     end
+  end
+
+  defp semantic_terminal_detail("queued"),
+    do: "Assessment is queued as durable Work. Reading and manual review remain available."
+
+  defp semantic_terminal_detail("failed"),
+    do:
+      "Assessment failed without changing the screenplay. The exact failure is retained in Work; retry creates a new source-bound attempt."
+
+  defp semantic_terminal_detail("cancelled"),
+    do:
+      "Assessment was cancelled. Existing manual review and screenplay text remain unchanged; reassessment is explicit."
+
+  defp semantic_terminal_detail("partial"),
+    do:
+      "Validated suggestions are partial; omitted or unresolved coverage remains explicit. Human review takes precedence."
+
+  defp semantic_terminal_detail("ready"),
+    do:
+      "Validated suggestions are source-bound and remain suggestions until human review. Confirming an interpretation does not accept screenplay changes."
+
+  defp semantic_assessment_progress_detail(coverage) do
+    processed =
+      coverage["completed_chunks"] || coverage["processed_chunks"] ||
+        coverage["processed_span_ids"] || []
+
+    total = coverage["chunk_count"] || coverage["total_chunks"]
+
+    if is_integer(processed) and is_integer(total),
+      do: "Assessing #{processed} of #{total} source chunks.",
+      else: "Assessment is running as durable Work. Reading and manual review remain available."
   end
 
   defp semantic_assessment_running?(%{assessment_state: state}), do: state in [:queued, :running]
@@ -1582,13 +1639,17 @@ defmodule FountWeb.ProjectToolsLive do
 
   defp semantic_assessment_action(%{assessment_state: :failed}), do: "Retry assessment"
   defp semantic_assessment_action(%{assessment_state: :cancelled}), do: "Restart assessment"
-  defp semantic_assessment_action(%{assessment_state: state}) when state in [:ready, :partial, :stale], do: "Reassess this draft"
+
+  defp semantic_assessment_action(%{assessment_state: state})
+       when state in [:ready, :partial, :stale], do: "Reassess this draft"
+
   defp semantic_assessment_action(_), do: "Assess this draft"
 
   defp semantic_assessment_history(semantic), do: Map.get(semantic, :model_assessment_history, [])
 
   defp semantic_assessment_run_key(semantic, runs) do
     run_id = get_in(semantic, [:latest_assessment, "run_id"])
+
     case Enum.find(runs, &(&1["run_id"] == run_id)) do
       nil -> nil
       run -> run["display_key"]
@@ -1610,7 +1671,8 @@ defmodule FountWeb.ProjectToolsLive do
     do: "Source assessment is not configured. Manual source review remains available."
 
   defp semantic_assessment_error(:project_screenplay_mismatch),
-    do: "The screenplay changed before assessment could be bound. Reload and assess the current draft."
+    do:
+      "The screenplay changed before assessment could be bound. Reload and assess the current draft."
 
   defp semantic_assessment_error(:semantic_schema_missing),
     do: "Apply the SI02 database migration before starting source assessment."
@@ -2475,7 +2537,9 @@ defmodule FountWeb.ProjectToolsLive do
             <summary>Assessment history</summary>
             <ul class="plain-list">
               <li :for={item <- semantic_assessment_history(@semantic)}>
-                {human_status(item["status"])} · {item["model"] || "model identity unavailable"} · {item["reasoning_effort"] || "effort unavailable"}
+                {human_status(item["status"])} · {item["model"] || "model identity unavailable"} · {item[
+                  "reasoning_effort"
+                ] || "effort unavailable"}
               </li>
             </ul>
           </details>
@@ -2706,7 +2770,7 @@ defmodule FountWeb.ProjectToolsLive do
           </article>
         </div>
 
-        <p :if={@characters == [] && not Map.get(@semantic, :error)} class="empty-copy">
+        <p :if={@characters == [] && !Map.get(@semantic, :error)} class="empty-copy">
           No reviewed or literal character cues are present in this source revision.
         </p>
 
@@ -2844,7 +2908,7 @@ defmodule FountWeb.ProjectToolsLive do
           </div>
         </section>
 
-        <p :if={@locations == [] && not Map.get(@semantic, :error)}>
+        <p :if={@locations == [] && !Map.get(@semantic, :error)}>
           No literal scene headings are available in this exact source revision.
         </p>
         <article
@@ -3567,9 +3631,9 @@ defmodule FountWeb.ProjectToolsLive do
     """
   end
 
-  attr :runs, :list, required: true
-  attr :project, :map, required: true
-  attr :mode, :string, default: "activity"
+  attr(:runs, :list, required: true)
+  attr(:project, :map, required: true)
+  attr(:mode, :string, default: "activity")
 
   def task_list(assigns) do
     ~H"""

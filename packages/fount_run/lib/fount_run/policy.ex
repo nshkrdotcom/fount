@@ -156,7 +156,10 @@ defmodule FountRun.Policy do
   defp completion_consistency("candidate", nil, nil), do: :ok
   defp completion_consistency("nonmutating", nil, nil), do: :ok
   defp completion_consistency("candidate", _, _), do: {:error, :candidate_completion_has_approver}
-  defp completion_consistency("nonmutating", _, _), do: {:error, :nonmutating_completion_has_approver}
+
+  defp completion_consistency("nonmutating", _, _),
+    do: {:error, :nonmutating_completion_has_approver}
+
   defp completion_consistency("accept", %Principal{}, _), do: :ok
 
   defp completion_consistency("accept", nil, _),

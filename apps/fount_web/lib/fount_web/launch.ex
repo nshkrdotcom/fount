@@ -1,9 +1,11 @@
 defmodule FountWeb.Launch do
   @moduledoc "Creates owner-bound screenplay projects and starts durable creative tasks only when explicitly requested."
   alias Ecto.Adapters.SQL
+  alias Fount.Intelligence.ImportAssessment
   alias Fount.{Persistence, Screenplay}
   alias Fount.Writing.CanonicalJSON
   alias FountRun.PipelineRequest
+  alias FountWorkshop.SemanticAssessment
 
   @max_bytes 1_048_576
 
@@ -49,8 +51,6 @@ defmodule FountWeb.Launch do
     end
   end
 
-
-
   @doc "Starts one source-bound, non-mutating SI02 assessment Run for the current accepted revision."
   def assess_project(owner_id, project_id, attrs)
       when is_binary(owner_id) and is_binary(project_id) and is_map(attrs) do
@@ -62,10 +62,10 @@ defmodule FountWeb.Launch do
          {:ok, project} <- FountWeb.Store.project(Fount.Repo, owner_id, project_id),
          {:ok, root} <- Persistence.load(Fount.Repo, project["key"]),
          true <- root.id == project["screenplay_id"] or {:error, :project_screenplay_mismatch},
-         {:ok, descriptor} <- Fount.Intelligence.ImportAssessment.source_descriptor(root),
+         {:ok, descriptor} <- ImportAssessment.source_descriptor(root),
          {:ok, source_plan} <-
-           Fount.Intelligence.ImportAssessment.plan_source(descriptor["visible_source"],
-             limits: Fount.Intelligence.ImportAssessment.default_limits(),
+           ImportAssessment.plan_source(descriptor["visible_source"],
+             limits: ImportAssessment.default_limits(),
              scene_starts: descriptor["scene_starts"] || [],
              metadata_ranges: descriptor["metadata_ranges"] || []
            ),
@@ -81,7 +81,6 @@ defmodule FountWeb.Launch do
         context
       )
     else
-      false -> {:error, :semantic_assessment_not_configured}
       {:error, _} = error -> error
     end
   end
@@ -98,12 +97,16 @@ defmodule FountWeb.Launch do
        ) do
     Fount.Repo.transaction(fn ->
       limits =
-        Fount.Intelligence.ImportAssessment.default_limits()
+        ImportAssessment.default_limits()
         |> Map.put("max_inference_calls", 2 * (source_plan["chunk_count"] + 1))
 
       provider_family = service["provider_family"] || "codex"
-      service_key = if service["mode"] == "deterministic_fixture", do: "deterministic_fixture", else: "codex"
-      origin = if service_key == "deterministic_fixture", do: "deterministic_fixture", else: "model"
+
+      service_key =
+        if service["mode"] == "deterministic_fixture", do: "deterministic_fixture", else: "codex"
+
+      origin =
+        if service_key == "deterministic_fixture", do: "deterministic_fixture", else: "model"
 
       request_identity = %{
         "project_id" => project["id"],
@@ -113,10 +116,10 @@ defmodule FountWeb.Launch do
         "source_sha256" => descriptor["source_sha256"],
         "render_sha256" => descriptor["render_sha256"],
         "source_basis" => descriptor["source_basis"],
-        "schema_version" => Fount.Intelligence.ImportAssessment.schema_version(),
-        "prompt_version" => Fount.Intelligence.ImportAssessment.prompt_version(),
-        "model" => FountWorkshop.SemanticAssessment.model(),
-        "reasoning_effort" => Atom.to_string(FountWorkshop.SemanticAssessment.reasoning_effort()),
+        "schema_version" => ImportAssessment.schema_version(),
+        "prompt_version" => ImportAssessment.prompt_version(),
+        "model" => SemanticAssessment.model(),
+        "reasoning_effort" => Atom.to_string(SemanticAssessment.reasoning_effort()),
         "provider_family" => provider_family,
         "service_key" => service_key,
         "command_id" => command_id,
@@ -145,55 +148,106 @@ defmodule FountWeb.Launch do
                root,
                reserve_attrs
              ),
-           semantic_request <-
-             request_identity
-             |> Map.put("assessment_id", assessment["id"]),
-           {:ok, envelope} <- PipelineRequest.semantic(semantic_request),
-           {:ok, run} <-
-             FountRun.start_run(
-               Fount.Repo,
-               semantic_run_attrs(root, project, request_fingerprint, command_id, limits),
-               context
-             ),
-           {:ok, access} <-
-             FountWeb.Store.register_run(Fount.Repo, %{
-               run_id: run["id"],
-               project_id: project["id"],
-               owner_id: owner_id,
-               preset: "semantic-import",
-               journey: "semantic_import",
-               display_label: "Source assessment"
-             }),
-           :ok <-
-             FountWeb.SemanticStore.bind_run(
-               Fount.Repo,
+           {:ok, result} <-
+             start_or_replay_assessment(
                owner_id,
-               project["id"],
-               assessment["id"],
-               run["id"]
-             ),
-           {:ok, _step} <-
-             FountRun.enqueue_step(
-               Fount.Repo,
-               run["id"],
-               semantic_intake(root, envelope, assessment["id"]),
+               project,
+               root,
+               assessment,
+               request_identity,
+               {request_fingerprint, command_id, limits},
                context
              ) do
-        %{
-          project: project,
-          assessment: assessment,
-          run: run,
-          access:
-            Map.merge(access, %{
-              "screenplay_id" => root.id,
-              "key" => project["key"],
-              "title" => project["title"]
-            })
-        }
+        result
       else
         {:error, reason} -> Fount.Repo.rollback(reason)
       end
     end)
+  end
+
+  defp start_or_replay_assessment(
+         owner_id,
+         project,
+         root,
+         %{"run_id" => run_id} = assessment,
+         _identity,
+         _launch,
+         context
+       )
+       when is_binary(run_id) do
+    with {:ok, run} <- FountRun.get_run(Fount.Repo, run_id, context),
+         {:ok, access} <- FountWeb.Store.run_access(Fount.Repo, owner_id, run_id) do
+      {:ok,
+       %{
+         project: project,
+         assessment: assessment,
+         run: run,
+         access:
+           Map.merge(access, %{
+             "screenplay_id" => root.id,
+             "key" => project["key"],
+             "title" => project["title"]
+           })
+       }}
+    end
+  end
+
+  defp start_or_replay_assessment(
+         owner_id,
+         project,
+         root,
+         assessment,
+         request_identity,
+         {request_fingerprint, command_id, limits},
+         context
+       ) do
+    with semantic_request <-
+           request_identity
+           |> Map.put("assessment_id", assessment["id"]),
+         {:ok, envelope} <- PipelineRequest.semantic(semantic_request),
+         {:ok, run} <-
+           FountRun.start_run(
+             Fount.Repo,
+             semantic_run_attrs(root, project, request_fingerprint, command_id, limits),
+             context
+           ),
+         {:ok, access} <-
+           FountWeb.Store.register_run(Fount.Repo, %{
+             run_id: run["id"],
+             project_id: project["id"],
+             owner_id: owner_id,
+             preset: "semantic-import",
+             journey: "semantic_import",
+             display_label: "Source assessment"
+           }),
+         :ok <-
+           FountWeb.SemanticStore.bind_run(
+             Fount.Repo,
+             owner_id,
+             project["id"],
+             assessment["id"],
+             run["id"]
+           ),
+         {:ok, _step} <-
+           FountRun.enqueue_step(
+             Fount.Repo,
+             run["id"],
+             semantic_intake(root, envelope, assessment["id"]),
+             context
+           ) do
+      {:ok,
+       %{
+         project: project,
+         assessment: assessment,
+         run: run,
+         access:
+           Map.merge(access, %{
+             "screenplay_id" => root.id,
+             "key" => project["key"],
+             "title" => project["title"]
+           })
+       }}
+    end
   end
 
   defp semantic_run_attrs(root, project, request_fingerprint, command_id, limits) do
@@ -208,7 +262,7 @@ defmodule FountWeb.Launch do
       },
       "constraints" => ["non_mutating", "source_bound_evidence", "human_review_precedence"],
       "protected_material" => [],
-      "client_idempotency_key" => "semantic-import:" <> command_id,
+      "client_idempotency_key" => "semantic-import:" <> project["id"] <> ":" <> command_id,
       "operation_parameters" => %{
         "workflow" => "semantic_import_v1",
         "request_fingerprint" => request_fingerprint,
@@ -248,7 +302,7 @@ defmodule FountWeb.Launch do
     }
   end
 
-    @doc "Parses an uploaded screenplay for the UX01 preview without writing project or Run state."
+  @doc "Parses an uploaded screenplay for the UX01 preview without writing project or Run state."
   def preview_import(source, filename) when is_binary(source) and is_binary(filename) do
     with :ok <- validate_import_source(source), do: parse(source, filename)
   end

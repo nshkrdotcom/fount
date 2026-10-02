@@ -24,18 +24,33 @@ defmodule FountWeb.SemanticContext do
              stored["id"],
              persisted.revision.id
            ),
-         current_entities when is_list(current_entities) <- SemanticStore.entities(repo, assessment["id"]),
+         current_entities when is_list(current_entities) <-
+           SemanticStore.entities(repo, assessment["id"]),
          revision_entities when is_list(revision_entities) <-
-           SemanticStore.entity_rows_for_revision(repo, owner, stored["id"], persisted.revision.id),
+           SemanticStore.entity_rows_for_revision(
+             repo,
+             owner,
+             stored["id"],
+             persisted.revision.id
+           ),
          history when is_list(history) <-
-           SemanticStore.review_history_for_revision(repo, owner, stored["id"], persisted.revision.id),
+           SemanticStore.review_history_for_revision(
+             repo,
+             owner,
+             stored["id"],
+             persisted.revision.id
+           ),
          {:ok, version} <-
            SemanticStore.current_version(repo, owner, stored["id"], assessment["id"]),
          assessment_history when is_list(assessment_history) <-
            SemanticStore.assessment_history(repo, owner, stored["id"], persisted.revision.id),
          model_history when is_list(model_history) <-
            SemanticStore.model_assessment_history(repo, owner, stored["id"]) do
-      entities = select_entity_rows(current_entities, revision_entities, history)
+      entities =
+        current_entities
+        |> include_partial_literals(revision_entities, assessment)
+        |> select_entity_rows(revision_entities, history)
+
       projection = project_entities(entities, history)
       inventory = manual["result"] || %{}
       latest_current = latest_model(assessment_history)
@@ -59,14 +74,36 @@ defmodule FountWeb.SemanticContext do
          canonical_cast: canonical_cast(inventory),
          review_history: history,
          assessment_state: assessment_state(head, persisted, latest_current, latest),
-         coverage: if(latest, do: latest["coverage"] || %{}, else: %{}),
-         usage: if(latest, do: latest["usage"] || %{}, else: %{}),
-         assessment_error: if(latest, do: latest["error"] || %{}, else: %{})
+         coverage: assessment_field(latest, "coverage"),
+         usage: assessment_field(latest, "usage"),
+         assessment_error: assessment_field(latest, "error")
        }}
     else
       {:error, _} = error -> error
     end
   end
+
+  defp assessment_field(nil, _key), do: %{}
+  defp assessment_field(assessment, key), do: assessment[key] || %{}
+
+  @doc "Retains unassessed literal source inventory when an interpretation reports partial coverage."
+  def include_partial_literals(current_rows, revision_rows, %{"status" => "partial"}) do
+    covered =
+      current_rows
+      |> Enum.flat_map(&(get_in(&1, ["payload", "occurrences"]) || []))
+      |> Enum.map(& &1["literal_element_id"])
+      |> MapSet.new()
+
+    literals =
+      Enum.filter(revision_rows, fn row ->
+        row["assessment_origin"] == "manual" and
+          not MapSet.member?(covered, get_in(row, ["payload", "element_id"]))
+      end)
+
+    Enum.uniq_by(current_rows ++ literals, & &1["handle_id"])
+  end
+
+  def include_partial_literals(current_rows, _revision_rows, _assessment), do: current_rows
 
   @doc "Carries human-reviewed handles across reassessments without reviving unreviewed historical suggestions."
   def select_entity_rows(current_rows, revision_rows, history)
@@ -91,7 +128,11 @@ defmodule FountWeb.SemanticContext do
   end
 
   defp latest_model(rows) do
-    Enum.find(rows, &(&1["schema_version"] == "semantic_import_v1" and &1["origin"] in ["model", "deterministic_fixture"]))
+    Enum.find(
+      rows,
+      &(&1["schema_version"] == "semantic_import_v1" and
+          &1["origin"] in ["model", "deterministic_fixture"])
+    )
   end
 
   defp assessment_state(head, persisted, _latest_current, _latest_any)
@@ -518,33 +559,43 @@ defmodule FountWeb.SemanticContext do
     }
   end
 
+  defp semantic_roster_by_block(characters) do
+    Enum.reduce(characters, %{}, fn profile, acc ->
+      identity = %{
+        "handle_id" => profile.semantic_handle_id,
+        "display_name" => profile.display_name,
+        "review_state" => profile.review_state,
+        "representation" => profile.representation
+      }
+
+      profile.occurrences
+      |> Enum.filter(&(&1.role == "speaker" and is_binary(&1.dialogue_block_id)))
+      |> Enum.reduce(acc, fn occurrence, index ->
+        add_roster_identity(index, occurrence.dialogue_block_id, identity)
+      end)
+    end)
+  end
+
+  defp add_roster_identity(index, block_id, identity) do
+    Map.update(index, block_id, [identity], fn rows ->
+      [identity | rows] |> Enum.uniq_by(& &1["handle_id"])
+    end)
+  end
+
+  defp annotate_read_turn(turn, [identity]), do: Map.put(turn, "semantic_identity", identity)
+  defp annotate_read_turn(turn, []), do: turn
+
+  defp annotate_read_turn(turn, identities) do
+    Map.put(turn, "semantic_identity_candidates", Enum.sort_by(identities, & &1["display_name"]))
+  end
+
   @doc "Annotates a human table-read packet with source-bound semantic speaker identities without changing source cues or dialogue."
   def annotate_table_read(packet, characters) when is_map(packet) and is_list(characters) do
-    by_block =
-      Enum.reduce(characters, %{}, fn profile, acc ->
-        identity = %{
-          "handle_id" => profile.semantic_handle_id,
-          "display_name" => profile.display_name,
-          "review_state" => profile.review_state,
-          "representation" => profile.representation
-        }
-
-        profile.occurrences
-        |> Enum.filter(&(&1.role == "speaker" and is_binary(&1.dialogue_block_id)))
-        |> Enum.reduce(acc, fn occurrence, index ->
-          Map.update(index, occurrence.dialogue_block_id, [identity], fn rows ->
-            [identity | rows] |> Enum.uniq_by(& &1["handle_id"])
-          end)
-        end)
-      end)
+    by_block = semantic_roster_by_block(characters)
 
     turns =
       Enum.map(packet["turns"] || [], fn turn ->
-        case Map.get(by_block, turn["id"], []) do
-          [identity] -> Map.put(turn, "semantic_identity", identity)
-          [] -> turn
-          identities -> Map.put(turn, "semantic_identity_candidates", Enum.sort_by(identities, & &1["display_name"]))
-        end
+        annotate_read_turn(turn, Map.get(by_block, turn["id"], []))
       end)
 
     roster =
@@ -561,7 +612,10 @@ defmodule FountWeb.SemanticContext do
     packet
     |> Map.put("turns", turns)
     |> Map.put("semantic_roster", roster)
-    |> Map.put("semantic_roster_claim", "Interpretation metadata only; source cue/dialogue text is unchanged.")
+    |> Map.put(
+      "semantic_roster_claim",
+      "Interpretation metadata only; source cue/dialogue text is unchanged."
+    )
   end
 
   def character_dialogue(%Screenplay{} = screenplay, profile) when is_map(profile) do

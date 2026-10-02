@@ -130,10 +130,14 @@ semantic_assessment_config =
 
     "codex" ->
       cli_path = optional_nonblank.("CODEX_PATH") || "codex"
-      auth_asserted = System.get_env("FOUNT_CODEX_AUTH_ASSERTED", "false") |> String.trim() |> String.downcase() == "true"
+
+      auth_asserted =
+        System.get_env("FOUNT_CODEX_AUTH_ASSERTED", "false") |> String.trim() |> String.downcase() ==
+          "true"
+
       [mode: :codex, cli_path: cli_path, auth_asserted: auth_asserted]
 
-    "deterministic_fixture" when config_env() == :test ->
+    "deterministic_fixture" when runtime_env == :test ->
       [
         mode: :deterministic_fixture,
         client_factory: {FountWeb.SemanticFixtureAdapter, :client, []}

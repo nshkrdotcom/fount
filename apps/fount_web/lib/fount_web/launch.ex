@@ -1,5 +1,6 @@
 defmodule FountWeb.Launch do
   @moduledoc "Creates owner-bound screenplay projects and starts durable creative tasks only when explicitly requested."
+  alias Ecto.Adapters.SQL
   alias Fount.{Persistence, Screenplay}
   alias Fount.Writing.CanonicalJSON
   alias FountRun.PipelineRequest
@@ -96,15 +97,25 @@ defmodule FountWeb.Launch do
   defp generated_project_key(owner_id, title) do
     base = slug(title)
 
-    1..99
-    |> Enum.map(fn
-      1 -> base
-      n -> base <> "-" <> Integer.to_string(n)
-    end)
-    |> Enum.find(&project_key_available?(owner_id, &1))
-    |> case do
-      nil -> {:error, :project_key_exhausted}
-      key -> {:ok, key}
+    # Core keys are globally unique, including across host owners. Allocate
+    # under a transaction lock so two imports cannot select the same free key.
+    with {:ok, _} <-
+           SQL.query(
+             Fount.Repo,
+             "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
+             ["fount:generated-project-key"],
+             log: false
+           ) do
+      key =
+        1
+        |> Stream.iterate(&(&1 + 1))
+        |> Stream.map(fn
+          1 -> base
+          n -> base <> "-" <> Integer.to_string(n)
+        end)
+        |> Enum.find(&project_key_available?(owner_id, &1))
+
+      {:ok, key}
     end
   end
 

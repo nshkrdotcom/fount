@@ -1,5 +1,5 @@
 import {test, expect} from '@playwright/test';
-import {importProject, createTask} from './workspace_helpers.mjs';
+import {importProject, createTask, openWorkspace, reloadWorkspace} from './workspace_helpers.mjs';
 const token = process.env.FOUNT_OWNER_TOKEN || 'browser-owner-token';
 const fixture = `Title: Phase 04 Viewer <Fixture>\nAuthor: Zoë\n\n# ACT ONE\n\nINT. CAFÉ - MORNING #1#\n\nMARA sets an envelope beside the coffee maker. <script>not executable</script>\n\nMARA\nI said I would wait.\n\nOWEN ^\nAnd I said the train would not.\n\n[[private note]]\n\nEXT. TRAIN PLATFORM - NIGHT #2#\n\nNORA waits under the departure board.\n\nNORA\nThe train is late.\n\nINT. INTERVIEW ROOM - LATER\n\nNora keeps her hands flat on the table.\n\nNORA\nI didn't miss anything.\n`;
 async function login(page) {
@@ -24,14 +24,13 @@ test('U01-U05 project viewer preserves escaped IR, dual dialogue, scene focus an
   const id = await links.nth(1).getAttribute('data-scene-link');
   await expect(page.locator(`#scene-${id}`)).toBeFocused();
   await expect(links.nth(1)).toHaveAttribute('aria-current', 'location');
-  await page.reload();
-  await expect(page.locator('.phx-connected')).toBeVisible();
+  await reloadWorkspace(page);
   await expect(links.nth(1)).toHaveAttribute('aria-current', 'location');
   await page.locator('#reader-scenes > summary').click();
   await links.first().focus();
   await page.keyboard.press('ArrowDown');
   await expect(links.nth(1)).toBeFocused();
-  await page.goto(`/p/${key}/cast`);
+  await openWorkspace(page, `/p/${key}/cast`);
   await expect(page.getByRole('heading', {name:'MARA', exact:true})).toBeVisible();
 });
 
@@ -56,19 +55,19 @@ test('U06/U08 task Sources keep proposed work distinct and reject arbitrary revi
   await login(page);
   const key=await importProject(page, `viewer-candidate-${Date.now()}`, fixture);
   await createTask(page,key,'opening');
-  await page.goto(`/p/${key}/activity/task-1/decisions`);
+  await openWorkspace(page, `/p/${key}/activity/task-1/decisions`);
   await page.getByRole('button',{name:/Commit now|route-a/i}).first().click();
-  await page.goto(`/p/${key}/changes/task-1`);
+  await openWorkspace(page, `/p/${key}/changes/task-1`);
   await expect(page.locator('pre.script').last()).toContainText('INT. LOCKED ROOM - NIGHT',{timeout:60000});
-  await page.goto(`/p/${key}/source/task-1`);
+  await openWorkspace(page, `/p/${key}/source/task-1`);
   await page.getByRole('link',{name:'Proposal 1',exact:true}).click();
   await expect(page.locator('.screenplay')).toContainText('INT. LOCKED ROOM - NIGHT');
-  await page.reload();
+  await reloadWorkspace(page);
   await expect(page.locator('.screenplay')).toContainText('INT. LOCKED ROOM - NIGHT');
-  await page.goto(`/p/${key}/source/task-1?view=accepted:00000000-0000-0000-0000-000000000000`);
+  await openWorkspace(page, `/p/${key}/source/task-1?view=accepted:00000000-0000-0000-0000-000000000000`);
   await expect(page.getByText(/stale or no longer bound/)).toBeVisible();
   await expect(page.locator('.screenplay')).not.toContainText('INT. LOCKED ROOM - NIGHT');
-  await page.goto(`/p/${key}`);
+  await openWorkspace(page, `/p/${key}`);
   await expect(page.locator('.screenplay')).not.toContainText('INT. LOCKED ROOM - NIGHT');
 });
 

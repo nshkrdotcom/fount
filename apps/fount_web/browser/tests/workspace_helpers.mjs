@@ -2,14 +2,39 @@ import {expect} from '@playwright/test';
 import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 
+// A server-rendered LiveView is readable before its event handlers are connected.
+// Editing journeys begin only after the main view has joined. Navigation must
+// also preserve any submitted event until Phoenix acknowledges its reply.
+export async function workspaceReady(page) {
+  await expect(page.locator('[data-phx-main]')).toHaveClass(/\bphx-connected\b/);
+}
+
+export async function workspaceSettled(page) {
+  await expect(page.locator('.phx-click-loading, .phx-submit-loading')).toHaveCount(0);
+}
+
+export async function openWorkspace(page, url) {
+  await workspaceSettled(page);
+  const response = await page.goto(url);
+  await workspaceReady(page);
+  return response;
+}
+
+export async function reloadWorkspace(page) {
+  await workspaceSettled(page);
+  const response = await page.reload();
+  await workspaceReady(page);
+  return response;
+}
+
 export async function importProject(page, name, source) {
-  await page.goto('/new');
-  await expect(page.locator('.phx-connected')).toBeVisible();
+  await openWorkspace(page, '/new');
   await page.locator('input[type=file]').setInputFiles({name: `${name}.fountain`, mimeType: 'text/plain', buffer: Buffer.from(source)});
   await page.getByRole('button', {name: 'Preview import'}).click();
   await expect(page.getByRole('heading', {name: `${name}.fountain`})).toBeVisible();
   await page.getByRole('button', {name: 'Open screenplay'}).click();
   await expect(page).toHaveURL(/\/p\/[^/]+$/);
+  await workspaceReady(page);
   return new URL(page.url()).pathname.split('/')[2];
 }
 
@@ -30,8 +55,7 @@ export function hostFixture(code, extraEnv = {}) {
 
 export async function createTask(page, key, journey) {
   seedTask(key, journey);
-  await page.goto(`/p/${key}/activity/task-1/setup`);
-  await expect(page.locator('.phx-connected')).toBeVisible();
+  await openWorkspace(page, `/p/${key}/activity/task-1/setup`);
   await page.getByRole('button', {name: 'Start / resume task'}).click();
 }
 

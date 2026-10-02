@@ -1,5 +1,5 @@
 import {test, expect} from '@playwright/test';
-import {importProject, projectRunCount} from './workspace_helpers.mjs';
+import {importProject, projectRunCount, openWorkspace} from './workspace_helpers.mjs';
 
 const token=process.env.FOUNT_OWNER_TOKEN || 'browser-owner-token';
 const source=`Title: SOURCE IDENTITIES\n\nINT. NORTH STATION - PLATFORM - NIGHT(2030)\n\n!AUTHORIZED PERSONNEL ONLY\n!STICKY NOTE: KEEP OUT\n!WORK ORDER 17-B\nDO NOT ENTER.\n\nGUARD\nStop.\n\nALEX crosses the empty concourse without speaking.\n\nINT. NORTH STATION - PLATFORM - LATE AFTERNOON\n\nGUARD (O.S.)\nAgain.\n\nYOUNG MARA\nWait.\n\nMARA (O.S.)\nNot yet.\n`;
@@ -16,7 +16,7 @@ test('SI01 import keeps source cues unreviewed, manual review creates zero Runs,
   const key=await importProject(page,`si01-${Date.now()}`,source);
   expect(projectRunCount(key)).toBe(0);
 
-  await page.goto(`/p/${key}/cast`);
+  await openWorkspace(page, `/p/${key}/cast`);
   await expect(page.getByRole('heading',{name:'Cast',exact:true})).toBeVisible();
   await expect(page.locator('#semantic-assessment-status')).toContainText('Not configured');
   await expect(page.locator('#semantic-assessment-status')).toContainText('SI02');
@@ -36,7 +36,7 @@ test('SI01 import keeps source cues unreviewed, manual review creates zero Runs,
   await expect(first).toContainText('confirmed');
   expect(projectRunCount(key)).toBe(0);
 
-  await page.goto(`/p/${key}/locations`);
+  await openWorkspace(page, `/p/${key}/locations`);
   await expect(page.getByRole('heading',{name:'Locations',exact:true})).toBeVisible();
   await expect(page.locator('.location-workspace')).toContainText('NORTH STATION - PLATFORM');
   await expect(page.locator('.location-workspace')).toContainText('2030');
@@ -53,8 +53,8 @@ test('SI01 stale source review is recovered across two tabs without creating a R
   await login(stalePage);
 
   const key=await importProject(firstPage,`si01-conflict-${Date.now()}`,source);
-  await firstPage.goto(`/p/${key}/cast`);
-  await stalePage.goto(`/p/${key}/cast`);
+  await openWorkspace(firstPage, `/p/${key}/cast`);
+  await openWorkspace(stalePage, `/p/${key}/cast`);
   await expect(firstPage.locator('.compact-character-card').first()).toBeVisible();
   await expect(stalePage.locator('.compact-character-card').first()).toBeVisible();
 
@@ -80,8 +80,7 @@ for (const viewport of [
     await login(page);
     const key=await importProject(page,`si01-layout-${viewport.width}-${Date.now()}`,source+'\nEXT. ROAD - LATER\n\nA cart rolls away.\n\nINT. HALL - UNKNOWABLE\n\nSilence.\n');
     for (const destination of ['cast','locations']) {
-      await page.goto(`/p/${key}/${destination}`);
-      await expect(page.locator('.phx-connected')).toBeVisible();
+      await openWorkspace(page, `/p/${key}/${destination}`);
       const confirm=page.getByRole('button',{name:destination==='cast'?'Confirm person':'Confirm place'}).first();
       await confirm.focus();
       await page.keyboard.press('Enter');
@@ -115,8 +114,7 @@ test('SI01 review exports exact provenance and promotion advances only through t
     return response.json();
   };
   const before=await exported();
-  await page.goto(`/p/${key}/cast`);
-  await expect(page.locator('.phx-connected')).toBeVisible();
+  await openWorkspace(page, `/p/${key}/cast`);
   const first=page.locator('.compact-character-card').first();
   await first.getByRole('button',{name:'Confirm person'}).focus();
   await page.keyboard.press('Enter');
@@ -146,5 +144,43 @@ test('SI01 review exports exact provenance and promotion advances only through t
   await page.getByRole('button',{name:'Save proposed name change'}).click();
   await expect(page.getByText('Name change saved as a proposal. The current screenplay is unchanged.')).toBeVisible();
   expect((await exported()).source.revision_id).toBe(accepted.source.revision_id);
+  expect(projectRunCount(key)).toBe(0);
+});
+
+test('SI01 navigation preserves a review held at the transport boundary until it is acknowledged', async ({page}) => {
+  let releaseReview;
+  let signalHeld;
+  const held = new Promise(resolve => {signalHeld = resolve;});
+  await page.routeWebSocket('**/live/websocket**', socket => {
+    const server = socket.connectToServer();
+    socket.onMessage(message => {
+      if (typeof message !== 'string') {
+        server.send(message);
+        return;
+      }
+      const frame = JSON.parse(message);
+      if (frame[3] === 'event' && frame[4]?.event === 'semantic_review') {
+        releaseReview = () => server.send(message);
+        signalHeld();
+      } else {
+        server.send(message);
+      }
+    });
+  });
+  await login(page);
+  const key = await importProject(page, 'si01-pending-review-navigation', source);
+  await openWorkspace(page, `/p/${key}/cast`);
+  const card = page.locator('.compact-character-card').first();
+  await card.getByRole('button', {name: 'Confirm person'}).click();
+  await held;
+  await expect(card.locator('form.phx-submit-loading')).toHaveCount(1);
+  const navigation = openWorkspace(page, `/p/${key}/locations`);
+  await expect(page).toHaveURL(new RegExp(`/p/${key}/cast$`));
+  await expect(card.locator('form.phx-submit-loading')).toHaveCount(1);
+  releaseReview();
+  await navigation;
+  await expect(page.getByRole('heading', {name: 'Locations', exact: true})).toBeVisible();
+  await openWorkspace(page, `/p/${key}/cast`);
+  await expect(page.locator('.compact-character-card').first()).toContainText('confirmed');
   expect(projectRunCount(key)).toBe(0);
 });

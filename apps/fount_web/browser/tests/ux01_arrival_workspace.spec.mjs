@@ -1,3 +1,4 @@
+import {openWorkspace, reloadWorkspace} from './workspace_helpers.mjs';
 import {test, expect} from '@playwright/test';
 
 const token = process.env.FOUNT_OWNER_TOKEN || 'browser-owner-token';
@@ -20,8 +21,7 @@ async function capture(page, name) {
 }
 
 async function importFixture(page, name, body, mimeType = 'text/plain') {
-  await page.goto('/new');
-  await expect(page.locator('.phx-connected')).toBeVisible();
+  await openWorkspace(page, '/new');
   await page.locator('input[type=file]').setInputFiles({name, mimeType, buffer: Buffer.from(body)});
   await page.getByRole('button', {name: 'Preview import'}).click();
   await expect(page.getByRole('heading', {name})).toBeVisible();
@@ -57,8 +57,7 @@ test('UX01 import reaches real pages before any workflow setup and keeps ordinar
   await expect(about.getByText('2', {exact: true}).first()).toBeVisible();
   await capture(page, 'ux01-desktop-import-reading');
 
-  await page.goto('/new');
-  await expect(page.locator('.phx-connected')).toBeVisible();
+  await openWorkspace(page, '/new');
   await page.locator('input[type=file]').setInputFiles({name: 'porch.fdx', mimeType: 'application/xml', buffer: Buffer.from(fdx)});
   await page.getByRole('button', {name: 'Preview import'}).click();
   await expect(page.getByText('FDX', {exact: true})).toBeVisible();
@@ -69,8 +68,7 @@ test('UX01 import reaches real pages before any workflow setup and keeps ordinar
 
 test('UX01 blank starts with empty source; saving working pages never advances current screenplay', async ({page}) => {
   await login(page);
-  await page.goto('/new');
-  await expect(page.locator('.phx-connected')).toBeVisible();
+  await openWorkspace(page, '/new');
   await page.getByRole('button', {name: 'Start writing'}).click();
   await expect(page).toHaveURL(/\/p\/[a-z0-9-]+\/write$/);
 
@@ -80,7 +78,7 @@ test('UX01 blank starts with empty source; saving working pages never advances c
   await editor.fill(source);
   await page.getByRole('button', {name: 'Save working draft'}).click();
   await expect(page.locator('.authoring-status')).toContainText(/Saved working draft/i);
-  await page.reload();
+  await reloadWorkspace(page);
   await expect(editor).toHaveValue(source);
 
   await page.getByRole('link', {name: 'Reading'}).click();
@@ -111,7 +109,7 @@ test('UX01 example is provider-free, Help is reopenable, and phone navigation re
   await capture(page, 'ux01-phone-return-to-passage');
 
   await page.setViewportSize({width: 768, height: 1024});
-  await page.reload();
+  await reloadWorkspace(page);
   await expect(page.locator('.reader-paper')).toBeVisible();
   await capture(page, 'ux01-tablet-reading');
 
@@ -138,8 +136,7 @@ test('UX01 shell, supplied About, no-task destinations, Help dismissal and phone
   await page.getByLabel('Synopsis',{exact:true}).fill('Mara and Eli pack the final cartons together.');
   await page.getByRole('button',{name:'Save project details'}).click();
   await expect(page.getByText('Project details saved.')).toBeVisible();
-  await page.goto(`/p/${key}`);
-  await expect(page.locator('.phx-connected')).toBeVisible();
+  await openWorkspace(page, `/p/${key}`);
   const about=page.locator('#about-screenplay');
   await expect(about).not.toHaveAttribute('open','');
   await about.locator(':scope > summary').focus(); await page.keyboard.press('Enter');
@@ -150,7 +147,7 @@ test('UX01 shell, supplied About, no-task destinations, Help dismissal and phone
   await page.locator('.project-tabs__help').click();
   await page.getByRole('link',{name:/Back to/}).click();
   await expect(page.locator('.context-help')).toHaveCount(0);
-  await page.goto(`/p/${key}/write`);
+  await openWorkspace(page, `/p/${key}/write`);
   await expect(page.locator('.context-help')).toHaveCount(0);
   await page.getByRole('link',{name:'Writing help',exact:true}).click();
   await page.getByLabel('Search help').fill('Fountain');
@@ -158,19 +155,19 @@ test('UX01 shell, supplied About, no-task destinations, Help dismissal and phone
   await page.getByRole('button',{name:'Show dismissed hints again'}).click();
   await page.getByRole('link',{name:/Back to LAST RETURN/}).click();
   await expect(page.locator('.context-help')).toHaveCount(0);
-  await page.goto(`/p/${key}/write`);
+  await openWorkspace(page, `/p/${key}/write`);
   await expect(page.locator('.context-help')).toHaveCount(0);
   await expect(page.getByRole('link',{name:'Writing help',exact:true})).toBeVisible();
   for (const destination of ['changes','activity']) {
-    await page.goto(`/p/${key}/${destination}`);
+    await openWorkspace(page, `/p/${key}/${destination}`);
     await expect(page.getByText('No saved tasks yet. The screenplay is still fully available for reading and writing.')).toBeVisible();
     noMachineIdentity(await page.locator('main').innerText());
   }
-  await page.goto(`/p/${key}/work`);
+  await openWorkspace(page, `/p/${key}/work`);
   await expect(page.locator('#creative-brief')).toBeVisible();
-  await page.goto(`/p/${key}/notes`);
+  await openWorkspace(page, `/p/${key}/notes`);
   await expect(page.getByRole('button', {name:'Save proposed note'})).toBeVisible();
-  await page.goto(`/p/${key}`);
+  await openWorkspace(page, `/p/${key}`);
   await page.setViewportSize({width:1024,height:768}); await capture(page,'ux01-tablet-landscape');
   await page.setViewportSize({width:360,height:800});
   await page.locator('.project-more > summary').click();
@@ -178,14 +175,14 @@ test('UX01 shell, supplied About, no-task destinations, Help dismissal and phone
   await capture(page,'ux01-phone-more');
   await page.getByRole('link',{name:'History',exact:true}).click();
   await expect(page.getByRole('heading',{name:'History',exact:true})).toBeVisible();
-  await page.goto('/new'); await expect(page.locator('.phx-connected')).toBeVisible();
+  await openWorkspace(page, '/new');
   await capture(page,'ux01-phone-entry');
   await page.getByRole('button',{name:'Start writing'}).click();
   const raw='INT. PHONE ROOM - DAY\n\nMARA types café 漢字 on her phone.\n';
   await page.locator('#source-editor').fill(raw);
   await page.getByRole('button',{name:'Save working draft',exact:true}).click();
   await expect(page.locator('.authoring-status')).toContainText('Saved working draft');
-  await page.reload(); await expect(page.locator('#source-editor')).toHaveValue(raw);
+  await reloadWorkspace(page); await expect(page.locator('#source-editor')).toHaveValue(raw);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth-innerWidth)).toBeLessThanOrEqual(2);
   await capture(page,'ux01-phone-writing-saved');
   await page.goto('/p/missing-project'); await expect(page).toHaveURL(/\/$/);
@@ -195,7 +192,7 @@ test('UX01 shell, supplied About, no-task destinations, Help dismissal and phone
 
 
 test('UX01 import errors preserve the desk and allow a later successful import',async ({page})=>{
-  await login(page); await page.goto('/new'); await expect(page.locator('.phx-connected')).toBeVisible();
+  await login(page); await openWorkspace(page, '/new');
   await page.getByRole('button',{name:'Preview import'}).click();
   await expect(page.getByText('Choose a .fountain or .fdx screenplay first.')).toBeVisible();
   await page.locator('input[type=file]').setInputFiles({name:'broken.fdx',mimeType:'application/xml',buffer:Buffer.from('<FinalDraft><Content>')});

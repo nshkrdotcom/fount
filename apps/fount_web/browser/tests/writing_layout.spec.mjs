@@ -1,4 +1,4 @@
-import {openWritingMenu} from './workspace_helpers.mjs';
+import {openWritingMenu, openWorkspace} from './workspace_helpers.mjs';
 import {test, expect} from '@playwright/test';
 import {importProject, projectRunCount} from './workspace_helpers.mjs';
 
@@ -9,7 +9,7 @@ test('writing chrome, scene margins and sticky controls remain usable at respons
   await page.getByLabel('Access token').fill(process.env.FOUNT_OWNER_TOKEN || 'browser-owner-token');
   await page.getByRole('button', {name:'Sign in'}).click();
   const key = await importProject(page, `writing-layout-${Date.now()}`, source);
-  await page.goto(`/p/${key}/write`);
+  await openWorkspace(page, `/p/${key}/write`);
   await page.getByRole('button', {name:'Save working draft'}).click();
   await page.locator('.writing-actions > summary', {hasText:/^Changes$/}).click();
   await page.getByRole('button', {name:'Save proposed change', exact:true}).click();
@@ -18,7 +18,7 @@ test('writing chrome, scene margins and sticky controls remain usable at respons
   await page.getByRole('link', {name:'Read proposed changes', exact:true}).click();
   await expect(page).toHaveURL(/source=proposed/);
   await expect(page.locator('.named-source-picker [aria-current=page]')).toContainText('Proposed');
-  await page.goto(`/p/${key}/write`);
+  await openWorkspace(page, `/p/${key}/write`);
   await page.getByRole('button', {name:'Pages', exact:true}).click();
   await expect(page.getByRole('button', {name:'Pages', exact:true})).toHaveAttribute('aria-pressed','true');
   for (const width of [390,640,641,720,768,920,921,1024,1440]) {
@@ -56,7 +56,7 @@ test('project navigation and Reading actions have symmetric vertical insets', as
   const key = await importProject(page, `navigation-alignment-${Date.now()}`, source);
   for (const width of [390,640,641,720,768,920,921,1024,1440]) {
     await page.setViewportSize({width,height:900});
-    await page.goto(`/p/${key}`);
+    await openWorkspace(page, `/p/${key}`);
     await expect(page.locator('.project-header')).toBeVisible();
     await page.evaluate(() => window.scrollTo(0, 600));
     const geometry = await page.evaluate(() => {
@@ -95,7 +95,7 @@ test('Reading groups paper utilities, distinguishes active levels and keeps sele
   await page.getByRole('button', {name:'Sign in'}).click();
   const key = await importProject(page, `reader-refinement-${Date.now()}`, source);
   await page.setViewportSize({width:1440,height:900});
-  await page.goto(`/p/${key}`);
+  await openWorkspace(page, `/p/${key}`);
   const mode=page.locator('.project-header__view [aria-current=page]');
   const destination=page.locator('.project-tabs > [aria-current=page]');
   const backgrounds=await Promise.all([mode,destination].map(el=>el.evaluate(e=>getComputedStyle(e).backgroundColor)));

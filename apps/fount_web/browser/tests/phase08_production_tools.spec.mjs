@@ -1,5 +1,5 @@
 import {test, expect} from '@playwright/test';
-import {importProject, projectRunCount, hostFixture} from './workspace_helpers.mjs';
+import {importProject, projectRunCount, hostFixture, openWorkspace, reloadWorkspace} from './workspace_helpers.mjs';
 
 const token = process.env.FOUNT_OWNER_TOKEN || 'browser-owner-token';
 const fountain = `Title: Phase 08 Browser\nAuthor: Fount\n\nINT. CAFÉ - MORNING\n\nMARA puts the café receipt beside the coffee maker.\n\nMARA\nThe café opens before dawn.\n\nOWEN\nCount it twice.\n\nEXT. TRAIN PLATFORM - NIGHT\n\nMARA waits under the departure board.\n\nMARA\nThe receipt is still in my pocket.\n`;
@@ -16,8 +16,7 @@ async function createProject(page, name) {
   return importProject(page, name, fountain);
 }
 async function openSection(page, key, section) {
-  await page.goto(`/p/${key}${section ? '/' + section : ''}`);
-  await expect(page.locator('.phx-connected')).toBeVisible();
+  await openWorkspace(page, `/p/${key}${section ? '/' + section : ''}`);
 }
 async function createRead(page, key) {
   await openSection(page,key,'read');
@@ -79,8 +78,7 @@ test('S05 manual saved table reads retain timing, bookmark and human reaction wi
   await read.getByRole('button',{name:'Next',exact:true}).click();
   await read.getByRole('button',{name:'Bookmark current passage'}).click();
   await expect(read).toHaveAttribute('data-version','2');
-  await page.reload();
-  await expect(page.locator('.phx-connected')).toBeVisible();
+  await reloadWorkspace(page);
   await page.locator('.saved-read-row').first().click();
   await expect(read).toHaveAttribute('data-bookmark-index','1');
   await page.getByLabel('Reader',{exact:true}).fill('reader-a');
@@ -105,8 +103,7 @@ test('S07 supplied metadata and Fountain/FDX import fidelity remain factual', as
   await expect(page.locator('#about-screenplay')).toContainText('fountain');
   // Supplied legacy metadata remains stored; current reading does not invent a thumbnail.
   hostFixture('owner=System.fetch_env!("FOUNT_OWNER_ID"); {:ok,p}=FountWeb.Store.project_by_key(Fount.Repo,owner,System.fetch_env!("FOUNT_FIXTURE_KEY")); Ecto.Adapters.SQL.query!(Fount.Repo,"UPDATE fount_web_projects SET thumbnail_ref=$2 WHERE id=$1::text::uuid",[p["id"],"writer://thumb/phase08"]); {:ok,saved}=FountWeb.Store.project_by_key(Fount.Repo,owner,p["key"]); if saved["thumbnail_ref"] != "writer://thumb/phase08", do: raise("supplied metadata lost")',{FOUNT_FIXTURE_KEY:key});
-  await page.goto('/new');
-  await expect(page.locator('.phx-connected')).toBeVisible();
+  await openWorkspace(page, '/new');
   await page.locator('input[type=file]').setInputFiles({name:'phase08.fdx',mimeType:'application/xml',buffer:Buffer.from(fdx)});
   await page.getByRole('button',{name:'Preview import'}).click();
   await expect(page.locator('main')).toContainText('FDX');

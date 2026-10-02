@@ -1,6 +1,6 @@
 import {test, expect} from '@playwright/test';
 import {readFileSync} from 'node:fs';
-import {importProject, projectRunCount, seedTask, hostFixture} from './workspace_helpers.mjs';
+import {importProject, projectRunCount, seedTask, hostFixture, openWorkspace, reloadWorkspace} from './workspace_helpers.mjs';
 
 const token = process.env.FOUNT_OWNER_TOKEN || 'browser-owner-token';
 const artifactRoot = process.env.FOUNT_ARTIFACT_ROOT;
@@ -27,8 +27,7 @@ test('UX03 Reading is calm, exact search is source-bound, and narrow comparison 
   await login(page);
   const key = await importProject(page, 'ux03-reading', source);
 
-  await page.goto(`/p/${key}`);
-  await expect(page.locator('.phx-connected')).toBeVisible();
+  await openWorkspace(page, `/p/${key}`);
   await expect(page.getByRole('navigation', {name: 'Reading actions'})).toContainText('Notes');
   await expect(page.getByRole('navigation', {name: 'Reading actions'})).toContainText('Export');
   await expect(page.locator('main')).not.toContainText('Settings');
@@ -43,13 +42,13 @@ test('UX03 Reading is calm, exact search is source-bound, and narrow comparison 
   await expect(page.locator('.script-search-results')).toContainText(/Inspected \d+ eligible source elements/);
   await capture(page, 'ux03-reading-literal-search');
 
-  await page.goto(`/p/${key}/write`);
+  await openWorkspace(page, `/p/${key}/write`);
   const editor = page.locator('#source-editor');
   await editor.fill((await editor.inputValue()) + '\n\nMARA\nKeep the light off.');
   await page.getByRole('button', {name: 'Save working draft'}).click();
   await expect(page.locator('.authoring-status')).toContainText(/Saved working draft/i);
 
-  await page.goto(`/p/${key}`);
+  await openWorkspace(page, `/p/${key}`);
   await page.getByRole('link', {name: 'Working draft'}).click();
   await expect(page.locator('#source-comparison')).toBeVisible();
   expect(await page.locator('[id]').evaluateAll(nodes => {const ids=nodes.map(n=>n.id);return ids.filter((id,index)=>ids.indexOf(id)!==index);})).toEqual([]);
@@ -72,8 +71,7 @@ test('UX03 Reading is calm, exact search is source-bound, and narrow comparison 
 test('UX03 reading text selection opens Notes with the exact current passage preselected', async ({page}) => {
   await login(page);
   const key = await importProject(page, 'ux03-selection-note', source);
-  await page.goto(`/p/${key}`);
-  await expect(page.locator('.phx-connected')).toBeVisible();
+  await openWorkspace(page, `/p/${key}`);
   const passage = page.locator('.screenplay-element__text', {hasText: 'coffee maker'}).first();
   await passage.evaluate((element) => {
     const range = document.createRange();
@@ -95,8 +93,7 @@ test('UX03 reading text selection opens Notes with the exact current passage pre
 test('UX03 notes support exact remap search, human response history, and immediate memo preview', async ({page}) => {
   await login(page);
   const key = await importProject(page, 'ux03-notes', source);
-  await page.goto(`/p/${key}/notes`);
-  await expect(page.locator('.phx-connected')).toBeVisible();
+  await openWorkspace(page, `/p/${key}/notes`);
 
   await page.getByLabel('Title').fill('Keep the withheld fact');
   await page.getByLabel('Note', {exact: true}).fill('Keep this exact wording.');
@@ -132,18 +129,18 @@ test('UX03 cast/location facts and manual table read remain provider-free and cr
   await login(page);
   const key = await importProject(page, 'ux03-read', source);
 
-  await page.goto(`/p/${key}/cast`);
+  await openWorkspace(page, `/p/${key}/cast`);
   await expect(page.getByRole('heading', {name: 'Cast', exact: true})).toBeVisible();
   await expect(page.locator('.character-grid')).toContainText('literal dialogue blocks');
   await expect(page.locator('.character-grid')).toContainText('unreviewed');
   const firstIdentity = page.locator('.compact-character-card').first();
   await firstIdentity.getByRole('button', {name: 'Confirm person'}).click();
   await expect(firstIdentity).toContainText('confirmed');
-  await page.goto(`/p/${key}/locations`);
+  await openWorkspace(page, `/p/${key}/locations`);
   await expect(page.getByRole('heading', {name: 'Locations', exact: true})).toBeVisible();
   await expect(page.locator('.location-workspace')).toContainText('KITCHEN');
 
-  await page.goto(`/p/${key}/read`);
+  await openWorkspace(page, `/p/${key}/read`);
   await page.locator('select[name="read[scope][]"]').selectOption(['whole']);
   await page.getByRole('button', {name: 'Save table-read material'}).click();
   await expect(page.locator('#table-read-workspace')).toBeVisible();
@@ -159,7 +156,7 @@ test('UX03 cast/location facts and manual table read remain provider-free and cr
   await expect(page.locator('.reaction-list')).toContainText('The pause landed');
 
   await page.emulateMedia({reducedMotion: 'reduce'});
-  await page.reload();
+  await reloadWorkspace(page);
   await page.locator('.saved-read-row').first().click();
   await expect(page.getByRole('button', {name: 'Start / pause'})).toBeDisabled();
   await expect(page.getByRole('button', {name: 'Previous'})).toBeEnabled();
@@ -173,17 +170,18 @@ test('UX03 table-read two-tab conflict reloads saved human state instead of over
   const first = await context.newPage();
   await login(first);
   const key = await importProject(first, 'ux03-read-conflict', source);
-  await first.goto(`/p/${key}/read`);
+  await openWorkspace(first, `/p/${key}/read`);
   await first.locator('select[name="read[scope][]"]').selectOption(['whole']);
   await first.getByRole('button', {name: 'Save table-read material'}).click();
+  await expect(first.locator('#table-read-workspace')).toBeVisible();
 
   const second = await context.newPage();
-  await second.goto(`/p/${key}/read`);
-  await expect(second.locator('.phx-connected')).toBeVisible();
+  await openWorkspace(second, `/p/${key}/read`);
   await second.locator('.saved-read-row').first().click();
 
+  const savedVersion = Number(await first.locator('#table-read-workspace').getAttribute('data-version'));
   await first.getByRole('button', {name: 'Bookmark current passage'}).click();
-  await first.waitForTimeout(250);
+  await expect(first.locator('#table-read-workspace')).toHaveAttribute('data-version', String(savedVersion + 1));
   await second.getByRole('button', {name: 'Bookmark current passage'}).click();
   await expect(second.getByRole('alert')).toContainText(/changed in another tab/i);
   await expect(second.locator('#table-read-workspace')).toBeVisible();
@@ -195,19 +193,18 @@ test('UX03 optional feedback stays attached to a real task and keeps independent
   await login(page);
   const key = await importProject(page, 'ux03-feedback', source);
   seedTask(key, 'dialogue');
-  await page.goto(`/p/${key}/activity/task-1/setup`);
+  await openWorkspace(page, `/p/${key}/activity/task-1/setup`);
   await page.getByRole('button', {name: 'Start / resume task'}).click();
-  await page.goto(`/p/${key}/activity/task-1/decisions`);
+  await openWorkspace(page, `/p/${key}/activity/task-1/decisions`);
   await page.getByRole('button', {name: 'Commit now', exact: true}).click();
-  await page.goto(`/p/${key}/changes/task-1`);
+  await openWorkspace(page, `/p/${key}/changes/task-1`);
   await expect(page.locator('pre.script').nth(1)).toContainText('If you missed it, you were meant to.', {timeout: 60_000});
 
   await expect.poll(() => hostFixture('owner = System.fetch_env!("FOUNT_OWNER_ID"); {:ok, project} = FountWeb.Store.project_by_key(Fount.Repo, owner, System.fetch_env!("FOUNT_FIXTURE_KEY")); [run] = FountWeb.Store.list_project_runs(Fount.Repo, owner, project["id"]); IO.puts("STATUS=" <> run["status"])', {FOUNT_FIXTURE_KEY:key}).split('STATUS=').at(-1).trim()).toMatch(/partial|completed_/);
-  await page.goto(`/p/${key}/exports/task-1`);
+  await openWorkspace(page, `/p/${key}/exports/task-1`);
   await page.getByRole('button', {name: 'Publish / retry bundle'}).click();
   await expect(page.getByRole('status')).toContainText('Delivery bundle published.');
-  await page.goto(`/p/${key}/feedback`);
-  await expect(page.locator('.phx-connected')).toBeVisible();
+  await openWorkspace(page, `/p/${key}/feedback`);
   await expect(page.getByRole('heading', {name: 'Feedback'})).toBeVisible();
   const form = page.locator('.feedback-form').first();
   await form.getByLabel('Useful', {exact: true}).check();
@@ -221,8 +218,7 @@ test('UX03 optional feedback stays attached to a real task and keeps independent
   await expect(page.getByRole('status')).toContainText('Human feedback saved.');
   await expect(page.getByRole('heading', {name: 'Saved responses'})).toBeVisible();
   await expect(page.locator('.feedback-report')).toContainText(/No combined quality, learning or preference score/);
-  await page.reload();
-  await expect(page.locator('.phx-connected')).toBeVisible();
+  await reloadWorkspace(page);
   const reopened = page.locator('.feedback-form').first();
   await expect(reopened.getByLabel('Useful', {exact: true})).toBeChecked();
   await expect(reopened.getByLabel('I kept my original')).toBeChecked();
@@ -235,8 +231,7 @@ test('UX03 optional feedback stays attached to a real task and keeps independent
   if (await clearVoice.count()) await clearVoice.check();
   await reopened.getByRole('button',{name:'Update optional feedback'}).click();
   await expect(page.getByRole('status')).toContainText('Human feedback saved.');
-  await page.reload();
-  await expect(page.locator('.phx-connected')).toBeVisible();
+  await reloadWorkspace(page);
   await expect(page.locator('.feedback-form').first().getByLabel('Mixed',{exact:true})).toBeChecked();
   const recordFacts = hostFixture('owner = System.fetch_env!("FOUNT_OWNER_ID"); {:ok, project} = FountWeb.Store.project_by_key(Fount.Repo, owner, System.fetch_env!("FOUNT_FIXTURE_KEY")); rows = FountWeb.ProductionStore.list_usefulness(Fount.Repo, owner, project["id"]); IO.puts("FEEDBACK=" <> Jason.encode!(Enum.map(rows, & &1["record"]["human_response"])))', {FOUNT_FIXTURE_KEY:key});
   expect(recordFacts.split('FEEDBACK=').at(-1).trim()).not.toContain('task_completion');
@@ -247,8 +242,7 @@ test('UX03 optional feedback stays attached to a real task and keeps independent
 test('UX03 exact Fountain, FDX and PDF exports preview/download from the named current revision', async ({page}) => {
   await login(page);
   const key = await importProject(page, 'ux03-exports', source);
-  await page.goto(`/p/${key}/exports`);
-  await expect(page.locator('.phx-connected')).toBeVisible();
+  await openWorkspace(page, `/p/${key}/exports`);
   await expect(page.getByRole('heading', {name: 'Exports'})).toBeVisible();
 
   await page.getByRole('button', {name: 'Build Fountain'}).click();
@@ -257,8 +251,7 @@ test('UX03 exact Fountain, FDX and PDF exports preview/download from the named c
   await page.goto(fountainPreview);
   await expect(page.locator('body')).toContainText('coffee maker');
 
-  await page.goto(`/p/${key}/exports`);
-  await expect(page.locator('.phx-connected')).toBeVisible();
+  await openWorkspace(page, `/p/${key}/exports`);
   await page.getByRole('button', {name: 'Build FDX'}).click();
   await expect(page.locator('.artifact-list')).toContainText('.fdx');
 
@@ -275,7 +268,7 @@ test('UX03 exact Fountain, FDX and PDF exports preview/download from the named c
   const bytes = readFileSync(await download.path());
   expect(bytes.subarray(0, 5).toString()).toBe('%PDF-');
   await capture(page, 'ux03-exported-pdf-pages');
-  await page.goto(`/p/${key}`);
+  await openWorkspace(page, `/p/${key}`);
   await expect(page.getByRole('navigation',{name:'Page layout'}).getByRole('link',{name:'Exported pages',exact:true})).toBeVisible();
   await expect(page.getByRole('link',{name:'Build exported pages',exact:true})).toHaveCount(0);
   await page.getByRole('navigation',{name:'Page layout'}).getByRole('link',{name:'Exported pages',exact:true}).click();
@@ -291,8 +284,7 @@ test('UX03 note categories, literal filtering, reviewer conflicts, changed/delet
   const first = await context.newPage();
   await login(first);
   const key = await importProject(first, 'ux03-note-loop', source);
-  await first.goto(`/p/${key}/notes`);
-  await expect(first.locator('.phx-connected')).toBeVisible();
+  await openWorkspace(first, `/p/${key}/notes`);
   const form = first.locator('form[phx-submit="save_note"]').first();
   const target = form.locator('select[name="note[target]"]');
   const value = await target.locator('option', {hasText:'coffee maker'}).first().getAttribute('value');
@@ -312,10 +304,9 @@ test('UX03 note categories, literal filtering, reviewer conflicts, changed/delet
   await filters.locator('input[name="notes[query]"]').fill('nomatch');
   await filters.getByRole('button').click();
   await expect(first.locator('.note-card')).toHaveCount(0);
-  await first.reload();
+  await reloadWorkspace(first);
   const second = await context.newPage();
-  await second.goto(`/p/${key}/notes`);
-  await expect(second.locator('.phx-connected')).toBeVisible();
+  await openWorkspace(second, `/p/${key}/notes`);
   const a = first.locator('.note-review-response');
   const b = second.locator('.note-review-response');
   await a.getByLabel('Response').selectOption('addressed');
@@ -338,10 +329,10 @@ test('UX03 note categories, literal filtering, reviewer conflicts, changed/delet
   const reviewCount = hostFixture('owner = System.fetch_env!("FOUNT_OWNER_ID"); {:ok, project} = FountWeb.Store.project_by_key(Fount.Repo, owner, System.fetch_env!("FOUNT_FIXTURE_KEY")); IO.puts("REVIEWS=" <> Integer.to_string(length(FountWeb.ProductionTools.note_reviews(Fount.Repo, owner, project["id"]))))', {FOUNT_FIXTURE_KEY:key});
   expect(reviewCount).toContain('REVIEWS=0');
   sourceMutation(key, 'change');
-  await first.reload();
+  await reloadWorkspace(first);
   await expect(first.locator('.note-card')).toContainText('The passage changed');
   sourceMutation(key, 'delete');
-  await first.reload();
+  await reloadWorkspace(first);
   await expect(first.locator('.note-card')).toContainText(/not available|deleted|no longer/i);
   await first.getByLabel('Exact literal search').fill('The train is late');
   await first.getByRole('button',{name:'Find passages'}).click();
@@ -360,7 +351,7 @@ test('UX03 artifact failures return to exact-source Exports and dated PDF checks
   await login(page);
   const key = await importProject(page, 'ux03-artifact-errors', source);
   hostFixture('owner = System.fetch_env!("FOUNT_OWNER_ID"); key = System.fetch_env!("FOUNT_FIXTURE_KEY"); {:ok, project} = FountWeb.Store.project_by_key(Fount.Repo, owner, key); {:ok, model} = Fount.Persistence.load(Fount.Repo, key); {:error, _} = FountWeb.ReadingArtifacts.build_source(Fount.Repo, owner, project, model, "pdf", pdf_options: [renderer: "/nonexistent/ux03-renderer"])', {FOUNT_FIXTURE_KEY:key});
-  await page.goto(`/p/${key}/exports`);
+  await openWorkspace(page, `/p/${key}/exports`);
   await expect(page.locator('.artifact-list')).toContainText('renderer is not installed');
   await page.getByRole('button',{name:'Build PDF'}).click();
   await expect(page.getByRole('link',{name:'Read numbered PDF pages'})).toBeVisible();
@@ -392,7 +383,7 @@ test('UX03 saved table-read timing, finite speeds, reaction conflicts, reconnect
   await login(first);
   const longSource = source + Array.from({length:30}, (_,i) => `\n\nMARA\nReader turn ${i+1}: a long human pause keeps the scene in the room until the next answer.`).join('');
   const key = await importProject(first, 'ux03-timing-conflict', longSource);
-  await first.goto(`/p/${key}/read`);
+  await openWorkspace(first, `/p/${key}/read`);
   await first.getByLabel('Read title').fill('Named human timing read');
   await first.getByRole('button',{name:'Save table-read material'}).click();
   const workspace = first.locator('#table-read-workspace');
@@ -412,7 +403,7 @@ test('UX03 saved table-read timing, finite speeds, reaction conflicts, reconnect
   await expect(workspace).toHaveAttribute('data-scroll-mode','paused');
   const exportHref = await first.getByRole('link',{name:'Export saved table-read JSON'}).getAttribute('href');
   const second = await context.newPage();
-  await second.goto(`/p/${key}/read`);
+  await openWorkspace(second, `/p/${key}/read`);
   await second.locator('.saved-read-row').click();
   await first.getByRole('button',{name:'Bookmark current passage'}).click();
   await expect(workspace).toHaveAttribute('data-scroll-mode','manual');

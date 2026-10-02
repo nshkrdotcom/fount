@@ -20,6 +20,25 @@ defmodule FountWeb.SI01SemanticImportIntegrationTest do
   Again.
   """
 
+  test "SI01 imports remain usable after one hundred projects share a title" do
+    for n <- 1..100 do
+      key = if n == 1, do: "si01-repeated-title", else: "si01-repeated-title-#{n}"
+      assert {:ok, _} = Fount.Persistence.create(Fount.Repo, key, Fount.Screenplay.new())
+    end
+
+    assert {:ok, %{project: project, screenplay: screenplay}} =
+             Launch.create_project("test-owner", %{
+               "title" => "SI01 repeated title",
+               "kind" => "import",
+               "source" => @source,
+               "filename" => "repeat.fountain"
+             })
+
+    assert project["key"] == "si01-repeated-title-101"
+    assert screenplay.import.bytes == @source
+    assert Store.list_project_runs(Fount.Repo, "test-owner", project["id"], limit: 50) == []
+  end
+
   test "SI01 import preserves source bytes, creates literal inventory, export provenance, and creates no synthetic Run",
        %{conn: conn} do
     before_runs = Store.list_project_runs(Fount.Repo, "test-owner", Fount.ID.v4(), limit: 50)

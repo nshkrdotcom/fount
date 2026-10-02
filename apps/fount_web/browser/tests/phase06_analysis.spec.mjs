@@ -1,6 +1,6 @@
 import {test, expect} from '@playwright/test';
 import {readFileSync} from 'node:fs';
-import {importProject, createTask} from './workspace_helpers.mjs';
+import {importProject, createTask, openWorkspace} from './workspace_helpers.mjs';
 
 const token = process.env.FOUNT_OWNER_TOKEN || 'browser-owner-token';
 const fixture = `Title: Phase 06 Intelligence\nAuthor: Fount\n\nINT. KITCHEN - MORNING\n\nMARA sets an unopened envelope beside the coffee maker.\n\nMARA\nI said I would wait.\n\nEXT. TRAIN PLATFORM - NIGHT\n\nNORA waits under the departure board.\n\nNORA\nThe train is late.\n\nINT. INTERVIEW ROOM - LATER\n\nNora keeps her hands flat on the table.\n\nNORA\nI didn't miss anything.\n`;
@@ -15,9 +15,9 @@ async function login(page) {
 async function createAnalysisRun(page, name) {
   const key = await importProject(page, name, fixture);
   await createTask(page, key, 'analysis');
-  await page.goto(`/p/${key}/activity/task-1/decisions`);
+  await openWorkspace(page, `/p/${key}/activity/task-1/decisions`);
   await page.getByRole('button', {name: /Commit now|route-a/i}).first().click();
-  await page.goto(`/p/${key}/changes/task-1`);
+  await openWorkspace(page, `/p/${key}/changes/task-1`);
   await expect(page.locator('pre.script').last()).toContainText('If you missed it, you were meant to.', {timeout: 60_000});
   return key;
 }
@@ -26,7 +26,7 @@ test('A01-A07 saved intelligence is inspectable, bounded, accessible and revisio
   await login(page);
   const runId = await createAnalysisRun(page, `phase06-intel-${Date.now()}`);
 
-  await page.goto(`/p/${runId}/analysis/task-1`);
+  await openWorkspace(page, `/p/${runId}/analysis/task-1`);
   await expect(page.getByRole('heading', {name: 'Phase 06 Intelligence'})).toBeVisible();
   await expect(page.getByText('Script analysis')).toBeVisible();
   await expect(page.getByText(/Browsing or comparing reports does not start AI work/)).toBeVisible();
@@ -59,7 +59,7 @@ test('A01-A07 saved intelligence is inspectable, bounded, accessible and revisio
     await expect(page.locator('.named-source-picker [aria-current=page]')).toContainText('Evidence');
   }
 
-  await page.goto(`/p/${runId}/changes/task-1`);
+  await openWorkspace(page, `/p/${runId}/changes/task-1`);
   await expect(page.getByRole('heading', {name: 'Analysis of proposed changes'})).toBeVisible();
   await expect(page.getByText(/Story observations do not replace required checks/)).toBeVisible();
 });
@@ -68,7 +68,7 @@ test('current project layout is responsive and writing remains source-first on n
   await page.setViewportSize({width:480,height:900});
   await login(page);
   const key = await importProject(page, `phase06-style-${Date.now()}`, fixture);
-  await page.goto(`/p/${key}/write`);
+  await openWorkspace(page, `/p/${key}/write`);
   await expect(page.locator('#source-editor')).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth-innerWidth)).toBeLessThanOrEqual(2);
   await expect(page.locator('main')).toContainText('analysis remains tied to saved task sources');
@@ -80,7 +80,7 @@ test('stored fixtures prove all states, finite graph controls, comparable histor
   const f = stored();
   await login(page);
   const inspect = async (packet, run = f.project_key) => {
-    await page.goto(`/p/${run}/analysis/task-1?packet=${packet}`);
+    await openWorkspace(page, `/p/${run}/analysis/task-1?packet=${packet}`);
     await expect(page.locator('.analysis-mast__signals .ui-status')).toBeVisible();
   };
   for (const state of ['complete', 'partial', 'failed', 'running']) {
@@ -132,9 +132,9 @@ test('stored fixtures prove all states, finite graph controls, comparable histor
   await page.getByRole('link', {name: 'Open exact recorded revision target'}).click();
   await expect(page).toHaveURL(new RegExp(`view=evidence%3A${f.complete}%3A${f.revision_id}#scene-`));
   await expect(page.locator('.named-source-picker [aria-current=page]')).toContainText('Evidence');
-  await page.goto(`/p/${f.project_key}/analysis/task-1?packet=${f.complete}&target=deleted-target`);
+  await openWorkspace(page, `/p/${f.project_key}/analysis/task-1?packet=${f.complete}&target=deleted-target`);
   await expect(page.locator('.target-context')).toContainText('Recorded target unresolved');
-  await page.goto(`/p/${f.project_key}/source/task-1?view=evidence%3A${f.complete}%3A${f.revision_id}&target=deleted-target`);
+  await openWorkspace(page, `/p/${f.project_key}/source/task-1?view=evidence%3A${f.complete}%3A${f.revision_id}&target=deleted-target`);
   await expect(page.getByText(/Recorded target unresolved in this exact analysis evidence revision/)).toBeVisible();
   await inspect(f.oversized);
   await expect(page.getByText(/Showing up to 48 nodes and 96 links/)).toBeVisible();
@@ -187,15 +187,15 @@ for (const width of [1440, 480]) {
     await login(page);
     await expect(page.getByRole('button', {name: 'Sign out', exact: true})).toBeVisible();
     await check('projects');
-    await page.goto('/new');
+    await openWorkspace(page, '/new');
     await check('intake');
     const f = stored();
     for (const [section, path] of Object.entries({setup:'activity/task-1/setup',timeline:'activity/task-1',decisions:'activity/task-1/decisions',review:'changes/task-1',exports:'exports/task-1',viewer:'source/task-1',analysis:'analysis/task-1'})) {
-      await page.goto(`/p/${f.project_key}/${path}?packet=${f.oversized}`);
+      await openWorkspace(page, `/p/${f.project_key}/${path}?packet=${f.oversized}`);
       await expect(page.locator('main')).toBeVisible();
       await check(section);
     }
-    await page.goto(`/p/${f.project_key}`);
+    await openWorkspace(page, `/p/${f.project_key}`);
     const paper = await page.locator('.screenplay').evaluate(el => ({background: getComputedStyle(el).backgroundColor, color: getComputedStyle(el).color, body: getComputedStyle(document.body).backgroundColor}));
     expect(paper.background).toBe('rgb(243, 239, 227)');
     expect(paper.color).toBe('rgb(23, 25, 20)');
@@ -203,7 +203,7 @@ for (const width of [1440, 480]) {
     await expect(page.locator('.screenplay .is-selected-scene')).toHaveCount(0);
     const blankHeight = await page.locator('.screenplay-element--blank').first().evaluate(el => el.getBoundingClientRect().height);
     expect(blankHeight).toBeLessThan(24);
-    await page.goto(`/p/${f.project_key}/write`);
+    await openWorkspace(page, `/p/${f.project_key}/write`);
     for (const mode of ['Source', 'Pages', 'Source + pages']) {
       await page.getByRole('button', {name: mode, exact: true}).click();
       await check(mode.toLowerCase().replaceAll(' ','-'));
@@ -239,7 +239,7 @@ test('named exact evidence source survives the initial LiveView connection', asy
   await login(page);
   const f = stored();
   const selected = `evidence:${f.complete}:${f.revision_id}`;
-  await page.goto(`/p/${f.project_key}/source/task-1?view=${encodeURIComponent(selected)}`);
+  await openWorkspace(page, `/p/${f.project_key}/source/task-1?view=${encodeURIComponent(selected)}`);
   await expect(page.locator('.named-source-picker [aria-current=page]')).toContainText('Evidence');
   connect();
   await expect(page.locator('.phx-connected')).toBeVisible();

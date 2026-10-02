@@ -1,4 +1,4 @@
-import {openWritingMenu} from './workspace_helpers.mjs';
+import {openWritingMenu, openWorkspace} from './workspace_helpers.mjs';
 import {test, expect} from '@playwright/test';
 import {importProject} from './workspace_helpers.mjs';
 
@@ -21,7 +21,7 @@ test('E01-E03/E07 editor handles Unicode, paste, composition, invalid source, mo
   await page.setViewportSize({width: 480, height: 900});
   await login(page);
   const runId = await createRun(page, `authoring-editor-${Date.now()}`);
-  await page.goto(`/p/${runId}/write`);
+  await openWorkspace(page, `/p/${runId}/write`);
 
   const source = page.getByLabel('Fountain screenplay source');
   await expect(source).toBeVisible();
@@ -71,11 +71,10 @@ test('E05 two tabs produce recoverable conflict instead of last-write-wins', asy
   const first = await context.newPage();
   await login(first);
   const runId = await createRun(first, `authoring-conflict-${Date.now()}`);
-  await first.goto(`/p/${runId}/write`);
+  await openWorkspace(first, `/p/${runId}/write`);
 
   const second = await context.newPage();
-  await second.goto(`/p/${runId}/write`);
-  await expect(second.locator('.phx-connected')).toBeVisible();
+  await openWorkspace(second, `/p/${runId}/write`);
 
   await first.getByLabel('Fountain screenplay source').fill(fixture.replace('departure board', 'departure display'));
   await first.getByRole('button', {name: 'Save working draft'}).click();
@@ -94,7 +93,7 @@ test('E05 two tabs produce recoverable conflict instead of last-write-wins', asy
 test('E04-E06 candidate save leaves canon unchanged, creative work uses Run, and acceptance is separate', async ({page}) => {
   await login(page);
   const runId = await createRun(page, `authoring-candidate-${Date.now()}`);
-  await page.goto(`/p/${runId}/write`);
+  await openWorkspace(page, `/p/${runId}/write`);
   const source = page.getByLabel('Fountain screenplay source');
   const edited = fixture.replace('departure board', 'blue departure board');
   await source.fill(edited);
@@ -103,11 +102,11 @@ test('E04-E06 candidate save leaves canon unchanged, creative work uses Run, and
   await page.getByRole('button', {name: 'Save proposed change'}).click();
   await expect(page.getByText(/The current screenplay is unchanged/)).toBeVisible();
 
-  await page.goto(`/p/${runId}`);
+  await openWorkspace(page, `/p/${runId}`);
   await expect(page.locator('.screenplay')).toContainText('departure board');
   await expect(page.locator('.screenplay')).not.toContainText('blue departure board');
 
-  await page.goto(`/p/${runId}/work`);
+  await openWorkspace(page, `/p/${runId}/work`);
   await page.getByLabel('What do you want to change or understand?').fill('Tighten the opening beat without changing its facts.');
   await page.locator('.all-tasks > summary').click();
   await page.locator('input[name="task[action]"][value="develop"]').check();
@@ -117,36 +116,38 @@ test('E04-E06 candidate save leaves canon unchanged, creative work uses Run, and
   await expect(page).toHaveURL(new RegExp(`/p/${runId}/activity/task-1/setup$`));
   await page.getByRole('button', {name: 'Start / resume task'}).click();
   const aiRunId = 'task-1';
-  await page.goto(`/p/${runId}/activity/${aiRunId}/decisions`);
+  await openWorkspace(page, `/p/${runId}/activity/${aiRunId}/decisions`);
   const route = page.getByRole('button', {name: /Commit now|route-a/i}).first();
   await expect(route).toBeVisible({timeout: 60_000});
   await route.click();
-  await page.goto(`/p/${runId}/changes/${aiRunId}`);
+  await openWorkspace(page, `/p/${runId}/changes/${aiRunId}`);
   await expect(page.locator('pre.script').last()).toContainText('INT. LOCKED ROOM - NIGHT', {timeout: 60_000});
   await expect(page.locator('pre.script').first()).toContainText('departure board');
   await expect(page.locator('p.status')).toContainText('stage: deliver', {timeout: 60_000});
   await expect(page.getByRole('heading', {name: /Analysis before writing/i})).toBeVisible();
-  await page.goto(`/p/${runId}/activity/${aiRunId}/decisions`);
-  await page.goto(`/p/${runId}/activity/${aiRunId}`);
+  await openWorkspace(page, `/p/${runId}/exports/${aiRunId}`);
+  await page.getByRole('button', {name: 'Publish / retry bundle'}).click();
+  await expect(page.getByRole('status')).toContainText('Delivery bundle published.');
+  await openWorkspace(page, `/p/${runId}/activity/${aiRunId}`);
   await expect(page.getByRole('button', {name:'Ensure worker is running'})).toBeDisabled();
-  await page.goto(`/p/${runId}`);
+  await openWorkspace(page, `/p/${runId}`);
   await expect(page.locator('.screenplay')).not.toContainText('blue departure board');
 
-  await page.goto(`/p/${runId}/write`);
+  await openWorkspace(page, `/p/${runId}/write`);
   await openWritingMenu(page, 'Changes');
   await page.getByRole('button', {name: 'Make proposed change current'}).click();
   await expect(page.getByText(/Revision approved and saved/)).toBeVisible();
   await expect(source).toHaveAttribute('readonly', '');
-  await page.goto(`/p/${runId}`);
+  await openWorkspace(page, `/p/${runId}`);
   await expect(page.locator('.screenplay')).toContainText('blue departure board');
-  await page.goto(`/p/${runId}/write`);
+  await openWorkspace(page, `/p/${runId}/write`);
   await expect(page.getByLabel('Fountain screenplay source')).toHaveValue(edited);
 });
 
 test('E01/E02/E03/E07 debounce, ordered replies, history bounds, focus, dirty warning and client-cache isolation', async ({page}) => {
   await login(page);
   const runId = await createRun(page, `authoring-lifecycle-${Date.now()}`);
-  await page.goto(`/p/${runId}/write`);
+  await openWorkspace(page, `/p/${runId}/write`);
   const source = page.getByLabel('Fountain screenplay source');
   await expect(source).toBeVisible();
   await page.waitForFunction(() => Object.values(window.liveSocket.roots)[0]?.getHook(document.querySelector('[phx-hook="AuthoringEditor"]')));
@@ -220,12 +221,11 @@ test('E05/E07 lost acknowledgement retry, newer-server recovery and invalid inte
   const page = await context.newPage();
   await login(page);
   const runId = await createRun(page, `authoring-interruption-${Date.now()}`);
-  await page.goto(`/p/${runId}/write`);
+  await openWorkspace(page, `/p/${runId}/write`);
   const source = page.getByLabel('Fountain screenplay source');
   await expect(source).toBeVisible();
   const second = await context.newPage();
-  await second.goto(`/p/${runId}/write`);
-  await expect(second.locator('.phx-connected')).toBeVisible();
+  await openWorkspace(second, `/p/${runId}/write`);
   await expect(second.getByLabel('Fountain screenplay source')).toBeVisible();
   await page.evaluate(() => window.addEventListener('phx:authoring:mark_saved', event => event.stopImmediatePropagation(), {once: true, capture: true}));
   const invalid = fixture + '\n[[unfinished';
@@ -254,7 +254,7 @@ test('E05/E07 lost acknowledgement retry, newer-server recovery and invalid inte
 test('E05/E06 immediate unsaved AI and acceptance clicks cannot race preview debounce', async ({page}) => {
   await login(page);
   const runId = await createRun(page, `authoring-action-race-${Date.now()}`);
-  await page.goto(`/p/${runId}/write`);
+  await openWorkspace(page, `/p/${runId}/write`);
   await page.locator('#source-editor').fill(fixture+'\nA changed beat.');
   await page.getByRole('button',{name:'Save working draft'}).click();
   await openWritingMenu(page, 'Changes');
@@ -273,6 +273,6 @@ test('E05/E06 immediate unsaved AI and acceptance clicks cannot race preview deb
   await openWritingMenu(page, 'Changes');
   await page.getByRole('button', {name: 'Save proposed change'}).click();
   await expect(page.locator('.authoring-status')).toContainText('Proposed change saved');
-  await page.goto(`/p/${runId}`);
+  await openWorkspace(page, `/p/${runId}`);
   await expect(page.locator('.screenplay')).not.toContainText('Unsaved immediate action.');
 });

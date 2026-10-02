@@ -1,5 +1,5 @@
 import {test, expect} from '@playwright/test';
-import {importProject, createTask} from './workspace_helpers.mjs';
+import {importProject, createTask, openWorkspace, reloadWorkspace} from './workspace_helpers.mjs';
 import {readFileSync} from 'node:fs';
 
 const token = process.env.FOUNT_OWNER_TOKEN || 'browser-owner-token';
@@ -25,14 +25,14 @@ async function revealTechnical(locator) {
 }
 
 async function chooseRoute(page, runId) {
-  await page.goto(`/p/${runId}/activity/task-1/decisions`);
+  await openWorkspace(page, `/p/${runId}/activity/task-1/decisions`);
   const route = page.getByRole('button', {name: /Commit now|route-a/i}).first();
   await expect(route).toBeVisible();
   await route.click();
 }
 
 async function waitForCandidate(page, runId, needle) {
-  await page.goto(`/p/${runId}/changes/task-1`);
+  await openWorkspace(page, `/p/${runId}/changes/task-1`);
   await expect(page.locator('pre.script').last()).toContainText(needle, {timeout: 60_000});
 }
 
@@ -44,7 +44,7 @@ test('U01 brief to checked opening candidate, export, canon base unchanged', asy
   await expect(page.locator('pre.script').first()).not.toContainText('INT. LOCKED ROOM - NIGHT');
   await expect(page.locator('p.status')).toContainText('stage: deliver', {timeout: 60_000});
 
-  await page.goto(`/p/${runId}/exports/task-1`);
+  await openWorkspace(page, `/p/${runId}/exports/task-1`);
   await page.getByRole('button', {name: 'Publish / retry bundle'}).click();
   const fountain = page.getByRole('link', {name: 'Download'}).first();
   await expect(fountain).toBeVisible({timeout: 60_000});
@@ -60,17 +60,16 @@ test('U02 protected reveal repairs then exact human approval survives refresh', 
   await waitForCandidate(page, runId, 'The stationmaster locks the evidence cabinet');
   await expect(page.locator('pre.script').last()).toContainText('departure board');
 
-  await page.goto(`/p/${runId}/activity/task-1/decisions`);
+  await openWorkspace(page, `/p/${runId}/activity/task-1/decisions`);
   const approve = page.getByRole('button', {name: /Make this exact checked proposal current|Accept candidate|approve/i}).first();
   await expect(approve).toBeVisible({timeout: 60_000});
   await approve.click();
-  await page.reload();
-  await page.goto(`/p/${runId}/activity/task-1`);
-  await expect(page.locator('.phx-connected')).toBeVisible();
+  await reloadWorkspace(page);
+  await openWorkspace(page, `/p/${runId}/activity/task-1`);
   await page.locator('.technical-details').evaluateAll(nodes=>nodes.forEach(node=>node.open=true));
   await revealTechnical(page.locator('pre').filter({hasText: '"outcome": "accepted"'}));
   await expect(page.locator('pre').filter({hasText: '"outcome": "accepted"'})).toBeVisible({timeout: 60_000});
-  await page.goto(`/p/${runId}/exports/task-1`);
+  await openWorkspace(page, `/p/${runId}/exports/task-1`);
   await page.getByRole('button', {name: 'Publish / retry bundle'}).click();
   await expect(page.locator('p.status')).toContainText('completed accepted', {timeout: 60_000});
 });
@@ -80,14 +79,13 @@ test('U03 selected-scene dialogue records configured service approval identity',
   const runId = await createJourney(page, 'dialogue', `u03-${Date.now()}`);
   await chooseRoute(page, runId);
   await waitForCandidate(page, runId, 'If you missed it, you were meant to.');
-  await page.goto(`/p/${runId}/activity/task-1`);
-  await expect(page.locator('.phx-connected')).toBeVisible();
+  await openWorkspace(page, `/p/${runId}/activity/task-1`);
   await page.locator('.technical-details').evaluateAll(nodes=>nodes.forEach(node=>node.open=true));
   await revealTechnical(page.getByText(/demo-service/).first());
   await expect(page.getByText(/demo-service/).first()).toBeVisible({timeout: 60_000});
   await revealTechnical(page.locator('pre').filter({hasText: '"outcome": "accepted"'}));
   await expect(page.locator('pre').filter({hasText: '"outcome": "accepted"'})).toBeVisible({timeout: 60_000});
-  await page.goto(`/p/${runId}/exports/task-1`);
+  await openWorkspace(page, `/p/${runId}/exports/task-1`);
   await page.getByRole('button', {name: 'Publish / retry bundle'}).click();
   await expect(page.locator('p.status')).toContainText('completed accepted', {timeout: 60_000});
 });
@@ -98,8 +96,8 @@ test('U04 duplicate tabs replay exact decision and unauthenticated client is den
   await login(first);
   const runId = await createJourney(first, 'opening', `u04-${Date.now()}`);
   const second = await context.newPage();
-  await first.goto(`/p/${runId}/activity/task-1/decisions`);
-  await second.goto(`/p/${runId}/activity/task-1/decisions`);
+  await openWorkspace(first, `/p/${runId}/activity/task-1/decisions`);
+  await openWorkspace(second, `/p/${runId}/activity/task-1/decisions`);
   const one = first.getByRole('button', {name: /Commit now|route-a/i}).first();
   const two = second.getByRole('button', {name: /Commit now|route-a/i}).first();
   await expect(one).toBeVisible();
@@ -116,8 +114,7 @@ test('U04 duplicate tabs replay exact decision and unauthenticated client is den
 test('U05 control, unknown-cost and failure semantics are visible and keyboard reachable', async ({page}) => {
   await login(page);
   const runId = await createJourney(page, 'opening', `u05-${Date.now()}`);
-  await page.goto(`/p/${runId}/activity/task-1`);
-  await expect(page.locator('.phx-connected')).toBeVisible();
+  await openWorkspace(page, `/p/${runId}/activity/task-1`);
   await page.locator('.technical-details').evaluateAll(nodes=>nodes.forEach(node=>node.open=true));
   await expect(page.getByRole('button', {name: 'Pause'})).toBeVisible();
   await expect(page.getByText(/Missing provider cost remains unknown/)).toBeVisible();
@@ -146,13 +143,12 @@ test('H03-H05 integrated analysis survives review reconnect and stays candidate-
   await expect(page.locator('pre.script').first()).toContainText("I didn't miss anything.");
   await expect(page.locator('pre.script').first()).not.toContainText('If you missed it, you were meant to.');
 
-  await page.reload();
+  await reloadWorkspace(page);
   await expect(page.getByText(/Status: (complete|partial)/).first()).toBeVisible({timeout: 60_000});
   await revealTechnical(page.getByText(/analysis_run_id/).first());
   await expect(page.getByText(/analysis_run_id/).first()).toBeVisible();
 
-  await page.goto(`/p/${runId}/activity/task-1`);
-  await expect(page.locator('.phx-connected')).toBeVisible();
+  await openWorkspace(page, `/p/${runId}/activity/task-1`);
   await page.locator('.technical-details').evaluateAll(nodes=>nodes.forEach(node=>node.open=true));
   await expect(page.getByText(/Analysis service:.*Deterministic Sandbox/)).toBeVisible();
   await expect(page.getByRole('heading', {name: 'Analysis before writing'})).toBeVisible();

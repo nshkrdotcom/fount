@@ -1,4 +1,4 @@
-import {openWritingMenu} from './workspace_helpers.mjs';
+import {openWritingMenu, openWorkspace, reloadWorkspace} from './workspace_helpers.mjs';
 import {test, expect} from '@playwright/test';
 import {importProject, projectRunCount} from './workspace_helpers.mjs';
 
@@ -24,8 +24,7 @@ async function capture(page, name) {
 test('UX02 compact writing keeps text through Focus exit and supports named keyboard scene moves', async ({page}) => {
   await login(page);
   const key = await importProject(page, 'ux02-writing', source);
-  await page.goto(`/p/${key}/write`);
-  await expect(page.locator('.phx-connected')).toBeVisible();
+  await openWorkspace(page, `/p/${key}/write`);
 
   const editor = page.locator('#source-editor');
   const before = await editor.inputValue();
@@ -47,7 +46,7 @@ test('UX02 compact writing keeps text through Focus exit and supports named keyb
   await firstCard.focus();
   await page.keyboard.press('Alt+ArrowDown');
   await expect(page.locator('[data-scene-card]').first()).toContainText('INT. SERVICE ELEVATOR - NIGHT');
-  await page.reload();
+  await reloadWorkspace(page);
   await expect(editor).toHaveValue(/A quiet mechanical hum/);
   await page.locator('#scene-cards > summary').click();
   await expect(page.locator('[data-scene-card]').first()).toContainText('INT. SERVICE ELEVATOR - NIGHT');
@@ -58,8 +57,7 @@ test('UX02 compact writing keeps text through Focus exit and supports named keyb
 test('UX02 Work is question-first, preserves the brief across task choices, and creates a durable task without acceptance', async ({page}) => {
   await login(page);
   const key = await importProject(page, 'ux02-work', source);
-  await page.goto(`/p/${key}/work`);
-  await expect(page.locator('.phx-connected')).toBeVisible();
+  await openWorkspace(page, `/p/${key}/work`);
 
   await expect(page.locator('.creative-family-grid--primary .creative-family')).toHaveCount(3);
   const question = page.getByLabel('What do you want to change or understand?');
@@ -91,7 +89,7 @@ test('UX02 Work is question-first, preserves the brief across task choices, and 
   await page.getByLabel('Maximum spend').fill('12.50');
   await page.getByRole('button', {name: 'Save task settings'}).click();
   await expect(page.getByText(/Task settings saved/)).toBeVisible();
-  await page.reload();
+  await reloadWorkspace(page);
   await expect(page.getByLabel('Maximum spend')).toHaveValue('12.5');
 
   await page.getByLabel('Preset name').fill('UX02 careful');
@@ -106,20 +104,19 @@ test('UX02 Work is question-first, preserves the brief across task choices, and 
   await page.getByRole('button',{name:'Save task settings'}).click();
   await expect(page.getByText(/Task settings saved/)).toBeVisible();
   await page.locator('.preset-card',{hasText:'UX02 careful'}).first().getByRole('button',{name:'Apply settings'}).click();
-  await page.reload();
+  await reloadWorkspace(page);
   await expect(page.getByLabel('Maximum spend')).toHaveValue('12.5');
   expect(download.suggestedFilename()).toMatch(/ux02-careful-v\d+\.json$/);
   await capture(page, 'ux02-task-purposeful-controls');
 
-  await page.goto(`/p/${key}`);
+  await openWorkspace(page, `/p/${key}`);
   await expect(page.locator('.screenplay')).toContainText('He said eleven.');
 });
 
 test('UX02 character reading and Try another line bind real source without accepting anything', async ({page}) => {
   await login(page);
   const key = await importProject(page, 'ux02-character', source);
-  await page.goto(`/p/${key}/cast`);
-  await expect(page.locator('.phx-connected')).toBeVisible();
+  await openWorkspace(page, `/p/${key}/cast`);
 
   await page.getByRole('button', {name: 'Read literal dialogue'}).first().click();
   await expect(page.getByText('Provider-free source reading', {exact: true})).toBeVisible();
@@ -132,9 +129,9 @@ test('UX02 character reading and Try another line bind real source without accep
   const returnHref=await page.getByRole('link',{name:'Return to passage'}).first().getAttribute('href');
   await page.getByRole('button',{name:'Start line alternatives'}).click();
   await page.getByRole('button',{name:'Start / resume task'}).click();
-  await page.goto(`/p/${key}/activity/task-1/decisions`);
+  await openWorkspace(page, `/p/${key}/activity/task-1/decisions`);
   await page.getByRole('button',{name:'Commit now',exact:true}).click();
-  await page.goto(`/p/${key}/changes/task-1`);
+  await openWorkspace(page, `/p/${key}/changes/task-1`);
   await expect(page.locator('pre.script').nth(1)).toContainText('The silence holds.',{timeout:60000});
   await expect(page.locator('pre.script').nth(1)).toContainText('He said eleven.');
   await expect(page.locator('pre.script').nth(1)).toContainText('MARA watches the elevator numbers.');
@@ -144,15 +141,14 @@ test('UX02 character reading and Try another line bind real source without accep
   await expect(page.locator(`[id="${anchor}"]`)).toBeVisible();
 
 
-  await page.goto(`/p/${key}`);
+  await openWorkspace(page, `/p/${key}`);
   await expect(page.locator('.screenplay')).toContainText('He said eleven.');
 });
 
 test('UX02 notes create an explicit proposal and reopen persisted related work as a factual link', async ({page}) => {
   await login(page);
   const key = await importProject(page, 'ux02-notes', source);
-  await page.goto(`/p/${key}/notes`);
-  await expect(page.locator('.phx-connected')).toBeVisible();
+  await openWorkspace(page, `/p/${key}/notes`);
 
   await page.getByLabel('Title').fill('Keep the withheld fact');
   await page.getByLabel('Note', {exact: true}).fill('Do not let Mara explain what she already knows.');
@@ -167,11 +163,11 @@ test('UX02 notes create an explicit proposal and reopen persisted related work a
   await expect(page).toHaveURL(new RegExp(`/p/${key}/activity/task-[0-9]+/setup$`));
 
   await page.getByRole('button',{name:'Start / resume task'}).click();
-  await page.goto(`/p/${key}/activity/task-1/decisions`);
+  await openWorkspace(page, `/p/${key}/activity/task-1/decisions`);
   await page.getByRole('button',{name:'Commit now',exact:true}).click();
-  await page.goto(`/p/${key}/changes/task-1`);
+  await openWorkspace(page, `/p/${key}/changes/task-1`);
   await expect(page.locator('pre.script').nth(1)).toContainText('The silence holds.',{timeout:60000});
-  await page.goto(`/p/${key}/notes`);
+  await openWorkspace(page, `/p/${key}/notes`);
   await expect(page.getByRole('link',{name:'Open linked proposal'})).toBeVisible();
   await expect(page.getByText(/Related work · Task [0-9]+/)).toBeVisible();
   await expect(page.getByRole('link', {name: 'Open activity'})).toBeVisible();
@@ -183,15 +179,14 @@ test('UX02 work remains usable on tablet, phone touch, and CSS zoom stress view'
   const page = await context.newPage();
   await login(page);
   const key = await importProject(page, 'ux02-responsive', source);
-  await page.goto(`/p/${key}/work`);
-  await expect(page.locator('.phx-connected')).toBeVisible();
+  await openWorkspace(page, `/p/${key}/work`);
   await page.getByRole('button', {name: 'Look for exposition'}).tap();
   await page.locator('.all-tasks > summary').tap();
   expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(2);
   await capture(page, 'ux02-phone-work');
 
   await page.setViewportSize({width: 768, height: 1024});
-  await page.reload();
+  await reloadWorkspace(page);
   await expect(page.locator('#creative-brief')).toBeVisible();
   await capture(page, 'ux02-tablet-work');
 
@@ -204,7 +199,7 @@ test('UX02 work remains usable on tablet, phone touch, and CSS zoom stress view'
 test('UX02 selected alternatives preserve exact protections and save auditioned selections without accepting pages', async ({page}) => {
   await login(page);
   const key=await importProject(page,'ux02-selected-approaches',source);
-  await page.goto(`/p/${key}/work`); await expect(page.locator('.phx-connected')).toBeVisible();
+  await openWorkspace(page, `/p/${key}/work`);
   await expect(page.locator('#creative-scope-picker')).not.toHaveAttribute('open','');
   await expect(page.locator('#creative-protection-picker')).not.toHaveAttribute('open','');
   await capture(page,'ux02-short-default-work');
@@ -224,12 +219,12 @@ test('UX02 selected alternatives preserve exact protections and save auditioned 
   await capture(page,'ux02-selected-protected-brief');
   await page.getByRole('button',{name:'Start this work'}).click();
   await page.getByRole('button',{name:'Start / resume task'}).click();
-  await page.goto(`/p/${key}/activity/task-1/decisions`);
+  await openWorkspace(page, `/p/${key}/activity/task-1/decisions`);
   const approach=page.getByRole('button',{name:'Commit now',exact:true});
   await expect(approach).toBeVisible({timeout:60000});
   await expect(page.getByRole('button',{name:'Delay',exact:true})).toBeVisible();
   await approach.click();
-  await page.goto(`/p/${key}/changes/task-1`);
+  await openWorkspace(page, `/p/${key}/changes/task-1`);
   await expect(page.locator('.related-candidate').first()).toBeVisible({timeout:60000});
   await expect(page.locator('pre.script').nth(1)).toContainText('The silence holds.');
   await expect(page.locator('pre.script').nth(1)).toContainText('He said eleven.');
@@ -246,15 +241,15 @@ test('UX02 selected alternatives preserve exact protections and save auditioned 
   await page.getByRole('button',{name:'Save recombined proposal'}).click();
   await expect(page.locator('.related-candidate')).toHaveCount(originalCount+2);
   await page.setViewportSize({width:390,height:844}); await capture(page,'ux02-phone-proposal-review');
-  await page.goto(`/p/${key}`);
+  await openWorkspace(page, `/p/${key}`);
   await expect(page.locator('.screenplay')).not.toContainText('The silence holds.');
 });
 
 test('UX02 Focus preserves unsaved text when another tab saves and reports a real conflict', async ({browser}) => {
   const context=await browser.newContext(); const page=await context.newPage(); await login(page);
   const key=await importProject(page,'ux02-focus-conflict',source);
-  await page.goto(`/p/${key}/write`); await expect(page.locator('.phx-connected')).toBeVisible();
-  const second=await context.newPage(); await second.goto(`/p/${key}/write`); await expect(second.locator('.phx-connected')).toBeVisible();
+  await openWorkspace(page, `/p/${key}/write`);
+  const second=await context.newPage(); await openWorkspace(second, `/p/${key}/write`);
   await page.getByRole('button',{name:'Focus',exact:true}).click();
   const editor=page.locator('#source-editor'); const initial=await editor.inputValue();
   await second.locator('#source-editor').fill(initial+'\nServer tab text.');
@@ -271,43 +266,43 @@ test('UX02 Focus preserves unsaved text when another tab saves and reports a rea
 
 test('UX02 manual proposal adjustment is rechecked and exact reviewed writing becomes current only after approval', async ({page}) => {
   await login(page); const key=await importProject(page,'ux02-manual-review',source);
-  await page.goto(`/p/${key}/work`); await expect(page.locator('.phx-connected')).toBeVisible();
+  await openWorkspace(page, `/p/${key}/work`);
   await page.getByLabel('What do you want to change or understand?').fill('Let the hesitation remain visible in the hallway.');
   await page.getByRole('button',{name:'Review brief'}).click();
   await page.getByRole('button',{name:'Start this work'}).click();
   await page.locator('.preset-card',{hasText:'Owner approval'}).getByRole('button',{name:'Apply settings'}).click();
   await expect(page.locator('select[name="policy[completion]"]')).toHaveValue('accept');
   await page.getByRole('button',{name:'Start / resume task'}).click();
-  await page.goto(`/p/${key}/activity/task-1/decisions`);
+  await openWorkspace(page, `/p/${key}/activity/task-1/decisions`);
   await page.getByRole('button',{name:'Commit now',exact:true}).click();
-  await page.goto(`/p/${key}/changes/task-1`);
+  await openWorkspace(page, `/p/${key}/changes/task-1`);
   await expect(page.locator('pre.script').nth(1)).toContainText('The silence holds.',{timeout:60000});
   const proposal=await page.locator('pre.script').nth(1).innerText();
-  await page.goto(`/p/${key}/activity/task-1/decisions`);
+  await openWorkspace(page, `/p/${key}/activity/task-1/decisions`);
   await page.getByLabel('Replacement Fountain').fill(proposal.replace('The silence holds.','A measured silence.'));
   await page.getByRole('button',{name:'Save manual adjustment and re-check'}).click();
   await expect(page.getByRole('status')).toContainText('Decision recorded');
-  await page.goto(`/p/${key}/changes/task-1`);
+  await openWorkspace(page, `/p/${key}/changes/task-1`);
   await expect(page.locator('pre.script').nth(1)).toContainText('A measured silence.',{timeout:60000});
-  await page.goto(`/p/${key}`); await expect(page.locator('.screenplay')).not.toContainText('A measured silence.');
-  await page.goto(`/p/${key}/activity/task-1/decisions`);
+  await openWorkspace(page, `/p/${key}`); await expect(page.locator('.screenplay')).not.toContainText('A measured silence.');
+  await openWorkspace(page, `/p/${key}/activity/task-1/decisions`);
   await page.getByRole('button',{name:'Make this exact checked proposal current'}).click();
   await expect(page.getByRole('status')).toContainText('Decision recorded');
-  await page.goto(`/p/${key}`); await expect(page.locator('.screenplay')).toContainText('A measured silence.',{timeout:60000});
+  await openWorkspace(page, `/p/${key}`); await expect(page.locator('.screenplay')).toContainText('A measured silence.',{timeout:60000});
   await capture(page,'ux02-reviewed-proposal-current');
 });
 
 test('UX02 a source change requires a real rebase before exact proposal approval', async ({page}) => {
   await login(page); const key=await importProject(page,'ux02-rebase-review',source);
-  await page.goto(`/p/${key}/work`); await expect(page.locator('.phx-connected')).toBeVisible();
+  await openWorkspace(page, `/p/${key}/work`);
   await page.getByLabel('What do you want to change or understand?').fill('Let the first hallway beat hesitate.');
   await page.getByRole('button',{name:'Review brief'}).click(); await page.getByRole('button',{name:'Start this work'}).click();
   await page.locator('.preset-card',{hasText:'Owner approval'}).getByRole('button',{name:'Apply settings'}).click();
   await expect(page.locator('select[name="policy[completion]"]')).toHaveValue('accept');
   await page.getByRole('button',{name:'Start / resume task'}).click();
-  await page.goto(`/p/${key}/activity/task-1/decisions`);
+  await openWorkspace(page, `/p/${key}/activity/task-1/decisions`);
   await expect(page.getByRole('button',{name:'Commit now',exact:true})).toBeVisible({timeout:60000});
-  const writing=await page.context().newPage(); await writing.goto(`/p/${key}/write`); await expect(writing.locator('.phx-connected')).toBeVisible();
+  const writing=await page.context().newPage(); await openWorkspace(writing, `/p/${key}/write`);
   const editor=writing.locator('#source-editor'); const original=await editor.inputValue();
   await editor.fill(original+'\nA distant engine turns over.');
   await writing.getByRole('button',{name:'Save working draft'}).click();
@@ -324,12 +319,12 @@ test('UX02 a source change requires a real rebase before exact proposal approval
   await rebase.click();
   await expect(page).toHaveURL(new RegExp(`/p/${key}/activity/task-2/decisions`));
   await expect(page.getByRole('button',{name:'Make this exact checked proposal current'})).toBeVisible({timeout:60000});
-  await page.goto(`/p/${key}/changes/task-2`);
+  await openWorkspace(page, `/p/${key}/changes/task-2`);
   await expect(page.locator('pre.script').nth(1)).toContainText('A distant engine turns over.');
   await expect(page.locator('pre.script').nth(1)).toContainText('The silence holds.');
-  await page.goto(`/p/${key}/activity/task-2/decisions`);
+  await openWorkspace(page, `/p/${key}/activity/task-2/decisions`);
   await page.getByRole('button',{name:'Make this exact checked proposal current'}).click();
   await expect(page.getByRole('status')).toContainText('Decision recorded');
-  await page.goto(`/p/${key}`); await expect(page.locator('.screenplay')).toContainText('The silence holds.',{timeout:60000});
+  await openWorkspace(page, `/p/${key}`); await expect(page.locator('.screenplay')).toContainText('The silence holds.',{timeout:60000});
   await expect(page.locator('.screenplay')).toContainText('A distant engine turns over.');
 });

@@ -10,7 +10,7 @@ defmodule FountWeb.Phase05AuthoringIntegrationTest do
     assert {:ok, view, html} = live(conn, editor_path(run))
     assert html =~ "Working draft"
     assert html =~ "Plain Fountain text"
-    assert html =~ "Saving a proposed change still does not replace the current screenplay"
+    assert html =~ "proposed changes do not alter the current screenplay"
 
     invalid = FountWeb.Journeys.fixture_fountain() <> "\n[[unfinished"
 

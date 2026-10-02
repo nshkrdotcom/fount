@@ -230,6 +230,13 @@ const CreativeBrief = {
 
 const AuthoringEditor = {
   mounted() {
+    const header = this.el.querySelector(".project-header")
+    this.updateHeaderOffset = () => {
+      this.el.style.setProperty("--writing-header-height", `${header?.getBoundingClientRect().height || 0}px`)
+    }
+    this.headerObserver = new ResizeObserver(this.updateHeaderOffset)
+    if (header) this.headerObserver.observe(header)
+    this.updateHeaderOffset()
     this.source = this.el.querySelector("[data-authoring-source]")
     this.seq = 0
     this.timer = null
@@ -341,6 +348,15 @@ const AuthoringEditor = {
     }
 
     this.onKeydown = (event) => {
+      if (event.key === "Escape" && !this.focusMode) {
+        const menu = this.el.querySelector(".writing-actions[open]")
+        if (menu) {
+          event.preventDefault()
+          menu.open = false
+          menu.querySelector("summary")?.focus()
+          return
+        }
+      }
       if (event.key === "Escape" && this.focusMode) {
         event.preventDefault()
         this.focusMode = false
@@ -451,6 +467,7 @@ const AuthoringEditor = {
     this.position()
     this.applyFocus()
     this.applyTypewriter()
+    this.reducedMotion?.addEventListener("change", this.applyTypewriter)
 
     this.handleEvent("authoring:mark_saved", ({client_seq}) => {
       if (Number(client_seq) !== this.seq) return
@@ -492,13 +509,25 @@ const AuthoringEditor = {
     })
   },
 
+  beforeUpdate() {
+    this.openWritingDetails = [...this.el.querySelectorAll(".writing-actions, #text-history")]
+      .filter(detail => detail.open).map(detail => detail.id)
+  },
+
   updated() {
     if (this.source) this.source.readOnly = this.el.dataset.draftStatus !== "active"
     this.applyFocus?.()
     this.applyTypewriter?.()
+    for (const id of this.openWritingDetails || []) {
+      const detail = this.el.querySelector(`#${id}`)
+      if (detail) detail.open = true
+    }
+    this.updateHeaderOffset?.()
   },
 
   destroyed() {
+    this.headerObserver?.disconnect()
+    this.reducedMotion?.removeEventListener("change", this.applyTypewriter)
     clearTimeout(this.timer)
     this.source?.removeEventListener("input", this.onInput)
     this.source?.removeEventListener("compositionstart", this.onCompositionStart)

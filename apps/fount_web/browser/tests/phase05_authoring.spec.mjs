@@ -1,3 +1,4 @@
+import {openWritingMenu} from './workspace_helpers.mjs';
 import {test, expect} from '@playwright/test';
 import {importProject} from './workspace_helpers.mjs';
 
@@ -52,6 +53,7 @@ test('E01-E03/E07 editor handles Unicode, paste, composition, invalid source, mo
   await page.getByRole('button', {name: 'Save working draft'}).click();
   await expect(page.locator('.authoring-status')).toContainText('Saved working draft');
   await source.fill(unicode.replace('café', 'bistro'));
+  await openWritingMenu(page, 'More');
   await page.locator('#text-history summary').click();
   await page.getByRole('button', {name: 'Undo text'}).click();
   await expect(source).toHaveValue(unicode);
@@ -97,6 +99,7 @@ test('E04-E06 candidate save leaves canon unchanged, creative work uses Run, and
   const edited = fixture.replace('departure board', 'blue departure board');
   await source.fill(edited);
   await page.getByRole('button', {name: 'Save working draft'}).click();
+  await openWritingMenu(page, 'Changes');
   await page.getByRole('button', {name: 'Save proposed change'}).click();
   await expect(page.getByText(/The current screenplay is unchanged/)).toBeVisible();
 
@@ -130,6 +133,7 @@ test('E04-E06 candidate save leaves canon unchanged, creative work uses Run, and
   await expect(page.locator('.screenplay')).not.toContainText('blue departure board');
 
   await page.goto(`/p/${runId}/write`);
+  await openWritingMenu(page, 'Changes');
   await page.getByRole('button', {name: 'Make proposed change current'}).click();
   await expect(page.getByText(/Revision approved and saved/)).toBeVisible();
   await expect(source).toHaveAttribute('readonly', '');
@@ -253,6 +257,7 @@ test('E05/E06 immediate unsaved AI and acceptance clicks cannot race preview deb
   await page.goto(`/p/${runId}/write`);
   await page.locator('#source-editor').fill(fixture+'\nA changed beat.');
   await page.getByRole('button',{name:'Save working draft'}).click();
+  await openWritingMenu(page, 'Changes');
   await page.getByRole('button', {name: 'Save proposed change'}).click();
   await expect(page.getByText(/The current screenplay is unchanged/)).toBeVisible();
   await page.evaluate(() => {
@@ -265,6 +270,7 @@ test('E05/E06 immediate unsaved AI and acceptance clicks cannot race preview deb
   await expect(page.getByText(/Unsaved text cannot be accepted/)).toBeVisible();
   await page.getByRole('button', {name: 'Save working draft'}).click();
   await expect(page.locator('.authoring-status')).toContainText('Saved working draft');
+  await openWritingMenu(page, 'Changes');
   await page.getByRole('button', {name: 'Save proposed change'}).click();
   await expect(page.locator('.authoring-status')).toContainText('Proposed change saved');
   await page.goto(`/p/${runId}`);

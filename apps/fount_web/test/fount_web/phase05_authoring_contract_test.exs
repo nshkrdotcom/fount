@@ -16,7 +16,7 @@ defmodule FountWeb.Phase05AuthoringContractTest do
     refute authoring =~ "FountWorkshop."
     assert live =~ "Fount.Screenplay.undo"
     assert live =~ "Fount.Screenplay.redo"
-    assert live =~ "Saving a proposed change still does not replace the current screenplay"
+    assert live =~ "proposed changes do not alter the current screenplay"
   end
 
   test "authoring limits are explicitly configured" do

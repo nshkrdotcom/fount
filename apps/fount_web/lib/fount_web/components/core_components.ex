@@ -217,7 +217,7 @@ defmodule FountWeb.CoreComponents do
         <span aria-hidden="true">/</span>
         <strong>{@project["title"]}</strong>
         <span :if={@example} class="project-header__flag">Example</span>
-        <span class="project-header__source">{@source_label}</span>
+        <span :if={@view != "writing"} class="project-header__source">{@source_label}</span>
       </div>
 
       <div class="project-header__view" role="group" aria-label="Workspace view">
@@ -226,13 +226,23 @@ defmodule FountWeb.CoreComponents do
       </div>
 
       <nav class="project-tabs" aria-label="Project">
-        <a href={@script_href} aria-current={if @section == "script", do: "page"}>Script</a>
-        <a href={@work_href} aria-current={if @section == "work", do: "page"}>Work on it</a>
+        <a
+          :if={@view != "writing"}
+          href={@script_href}
+          aria-current={if @section == "script", do: "page"}
+        >Script</a>
+        <a :if={@view != "writing"} href={@work_href} aria-current={if @section == "work", do: "page"}>Work on it</a>
         <a href={@changes_href} aria-current={if @section == "changes", do: "page"}>Changes</a>
-        <a href={@notes_href} aria-current={if @section == "notes", do: "page"}>Notes</a>
+        <a
+          :if={@view != "writing"}
+          href={@notes_href}
+          aria-current={if @section == "notes", do: "page"}
+        >Notes</a>
         <details class="project-more">
           <summary>More</summary>
           <div class="project-more__menu">
+            <a :if={@view == "writing"} href={@work_href}>Work on it</a>
+            <a :if={@view == "writing"} href={@notes_href}>Notes</a>
             <a href={"/p/#{@project_key}/analysis"}>Analysis</a>
             <a href={"/p/#{@project_key}/cast"}>Cast &amp; locations</a>
             <a href={"/p/#{@project_key}/read"}>Table read</a>

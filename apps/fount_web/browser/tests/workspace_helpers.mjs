@@ -39,3 +39,11 @@ export function projectRunCount(key) {
   const output=hostFixture('owner = System.fetch_env!("FOUNT_OWNER_ID"); {:ok, project} = FountWeb.Store.project_by_key(Fount.Repo, owner, System.fetch_env!("FOUNT_FIXTURE_KEY")); rows = FountWeb.Store.list_project_runs(Fount.Repo, owner, project["id"], limit: 50); IO.puts("FOUNT_FIXTURE_RESULT=" <> Integer.to_string(length(rows)))', {FOUNT_FIXTURE_KEY:key});
   return Number(output.split('FOUNT_FIXTURE_RESULT=').at(-1).trim());
 }
+
+export async function openWritingMenu(page, name) {
+  for (const menu of await page.locator('.writing-actions[open]').all()) {
+    if ((await menu.locator(':scope > summary').innerText()) !== name) await menu.locator(':scope > summary').click();
+  }
+  const menu = page.locator('.writing-actions').filter({has: page.locator('summary', {hasText: new RegExp(`^${name}$`)})});
+  if (!(await menu.getAttribute('open') !== null)) await menu.locator(':scope > summary').click();
+}

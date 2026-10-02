@@ -1,3 +1,4 @@
+import {openWritingMenu} from './workspace_helpers.mjs';
 import {test, expect} from '@playwright/test';
 import {importProject, projectRunCount} from './workspace_helpers.mjs';
 
@@ -36,6 +37,7 @@ test('UX02 compact writing keeps text through Focus exit and supports named keyb
   await expect(page.locator('#project-editor')).not.toHaveClass(/is-focus-mode/);
   await expect(editor).toHaveValue(before + '\nA quiet mechanical hum.');
 
+  await openWritingMenu(page, 'More');
   await expect(page.getByRole('button', {name: 'Typewriter scroll off'})).toBeVisible();
   await page.getByRole('button', {name: 'Save working draft'}).click();
   await expect(page.locator('.authoring-status')).toContainText(/Saved working draft/i);
@@ -309,7 +311,9 @@ test('UX02 a source change requires a real rebase before exact proposal approval
   const editor=writing.locator('#source-editor'); const original=await editor.inputValue();
   await editor.fill(original+'\nA distant engine turns over.');
   await writing.getByRole('button',{name:'Save working draft'}).click();
+  await openWritingMenu(writing, 'Changes');
   await writing.getByRole('button',{name:'Save proposed change'}).click();
+  await openWritingMenu(writing, 'Changes');
   await writing.getByRole('button',{name:'Make proposed change current'}).click();
   await expect(writing.getByText(/Revision approved and saved/)).toBeVisible(); await writing.close();
   await page.getByRole('button',{name:'Commit now',exact:true}).click();

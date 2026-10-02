@@ -869,8 +869,6 @@ defmodule FountWeb.EditorLive do
     if preview == "", do: type, else: "#{type} · #{preview}"
   end
 
-  defp dismissed?(prefs, slug), do: slug in List.wrap(Map.get(prefs, "dismissed_hints", []))
-
   defp save_state_label("saved"), do: "Saved working draft"
   defp save_state_label("candidate-saved"), do: "Proposed change saved"
   defp save_state_label("accepted"), do: "Current screenplay updated"
@@ -892,7 +890,6 @@ defmodule FountWeb.EditorLive do
       |> assign(:preview_screenplay, preview_screenplay)
       |> assign(:writing_index, ScreenplayIndex.build(preview_screenplay))
       |> assign(:writing_elements, List.wrap(preview_screenplay.ir.elements))
-      |> assign(:writing_hint_dismissed, dismissed?(assigns.preferences, "writing"))
 
     ~H"""
     <main
@@ -911,36 +908,20 @@ defmodule FountWeb.EditorLive do
         example={@project["project_kind"] == "example"}
       />
 
-      <section class="script-context writing-context" aria-label="Writing status">
-        <div>
-          <h1>{@project["title"]}</h1>
-          <p>
-            <strong>Working draft</strong>
-            · separate from the current screenplay until you explicitly make a saved proposal current.
-          </p>
-        </div>
+      <section class="writing-context" aria-label="Writing status">
+        <p>
+          <strong>Working draft</strong>
+          · {@notice || "proposed changes do not alter the current screenplay."}
+        </p>
         <div class="authoring-status" role="status" aria-live="polite">
           <strong>{save_state_label(@save_state)}</strong>
           <span>Draft version {@draft["version"]}</span>
         </div>
+        <a href={"/help?project=#{@project["key"]}#writing"}>Writing help</a>
       </section>
-
-      <FountWeb.CoreComponents.contextual_help
-        slug="writing"
-        title="Working text is recoverable, not automatically current"
-        dismissed={@writing_hint_dismissed}
-        project_key={@project["key"]}
-      >
-        <p>
-          Save freely. Saving a proposed change still does not replace the current screenplay; that requires the separate Make current action.
-        </p>
-      </FountWeb.CoreComponents.contextual_help>
 
       <FountWeb.CoreComponents.alert :if={@error} kind="warning" title="Writing notice">
         {@error}
-      </FountWeb.CoreComponents.alert>
-      <FountWeb.CoreComponents.alert :if={@notice} kind="info" title="Writing status">
-        {@notice}
       </FountWeb.CoreComponents.alert>
 
       <section :if={@conflict} id="draft-conflict" class="authoring-conflict" role="alert">
@@ -973,13 +954,6 @@ defmodule FountWeb.EditorLive do
           aria-pressed="false"
           title="Hide surrounding controls. Press Escape to leave Focus."
         >Focus</button>
-        <button
-          id="authoring-typewriter"
-          type="button"
-          data-authoring-typewriter
-          aria-pressed="false"
-          title="Optional cursor-following scroll. Off by default and disabled when reduced motion is requested."
-        >Typewriter scroll off</button>
         <span class="focus-save-state" role="status">{save_state_label(@save_state)}</span>
         <button
           id="authoring-save"
@@ -987,21 +961,74 @@ defmodule FountWeb.EditorLive do
           data-authoring-save
           disabled={@draft["status"] != "active"}
         >Save working draft</button>
-        <button
-          id="candidate-save"
-          type="button"
-          data-authoring-candidate
-          disabled={not valid_preview?(@preview) or @draft["status"] != "active"}
-        >Save proposed change</button>
-        <button
-          id="candidate-accept"
-          type="button"
-          phx-click="accept_candidate"
-          disabled={
-            not @live_connected or @dirty or @draft["status"] != "active" or
-              not is_binary(@draft["saved_candidate_id"])
-          }
-        >Make proposed change current</button>
+        <details id="writing-changes" class="writing-actions">
+          <summary>Changes</summary>
+          <div class="writing-actions__panel">
+            <p>Review the exact saved proposal before making it current.</p>
+            <a href={"/p/#{@project["key"]}?source=proposed"}>Read proposed changes</a>
+            <button
+              id="candidate-save"
+              type="button"
+              data-authoring-candidate
+              disabled={not valid_preview?(@preview) or @draft["status"] != "active"}
+            >Save proposed change</button>
+            <button
+              id="candidate-accept"
+              type="button"
+              phx-click="accept_candidate"
+              disabled={
+                not @live_connected or @dirty or @draft["status"] != "active" or
+                  not is_binary(@draft["saved_candidate_id"])
+              }
+            >Make proposed change current</button>
+          </div>
+        </details>
+        <details id="writing-more" class="writing-actions">
+          <summary>More</summary>
+          <div class="writing-actions__panel">
+            <button
+              id="authoring-typewriter"
+              type="button"
+              data-authoring-typewriter
+              aria-pressed="false"
+              title="Optional cursor-following scroll. Off by default and disabled when reduced motion is requested."
+            >Typewriter scroll off</button>
+            <FountWeb.CoreComponents.disclosure
+              id="text-history"
+              title="Undo and recovery"
+              summary="Local text, structure and saved history"
+            >
+              <div class="button-row" role="group" aria-label="Text history">
+                <button type="button" phx-click="text_undo" disabled={@draft["status"] != "active"}>Undo text</button>
+                <button type="button" phx-click="text_redo" disabled={@draft["status"] != "active"}>Redo text</button>
+                <button
+                  type="button"
+                  phx-click="structural_undo"
+                  disabled={@draft["status"] != "active" or @structural_undo == []}
+                >Undo structure</button>
+                <button
+                  type="button"
+                  phx-click="structural_redo"
+                  disabled={@draft["status"] != "active" or @structural_redo == []}
+                >Redo structure</button>
+              </div>
+              <ol class="draft-history">
+                <li :for={item <- @history}>
+                  <span>Version {item["draft_version"]} · {item["reason"]}</span>
+                  <button type="button" phx-click="restore_history" phx-value-history_id={item["id"]}>Restore as new draft</button>
+                </li>
+              </ol>
+              <div class="button-row">
+                <button type="button" phx-click="rebase_draft" disabled={@draft["status"] != "active"}>Rebase onto current screenplay</button>
+                <button
+                  type="button"
+                  phx-click="discard_draft"
+                  disabled={@draft["status"] != "active"}
+                >Discard working draft</button>
+              </div>
+            </FountWeb.CoreComponents.disclosure>
+          </div>
+        </details>
       </section>
 
       <div class="authoring-grid">
@@ -1051,37 +1078,6 @@ defmodule FountWeb.EditorLive do
       </div>
 
       <div class="authoring-secondary">
-        <FountWeb.CoreComponents.disclosure
-          id="text-history"
-          title="Undo and recovery"
-          summary="Local text, structure and saved history"
-        >
-          <div class="button-row" role="group" aria-label="Text history">
-            <button type="button" phx-click="text_undo" disabled={@draft["status"] != "active"}>Undo text</button>
-            <button type="button" phx-click="text_redo" disabled={@draft["status"] != "active"}>Redo text</button>
-            <button
-              type="button"
-              phx-click="structural_undo"
-              disabled={@draft["status"] != "active" or @structural_undo == []}
-            >Undo structure</button>
-            <button
-              type="button"
-              phx-click="structural_redo"
-              disabled={@draft["status"] != "active" or @structural_redo == []}
-            >Redo structure</button>
-          </div>
-          <ol class="draft-history">
-            <li :for={item <- @history}>
-              <span>Version {item["draft_version"]} · {item["reason"]}</span>
-              <button type="button" phx-click="restore_history" phx-value-history_id={item["id"]}>Restore as new draft</button>
-            </li>
-          </ol>
-          <div class="button-row">
-            <button type="button" phx-click="rebase_draft" disabled={@draft["status"] != "active"}>Rebase onto current screenplay</button>
-            <button type="button" phx-click="discard_draft" disabled={@draft["status"] != "active"}>Discard working draft</button>
-          </div>
-        </FountWeb.CoreComponents.disclosure>
-
         <FountWeb.CoreComponents.disclosure
           id="scene-cards"
           title="Scene cards and exact edits"

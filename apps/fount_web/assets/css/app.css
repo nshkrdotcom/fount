@@ -244,9 +244,9 @@ tbody tr:hover { background: rgba(211,189,139,.025); }
 .screenplay-title-entry dd { margin: 0; }
 .screenplay-body { display: grid; gap: .33rem; }
 .screenplay-element { white-space: normal; overflow-wrap: anywhere; scroll-margin-top: 3rem; }
-.screenplay-node-anchor { display: block; position: relative; top: -3rem; visibility: hidden; height: 0; }
+.screenplay-node-anchor { position: absolute; top: -3rem; visibility: hidden; width: 0; height: 0; }
 .screenplay-element__text { white-space: pre-wrap; }
-.screenplay-element--scene-heading { margin-top: 1.85rem; font-weight: 800; text-transform: uppercase; display: flex; justify-content: space-between; gap: .6rem; }
+.screenplay-element--scene-heading { margin-top: 1.85rem; font-weight: 800; text-transform: uppercase; position: relative; display: flex; justify-content: flex-start; gap: .6rem; }
 .screenplay-element--action { margin: .46rem 0; }
 .screenplay-element--character { width: 60%; margin: .8rem auto 0; text-transform: uppercase; }
 .screenplay-element--dialogue { width: 68%; margin: 0 auto; }
@@ -649,7 +649,7 @@ input, textarea, select { padding: .4rem .48rem; }
 .project-header__home { color: var(--text); font-weight: 850; letter-spacing: -.035em; text-decoration: none; }
 
 .project-header { display: grid; grid-template-columns: minmax(14rem,1fr) auto auto; }
-.project-header__identity { min-width: 0; display: flex; align-items: baseline; gap: .36rem; overflow: hidden; }
+.project-header__identity { min-width: 0; display: flex; align-items: center; gap: .36rem; overflow: hidden; }
 .project-header__identity strong { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .project-header__source { color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .project-header__flag { border: 1px solid var(--line-hot); padding: .08rem .28rem; font-size: .62rem; text-transform: uppercase; letter-spacing: .06em; }
@@ -1161,3 +1161,27 @@ input, textarea, select { padding: .4rem .48rem; }
   .screenplay-dialogue-block { break-inside: avoid; page-break-inside: avoid; }
   a { color: inherit !important; text-decoration: none !important; }
 }
+
+/* Writing keeps routine editing distinct from deliberate proposal acceptance. */
+.screenplay-scene-number { margin-left: auto; }
+.project-header__view, .project-tabs { align-self: center; }
+.project-header__view a, .project-tabs > a, .project-more > summary {
+  display: inline-flex; align-items: center; min-height: 30px; font-size: .8rem;
+}
+.writing-context { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem .8rem; margin: .3rem 0; font-size: .8rem; }
+.writing-context p { margin: 0; flex: 1 1 20rem; }
+.writing-context .authoring-status { display: flex; flex-wrap: wrap; gap: .4rem; font-size: .8rem; }
+.writing-context > a { white-space: nowrap; }
+.authoring-toolbar { top: var(--writing-header-height, 0px); overflow: visible; }
+.authoring-toolbar button, .writing-actions > summary { min-height: 34px; font-size: .8rem; }
+#authoring-save { background: var(--accent); color: var(--paper-ink); border-color: var(--accent); }
+.writing-actions { position: static; }
+.writing-actions > summary { display: flex; align-items: center; padding: .3rem .45rem; cursor: pointer; border: 1px solid var(--line); }
+.writing-actions__panel { position: absolute; right: 0; top: calc(100% + .3rem); z-index: 40; width: 23rem; max-width: calc(100vw - 2rem); padding: .65rem; background: var(--ink-1); border: 1px solid var(--line); box-shadow: 0 8px 24px #0006; display: grid; gap: .5rem; max-height: 65vh; overflow: auto; }
+.writing-actions__panel p { margin: 0; }
+.writing-actions__panel .button-row { flex-wrap: wrap; }
+.authoring-shell.mode-preview .authoring-preview-pane .screenplay { max-width: 56rem; }
+.authoring-shell.is-focus-mode > .writing-context,
+.authoring-shell.is-focus-mode .writing-actions { display: none !important; }
+
+.writing-actions:not([open]) > .writing-actions__panel { display: none; }

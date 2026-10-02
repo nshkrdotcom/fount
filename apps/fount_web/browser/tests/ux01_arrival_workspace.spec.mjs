@@ -150,16 +150,16 @@ test('UX01 shell, supplied About, no-task destinations, Help dismissal and phone
   await page.getByRole('link',{name:/Back to/}).click();
   await expect(page.locator('.context-help')).toHaveCount(0);
   await page.goto(`/p/${key}/write`);
-  await page.getByRole('button',{name:'Dismiss',exact:true}).click();
   await expect(page.locator('.context-help')).toHaveCount(0);
-  await page.locator('.project-tabs__help').click();
+  await page.getByRole('link',{name:'Writing help',exact:true}).click();
   await page.getByLabel('Search help').fill('Fountain');
   await expect(page.locator('.help-topic')).not.toHaveCount(0);
   await page.getByRole('button',{name:'Show dismissed hints again'}).click();
   await page.getByRole('link',{name:/Back to LAST RETURN/}).click();
   await expect(page.locator('.context-help')).toHaveCount(0);
   await page.goto(`/p/${key}/write`);
-  await expect(page.locator('.context-help')).toBeVisible();
+  await expect(page.locator('.context-help')).toHaveCount(0);
+  await expect(page.getByRole('link',{name:'Writing help',exact:true})).toBeVisible();
   for (const destination of ['changes','activity']) {
     await page.goto(`/p/${key}/${destination}`);
     await expect(page.getByText('No saved tasks yet. The screenplay is still fully available for reading and writing.')).toBeVisible();

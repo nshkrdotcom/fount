@@ -133,6 +133,7 @@ test('UX01 shell, supplied About, no-task destinations, Help dismissal and phone
   await expect(page.getByRole('link',{name:'Analysis',exact:true})).toBeFocused();
   expect(await page.locator(':focus').evaluate(node=>getComputedStyle(node).outlineStyle)).not.toBe('none');
   await page.getByRole('link',{name:'Project settings',exact:true}).click();
+  await expect(page.locator('.phx-connected')).toBeVisible();
   await page.getByLabel('Logline',{exact:true}).fill('A father returns a tape on the last night of a video shop.');
   await page.getByLabel('Synopsis',{exact:true}).fill('Mara and Eli pack the final cartons together.');
   await page.getByRole('button',{name:'Save project details'}).click();

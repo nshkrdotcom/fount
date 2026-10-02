@@ -177,7 +177,8 @@ defmodule FountWeb.ScreenplayIndex do
       confirmed_cast_count: length(confirmed_cast),
       confirmed_cast: confirmed_cast,
       literal_cue_group_count: length(literal_characters),
-      literal_character_cues: Enum.map(literal_characters, &Map.take(&1, [:name, :scene_count, :cue_count])),
+      literal_character_cues:
+        Enum.map(literal_characters, &Map.take(&1, [:name, :scene_count, :cue_count])),
       heading_contexts: heading_counts,
       time_of_day_unknown_count: Enum.count(scenes, &blank?(&1.time)),
       dialogue_words: dialogue_words,

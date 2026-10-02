@@ -5,8 +5,13 @@ defmodule FountWeb.Migrations.SemanticImportSI01 do
     create table(:fount_web_semantic_assessments, primary_key: false) do
       add :id, :uuid, primary_key: true
       add :owner_id, :text, null: false
-      add :project_id, references(:fount_web_projects, type: :uuid, on_delete: :delete_all), null: false
-      add :screenplay_id, references(:screenplays, type: :uuid, on_delete: :delete_all), null: false
+
+      add :project_id, references(:fount_web_projects, type: :uuid, on_delete: :delete_all),
+        null: false
+
+      add :screenplay_id, references(:screenplays, type: :uuid, on_delete: :delete_all),
+        null: false
+
       add :revision_id, :uuid, null: false
       add :source_artifact_id, :uuid
       add :source_sha256, :text, null: false
@@ -61,8 +66,13 @@ defmodule FountWeb.Migrations.SemanticImportSI01 do
     create table(:fount_web_semantic_entity_handles, primary_key: false) do
       add :id, :uuid, primary_key: true
       add :owner_id, :text, null: false
-      add :project_id, references(:fount_web_projects, type: :uuid, on_delete: :delete_all), null: false
-      add :screenplay_id, references(:screenplays, type: :uuid, on_delete: :delete_all), null: false
+
+      add :project_id, references(:fount_web_projects, type: :uuid, on_delete: :delete_all),
+        null: false
+
+      add :screenplay_id, references(:screenplays, type: :uuid, on_delete: :delete_all),
+        null: false
+
       add :kind, :text, null: false
       add :created_origin, :text, null: false
       timestamps(type: :utc_datetime_usec)
@@ -75,7 +85,8 @@ defmodule FountWeb.Migrations.SemanticImportSI01 do
            )
 
     create constraint(:fount_web_semantic_entity_handles, :semantic_handle_kind,
-             check: "kind IN ('character','location','document_text','prop','organization','unknown')"
+             check:
+               "kind IN ('character','location','document_text','prop','organization','unknown')"
            )
 
     create table(:fount_web_semantic_assessment_entities, primary_key: false) do
@@ -85,7 +96,11 @@ defmodule FountWeb.Migrations.SemanticImportSI01 do
           null: false
 
       add :local_id, :text, primary_key: true, null: false
-      add :handle_id, references(:fount_web_semantic_entity_handles, type: :uuid, on_delete: :nothing), null: false
+
+      add :handle_id,
+          references(:fount_web_semantic_entity_handles, type: :uuid, on_delete: :nothing),
+          null: false
+
       add :kind, :text, null: false
       add :label, :text, null: false
       add :payload, :map, null: false, default: %{}
@@ -102,19 +117,29 @@ defmodule FountWeb.Migrations.SemanticImportSI01 do
            )
 
     create constraint(:fount_web_semantic_assessment_entities, :semantic_assessment_entity_kind,
-             check: "kind IN ('character','location','document_text','prop','organization','unknown')"
+             check:
+               "kind IN ('character','location','document_text','prop','organization','unknown')"
            )
 
     create table(:fount_web_semantic_review_events, primary_key: false) do
       add :id, :uuid, primary_key: true
       add :owner_id, :text, null: false
-      add :project_id, references(:fount_web_projects, type: :uuid, on_delete: :delete_all), null: false
-      add :screenplay_id, references(:screenplays, type: :uuid, on_delete: :delete_all), null: false
+
+      add :project_id, references(:fount_web_projects, type: :uuid, on_delete: :delete_all),
+        null: false
+
+      add :screenplay_id, references(:screenplays, type: :uuid, on_delete: :delete_all),
+        null: false
+
       add :revision_id, :uuid, null: false
+
       add :assessment_id,
           references(:fount_web_semantic_assessments, type: :uuid, on_delete: :delete_all),
           null: false
-      add :target_handle_id, references(:fount_web_semantic_entity_handles, type: :uuid, on_delete: :nothing)
+
+      add :target_handle_id,
+          references(:fount_web_semantic_entity_handles, type: :uuid, on_delete: :nothing)
+
       add :action, :text, null: false
       add :payload, :map, null: false, default: %{}
       add :expected_version, :bigint, null: false

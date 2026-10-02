@@ -131,7 +131,8 @@ defmodule FountWeb.Help do
     %{
       slug: "cast-locations",
       title: "Cast & locations",
-      summary: "Literal source facts stay separate from reviewed identities, places and screenplay truth.",
+      summary:
+        "Literal source facts stay separate from reviewed identities, places and screenplay truth.",
       body:
         "Cast and Locations are separate local destinations. A literal uppercase cue is only a source occurrence until a reviewer confirms what it represents; generic guards, printed words, young/adult variants and aliases are never merged by spelling alone. Historical literal-cue cast is labeled legacy/unreviewed while writer-authored Core identities remain confirmed. Locations preserve raw headings and keep place, subplace, time of day, date/era and relative time separate. Manual confirm/reject/type/merge/split/alias/hierarchy/time review is pinned to the exact owner, project, revision and source hash, has append-only conflict history and creates no Run. If the screenplay revision changes, the old review becomes historical rather than silently rebinding to the new source. Model assessment is intentionally Not configured until SI02, so SI01 source review makes no provider call and sends no screenplay material to a model. Promoting a reviewed identity creates proposed Core work only; deliberate typed acceptance is still required to change the current screenplay."
     },

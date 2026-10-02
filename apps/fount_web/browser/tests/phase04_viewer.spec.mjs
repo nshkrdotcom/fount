@@ -25,13 +25,14 @@ test('U01-U05 project viewer preserves escaped IR, dual dialogue, scene focus an
   await expect(page.locator(`#scene-${id}`)).toBeFocused();
   await expect(links.nth(1)).toHaveAttribute('aria-current', 'location');
   await page.reload();
+  await expect(page.locator('.phx-connected')).toBeVisible();
   await expect(links.nth(1)).toHaveAttribute('aria-current', 'location');
   await page.locator('#reader-scenes > summary').click();
   await links.first().focus();
   await page.keyboard.press('ArrowDown');
   await expect(links.nth(1)).toBeFocused();
   await page.goto(`/p/${key}/cast`);
-  await expect(page.getByText('MARA', {exact:true})).toBeVisible();
+  await expect(page.getByRole('heading', {name:'MARA', exact:true})).toBeVisible();
 });
 
 test('U04 narrow reduced-motion source reading remains legible and does not inject markup', async ({page}) => {

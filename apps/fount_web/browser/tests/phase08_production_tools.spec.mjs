@@ -80,6 +80,7 @@ test('S05 manual saved table reads retain timing, bookmark and human reaction wi
   await read.getByRole('button',{name:'Bookmark current passage'}).click();
   await expect(read).toHaveAttribute('data-version','2');
   await page.reload();
+  await expect(page.locator('.phx-connected')).toBeVisible();
   await page.locator('.saved-read-row').first().click();
   await expect(read).toHaveAttribute('data-bookmark-index','1');
   await page.getByLabel('Reader',{exact:true}).fill('reader-a');

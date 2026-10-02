@@ -73,6 +73,7 @@ test('UX03 reading text selection opens Notes with the exact current passage pre
   await login(page);
   const key = await importProject(page, 'ux03-selection-note', source);
   await page.goto(`/p/${key}`);
+  await expect(page.locator('.phx-connected')).toBeVisible();
   const passage = page.locator('.screenplay-element__text', {hasText: 'coffee maker'}).first();
   await passage.evaluate((element) => {
     const range = document.createRange();
@@ -275,7 +276,7 @@ test('UX03 exact Fountain, FDX and PDF exports preview/download from the named c
 });
 
 function sourceMutation(key, operation) {
-  hostFixture(`owner = System.fetch_env!("FOUNT_OWNER_ID"); key = System.fetch_env!("FOUNT_FIXTURE_KEY"); {:ok, model} = Fount.Persistence.load(Fount.Repo, key); node = Enum.find(model.ir.elements, &(&1.type == :action)); op = if System.fetch_env!("FOUNT_FIXTURE_OPERATION") == "delete", do: %{"kind" => "delete_elements", "value" => %{"ids" => [node.id]}}, else: Fount.Edit.replace_text(node.id, "MARA moves the coffee maker to the window."); {:ok, changed, _} = Fount.Screenplay.apply(model, [op], actor: "writer:" <> owner); {:ok, candidate} = Fount.Persistence.save_edit_candidate(Fount.Repo, key, changed, expected_revision: model.revision.id, operations: [op]); {:ok, stored} = Fount.Persistence.candidate(Fount.Repo, candidate.id); {:ok, principal} = Fount.Writing.Principal.new(:human, owner); {:ok, authority} = Fount.Writing.Authority.new(principal, model.id, [:approve]); {:ok, approval} = Fount.Writing.Approval.direct(stored, principal, Fount.ID.v4()); {:ok, _} = Fount.Persistence.accept_candidate(Fount.Repo, candidate.id, approval: approval, authority: authority)`, {FOUNT_FIXTURE_KEY:key, FOUNT_FIXTURE_OPERATION:operation});
+  hostFixture(`owner = System.fetch_env!("FOUNT_OWNER_ID"); key = System.fetch_env!("FOUNT_FIXTURE_KEY"); {:ok, model} = Fount.Persistence.load(Fount.Repo, key); node = Enum.find(model.ir.elements, &(&1.type == :action and String.contains?(&1.text || "", "coffee maker"))); op = if System.fetch_env!("FOUNT_FIXTURE_OPERATION") == "delete", do: %{"kind" => "delete_elements", "value" => %{"ids" => [node.id]}}, else: Fount.Edit.replace_text(node.id, "MARA moves the coffee maker to the window."); {:ok, changed, _} = Fount.Screenplay.apply(model, [op], actor: "writer:" <> owner); {:ok, candidate} = Fount.Persistence.save_edit_candidate(Fount.Repo, key, changed, expected_revision: model.revision.id, operations: [op]); {:ok, stored} = Fount.Persistence.candidate(Fount.Repo, candidate.id); {:ok, principal} = Fount.Writing.Principal.new(:human, owner); {:ok, authority} = Fount.Writing.Authority.new(principal, model.id, [:approve]); {:ok, approval} = Fount.Writing.Approval.direct(stored, principal, Fount.ID.v4()); {:ok, _} = Fount.Persistence.accept_candidate(Fount.Repo, candidate.id, approval: approval, authority: authority)`, {FOUNT_FIXTURE_KEY:key, FOUNT_FIXTURE_OPERATION:operation});
 }
 
 test('UX03 note categories, literal filtering, reviewer conflicts, changed/deleted targets and named remapping complete the reader loop', async ({browser}) => {
@@ -284,6 +285,7 @@ test('UX03 note categories, literal filtering, reviewer conflicts, changed/delet
   await login(first);
   const key = await importProject(first, 'ux03-note-loop', source);
   await first.goto(`/p/${key}/notes`);
+  await expect(first.locator('.phx-connected')).toBeVisible();
   const form = first.locator('form[phx-submit="save_note"]').first();
   const target = form.locator('select[name="note[target]"]');
   const value = await target.locator('option', {hasText:'coffee maker'}).first().getAttribute('value');
@@ -330,7 +332,7 @@ test('UX03 note categories, literal filtering, reviewer conflicts, changed/delet
   expect(reviewCount).toContain('REVIEWS=0');
   sourceMutation(key, 'change');
   await first.reload();
-  await expect(first.locator('.note-card')).toContainText(/changed/i);
+  await expect(first.locator('.note-card')).toContainText('The passage changed');
   sourceMutation(key, 'delete');
   await first.reload();
   await expect(first.locator('.note-card')).toContainText(/not available|deleted|no longer/i);

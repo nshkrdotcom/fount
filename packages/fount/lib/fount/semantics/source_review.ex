@@ -35,7 +35,9 @@ defmodule Fount.Semantics.SourceReview do
   end
 
   defp validate_payload("split", %{"local_ids" => ids} = payload) when is_list(ids) and ids != [] do
-    if Enum.all?(ids, &(is_binary(&1) and &1 != "")), do: closed(payload, ["local_ids"]), else: {:error, :invalid_split_occurrences}
+    if Enum.all?(ids, &(is_binary(&1) and &1 != "")),
+      do: closed(payload, ["local_ids"]),
+      else: {:error, :invalid_split_occurrences}
   end
 
   defp validate_payload("set_alias", %{"alias" => alias_text} = payload) when is_binary(alias_text) do

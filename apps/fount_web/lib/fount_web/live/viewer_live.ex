@@ -171,7 +171,10 @@ defmodule FountWeb.ViewerLive do
       ProductionTools.character_profiles(screenplay)
       |> Enum.map(&Map.put(&1, :filter_label, &1.display_name))
 
-    canonical_names = canonical |> Enum.map(fn character -> String.upcase(character.display_name || "") end) |> MapSet.new()
+    canonical_names =
+      canonical
+      |> Enum.map(fn character -> String.upcase(character.display_name || "") end)
+      |> MapSet.new()
 
     literal =
       screenplay
@@ -426,6 +429,9 @@ defmodule FountWeb.ViewerLive do
           </section>
           <details class="script-facts">
             <summary>Script facts</summary>
+            <p class="scope-note">
+              Literal source facts only. Reviewed interpretations and confirmed Core cast remain separate.
+            </p>
             <dl>
               <div>
                 <dt>Scenes</dt><dd>{@facts.scene_count}</dd>
@@ -461,14 +467,18 @@ defmodule FountWeb.ViewerLive do
             </dl>
             <details>
               <summary>Confirmed Core cast</summary>
-              <p :if={@facts.confirmed_cast == []}>No source cue has been promoted to a confirmed Core identity in this revision.</p>
+              <p :if={@facts.confirmed_cast == []}>
+                No source cue has been promoted to a confirmed Core identity in this revision.
+              </p>
               <ul>
                 <li :for={character <- @facts.confirmed_cast}>
                   <strong>{character.name}</strong>
                   · {character.scene_count} speaking scenes · {character.cue_count} linked cues
                 </li>
               </ul>
-              <p>Literal cue groups: {@facts.literal_cue_group_count}. Open Cast to review source identities without changing the screenplay.</p>
+              <p>
+                Literal cue groups: {@facts.literal_cue_group_count}. Open Cast to review source identities without changing the screenplay.
+              </p>
             </details>
             <p class="scope-note">
               Literal and canonical facts are labeled separately. No cue spelling is treated as a person by itself; no coverage score, page/minute guarantee or production estimate is inferred.

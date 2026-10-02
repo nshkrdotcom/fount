@@ -41,6 +41,7 @@ export function projectRunCount(key) {
 }
 
 export async function openWritingMenu(page, name) {
+  await expect(page.locator('.phx-connected')).toBeVisible();
   for (const menu of await page.locator('.writing-actions[open]').all()) {
     if ((await menu.locator(':scope > summary').innerText()) !== name) await menu.locator(':scope > summary').click();
   }

@@ -97,7 +97,8 @@ defmodule FountWeb.ProjectArtifactController do
     owner = conn.assigns.current_owner
 
     with {:ok, context} <- ProjectContext.load(owner, key),
-         %{assessment_id: assessment_id, source_sha256: source_sha256} = semantic <- context.semantic do
+         %{assessment_id: assessment_id, source_sha256: source_sha256} = semantic <-
+           context.semantic do
       json(conn, %{
         "kind" => "fount.semantic_source_review_v1",
         "project" => context.project["title"],
@@ -106,10 +107,15 @@ defmodule FountWeb.ProjectArtifactController do
           "revision_id" => semantic.revision_id,
           "assessment_id" => assessment_id,
           "source_sha256" => source_sha256,
+          "source_artifact_id" => semantic.assessment["source_artifact_id"],
+          "render_sha256" => semantic.assessment["render_sha256"],
           "source_name" => context.project["source_name"],
           "representation" => "manual_source_inventory"
         },
         "assessment" => %{
+          "id" => assessment_id,
+          "schema_version" => semantic.assessment["schema_version"],
+          "request_fingerprint" => semantic.assessment["request_fingerprint"],
           "origin" => semantic.assessment["origin"],
           "status" => semantic.assessment["status"],
           "parser_version" => semantic.assessment["parser_version"],

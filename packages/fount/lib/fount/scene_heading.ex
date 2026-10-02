@@ -133,8 +133,7 @@ defmodule Fount.SceneHeading do
       Regex.match?(~r/\bMORNING\b/u, upper) -> "MORNING"
       Regex.match?(~r/\bAFTERNOON\b/u, upper) -> "AFTERNOON"
       Regex.match?(~r/\bEVENING\b/u, upper) -> "EVENING"
-      Regex.match?(~r/\b(?:DAWN|SUNRISE|PREDAWN)\b/iu, upper) -> upper
-      Regex.match?(~r/\b(?:DUSK|SUNSET)\b/u, upper) -> upper
+      Regex.match?(~r/\b(?:DAWN|SUNRISE|PREDAWN|DUSK|SUNSET)\b/u, upper) -> upper
       Regex.match?(~r/^\d{1,2}(?::\d{2})?\s*(?:AM|PM)$/u, upper) -> upper
       true -> nil
     end

@@ -2,10 +2,11 @@ defmodule FountWeb.SemanticStore do
   @moduledoc "Source-bound semantic inventory and manual review persistence for SI01."
 
   alias Ecto.Adapters.SQL
-  alias Fount.Semantics.{SourceInventory, SourceReview}
   alias Fount.Screenplay.Model
+  alias Fount.Semantics.{SourceInventory, SourceReview}
 
   @manual_schema SourceInventory.schema_version()
+  @uuid_columns ~w(id project_id screenplay_id revision_id source_artifact_id run_id assessment_id handle_id target_handle_id)
 
   def ensure_inventory(repo, owner, project, screenplay)
       when is_binary(owner) and is_map(project) do
@@ -74,7 +75,7 @@ defmodule FountWeb.SemanticStore do
       """
       SELECT * FROM fount_web_semantic_review_events
       WHERE owner_id=$1 AND project_id=$2::text::uuid AND assessment_id=$3::text::uuid
-      ORDER BY inserted_at,id
+      ORDER BY new_version,inserted_at,id
       """,
       [owner, project_id, assessment_id]
     )
@@ -98,7 +99,8 @@ defmodule FountWeb.SemanticStore do
   end
 
   def review(repo, owner, project_id, assessment_id, attrs)
-      when is_binary(owner) and is_binary(project_id) and is_binary(assessment_id) and is_map(attrs) do
+      when is_binary(owner) and is_binary(project_id) and is_binary(assessment_id) and
+             is_map(attrs) do
     command = %{
       "action" => attrs["action"],
       "target_handle_id" => attrs["target_handle_id"],
@@ -122,6 +124,7 @@ defmodule FountWeb.SemanticStore do
 
   defp create_inventory(repo, owner, project, screenplay, binding, inventory, assessment_id) do
     result = Model.plain(inventory)
+
     request_fingerprint =
       Fount.ID.hash([
         owner,
@@ -139,7 +142,12 @@ defmodule FountWeb.SemanticStore do
     }
 
     transaction(repo, fn ->
-      SQL.query!(repo, "SELECT pg_advisory_xact_lock(hashtext($1))", ["semantic-inventory:" <> assessment_id], log: false)
+      SQL.query!(
+        repo,
+        "SELECT pg_advisory_xact_lock(hashtext($1))",
+        ["semantic-inventory:" <> assessment_id],
+        log: false
+      )
 
       case assessment(repo, owner, project["id"], assessment_id) do
         {:ok, row} ->
@@ -223,7 +231,15 @@ defmodule FountWeb.SemanticStore do
         ) VALUES($1::text::uuid,$2,$3::text::uuid,$4,$5,$6::jsonb,$7::jsonb,now(),now())
         ON CONFLICT(assessment_id,local_id) DO NOTHING
         """,
-        [assessment_id, item.local_id, handle_id, item.kind, label, Model.plain(item), Model.plain(item.evidence)],
+        [
+          assessment_id,
+          item.local_id,
+          handle_id,
+          item.kind,
+          label,
+          Model.plain(item),
+          Model.plain(item.evidence)
+        ],
         log: false
       )
     end)
@@ -240,24 +256,17 @@ defmodule FountWeb.SemanticStore do
 
       case existing_command(repo, owner, project_id, command_id) do
         {:ok, row} ->
-          if command_binding_matches?(row, assessment_id, command, expected, actor),
-            do: row,
-            else: repo.rollback(:command_id_conflict)
+          replay_review(repo, row, assessment_id, command, expected, actor)
 
         {:error, :not_found} ->
-          with {:ok, assessment} <- assessment(repo, owner, project_id, assessment_id),
-               :ok <- ensure_current_revision(repo, assessment),
-               :ok <- validate_review_references(repo, assessment, command),
-               {:ok, version} <- current_version(repo, owner, project_id, assessment_id) do
-            if expected == version do
-              payload = maybe_allocate_split_handle(repo, assessment, command)
-              insert_review_event(repo, assessment, command, payload, expected, version + 1, "applied", command_id, actor)
-            else
-              insert_review_event(repo, assessment, command, command["payload"], expected, version, "conflict", command_id, actor)
-            end
-          else
-            {:error, reason} -> repo.rollback(reason)
-          end
+          apply_review(
+            repo,
+            owner,
+            project_id,
+            assessment_id,
+            command,
+            {expected, command_id, actor}
+          )
 
         {:error, reason} ->
           repo.rollback(reason)
@@ -267,6 +276,46 @@ defmodule FountWeb.SemanticStore do
       {:ok, %{"outcome" => "conflict"} = row} -> {:error, {:stale_review, row}}
       {:ok, row} -> {:ok, row}
       {:error, _} = error -> error
+    end
+  end
+
+  defp replay_review(repo, row, assessment_id, command, expected, actor) do
+    if command_binding_matches?(row, assessment_id, command, expected, actor),
+      do: row,
+      else: repo.rollback(:command_id_conflict)
+  end
+
+  defp apply_review(
+         repo,
+         owner,
+         project_id,
+         assessment_id,
+         command,
+         {expected, command_id, actor}
+       ) do
+    with {:ok, assessment} <- assessment(repo, owner, project_id, assessment_id),
+         :ok <- ensure_current_revision(repo, assessment),
+         :ok <- validate_review_references(repo, assessment, command),
+         {:ok, version} <- current_version(repo, owner, project_id, assessment_id) do
+      {payload, next_version, outcome} =
+        if expected == version do
+          {maybe_allocate_split_handle(repo, assessment, command), version + 1, "applied"}
+        else
+          {command["payload"], version, "conflict"}
+        end
+
+      insert_review_event(
+        repo,
+        assessment,
+        command,
+        payload,
+        expected,
+        next_version,
+        outcome,
+        {command_id, actor}
+      )
+    else
+      {:error, reason} -> repo.rollback(reason)
     end
   end
 
@@ -292,7 +341,8 @@ defmodule FountWeb.SemanticStore do
     else
       with :ok <- ensure_handle(repo, assessment, target),
            {:ok, projection} <- review_projection(repo, assessment),
-           %{} = entity <- Enum.find(projection, &(&1.handle_id == target)) || {:error, :invalid_review_target},
+           %{} = entity <-
+             Enum.find(projection, &(&1.handle_id == target)) || {:error, :invalid_review_target},
            :ok <- validate_projected_action(action, entity, payload, projection) do
         :ok
       else
@@ -329,13 +379,23 @@ defmodule FountWeb.SemanticStore do
       else: {:error, :invalid_split_occurrences}
   end
 
-  defp validate_projected_action("resolve_occurrence", entity, %{"local_id" => local_id}, _projection) do
+  defp validate_projected_action(
+         "resolve_occurrence",
+         entity,
+         %{"local_id" => local_id},
+         _projection
+       ) do
     if Enum.any?(entity.occurrences, &(&1.local_id == local_id)),
       do: :ok,
       else: {:error, :invalid_occurrence}
   end
 
-  defp validate_projected_action("set_location_parent", %{kind: "location"} = entity, %{"parent_handle_id" => id}, projection) do
+  defp validate_projected_action(
+         "set_location_parent",
+         %{kind: "location"} = entity,
+         %{"parent_handle_id" => id},
+         projection
+       ) do
     case Enum.find(projection, &(&1.handle_id == id)) do
       %{kind: "location"} when id != entity.handle_id ->
         if location_parent_cycle?(projection, entity.handle_id, id),
@@ -347,9 +407,19 @@ defmodule FountWeb.SemanticStore do
     end
   end
 
+  defp validate_projected_action("set_location_parent", _entity, _payload, _projection),
+    do: {:error, :invalid_location_parent}
+
+  defp validate_projected_action("set_time", %{kind: "location"}, _payload, _projection), do: :ok
+
+  defp validate_projected_action("set_time", _entity, _payload, _projection),
+    do: {:error, :invalid_time_target}
+
+  defp validate_projected_action(_action, _entity, _payload, _projection), do: :ok
+
   defp location_parent_cycle?(projection, child_id, candidate_parent_id) do
     by_id = Map.new(projection, &{&1.handle_id, &1})
-    parent_chain_reaches?(by_id, candidate_parent_id, child_id, MapSet.new())
+    parent_chain_reaches?(by_id, candidate_parent_id, child_id, %{})
   end
 
   defp parent_chain_reaches?(_by_id, nil, _wanted, _seen), do: false
@@ -357,22 +427,27 @@ defmodule FountWeb.SemanticStore do
 
   defp parent_chain_reaches?(by_id, current, wanted, seen) do
     cond do
-      MapSet.member?(seen, current) -> true
-      is_nil(by_id[current]) -> false
-      true -> parent_chain_reaches?(by_id, by_id[current].parent_handle_id, wanted, MapSet.put(seen, current))
+      Map.has_key?(seen, current) ->
+        true
+
+      is_nil(by_id[current]) ->
+        false
+
+      true ->
+        parent_chain_reaches?(
+          by_id,
+          by_id[current].parent_handle_id,
+          wanted,
+          Map.put(seen, current, true)
+        )
     end
   end
 
-  defp validate_projected_action("set_location_parent", _entity, _payload, _projection),
-    do: {:error, :invalid_location_parent}
-
-  defp validate_projected_action("set_time", %{kind: "location"}, _payload, _projection), do: :ok
-  defp validate_projected_action("set_time", _entity, _payload, _projection), do: {:error, :invalid_time_target}
-  defp validate_projected_action(_action, _entity, _payload, _projection), do: :ok
-
   defp review_projection(repo, assessment) do
     entities = entities(repo, assessment["id"])
-    history = review_history(repo, assessment["owner_id"], assessment["project_id"], assessment["id"])
+
+    history =
+      review_history(repo, assessment["owner_id"], assessment["project_id"], assessment["id"])
 
     cond do
       not is_list(entities) -> entities
@@ -399,14 +474,24 @@ defmodule FountWeb.SemanticStore do
                )
              )
            """,
-           [handle_id, assessment["owner_id"], assessment["project_id"], assessment["screenplay_id"], assessment["id"]]
+           [
+             handle_id,
+             assessment["owner_id"],
+             assessment["project_id"],
+             assessment["screenplay_id"],
+             assessment["id"]
+           ]
          ) do
       [_] -> :ok
       _ -> {:error, :invalid_review_target}
     end
   end
 
-  defp maybe_allocate_split_handle(repo, assessment, %{"action" => "split", "target_handle_id" => target, "payload" => payload}) do
+  defp maybe_allocate_split_handle(repo, assessment, %{
+         "action" => "split",
+         "target_handle_id" => target,
+         "payload" => payload
+       }) do
     new_handle_id = Fount.ID.v4()
 
     kind =
@@ -425,7 +510,13 @@ defmodule FountWeb.SemanticStore do
       INSERT INTO fount_web_semantic_entity_handles(id,owner_id,project_id,screenplay_id,kind,created_origin,inserted_at,updated_at)
       VALUES($1::text::uuid,$2,$3::text::uuid,$4::text::uuid,$5,'manual',now(),now())
       """,
-      [new_handle_id, assessment["owner_id"], assessment["project_id"], assessment["screenplay_id"], kind],
+      [
+        new_handle_id,
+        assessment["owner_id"],
+        assessment["project_id"],
+        assessment["screenplay_id"],
+        kind
+      ],
       log: false
     )
 
@@ -434,7 +525,16 @@ defmodule FountWeb.SemanticStore do
 
   defp maybe_allocate_split_handle(_repo, _assessment, %{"payload" => payload}), do: payload
 
-  defp insert_review_event(repo, assessment, command, payload, expected, new_version, outcome, command_id, actor) do
+  defp insert_review_event(
+         repo,
+         assessment,
+         command,
+         payload,
+         expected,
+         new_version,
+         outcome,
+         {command_id, actor}
+       ) do
     SQL.query!(
       repo,
       """
@@ -468,7 +568,6 @@ defmodule FountWeb.SemanticStore do
     |> one()
   end
 
-
   defp command_binding_matches?(row, assessment_id, command, expected, actor) do
     stored_payload =
       case command["action"] do
@@ -476,12 +575,15 @@ defmodule FountWeb.SemanticStore do
         _ -> row["payload"] || %{}
       end
 
-    row["assessment_id"] == assessment_id and
-      row["action"] == command["action"] and
-      row["target_handle_id"] == command["target_handle_id"] and
-      stored_payload == command["payload"] and
-      row["expected_version"] == expected and
-      row["actor"] == actor
+    binding = %{
+      "assessment_id" => assessment_id,
+      "action" => command["action"],
+      "target_handle_id" => command["target_handle_id"],
+      "expected_version" => expected,
+      "actor" => actor
+    }
+
+    Map.take(row, Map.keys(binding)) == binding and stored_payload == command["payload"]
   end
 
   defp existing_command(repo, owner, project_id, command_id) do
@@ -499,7 +601,14 @@ defmodule FountWeb.SemanticStore do
   defp assessment_id(project, screenplay, source_sha256) do
     Fount.ID.v5(
       screenplay.id,
-      ["semantic-source-inventory:", project["id"], ":", screenplay.revision.id, ":", source_sha256]
+      [
+        "semantic-source-inventory:",
+        project["id"],
+        ":",
+        screenplay.revision.id,
+        ":",
+        source_sha256
+      ]
     )
   end
 
@@ -531,11 +640,27 @@ defmodule FountWeb.SemanticStore do
   defp one(result), do: result |> rows() |> List.first()
 
   defp rows(%{columns: columns, rows: rows}) do
-    Enum.map(rows, fn values -> columns |> Enum.zip(values) |> Map.new() end)
+    Enum.map(rows, fn values ->
+      columns
+      |> Enum.zip(values)
+      |> Map.new(fn {column, value} -> {column, normalize_column(column, value)} end)
+    end)
   end
 
-  defp storage_reason(%Postgrex.Error{postgres: %{code: :undefined_table}}), do: :semantic_schema_missing
-  defp storage_reason(%Postgrex.Error{postgres: %{code: :foreign_key_violation}}), do: :source_binding_conflict
+  defp normalize_column(column, value)
+       when column in @uuid_columns and is_binary(value) and byte_size(value) == 16 do
+    {:ok, uuid} = Ecto.UUID.load(value)
+    uuid
+  end
+
+  defp normalize_column(_column, value), do: value
+
+  defp storage_reason(%Postgrex.Error{postgres: %{code: :undefined_table}}),
+    do: :semantic_schema_missing
+
+  defp storage_reason(%Postgrex.Error{postgres: %{code: :foreign_key_violation}}),
+    do: :source_binding_conflict
+
   defp storage_reason(%Postgrex.Error{postgres: %{code: :unique_violation}}), do: :conflict
   defp storage_reason(_), do: :storage_error
 end

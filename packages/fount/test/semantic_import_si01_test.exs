@@ -1,8 +1,8 @@
 defmodule Fount.SemanticImportSI01Test do
   use ExUnit.Case, async: true
 
-  alias Fount.Semantics.{SourceInventory, SourceReview}
   alias Fount.Screenplay
+  alias Fount.Semantics.{SourceInventory, SourceReview}
 
   test "forced action wins before automatic uppercase character detection and source roundtrips" do
     source =
@@ -12,7 +12,11 @@ defmodule Fount.SemanticImportSI01Test do
 
     forced = Enum.filter(Fount.elements(document, :action), &Map.get(&1.attrs, :forced?, false))
     assert Enum.map(forced, & &1.text) == ["AUTHORIZED PERSONNEL ONLY", "SECOND WARNING", "Mixed Case Notice"]
-    refute Enum.any?(Fount.elements(document, :character), &(&1.text in ["AUTHORIZED PERSONNEL ONLY", "SECOND WARNING", "FALSE CUE"]))
+
+    refute Enum.any?(
+             Fount.elements(document, :character),
+             &(&1.text in ["AUTHORIZED PERSONNEL ONLY", "SECOND WARNING", "FALSE CUE"])
+           )
 
     characters = Fount.elements(document, :character)
     assert Enum.map(characters, & &1.text) == ["Mara", "Renée"]
@@ -59,7 +63,6 @@ defmodule Fount.SemanticImportSI01Test do
     assert Enum.all?(inventory.character_cues, &is_binary(&1.dialogue_block_id))
     assert Enum.map(inventory.character_cues, & &1.literal) == ["GUARD", "GUARD"]
   end
-
 
   test "literal inventory keeps printed signs, prose people, variants and generic guards unresolved" do
     source = """
@@ -118,9 +121,33 @@ defmodule Fount.SemanticImportSI01Test do
     other = Fount.ID.v4()
 
     assert :ok == SourceReview.validate_command(%{"action" => "confirm", "target_handle_id" => id, "payload" => %{}})
-    assert :ok == SourceReview.validate_command(%{"action" => "merge", "target_handle_id" => id, "payload" => %{"into_handle_id" => other}})
-    assert :ok == SourceReview.validate_command(%{"action" => "resolve_occurrence", "target_handle_id" => id, "payload" => %{"local_id" => "character:x", "role" => "speaker"}})
-    assert {:error, :unknown_review_payload_field} = SourceReview.validate_command(%{"action" => "confirm", "target_handle_id" => id, "payload" => %{"surprise" => true}})
-    assert {:error, :invalid_entity_kind} = SourceReview.validate_command(%{"action" => "change_type", "target_handle_id" => id, "payload" => %{"kind" => "person_because_uppercase"}})
+
+    assert :ok ==
+             SourceReview.validate_command(%{
+               "action" => "merge",
+               "target_handle_id" => id,
+               "payload" => %{"into_handle_id" => other}
+             })
+
+    assert :ok ==
+             SourceReview.validate_command(%{
+               "action" => "resolve_occurrence",
+               "target_handle_id" => id,
+               "payload" => %{"local_id" => "character:x", "role" => "speaker"}
+             })
+
+    assert {:error, :unknown_review_payload_field} =
+             SourceReview.validate_command(%{
+               "action" => "confirm",
+               "target_handle_id" => id,
+               "payload" => %{"surprise" => true}
+             })
+
+    assert {:error, :invalid_entity_kind} =
+             SourceReview.validate_command(%{
+               "action" => "change_type",
+               "target_handle_id" => id,
+               "payload" => %{"kind" => "person_because_uppercase"}
+             })
   end
 end

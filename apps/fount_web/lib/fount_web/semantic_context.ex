@@ -8,14 +8,20 @@ defmodule FountWeb.SemanticContext do
   def load(repo, owner, project, %Screenplay{} = screenplay)
       when is_binary(owner) and is_map(project) do
     with {:ok, stored} <- Store.project(repo, owner, project["id"]),
-         true <- stored["screenplay_id"] == screenplay.id or {:error, :project_screenplay_mismatch},
-         {:ok, persisted} <- Persistence.load_revision(repo, screenplay.id, screenplay.revision.id),
-         true <- persisted.revision.content_hash == screenplay.revision.content_hash or {:error, :source_content_mismatch},
+         true <-
+           stored["screenplay_id"] == screenplay.id or {:error, :project_screenplay_mismatch},
+         {:ok, persisted} <-
+           Persistence.load_revision(repo, screenplay.id, screenplay.revision.id),
+         true <-
+           persisted.revision.content_hash == screenplay.revision.content_hash or
+             {:error, :source_content_mismatch},
          {:ok, head} <- Persistence.load(repo, stored["key"]),
          {:ok, assessment} <- SemanticStore.ensure_inventory(repo, owner, stored, persisted),
          entities when is_list(entities) <- SemanticStore.entities(repo, assessment["id"]),
-         history when is_list(history) <- SemanticStore.review_history(repo, owner, stored["id"], assessment["id"]),
-         {:ok, version} <- SemanticStore.current_version(repo, owner, stored["id"], assessment["id"]) do
+         history when is_list(history) <-
+           SemanticStore.review_history(repo, owner, stored["id"], assessment["id"]),
+         {:ok, version} <-
+           SemanticStore.current_version(repo, owner, stored["id"], assessment["id"]) do
       projection = project_entities(entities, history)
       inventory = assessment["result"] || %{}
 
@@ -39,9 +45,7 @@ defmodule FountWeb.SemanticContext do
            )
        }}
     else
-      false -> {:error, :semantic_source_mismatch}
       {:error, _} = error -> error
-      other -> {:error, {:semantic_load_failed, other}}
     end
   end
 
@@ -68,7 +72,14 @@ defmodule FountWeb.SemanticContext do
 
     active = active_review_events(history)
 
-    projected = Enum.reduce(active, base, &apply_event/2)
+    projected =
+      Enum.reduce(active, base, fn event, state ->
+        event
+        |> apply_event(state)
+        |> consolidate_merges()
+        |> Map.new(&{&1.handle_id, &1})
+      end)
+
     consolidate_merges(projected)
   end
 
@@ -101,89 +112,140 @@ defmodule FountWeb.SemanticContext do
   defp apply_event(%{"action" => "reject", "target_handle_id" => id}, state),
     do: update_entity(state, id, &Map.put(&1, :review_state, "rejected"))
 
-  defp apply_event(%{"action" => "change_type", "target_handle_id" => id, "payload" => %{"kind" => kind}}, state),
-    do: update_entity(state, id, &Map.put(&1, :kind, kind))
+  defp apply_event(
+         %{"action" => "change_type", "target_handle_id" => id, "payload" => %{"kind" => kind}},
+         state
+       ),
+       do: update_entity(state, id, &Map.put(&1, :kind, kind))
 
-  defp apply_event(%{"action" => "merge", "target_handle_id" => id, "payload" => %{"into_handle_id" => into}}, state),
-    do: update_entity(state, id, &Map.put(&1, :merged_into, into))
+  defp apply_event(
+         %{
+           "action" => "merge",
+           "target_handle_id" => id,
+           "payload" => %{"into_handle_id" => into}
+         },
+         state
+       ),
+       do: update_entity(state, id, &Map.put(&1, :merged_into, into))
 
-  defp apply_event(%{"action" => "set_alias", "target_handle_id" => id, "payload" => %{"alias" => value}}, state) do
+  defp apply_event(
+         %{"action" => "set_alias", "target_handle_id" => id, "payload" => %{"alias" => value}},
+         state
+       ) do
     update_entity(state, id, fn entity ->
       aliases = [String.trim(value) | entity.aliases] |> Enum.reject(&(&1 == "")) |> Enum.uniq()
       %{entity | aliases: aliases}
     end)
   end
 
-  defp apply_event(%{"action" => "set_location_parent", "target_handle_id" => id, "payload" => %{"parent_handle_id" => parent}}, state),
-    do: update_entity(state, id, &Map.put(&1, :parent_handle_id, parent))
+  defp apply_event(
+         %{
+           "action" => "set_location_parent",
+           "target_handle_id" => id,
+           "payload" => %{"parent_handle_id" => parent}
+         },
+         state
+       ),
+       do: update_entity(state, id, &Map.put(&1, :parent_handle_id, parent))
 
-  defp apply_event(%{"action" => "set_time", "target_handle_id" => id, "payload" => %{"value" => value}}, state),
-    do: update_entity(state, id, &Map.put(&1, :time, String.trim(value)))
+  defp apply_event(
+         %{"action" => "set_time", "target_handle_id" => id, "payload" => %{"value" => value}},
+         state
+       ),
+       do: update_entity(state, id, &Map.put(&1, :time, String.trim(value)))
 
-  defp apply_event(%{"action" => "resolve_occurrence", "target_handle_id" => id, "payload" => %{"local_id" => local_id, "role" => role}}, state) do
+  defp apply_event(
+         %{
+           "action" => "resolve_occurrence",
+           "target_handle_id" => id,
+           "payload" => %{"local_id" => local_id, "role" => role}
+         },
+         state
+       ) do
     update_entity(state, id, fn entity ->
-      occurrences = Enum.map(entity.occurrences, fn occurrence -> if occurrence.local_id == local_id, do: %{occurrence | role: role}, else: occurrence end)
+      occurrences = Enum.map(entity.occurrences, &set_occurrence_role(&1, local_id, role))
+
       %{entity | occurrences: occurrences}
     end)
   end
 
-  defp apply_event(%{"action" => "split", "target_handle_id" => id, "payload" => %{"local_ids" => local_ids, "new_handle_id" => new_id}}, state) do
+  defp apply_event(
+         %{
+           "action" => "split",
+           "target_handle_id" => id,
+           "payload" => %{"local_ids" => local_ids, "new_handle_id" => new_id}
+         },
+         state
+       ) do
     case Map.get(state, id) do
-      nil -> state
+      nil ->
+        state
+
       entity ->
         {moved, kept} = Enum.split_with(entity.occurrences, &(&1.local_id in local_ids))
 
-        if moved == [] do
-          state
-        else
-          new_entity = %{
-            entity
-            | handle_id: new_id,
-              label: List.first(moved).literal || entity.label,
-              occurrences: moved,
-              merged_into: nil,
-              review_state: "unreviewed",
-              aliases: []
-          }
-
-          state
-          |> Map.put(id, %{entity | occurrences: kept})
-          |> Map.put(new_id, new_entity)
-        end
+        split_entity(state, entity, id, new_id, moved, kept)
     end
   end
 
   defp apply_event(_event, state), do: state
 
+  defp set_occurrence_role(%{local_id: id} = occurrence, id, role), do: %{occurrence | role: role}
+  defp set_occurrence_role(occurrence, _id, _role), do: occurrence
+
+  defp split_entity(state, _entity, _id, _new_id, [], _kept), do: state
+
+  defp split_entity(state, entity, id, new_id, moved, kept) do
+    new_entity = %{
+      entity
+      | handle_id: new_id,
+        label: List.first(moved).literal || entity.label,
+        occurrences: moved,
+        merged_into: nil,
+        review_state: "unreviewed",
+        aliases: []
+    }
+
+    state |> Map.put(id, %{entity | occurrences: kept}) |> Map.put(new_id, new_entity)
+  end
+
   defp consolidate_merges(state) do
     state
     |> Enum.reduce(state, fn {id, entity}, acc ->
       case merge_root(state, entity.merged_into, MapSet.new([id])) do
-        nil -> acc
-        root when root == id -> acc
+        nil ->
+          acc
+
+        root when root == id ->
+          acc
+
         root ->
-          case {Map.get(acc, id), Map.get(acc, root)} do
-            {%{} = child, %{} = parent} ->
-              parent = %{
-                parent
-                | occurrences: parent.occurrences ++ child.occurrences,
-                  aliases:
-                    (parent.aliases ++ child.aliases ++ [child.label])
-                    |> Enum.reject(&(&1 in [nil, "", parent.label]))
-                    |> Enum.uniq(),
-                  review_state: merged_review_state(parent.review_state, child.review_state)
-              }
-
-              acc |> Map.put(root, parent) |> Map.delete(id)
-
-            _ ->
-              acc
-          end
+          merge_entities(acc, id, root)
       end
     end)
     |> Map.values()
     |> Enum.filter(&(&1.occurrences != []))
     |> Enum.sort_by(&{&1.kind, String.downcase(&1.label || ""), &1.handle_id})
+  end
+
+  defp merge_entities(state, id, root) do
+    case {Map.get(state, id), Map.get(state, root)} do
+      {%{} = child, %{} = parent} ->
+        parent = %{
+          parent
+          | occurrences: parent.occurrences ++ child.occurrences,
+            aliases:
+              (parent.aliases ++ child.aliases ++ [child.label])
+              |> Enum.reject(&(&1 in [nil, "", parent.label]))
+              |> Enum.uniq(),
+            review_state: merged_review_state(parent.review_state, child.review_state)
+        }
+
+        state |> Map.put(root, parent) |> Map.delete(id)
+
+      _ ->
+        state
+    end
   end
 
   defp merge_root(_state, nil, _seen), do: nil
@@ -228,31 +290,15 @@ defmodule FountWeb.SemanticContext do
   end
 
   def character_profiles(entities, screenplay, inventory) do
+    confirmed_ids =
+      canonical_cast(inventory)
+      |> Enum.filter(&(&1["review_state"] == "confirmed"))
+      |> Enum.map(& &1["core_character_id"])
+
     semantic =
       entities
       |> Enum.filter(&(&1.kind == "character" and &1.review_state != "rejected"))
-      |> Enum.map(fn entity ->
-        dialogue_blocks = entity.occurrences |> Enum.map(& &1.dialogue_block_id) |> Enum.reject(&is_nil/1) |> Enum.uniq()
-        scene_ordinals = entity.occurrences |> Enum.map(& &1.scene_ordinal) |> Enum.reject(&is_nil/1) |> Enum.uniq() |> Enum.sort()
-        core_character_id = matching_core_character(screenplay, entity)
-
-        %{
-          id: entity.handle_id,
-          semantic_handle_id: entity.handle_id,
-          core_character_id: core_character_id,
-          display_name: entity.label,
-          aliases: entity.aliases,
-          review_state: if(core_character_id, do: "confirmed", else: entity.review_state),
-          representation: if(core_character_id, do: "canonical_linked_source", else: "source_interpretation"),
-          speaking_occurrences: Enum.count(entity.occurrences, &(&1.role == "speaker")),
-          presence_occurrences: Enum.count(entity.occurrences, &(&1.role == "physical_presence")),
-          mention_occurrences: Enum.count(entity.occurrences, &(&1.role == "mentioned")),
-          appearance_ordinals: scene_ordinals,
-          appearance_count: length(scene_ordinals),
-          dialogue_block_count: length(dialogue_blocks),
-          occurrences: entity.occurrences
-        }
-      end)
+      |> Enum.map(&character_profile(&1, screenplay, confirmed_ids))
 
     legacy =
       canonical_cast(inventory)
@@ -275,11 +321,48 @@ defmodule FountWeb.SemanticContext do
         }
       end)
 
-    linked_core_ids = semantic |> Enum.map(& &1.core_character_id) |> Enum.reject(&is_nil/1) |> MapSet.new()
+    linked_core_ids =
+      semantic |> Enum.map(& &1.core_character_id) |> Enum.reject(&is_nil/1) |> MapSet.new()
+
     legacy = Enum.reject(legacy, &MapSet.member?(linked_core_ids, &1.core_character_id))
 
     (semantic ++ legacy)
     |> Enum.sort_by(&{String.downcase(&1.display_name || ""), &1.id})
+  end
+
+  defp character_profile(entity, screenplay, confirmed_ids) do
+    dialogue_blocks =
+      entity.occurrences
+      |> Enum.map(& &1.dialogue_block_id)
+      |> Enum.reject(&is_nil/1)
+      |> Enum.uniq()
+
+    scene_ordinals =
+      entity.occurrences
+      |> Enum.map(& &1.scene_ordinal)
+      |> Enum.reject(&is_nil/1)
+      |> Enum.uniq()
+      |> Enum.sort()
+
+    core_character_id = matching_core_character(screenplay, entity, confirmed_ids)
+
+    %{
+      id: entity.handle_id,
+      semantic_handle_id: entity.handle_id,
+      core_character_id: core_character_id,
+      display_name: entity.label,
+      aliases: entity.aliases,
+      review_state: if(core_character_id, do: "confirmed", else: entity.review_state),
+      representation:
+        if(core_character_id, do: "canonical_linked_source", else: "source_interpretation"),
+      speaking_occurrences: Enum.count(entity.occurrences, &(&1.role == "speaker")),
+      presence_occurrences: Enum.count(entity.occurrences, &(&1.role == "physical_presence")),
+      mention_occurrences: Enum.count(entity.occurrences, &(&1.role == "mentioned")),
+      appearance_ordinals: scene_ordinals,
+      appearance_count: length(scene_ordinals),
+      dialogue_block_count: length(dialogue_blocks),
+      occurrences: entity.occurrences
+    }
   end
 
   def location_profiles(entities) do
@@ -287,20 +370,7 @@ defmodule FountWeb.SemanticContext do
     |> Enum.filter(&(&1.kind == "location" and &1.review_state != "rejected"))
     |> Enum.map(fn entity ->
       entries =
-        Enum.map(entity.occurrences, fn occurrence ->
-          parts = occurrence.parts || %{}
-          %{
-            local_id: occurrence.local_id,
-            element_id: occurrence.element_id,
-            ordinal: occurrence.scene_ordinal,
-            heading: occurrence.literal,
-            parsed_context: value(parts, "context") || "Unknown / unparsed",
-            parsed_time: entity.time || value(parts, "time") || value(parts, "relative_time") || "Unknown / unparsed",
-            date_or_era: value(parts, "date_or_era"),
-            subplace: value(parts, "subplace"),
-            unknown_modifiers: value(parts, "unknown_modifiers") || []
-          }
-        end)
+        Enum.map(entity.occurrences, &location_entry(&1, entity.time))
 
       %{
         id: entity.handle_id,
@@ -315,6 +385,27 @@ defmodule FountWeb.SemanticContext do
     |> Enum.sort_by(&{String.downcase(&1.location || ""), &1.id})
   end
 
+  defp location_entry(occurrence, reviewed_time) do
+    parts = occurrence.parts || %{}
+
+    %{
+      local_id: occurrence.local_id,
+      element_id: occurrence.element_id,
+      ordinal: occurrence.scene_ordinal,
+      heading: occurrence.literal,
+      parsed_context: value(parts, "context") || "Unknown / unparsed",
+      parsed_time:
+        reviewed_time || value(parts, "time") || value(parts, "relative_time") ||
+          "Unknown / unparsed",
+      place: value(parts, "parent_place") || "Unknown / unparsed",
+      time_of_day: value(parts, "time_of_day") || "Unknown / unparsed",
+      relative_time: value(parts, "relative_time"),
+      date_or_era: value(parts, "date_or_era"),
+      subplace: value(parts, "subplace"),
+      unknown_modifiers: value(parts, "unknown_modifiers") || []
+    }
+  end
+
   def character_dialogue(%Screenplay{} = screenplay, profile) when is_map(profile) do
     blocks =
       profile.occurrences
@@ -325,7 +416,9 @@ defmodule FountWeb.SemanticContext do
       |> Enum.reject(&is_nil/1)
 
     rows = Enum.map(blocks, &dialogue_row(screenplay, &1))
-    {:ok, %{character: profile, rows: rows, total: length(rows), representation: "literal_source"}}
+
+    {:ok,
+     %{character: profile, rows: rows, total: length(rows), representation: "literal_source"}}
   end
 
   def character_dialogue(%Screenplay{} = screenplay, character_id) when is_binary(character_id) do
@@ -336,36 +429,49 @@ defmodule FountWeb.SemanticContext do
   end
 
   @doc "Builds a saved Core candidate from a reviewed semantic character without accepting it."
-  def save_character_promotion_candidate(repo, owner, project_id, base_revision_id, semantic, handle_id)
+  def save_character_promotion_candidate(
+        repo,
+        owner,
+        project_id,
+        base_revision_id,
+        semantic,
+        handle_id
+      )
       when is_map(semantic) and is_binary(handle_id) do
     with {:ok, project} <- Store.project(repo, owner, project_id),
          true <- semantic.revision_id == base_revision_id or {:error, :semantic_revision_stale},
-         profile when is_map(profile) <- Enum.find(semantic.characters, &(&1.semantic_handle_id == handle_id)),
+         profile when is_map(profile) <-
+           Enum.find(semantic.characters, &(&1.semantic_handle_id == handle_id)),
          true <- profile.review_state == "confirmed" or {:error, :semantic_identity_unconfirmed},
-         true <- is_nil(profile.core_character_id) or {:error, :semantic_identity_already_canonical},
-         {:ok, base} <- Persistence.load_revision(repo, project["screenplay_id"], base_revision_id),
+         true <-
+           is_nil(profile.core_character_id) or {:error, :semantic_identity_already_canonical},
+         {:ok, base} <-
+           Persistence.load_revision(repo, project["screenplay_id"], base_revision_id),
          operations <- promotion_operations(profile),
-         {:ok, candidate_screenplay, _changes} <- Screenplay.apply(base, operations, actor: "writer:#{owner}"),
-         {:ok, candidate} <- Persistence.save_edit_candidate(repo, project["key"], candidate_screenplay,
-           expected_revision: base.revision.id,
-           operations: operations,
-           label: "Reviewed source identity promotion"
-         ),
-         {:ok, pointer} <- ProductionStore.register_candidate(repo, %{
-           owner_id: owner,
-           project_id: project_id,
-           candidate_id: candidate.id,
-           screenplay_id: base.id,
-           base_revision_id: base.revision.id,
-           kind: "cast",
-           resource_id: handle_id,
-           metadata: %{
-             "action" => "semantic_identity_promotion",
-             "semantic_handle_id" => handle_id,
-             "display_name" => profile.display_name,
-             "source_revision_id" => base_revision_id
-           }
-         }) do
+         {:ok, candidate_screenplay, _changes} <-
+           Screenplay.apply(base, operations, actor: "writer:#{owner}"),
+         {:ok, candidate} <-
+           Persistence.save_edit_candidate(repo, project["key"], candidate_screenplay,
+             expected_revision: base.revision.id,
+             operations: operations,
+             label: "Reviewed source identity promotion"
+           ),
+         {:ok, pointer} <-
+           ProductionStore.register_candidate(repo, %{
+             owner_id: owner,
+             project_id: project_id,
+             candidate_id: candidate.id,
+             screenplay_id: base.id,
+             base_revision_id: base.revision.id,
+             kind: "cast",
+             resource_id: handle_id,
+             metadata: %{
+               "action" => "semantic_identity_promotion",
+               "semantic_handle_id" => handle_id,
+               "display_name" => profile.display_name,
+               "source_revision_id" => base_revision_id
+             }
+           }) do
       {:ok, %{candidate: candidate, pointer: pointer, operations: operations}}
     else
       nil -> {:error, :semantic_identity_not_found}
@@ -404,11 +510,13 @@ defmodule FountWeb.SemanticContext do
     [put | links]
   end
 
-  defp matching_core_character(screenplay, entity) do
-    cue_ids = entity.occurrences |> Enum.map(& &1.element_id) |> Enum.reject(&is_nil/1) |> MapSet.new()
+  defp matching_core_character(screenplay, entity, confirmed_ids) do
+    cue_ids =
+      entity.occurrences |> Enum.map(& &1.element_id) |> Enum.reject(&is_nil/1) |> MapSet.new()
 
     screenplay.cast
     |> Map.values()
+    |> Enum.filter(&(&1.id in confirmed_ids))
     |> Enum.find_value(fn character ->
       linked =
         Query.character_mentions(screenplay, character.id)
@@ -420,20 +528,20 @@ defmodule FountWeb.SemanticContext do
     end)
   end
 
-
-  defp canonical_cast(inventory), do: inventory["canonical_cast"] || inventory[:canonical_cast] || []
+  defp canonical_cast(inventory),
+    do: inventory["canonical_cast"] || inventory[:canonical_cast] || []
 
   defp dialogue_row(screenplay, block) do
-    scene = if block.scene_id, do: Query.scene(screenplay, block.scene_id)
+    scene = Query.scene_for(screenplay, block.cue_id)
     heading = if scene, do: Query.node(screenplay, scene.heading_id)
     cue = Query.node(screenplay, block.cue_id)
 
     %{
       block_id: block.id,
       cue_id: block.cue_id,
-      scene_id: block.scene_id,
+      scene_id: scene && scene.id,
       scene_heading: heading && heading.text,
-      character: cue && cue.text,
+      character: cue && (cue.raw_text || cue.text),
       lines:
         block.body_ids
         |> Enum.map(&Query.node(screenplay, &1))
@@ -444,9 +552,17 @@ defmodule FountWeb.SemanticContext do
 
   defp value(map, key) when is_map(map) do
     case Map.fetch(map, key) do
-      {:ok, value} -> value
-      :error -> Enum.find_value(map, fn {candidate, value} -> if to_string(candidate) == key, do: value end)
+      {:ok, value} ->
+        value
+
+      :error ->
+        Enum.find_value(map, &matching_value(&1, key))
     end
   end
+
   defp value(_, _), do: nil
+
+  defp matching_value({candidate, value}, key) do
+    if to_string(candidate) == key, do: value
+  end
 end

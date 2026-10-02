@@ -121,7 +121,7 @@ test('UX02 character reading and Try another line bind real source without accep
   await page.goto(`/p/${key}/cast`);
   await expect(page.locator('.phx-connected')).toBeVisible();
 
-  await page.getByRole('button', {name: 'Read this character’s dialogue'}).first().click();
+  await page.getByRole('button', {name: 'Read literal dialogue'}).first().click();
   await expect(page.getByText('Provider-free source reading', {exact: true})).toBeVisible();
   await expect(page.getByRole('link', {name: 'Return to passage'}).first()).toBeVisible();
   await page.getByRole('button', {name: 'Try another line'}).first().click();

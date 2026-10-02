@@ -22,7 +22,16 @@
     "apps/fount_web/.formatter.exs",
     "apps/fount_web/config/**",
     "apps/fount_web/lib/**",
-    "apps/fount_web/priv/repo/migrations/**"
+    "apps/fount_web/priv/repo/migrations/**",
+    "CHANGELOG.md",
+    "LICENSE",
+    "mix.lock",
+    ".github/**",
+    "scripts/**",
+    "handoff/**",
+    "packages/**",
+    "apps/**",
+    "docs/**"
   ],
   "ignore": {
     "useGitignore": true,
@@ -42,7 +51,25 @@
       "repomix-output*.xml",
       "**/*.pdf",
       "**/*.dump",
-      "**/*.tar"
+      "**/*.tar",
+      "**/examples/_downloads/**",
+      "**/examples/_output/**",
+      "**/*.zip",
+      "**/*.png",
+      "**/*.jpg",
+      "**/*.jpeg",
+      "**/*.gif",
+      "**/*.ico",
+      "**/*.woff*",
+      "**/*.mp3",
+      "**/*.wav",
+      "**/*.beam",
+      "**/*.ez",
+      "**/*.key",
+      "**/*.pem"
     ]
+  },
+  "security": {
+    "enableSecurityCheck": true
   }
 }

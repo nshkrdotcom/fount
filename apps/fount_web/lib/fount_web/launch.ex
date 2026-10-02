@@ -3,6 +3,8 @@ defmodule FountWeb.Launch do
   alias Ecto.Adapters.SQL
   alias Fount.Intelligence.ImportAssessment
   alias Fount.{Persistence, Screenplay}
+  alias Fount.Screenplay.Model
+  alias Fount.Semantics.SourceInventory
   alias Fount.Writing.CanonicalJSON
   alias FountRun.PipelineRequest
   alias FountWorkshop.SemanticAssessment
@@ -59,6 +61,7 @@ defmodule FountWeb.Launch do
     with :ok <- validate_authoring_command(command_id),
          service <- FountWeb.Services.assessment_service_summary(),
          true <- service["configured"] == true or {:error, :semantic_assessment_not_configured},
+         :ok <- assessment_audit_schema_ready(),
          {:ok, project} <- FountWeb.Store.project(Fount.Repo, owner_id, project_id),
          {:ok, root} <- Persistence.load(Fount.Repo, project["key"]),
          true <- root.id == project["screenplay_id"] or {:error, :project_screenplay_mismatch},
@@ -85,6 +88,25 @@ defmodule FountWeb.Launch do
     end
   end
 
+  defp assessment_audit_schema_ready do
+    case SQL.query(
+           Fount.Repo,
+           """
+           SELECT EXISTS (
+             SELECT 1 FROM information_schema.columns
+             WHERE table_schema='public' AND table_name='fount_run_provider_requests'
+               AND column_name='request_snapshot'
+           )
+           """,
+           [],
+           log: false
+         ) do
+      {:ok, %{rows: [[true]]}} -> :ok
+      {:ok, _} -> {:error, :semantic_schema_missing}
+      {:error, _} -> {:error, :storage_error}
+    end
+  end
+
   defp assessment_launch_transaction(
          owner_id,
          project,
@@ -98,7 +120,7 @@ defmodule FountWeb.Launch do
     Fount.Repo.transaction(fn ->
       limits =
         ImportAssessment.default_limits()
-        |> Map.put("max_inference_calls", 2 * (source_plan["chunk_count"] + 1))
+        |> Map.put("max_inference_calls", 4 * source_plan["chunk_count"] + 2)
 
       provider_family = service["provider_family"] || "codex"
 
@@ -655,6 +677,8 @@ defmodule FountWeb.Launch do
                "format" => "fdx",
                "source_bytes" => byte_size(source),
                "parsed" => true,
+               "semantic_confidence" => "unknown",
+               "import_audit" => Model.plain(SourceInventory.build(root).import_audit),
                "adapter_losses" => losses,
                "loss_count" => length(losses),
                "original_bytes_preserved_when_unchanged" => true
@@ -673,6 +697,8 @@ defmodule FountWeb.Launch do
              "format" => "fountain",
              "source_bytes" => byte_size(source),
              "parsed" => true,
+             "semantic_confidence" => "unknown",
+             "import_audit" => Model.plain(SourceInventory.build(root).import_audit),
              "adapter_losses" => [],
              "loss_count" => 0,
              "original_bytes_preserved_when_unchanged" => Screenplay.to_fountain(root) == source

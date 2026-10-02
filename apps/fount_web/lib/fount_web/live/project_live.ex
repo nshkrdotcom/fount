@@ -391,7 +391,7 @@ defmodule FountWeb.ProjectLive do
             </div>
           </dl>
           <p :if={@pending_import.import["loss_count"] == 0}>
-            No adapter losses were reported by the screenplay importer.
+            No adapter losses were reported by the screenplay importer. This confirms syntax import, not correct character identities.
           </p>
           <details :if={@pending_import.import["loss_count"] > 0}>
             <summary>Import notes</summary>
@@ -400,6 +400,9 @@ defmodule FountWeb.ProjectLive do
             </ul>
           </details>
         </div>
+        <p class="scope-note">
+          Character identities are unverified until source assessment and review. An assessment rereads the raw source to check printed-text false positives and people missed by the parser.
+        </p>
         <form phx-submit="open_import" class="compact-form">
           <label for="import-project-title">Project title <span class="muted">optional</span></label>
           <input

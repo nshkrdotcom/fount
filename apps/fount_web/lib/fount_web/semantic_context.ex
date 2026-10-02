@@ -507,7 +507,11 @@ defmodule FountWeb.SemanticContext do
       aliases: entity.aliases,
       review_state: if(core_character_id, do: "confirmed", else: entity.review_state),
       representation:
-        if(core_character_id, do: "canonical_linked_source", else: "source_interpretation"),
+        cond do
+          core_character_id -> "canonical_linked_source"
+          entity.source_origin == "manual" -> "literal_source"
+          true -> "source_interpretation"
+        end,
       speaking_occurrences: Enum.count(entity.occurrences, &(&1.role == "speaker")),
       presence_occurrences: Enum.count(entity.occurrences, &(&1.role == "physical_presence")),
       mention_occurrences: Enum.count(entity.occurrences, &(&1.role == "mentioned")),

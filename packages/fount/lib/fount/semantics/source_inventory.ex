@@ -8,6 +8,7 @@ defmodule Fount.Semantics.SourceInventory do
   syntax.
   """
 
+  alias Fount.ID
   alias Fount.Query
   alias Fount.SceneHeading
   alias Fount.Screenplay
@@ -37,6 +38,7 @@ defmodule Fount.Semantics.SourceInventory do
       character_cues: cues,
       scene_headings: headings,
       canonical_cast: canonical_cast(screenplay),
+      import_audit: import_audit(screenplay, cues),
       counts: %{
         literal_character_cues: length(cues),
         literal_scene_headings: length(headings),
@@ -44,6 +46,62 @@ defmodule Fount.Semantics.SourceInventory do
       }
     }
   end
+
+  defp import_audit(screenplay, cues) do
+    groups = Enum.frequencies_by(cues, & &1.literal)
+
+    %{
+      version: "import_audit_v1",
+      parser_version: Fount.version(),
+      semantic_status: "not_assessed",
+      semantic_confidence: "unknown",
+      source_sha256: audit_source_hash(screenplay),
+      visible_source_sha256: screenplay |> Screenplay.to_fountain() |> ID.hash(),
+      span_basis: "visible_fountain_revision",
+      source_format: if(screenplay.import, do: to_string(screenplay.import.format), else: "fountain"),
+      cue_occurrences: length(cues),
+      distinct_cue_spellings: map_size(groups),
+      repeated_cue_groups: groups,
+      suspected_document_cues: Enum.filter(cues, &suspected_document_cue?/1),
+      decisions: Enum.map(Query.elements(screenplay), &parser_decision(&1, screenplay.import)),
+      limitations: [
+        "Fountain syntax recognition does not prove a person identity.",
+        "Repeated spelling is a cue group, not evidence that occurrences are the same person.",
+        "Raw-source semantic extraction and self-review are required to assess missed people and printed text."
+      ]
+    }
+  end
+
+  defp audit_source_hash(%{import: %{bytes: bytes, revision_id: imported}, revision: revision})
+       when imported == nil or imported == revision.id,
+       do: ID.hash(bytes)
+
+  defp audit_source_hash(screenplay), do: screenplay.revision.content_hash
+
+  defp suspected_document_cue?(cue) do
+    not cue.forced and
+      (String.ends_with?(cue.literal, ":") or String.length(cue.literal) > 40 or
+         Regex.match?(~r/\b(?:WORK ORDER|CHARGE|NETWORK|AUTHORIZED|ADDRESS HISTORY)\b/u, cue.literal))
+  end
+
+  defp parser_decision(element, import) do
+    %{
+      element_id: element.id,
+      type: to_string(element.type),
+      source_span: plain_span(element.source_span),
+      content_span: plain_span(element.content_span),
+      rule: parser_rule(element, import),
+      semantic_confidence: "unknown"
+    }
+  end
+
+  defp parser_rule(_element, %{format: :fdx}), do: "fdx_decode_then_fountain_syntax"
+  defp parser_rule(%{attrs: %{forced?: true}}, _import), do: "explicit_fountain_marker"
+
+  defp parser_rule(%{type: :character}, _import),
+    do: "uppercase_letters_after_blank_before_nonblank"
+
+  defp parser_rule(_element, _import), do: "fountain_syntax"
 
   def schema_version, do: @schema_version
 

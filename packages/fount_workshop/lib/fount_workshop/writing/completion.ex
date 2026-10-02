@@ -103,6 +103,7 @@ defmodule FountWorkshop.Writing.Completion do
 
       {:ok, response} ->
         entry = %{
+          "purpose" => name,
           "mode" => mode,
           "request_sha256" => hash(request),
           "response_sha256" =>
@@ -113,6 +114,7 @@ defmodule FountWorkshop.Writing.Completion do
               })
             ),
           "model" => json_value(Map.get(response, :model)),
+          "provider" => json_value(Map.get(response, :provider)),
           "finish_reason" => json_value(Map.get(response, :finish_reason)),
           "response_id" => Map.get(response, :id),
           "usage" => json_value(Map.get(response, :usage))
@@ -212,6 +214,16 @@ defmodule FountWorkshop.Writing.Completion do
   defp dispatch_completion(client, request, options, state) do
     dispatch = %{
       name: state.name,
+      request_snapshot: %{
+        "purpose" => state.name,
+        "prompt" => request,
+        "schema" => state.schema,
+        "provider" => json_value(Map.get(client, :provider)),
+        "model" => json_value(Keyword.get(options, :model, Map.get(client, :model))),
+        "reasoning_effort" =>
+          json_value(get_in(Keyword.get(options, :options, []), [:reasoning_effort])),
+        "mode" => state.mode
+      },
       mode: state.mode,
       request_sha256: hash(request),
       dispatch_index: length(state.trace) + 1,
@@ -274,6 +286,7 @@ defmodule FountWorkshop.Writing.Completion do
       "text" => Map.get(response, :text),
       "object" => json_value(Map.get(response, :object)),
       "model" => json_value(Map.get(response, :model)),
+      "provider" => json_value(Map.get(response, :provider)),
       "finish_reason" => json_value(Map.get(response, :finish_reason)),
       "usage" => json_value(Map.get(response, :usage) || %{})
     }

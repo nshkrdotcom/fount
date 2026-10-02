@@ -670,8 +670,8 @@ defmodule FountRun.ExecutionStore do
     q!(
       repo,
       ~S"""
-      INSERT INTO fount_run_provider_requests(id,operation_id,run_id,screenplay_id,step_id,attempt_number,fencing_token,usage_id,request_fingerprint,request_mode,dispatch_index,transport_retry,malformed_repair,status)
-      VALUES($1::text::uuid,$2,$3::text::uuid,$4::text::uuid,$5::text::uuid,$6,$7,$8::text::uuid,$9,$10,$11,$12,$13,'intended')
+      INSERT INTO fount_run_provider_requests(id,operation_id,run_id,screenplay_id,step_id,attempt_number,fencing_token,usage_id,request_fingerprint,request_mode,dispatch_index,transport_retry,malformed_repair,status,request_snapshot)
+      VALUES($1::text::uuid,$2,$3::text::uuid,$4::text::uuid,$5::text::uuid,$6,$7,$8::text::uuid,$9,$10,$11,$12,$13,'intended',$14::jsonb)
       """,
       [
         ID.v4(),
@@ -686,7 +686,8 @@ defmodule FountRun.ExecutionStore do
         attrs.mode,
         attrs.dispatch_index,
         attrs.transport_retry,
-        attrs.malformed_repair
+        attrs.malformed_repair,
+        attrs.request_snapshot
       ]
     )
 
@@ -993,7 +994,8 @@ defmodule FountRun.ExecutionStore do
          transport_retry: retry,
          malformed_repair: malformed,
          reserved_cost_microunits: cost,
-         currency: currency
+         currency: currency,
+         request_snapshot: Map.get(dispatch, :request_snapshot, %{})
        }}
     else
       _ -> {:error, :invalid_provider_dispatch}

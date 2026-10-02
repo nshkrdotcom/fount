@@ -46,7 +46,7 @@ defmodule FountRun.PlanPolicyTest do
       "source_sha256" => String.duplicate("a", 64),
       "render_sha256" => String.duplicate("b", 64),
       "schema_version" => "semantic_import_v1",
-      "prompt_version" => "semantic_import_prompt_v1",
+      "prompt_version" => "semantic_import_prompt_v2_self_review",
       "model" => "gpt-6.1-sol",
       "reasoning_effort" => "low",
       "provider_family" => "fixture",
@@ -65,7 +65,7 @@ defmodule FountRun.PlanPolicyTest do
              PipelineRequest.validate(Map.put(persisted, "surprise", true))
 
     assert {:error, :limit_exceeds_server_cap} =
-             PipelineRequest.semantic(put_in(request, ["limits", "max_inference_calls"], 131))
+             PipelineRequest.semantic(put_in(request, ["limits", "max_inference_calls"], 259))
   end
 
   test "policy resolves only configured principals and rejects candidate acceptance", %{

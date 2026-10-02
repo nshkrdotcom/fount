@@ -15,7 +15,7 @@ defmodule Fount.Intelligence.ImportAssessment do
   @schema @schema_path |> File.read!() |> Jason.decode!()
 
   @schema_version "semantic_import_v1"
-  @prompt_version "semantic_import_prompt_v1"
+  @prompt_version "semantic_import_prompt_v2_self_review"
   @entity_kinds ~w(character location document_text prop organization unknown)
   @roles ~w(speaker physical_presence mentioned printed_text message_sender location_heading location_reference unknown)
   @certainty ~w(supported uncertain unresolved)
@@ -34,7 +34,7 @@ defmodule Fount.Intelligence.ImportAssessment do
   }
 
   @max_completion_context_bytes 100_000
-  @max_inference_calls 130
+  @max_inference_calls 258
   @plan_limit_keys Map.keys(@default_limits)
   @accepted_limit_keys @plan_limit_keys ++ ["max_inference_calls"]
 
@@ -270,6 +270,49 @@ defmodule Fount.Intelligence.ImportAssessment do
 
     "Fount semantic import extraction. Return only the requested structured object.\n" <>
       Jason.encode!(envelope)
+  end
+
+  @doc "A second source-reading pass checks false positives and missed people without treating parser cues as identities."
+  def review_prompt(chunk, binding, proposed) do
+    prefix = "Fount semantic import extraction. Return only the requested structured object.\n"
+
+    envelope =
+      extraction_prompt(chunk, binding) |> String.replace_prefix(prefix, "") |> Jason.decode!()
+
+    summary = review_summary(proposed["entities"])
+
+    envelope =
+      envelope
+      |> Map.put("review_pass", "source_self_review_v1")
+      |> Map.put("proposed_entity_summary", summary)
+      |> Map.put("proposal_summary_truncated", length(proposed["entities"]) > length(summary))
+      |> Map.update!("rules", fn rules ->
+        rules ++
+          [
+            "Independently reread ALL raw payload, not just the proposed entities or parser cues.",
+            "Find missed people introduced in prose, false speakers that are printed documents, and ambiguous generic identities.",
+            "Return a complete corrected replacement extraction, including exact evidence for every retained or added entity.",
+            "Do not merge generic roles or age variants without evidence. Report unresolved ambiguity and omitted coverage instead of guessing."
+          ]
+      end)
+
+    prefix <> Jason.encode!(envelope)
+  end
+
+  defp review_summary(entities) do
+    {summary, _bytes} =
+      entities
+      |> Enum.take(200)
+      |> Enum.reduce_while({[], 0}, fn entity, {rows, bytes} ->
+        row = Map.take(entity, ~w(kind label))
+        size = byte_size(Jason.encode!(row))
+
+        if bytes + size > 8_000,
+          do: {:halt, {rows, bytes}},
+          else: {:cont, {[row | rows], bytes + size}}
+      end)
+
+    Enum.reverse(summary)
   end
 
   @doc "Trusted local validation for one provider chunk result."

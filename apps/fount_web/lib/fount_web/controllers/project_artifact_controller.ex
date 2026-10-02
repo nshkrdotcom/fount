@@ -131,6 +131,7 @@ defmodule FountWeb.ProjectArtifactController do
           "provenance" => semantic.assessment["provenance"]
         },
         "assessment_state" => to_string(semantic.assessment_state),
+        "import_audit" => semantic.inventory["import_audit"],
         "latest_assessment" => plain(semantic.latest_assessment),
         "assessment_history" => Enum.map(semantic.assessment_history, &plain/1),
         "historical_model_assessments" =>

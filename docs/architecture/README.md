@@ -9,6 +9,8 @@ Source snapshots reviewed on 2026-09-30:
 
 Read each document from the system view down to the implementation views. These are maps of the checked-in implementation, not feature promises or runtime certification. Arrows have a stated meaning per diagram; a package dependency is not necessarily a network call.
 
+Current import workflow and debugging: [IMPORT_WORKFLOW.md](IMPORT_WORKFLOW.md), including parser audit, exact call records and source self-review.
+
 ## Markdown notation
 
 Use fenced `mermaid` blocks, with stable `flowchart`, `sequenceDiagram` and `erDiagram` syntax. Flowcharts with named subgraphs remain suitable for software components and package boundaries. Organize them into context/component levels following the [C4 model](https://c4model.com/diagrams), without requiring Mermaid's experimental C4 renderer.

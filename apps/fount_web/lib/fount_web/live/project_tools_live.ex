@@ -57,6 +57,17 @@ defmodule FountWeb.ProjectToolsLive do
   end
 
   @impl true
+  def handle_event("browse_cast", %{"cast" => params}, socket) do
+    {:noreply, assign(socket, :cast_query, params["name"] || "") |> assign(:cast_page, 0)}
+  end
+
+  @impl true
+  def handle_event("cast_page", %{"direction" => direction}, socket) do
+    delta = if direction == "next", do: 1, else: -1
+    {:noreply, assign(socket, :cast_page, max(socket.assigns.cast_page + delta, 0))}
+  end
+
+  @impl true
   def handle_event("assess_source", _params, socket) do
     owner = socket.assigns.current_owner
     project = socket.assigns.project
@@ -991,6 +1002,14 @@ defmodule FountWeb.ProjectToolsLive do
     owner = socket.assigns.current_owner
     project_id = context.project["id"]
     project_runs = runs(owner, project_id)
+    characters = semantic_characters(context)
+    cast_query = socket.assigns[:cast_query] || ""
+
+    cast_query =
+      if Enum.any?(characters, &(&1.display_name == cast_query)), do: cast_query, else: ""
+
+    matching_count = Enum.count(characters, &(cast_query == "" or &1.display_name == cast_query))
+    cast_page = min(socket.assigns[:cast_page] || 0, div(max(matching_count - 1, 0), 20))
 
     note_filters =
       socket.assigns[:note_filters] || %{"query" => "", "status" => "", "category" => ""}
@@ -1013,7 +1032,9 @@ defmodule FountWeb.ProjectToolsLive do
     |> assign(:target_options, ProductionTools.target_options(context.current))
     |> assign(:semantic, context.semantic)
     |> assign(:semantic_service, FountWeb.Services.assessment_service_summary())
-    |> assign(:characters, semantic_characters(context))
+    |> assign(:cast_query, cast_query)
+    |> assign(:cast_page, cast_page)
+    |> assign(:characters, characters)
     |> assign(:locations, semantic_locations(context))
     |> assign(:estimates, FountWeb.ScreenplayIndex.estimates(context.current))
     |> assign(:note_filters, note_filters)
@@ -1040,6 +1061,16 @@ defmodule FountWeb.ProjectToolsLive do
       :workflow_action_groups,
       workflow_action_groups(WorkflowManagement.action_catalog())
     )
+  end
+
+  defp visible_cast(characters, query, page) do
+    characters
+    |> Enum.filter(&(query == "" or &1.display_name == query))
+    |> Enum.slice(page * 20, 20)
+  end
+
+  defp cast_groups(characters) do
+    characters |> Enum.frequencies_by(& &1.display_name) |> Enum.sort()
   end
 
   defp semantic_characters(%{semantic: %{characters: characters}}) when is_list(characters),
@@ -2553,9 +2584,60 @@ defmodule FountWeb.ProjectToolsLive do
           Apply the SI01 host migration, then reload this exact revision. No fallback identity facts were fabricated.
         </FountWeb.CoreComponents.alert>
 
+        <section :if={length(@characters) > 20} class="card" id="literal-cue-browser">
+          <h2>Browse source cue groups</h2>
+          <p>
+            {length(@characters)} source occurrences or assessed identities; {length(
+              cast_groups(@characters)
+            )} distinct spellings. Repeated spelling does not prove the same person. Showing at most 20 review cards at a time.
+          </p>
+          <form id="cast-cue-filter" phx-change="browse_cast">
+            <label for="cast-cue-name">Cue spelling</label>
+            <select id="cast-cue-name" name="cast[name]">
+              <option value="">All spellings</option>
+              <option
+                :for={{name, count} <- cast_groups(@characters)}
+                value={name}
+                selected={name == @cast_query}
+              >
+                {name} ({count})
+              </option>
+            </select>
+          </form>
+          <button
+            type="button"
+            phx-click="cast_page"
+            phx-value-direction="previous"
+            disabled={@cast_page == 0}
+          >Previous occurrences</button>
+          <button
+            type="button"
+            phx-click="cast_page"
+            phx-value-direction="next"
+            disabled={length(visible_cast(@characters, @cast_query, @cast_page + 1)) == 0}
+          >Next occurrences</button>
+          <p>Page {@cast_page + 1}</p>
+        </section>
+        <details
+          :if={@semantic[:inventory] && @semantic.inventory["import_audit"]}
+          class="card"
+          id="import-parser-audit"
+        >
+          <summary>Import parser audit</summary>
+          <p>
+            Parser cues: {@semantic.inventory["import_audit"]["cue_occurrences"]}. Distinct spellings: {@semantic.inventory[
+              "import_audit"
+            ]["distinct_cue_spellings"]}. Suspected printed-text cues: {length(
+              @semantic.inventory["import_audit"]["suspected_document_cues"]
+            )}.
+          </p>
+          <p>
+            Parser confidence about people: unknown. Model assessment includes a separate source self-review. Export source review JSON for every parser decision, source range and anomaly.
+          </p>
+        </details>
         <div class="character-grid">
           <article
-            :for={character <- @characters}
+            :for={character <- visible_cast(@characters, @cast_query, @cast_page)}
             class="card compact-character-card"
             id={"semantic-character-#{character.id}"}
           >

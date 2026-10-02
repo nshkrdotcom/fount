@@ -74,13 +74,50 @@ defmodule FountWorkshop.SemanticAssessment do
   def extract(client, chunk, binding, opts \\ []) do
     prompt = ImportAssessment.extraction_prompt(chunk, binding)
 
-    Completion.complete(
-      client,
-      prompt,
-      ImportAssessment.schema(),
-      &ImportAssessment.validate_chunk(&1, chunk, binding),
-      completion_opts(opts, "semantic_import_chunk")
-    )
+    case Completion.complete(
+           client,
+           prompt,
+           ImportAssessment.schema(),
+           &ImportAssessment.validate_chunk(&1, chunk, binding),
+           completion_opts(opts, "semantic_import_chunk")
+         ) do
+      {:ok, proposed, trace} ->
+        case validate_extraction_models(trace) do
+          :ok -> review_extraction(client, chunk, binding, proposed, trace, opts)
+          {:error, reason} -> {:error, reason, trace}
+        end
+
+      error ->
+        error
+    end
+  end
+
+  defp validate_extraction_models(trace) do
+    models = Enum.map(trace, & &1["model"])
+
+    cond do
+      models == [] or Enum.any?(models, &is_nil/1) ->
+        {:error, :semantic_returned_model_missing}
+
+      mismatch = Enum.find(models, &(&1 != @model)) ->
+        {:error, {:semantic_returned_model_mismatch, mismatch}}
+
+      true ->
+        :ok
+    end
+  end
+
+  defp review_extraction(client, chunk, binding, proposed, trace, opts) do
+    case Completion.complete(
+           client,
+           ImportAssessment.review_prompt(chunk, binding, proposed),
+           ImportAssessment.schema(),
+           &ImportAssessment.validate_chunk(&1, chunk, binding),
+           completion_opts(opts, "semantic_import_review")
+         ) do
+      {:ok, reviewed, review_trace} -> {:ok, reviewed, trace ++ review_trace}
+      {:error, reason, review_trace} -> {:error, reason, trace ++ review_trace}
+    end
   end
 
   def reconcile(client, chunk_results, opts \\ []) do

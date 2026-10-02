@@ -41,7 +41,9 @@ defmodule FountWeb.SemanticFixtureAdapter do
 
     object =
       object
+      |> maybe_miss_person(request, client.adapter_opts)
       |> maybe_omit_payload(client.adapter_opts)
+      |> maybe_unresolved(client.adapter_opts)
       |> maybe_invalid_reconciliation(client.adapter_opts)
 
     {:ok,
@@ -56,6 +58,56 @@ defmodule FountWeb.SemanticFixtureAdapter do
        metadata: %{fixture: true, live_provider: false}
      )}
   end
+
+  defp maybe_miss_person(%{"entities" => entities} = object, request, opts) do
+    if Keyword.get(opts, :miss_person_first_pass, false) and
+         not String.contains?(Request.user_prompt(request), "source_self_review_v1") do
+      ids = entities |> Enum.filter(&(&1["label"] == "EVELYN")) |> Enum.map(& &1["local_id"])
+
+      object
+      |> Map.put("entities", Enum.reject(entities, &(&1["local_id"] in ids)))
+      |> Map.update!("occurrences", &Enum.reject(&1, fn row -> row["entity_id"] in ids end))
+      |> mistake_printed_text()
+    else
+      object
+    end
+  end
+
+  defp maybe_miss_person(object, _request, _opts), do: object
+
+  defp mistake_printed_text(object) do
+    object
+    |> Map.update!("entities", &Enum.map(&1, fn row -> mistake_document_entity(row) end))
+    |> Map.update!("occurrences", &Enum.map(&1, fn row -> mistake_document_occurrence(row) end))
+  end
+
+  defp mistake_document_entity(%{"label" => "WORK ORDER"} = row),
+    do: Map.put(row, "kind", "character")
+
+  defp mistake_document_entity(row), do: row
+
+  defp mistake_document_occurrence(%{"entity_id" => "fixture-document-work-order"} = row),
+    do: Map.put(row, "role", "speaker")
+
+  defp mistake_document_occurrence(row), do: row
+
+  defp maybe_unresolved(%{"coverage" => coverage} = object, opts) do
+    if Keyword.get(opts, :unresolved_identity, false) do
+      Map.put(object, "unresolved", [
+        %{
+          "span_ids" => coverage["processed_span_ids"],
+          "entity_ids" => [],
+          "reason_code" => "ambiguous_identity",
+          "explanation" =>
+            "The source does not resolve whether these generic roles share an identity."
+        }
+      ])
+    else
+      object
+    end
+  end
+
+  defp maybe_unresolved(object, _opts), do: object
 
   defp maybe_invalid_reconciliation(%{"groups" => _} = object, opts) do
     if Keyword.get(opts, :invalid_reconciliation, false),

@@ -267,6 +267,29 @@ defmodule FountWeb.SI02SemanticImportAssessmentIntegrationTest do
     assert rows.rows == [[0]]
   end
 
+  test "missing dispatch audit schema refuses assessment before creating a Run" do
+    fixture_service!()
+    assert {:ok, %{project: project}} = create_import("Missing audit schema")
+
+    Ecto.Adapters.SQL.query!(
+      Fount.Repo,
+      "ALTER TABLE fount_run_provider_requests DROP COLUMN request_snapshot CASCADE",
+      []
+    )
+
+    assert {:error, :semantic_schema_missing} =
+             Launch.assess_project("test-owner", project["id"], %{"command_id" => "missing-audit"})
+
+    assert Store.list_project_runs(Fount.Repo, "test-owner", project["id"], limit: 20) == []
+
+    assert [[0]] =
+             Ecto.Adapters.SQL.query!(
+               Fount.Repo,
+               "SELECT count(*) FROM fount_web_semantic_assessments WHERE project_id=$1::text::uuid AND origin<>'manual'",
+               [project["id"]]
+             ).rows
+  end
+
   test "JSON-text fallback uses the same trusted validator and exact request policy" do
     Application.put_env(:fount_web, :semantic_assessment,
       mode: :deterministic_fixture,
@@ -285,6 +308,98 @@ defmodule FountWeb.SI02SemanticImportAssessmentIntegrationTest do
     assert request.options[:reasoning_effort] == :low
     assert {:ok, context} = ProjectContext.load("test-owner", project["key"])
     assert context.semantic.assessment_state == :ready
+  end
+
+  test "source self-review corrects a false speaker and a missed person with exact dispatch inputs" do
+    Application.put_env(:fount_web, :semantic_assessment,
+      mode: :deterministic_fixture,
+      client_factory: {FountWeb.SemanticFixtureAdapter, :client, [[miss_person_first_pass: true]]}
+    )
+
+    assert {:ok, %{project: project}} = create_import("Reviewed import")
+
+    assert {:ok, %{run: run}} =
+             Launch.assess_project("test-owner", project["id"], %{"command_id" => "review"})
+
+    complete_semantic_run(run)
+    assert {:ok, context} = ProjectContext.load("test-owner", project["key"])
+    assert Enum.any?(context.semantic.characters, &(&1.display_name == "EVELYN"))
+
+    rows =
+      Ecto.Adapters.SQL.query!(
+        Fount.Repo,
+        "SELECT request_snapshot,response FROM fount_run_provider_requests WHERE run_id=$1::text::uuid ORDER BY intended_at,id",
+        [run["id"]]
+      ).rows
+
+    assert length(rows) == 3
+
+    [extraction, initial] =
+      Enum.find(rows, fn [snapshot, _] -> snapshot["purpose"] == "semantic_import_chunk" end)
+
+    [review, corrected] =
+      Enum.find(rows, fn [snapshot, _] -> snapshot["purpose"] == "semantic_import_review" end)
+
+    [reconcile, _] =
+      Enum.find(rows, fn [snapshot, _] -> snapshot["purpose"] == "semantic_import_reconcile" end)
+
+    refute Enum.any?(initial["object"]["entities"], &(&1["label"] == "EVELYN"))
+    assert Enum.any?(corrected["object"]["entities"], &(&1["label"] == "EVELYN"))
+
+    assert Enum.find(initial["object"]["entities"], &(&1["label"] == "WORK ORDER"))["kind"] ==
+             "character"
+
+    assert Enum.find(corrected["object"]["entities"], &(&1["label"] == "WORK ORDER"))["kind"] ==
+             "document_text"
+
+    assert extraction["purpose"] == "semantic_import_chunk"
+    assert review["purpose"] == "semantic_import_review"
+    assert review["prompt"] =~ "Independently reread ALL raw payload"
+    assert review["model"] == "gpt-6.1-sol"
+    assert review["reasoning_effort"] == "low"
+    assert reconcile["purpose"] == "semantic_import_reconcile"
+  end
+
+  test "fully read source with unresolved identity remains partial" do
+    Application.put_env(:fount_web, :semantic_assessment,
+      mode: :deterministic_fixture,
+      client_factory: {FountWeb.SemanticFixtureAdapter, :client, [[unresolved_identity: true]]}
+    )
+
+    assert {:ok, %{project: project}} = create_import("Unresolved identity")
+
+    assert {:ok, %{run: run}} =
+             Launch.assess_project("test-owner", project["id"], %{"command_id" => "unresolved"})
+
+    complete_semantic_run(run)
+    assert {:ok, context} = ProjectContext.load("test-owner", project["key"])
+    assert context.semantic.assessment_state == :partial
+    assert context.semantic.coverage["complete"] == true
+    assert context.semantic.latest_assessment["result"]["unresolved"] != []
+  end
+
+  test "a large manual import exposes grouped cue counts and only twenty occurrence cards", %{
+    conn: conn
+  } do
+    source = "INT. ROOM - DAY\n\n" <> String.duplicate("MIRA\nHello.\n\n", 70)
+
+    assert {:ok, %{project: project}} =
+             Launch.create_project("test-owner", %{
+               "title" => "Large literal inventory",
+               "kind" => "import",
+               "source" => source,
+               "filename" => "large.fountain"
+             })
+
+    conn = FountWeb.ConnCase.login(conn)
+    assert {:ok, view, html} = live(conn, "/p/#{project["key"]}/cast")
+    assert html =~ "MIRA (70)"
+    assert has_element?(view, ".compact-character-card:nth-child(20)")
+    refute has_element?(view, ".compact-character-card:nth-child(21)")
+    assert html =~ "Import parser audit"
+    view |> element("button[phx-value-direction=next]") |> render_click()
+    assert render(view) =~ "Page 2"
+    assert Store.list_project_runs(Fount.Repo, "test-owner", project["id"], limit: 20) == []
   end
 
   test "missing and mismatched returned models fail before result persistence" do
@@ -308,6 +423,13 @@ defmodule FountWeb.SI02SemanticImportAssessmentIntegrationTest do
                SemanticStore.assessment(Fount.Repo, "test-owner", project["id"], assessment["id"])
 
       assert row["result"] == %{}
+
+      assert [[1]] =
+               Ecto.Adapters.SQL.query!(
+                 Fount.Repo,
+                 "SELECT count(*) FROM fount_run_provider_requests WHERE run_id=$1::text::uuid",
+                 [run["id"]]
+               ).rows
     end
   end
 
@@ -551,6 +673,7 @@ defmodule FountWeb.SI02SemanticImportAssessmentIntegrationTest do
     )
 
     assert {:ok, _} = FountRun.step(Fount.Repo, run["id"], context, opts)
+    assert_receive {:semantic_fixture_request, _}
     refute_receive {:semantic_fixture_request, _}
     complete_semantic_run(run)
   end
@@ -607,7 +730,7 @@ defmodule FountWeb.SI02SemanticImportAssessmentIntegrationTest do
     assert {:error, {:invalid_completion, :invalid_reconciliation}} =
              FountRun.step(Fount.Repo, run["id"], context, opts)
 
-    for _ <- 1..3, do: assert_receive({:semantic_fixture_request, _})
+    for _ <- 1..4, do: assert_receive({:semantic_fixture_request, _})
     refute_receive {:semantic_fixture_request, _}
 
     assert {:ok, row} =
@@ -623,7 +746,7 @@ defmodule FountWeb.SI02SemanticImportAssessmentIntegrationTest do
                [run["id"]]
              )
 
-    assert usage.rows == [[3]]
+    assert usage.rows == [[4]]
     fixture_service!()
 
     assert {:ok, %{run: retry}} =

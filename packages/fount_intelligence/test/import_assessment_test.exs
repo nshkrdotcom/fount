@@ -73,7 +73,7 @@ defmodule Fount.Intelligence.ImportAssessmentTest do
     assert {:error, :unsupported_limit} = ImportAssessment.validate_limits(%{"unbounded" => 1})
 
     assert {:error, :limit_exceeds_server_cap} =
-             ImportAssessment.validate_limits(%{"max_inference_calls" => 131})
+             ImportAssessment.validate_limits(%{"max_inference_calls" => 259})
 
     assert {:ok, limits} = ImportAssessment.validate_limits(%{"max_inference_calls" => 10})
     assert limits["payload_bytes"] == 48_000

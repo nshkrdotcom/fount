@@ -197,7 +197,8 @@ defmodule FountRun.SemanticAssessmentHandler do
 
     status =
       if is_binary(runtime["partial_reason"]) or
-           get_in(aggregate, ["coverage", "complete"]) != true,
+           get_in(aggregate, ["coverage", "complete"]) != true or
+           aggregate["unresolved"] != [],
          do: "partial",
          else: "ready"
 
@@ -544,7 +545,7 @@ defmodule FountRun.SemanticAssessmentHandler do
 
   defp validate_inference_ceiling(request, plan) do
     configured = get_in(request, ["limits", "max_inference_calls"])
-    ceiling = 2 * ((plan["chunk_count"] || 0) + 1)
+    ceiling = 4 * (plan["chunk_count"] || 0) + 2
 
     if is_integer(configured) and configured > 0 and configured <= ceiling,
       do: :ok,

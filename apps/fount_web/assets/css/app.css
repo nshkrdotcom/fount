@@ -637,7 +637,6 @@ input, textarea, select { padding: .4rem .48rem; }
   gap: .55rem;
   padding: .28rem .42rem;
   margin: -.38rem -.48rem .42rem;
-  border-top: 1px solid transparent;
   border-bottom: 1px solid var(--line);
   background: rgba(18,21,18,.97);
   backdrop-filter: blur(10px);

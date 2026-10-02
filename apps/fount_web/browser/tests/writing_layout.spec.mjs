@@ -58,6 +58,7 @@ test('project navigation and Reading actions have symmetric vertical insets', as
     await page.setViewportSize({width,height:900});
     await page.goto(`/p/${key}`);
     await expect(page.locator('.project-header')).toBeVisible();
+    await page.evaluate(() => window.scrollTo(0, 600));
     const geometry = await page.evaluate(() => {
       const rect = e => e.getBoundingClientRect();
       const center = e => {const r=rect(e);return (r.top+r.bottom)/2;};
@@ -69,7 +70,7 @@ test('project navigation and Reading actions have symmetric vertical insets', as
       const first=Math.min(...actionLinks.map(r=>r.top));
       const last=Math.max(...actionLinks.map(r=>r.bottom));
       return {
-        desktopHeaderOffset:center(view)-center(header),
+        desktopHeaderOffset:center(view)-(rect(header).top+rect(header).bottom-parseFloat(getComputedStyle(header).borderBottomWidth))/2,
         viewOffsets:[...view.querySelectorAll('a')].map(e=>center(e)-center(view)),
         tabTop:Math.min(...links.map(r=>r.top))-rect(tabs).top,
         tabBottom:rect(tabs).bottom-Math.max(...links.map(r=>r.bottom)),

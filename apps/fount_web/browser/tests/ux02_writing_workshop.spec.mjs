@@ -118,6 +118,8 @@ test('UX02 character reading and Try another line bind real source without accep
   const key = await importProject(page, 'ux02-character', source);
   await openWorkspace(page, `/p/${key}/cast`);
 
+  await page.locator('.source-cue-group').first().locator('summary').first().click();
+  await page.locator('.source-cue-occurrence').first().locator('summary').click();
   await page.getByRole('button', {name: 'Read literal dialogue'}).first().click();
   await expect(page.getByText('Provider-free source reading', {exact: true})).toBeVisible();
   await expect(page.getByRole('link', {name: 'Return to passage'}).first()).toBeVisible();

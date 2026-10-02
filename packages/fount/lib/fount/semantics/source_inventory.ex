@@ -14,16 +14,18 @@ defmodule Fount.Semantics.SourceInventory do
   alias Fount.Screenplay
   alias Fount.Source.Span
 
-  @schema_version "source_inventory_v1"
+  @schema_version "source_inventory_v2"
 
   @spec build(Screenplay.t()) :: map()
   def build(%Screenplay{} = screenplay) do
     scenes = screenplay.ir.scenes |> Enum.with_index(1) |> Map.new(fn {scene, n} -> {scene.id, n} end)
 
+    context = cue_context_index(screenplay)
+
     cues =
       screenplay
       |> Query.elements(:character)
-      |> Enum.map(&cue(screenplay, &1, scenes))
+      |> Enum.map(&cue(screenplay, &1, scenes, context))
 
     headings =
       screenplay
@@ -32,7 +34,8 @@ defmodule Fount.Semantics.SourceInventory do
 
     %{
       schema_version: @schema_version,
-      parser_version: Fount.version(),
+      parser_version: "fountain_syntax_v1",
+      inventory_policy_version: "source_inventory_policy_v2",
       screenplay_id: screenplay.id,
       revision_id: screenplay.revision.id,
       character_cues: cues,
@@ -52,7 +55,8 @@ defmodule Fount.Semantics.SourceInventory do
 
     %{
       version: "import_audit_v1",
-      parser_version: Fount.version(),
+      parser_version: "fountain_syntax_v1",
+      inventory_policy_version: "source_inventory_policy_v2",
       semantic_status: "not_assessed",
       semantic_confidence: "unknown",
       source_sha256: audit_source_hash(screenplay),
@@ -91,7 +95,8 @@ defmodule Fount.Semantics.SourceInventory do
       source_span: plain_span(element.source_span),
       content_span: plain_span(element.content_span),
       rule: parser_rule(element, import),
-      semantic_confidence: "unknown"
+      semantic_confidence: "unknown",
+      fdx_paragraph: fdx_paragraph(element, import)
     }
   end
 
@@ -105,14 +110,16 @@ defmodule Fount.Semantics.SourceInventory do
 
   def schema_version, do: @schema_version
 
-  defp cue(screenplay, element, scenes) do
+  defp cue(screenplay, element, scenes, context) do
     scene = Query.scene_for(screenplay, element.id)
     block = Query.block_for(screenplay, element.id)
 
     %{
       local_id: "character:" <> element.id,
       kind: "character",
-      occurrence_role: "speaker",
+      syntactic_type: "character",
+      syntactic_role: "speaker_candidate",
+      occurrence_role: "unknown",
       element_id: element.id,
       dialogue_block_id: block && block.id,
       literal: element.text,
@@ -124,8 +131,37 @@ defmodule Fount.Semantics.SourceInventory do
       scene_ordinal: scene && scenes[scene.id],
       source_span: plain_span(element.source_span),
       content_span: plain_span(element.content_span),
+      context: Map.get(context, element.id, []),
+      fdx_paragraph: fdx_paragraph(element, screenplay.import),
       evidence: evidence(element)
     }
+  end
+
+  defp fdx_paragraph(element, %{format: :fdx} = import) do
+    paragraphs = get_in(import, [:metadata, "paragraph_provenance"]) || []
+    start = element.content_span && element.content_span.byte_start
+    Enum.find(paragraphs, fn row -> is_integer(start) and start >= row["byte_start"] and start < row["byte_end"] end)
+  end
+
+  defp fdx_paragraph(_element, _import), do: nil
+
+  defp cue_context_index(screenplay) do
+    elements = screenplay |> Query.elements() |> List.to_tuple()
+
+    elements
+    |> Tuple.to_list()
+    |> Enum.with_index()
+    |> Map.new(fn {element, index} ->
+      adjacent =
+        max(index - 2, 0)..min(index + 2, tuple_size(elements) - 1)
+        |> Enum.map(&elem(elements, &1))
+        |> Enum.reject(&(&1.id == element.id))
+        |> Enum.map(fn adjacent ->
+          %{element_id: adjacent.id, type: to_string(adjacent.type), source_span: plain_span(adjacent.source_span)}
+        end)
+
+      {element.id, adjacent}
+    end)
   end
 
   defp heading(screenplay, element, scenes) do

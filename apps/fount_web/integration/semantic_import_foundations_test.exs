@@ -64,9 +64,9 @@ defmodule FountWeb.SI01SemanticImportIntegrationTest do
     assert semantic.assessment["run_id"] == nil
     assert semantic.assessment["model"] == nil
     assert semantic.version == 0
-    assert length(semantic.characters) == 2
-    assert Enum.all?(semantic.characters, &(&1.review_state == "unreviewed"))
-    assert Enum.all?(semantic.characters, &(&1.display_name == "GUARD"))
+    assert semantic.characters == []
+    assert [%{display_spelling: "GUARD", cue_count: 2}] = semantic.cue_groups
+    assert length(source_targets(semantic)) == 2
     assert length(semantic.locations) == 2
 
     assert Enum.any?(semantic.locations, fn location ->
@@ -94,13 +94,13 @@ defmodule FountWeb.SI01SemanticImportIntegrationTest do
     response = get(conn, "/p/#{project["key"]}/source-review/export.json")
     assert response.status == 200
     export = Jason.decode!(response.resp_body)
-    assert export["kind"] == "fount.semantic_source_review_v1"
+    assert export["kind"] == "fount.semantic_source_review_v2"
     assert export["source"]["revision_id"] == screenplay.revision.id
     assert export["source"]["source_sha256"] == semantic.source_sha256
     assert export["source"]["source_artifact_id"] == semantic.assessment["source_artifact_id"]
 
     assert {:ok, dialogue} =
-             SemanticContext.character_dialogue(context.current, hd(semantic.characters))
+             SemanticContext.character_dialogue(context.current, hd(source_targets(semantic)))
 
     assert dialogue.total == 1
     assert hd(dialogue.rows).scene_heading =~ "NORTH STATION"
@@ -121,7 +121,7 @@ defmodule FountWeb.SI01SemanticImportIntegrationTest do
 
     assert {:ok, context} = ProjectContext.load("test-owner", project["key"])
     semantic = context.semantic
-    [first, second] = semantic.characters
+    [first, second] = source_targets(semantic)
     before_runs = Store.list_project_runs(Fount.Repo, "test-owner", project["id"], limit: 50)
 
     assert {:ok, confirmed} =
@@ -259,7 +259,7 @@ defmodule FountWeb.SI01SemanticImportIntegrationTest do
              })
 
     assert {:ok, context} = ProjectContext.load("test-owner", project["key"])
-    [first | _] = context.semantic.characters
+    [first | _] = source_targets(context.semantic)
 
     assert {:ok, _} =
              SemanticStore.review(
@@ -351,7 +351,7 @@ defmodule FountWeb.SI01SemanticImportIntegrationTest do
              })
 
     assert {:ok, context} = ProjectContext.load("test-owner", project["key"])
-    [guard_a, guard_b] = context.semantic.characters
+    [guard_a, guard_b] = source_targets(context.semantic)
     [place_a, place_b] = context.semantic.locations
     assessment_id = context.semantic.assessment_id
 
@@ -380,7 +380,7 @@ defmodule FountWeb.SI01SemanticImportIntegrationTest do
 
     merged_guard =
       Enum.find(
-        merged.semantic.characters,
+        source_targets(merged.semantic),
         &(&1.semantic_handle_id == guard_a.semantic_handle_id)
       )
 
@@ -511,7 +511,7 @@ defmodule FountWeb.SI01SemanticImportIntegrationTest do
 
     attrs = %{
       "action" => "confirm",
-      "target_handle_id" => hd(context.semantic.characters).semantic_handle_id,
+      "target_handle_id" => hd(source_targets(context.semantic)).semantic_handle_id,
       "payload" => %{},
       "expected_version" => 0,
       "command_id" => command_id,
@@ -584,15 +584,23 @@ defmodule FountWeb.SI01SemanticImportIntegrationTest do
 
       assert {:ok, context} = ProjectContext.load("test-owner", key)
 
-      assert Enum.any?(
-               context.semantic.characters,
-               &(&1.representation == origin and &1.review_state == state)
-             )
-
-      if origin == "legacy_literal",
-        do: assert(Enum.all?(context.semantic.characters, &(&1.review_state == "unreviewed")))
+      if origin == "legacy_literal" do
+        assert context.semantic.characters == []
+        assert context.semantic.cue_groups != []
+      else
+        assert Enum.any?(
+                 context.semantic.characters,
+                 &(&1.representation == origin and &1.review_state == state)
+               )
+      end
 
       assert context.current.cast == model.cast
     end
+  end
+
+  defp source_targets(semantic) do
+    semantic.entities
+    |> Enum.filter(&(&1.kind == "character" and &1.source_origin == "manual"))
+    |> Enum.map(&Map.put(&1, :semantic_handle_id, &1.handle_id))
   end
 end

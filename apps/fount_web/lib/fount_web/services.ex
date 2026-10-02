@@ -239,7 +239,7 @@ defmodule FountWeb.Services do
   end
 
   defp semantic_run?(run),
-    do: get_in(run, ["plan", "operation_parameters", "workflow"]) == "semantic_import_v1"
+    do: get_in(run, ["plan", "operation_parameters", "workflow"]) == "semantic_import_v2"
 
   defp semantic_assessment_config do
     case Application.fetch_env(:fount_web, :semantic_assessment) do

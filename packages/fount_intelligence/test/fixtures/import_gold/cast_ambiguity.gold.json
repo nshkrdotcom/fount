@@ -1,0 +1,82 @@
+{
+  "schema_version": "fount_import_gold_v1",
+  "annotation_basis": "Independent hand-selected source roles and identity partitions; synthetic regression corpus, not a live-provider evaluation.",
+  "visible_source_sha256": "ab16d191254b6c7396b5aa10e724061890448013f634255c0e1c465ef657c76a",
+  "entities": [
+    {
+      "id": "evan",
+      "kind": "character"
+    },
+    {
+      "id": "printed-form",
+      "kind": "document_text"
+    },
+    {
+      "id": "mira",
+      "kind": "character"
+    },
+    {
+      "id": "guard-west",
+      "kind": "character"
+    },
+    {
+      "id": "guard-east",
+      "kind": "character"
+    },
+    {
+      "id": "evelyn",
+      "kind": "character"
+    }
+  ],
+  "occurrences": [
+    {
+      "entity_id": "evan",
+      "role": "speaker",
+      "byte_start": 19,
+      "byte_end": 23
+    },
+    {
+      "entity_id": "evan",
+      "role": "speaker",
+      "byte_start": 32,
+      "byte_end": 36
+    },
+    {
+      "entity_id": "printed-form",
+      "role": "printed_text",
+      "byte_start": 68,
+      "byte_end": 83
+    },
+    {
+      "entity_id": "mira",
+      "role": "speaker",
+      "byte_start": 104,
+      "byte_end": 117
+    },
+    {
+      "entity_id": "mira",
+      "role": "speaker",
+      "byte_start": 143,
+      "byte_end": 152
+    },
+    {
+      "entity_id": "guard-west",
+      "role": "speaker",
+      "byte_start": 217,
+      "byte_end": 222
+    },
+    {
+      "entity_id": "evelyn",
+      "role": "physical_presence",
+      "byte_start": 235,
+      "byte_end": 241
+    },
+    {
+      "entity_id": "guard-east",
+      "role": "speaker",
+      "byte_start": 296,
+      "byte_end": 301
+    }
+  ],
+  "required_ambiguities": []
+}

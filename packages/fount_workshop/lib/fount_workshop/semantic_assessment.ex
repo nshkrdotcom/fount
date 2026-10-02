@@ -1,7 +1,7 @@
 defmodule FountWorkshop.SemanticAssessment do
   @moduledoc "Host-neutral SI02 completion bridge through the existing Inference/ASM contracts."
 
-  alias Fount.Intelligence.ImportAssessment
+  alias Fount.Intelligence.{ImportAssessment, ImportCueDecisions, ImportReview}
   alias FountWorkshop.Writing.Completion
 
   @model "gpt-6.1-sol"
@@ -72,6 +72,13 @@ defmodule FountWorkshop.SemanticAssessment do
   end
 
   def extract(client, chunk, binding, opts \\ []) do
+    opts =
+      Keyword.put(
+        opts,
+        :validation_diagnostics,
+        &ImportCueDecisions.diagnostics(&1, chunk, binding)
+      )
+
     prompt = ImportAssessment.extraction_prompt(chunk, binding)
 
     case Completion.complete(
@@ -115,13 +122,28 @@ defmodule FountWorkshop.SemanticAssessment do
            &ImportAssessment.validate_chunk(&1, chunk, binding),
            completion_opts(opts, "semantic_import_review")
          ) do
-      {:ok, reviewed, review_trace} -> {:ok, reviewed, trace ++ review_trace}
-      {:error, reason, review_trace} -> {:error, reason, trace ++ review_trace}
+      {:ok, reviewed, review_trace} ->
+        {reviewed, diff} = ImportReview.finalize(proposed, reviewed)
+
+        case ImportAssessment.validate_chunk(reviewed, chunk, binding) do
+          :ok ->
+            {:ok, reviewed, trace ++ Enum.map(review_trace, &Map.put(&1, "review_diff", diff))}
+
+          {:error, reason} ->
+            {:error, reason, trace ++ review_trace}
+        end
+
+      {:error, reason, review_trace} ->
+        {:error, reason, trace ++ review_trace}
     end
   end
 
   def reconcile(client, chunk_results, opts \\ []) do
-    with {:ok, prompt} <- ImportAssessment.reconciliation_prompt(chunk_results) do
+    with {:ok, prompt} <-
+           ImportAssessment.reconciliation_prompt(
+             chunk_results,
+             Keyword.take(opts, [:plan, :binding, :max_bytes])
+           ) do
       Completion.complete(
         client,
         prompt,
@@ -185,6 +207,10 @@ defmodule FountWorkshop.SemanticAssessment do
       max_context_bytes: Keyword.get(opts, :max_context_bytes, 100_000),
       budget: Keyword.get(opts, :budget),
       dispatch_hook: Keyword.get(opts, :dispatch_hook),
+      audit_validation: not is_nil(Keyword.get(opts, :dispatch_hook)),
+      validator_version: ImportAssessment.schema_version(),
+      expected_model: @model,
+      validation_diagnostics: Keyword.get(opts, :validation_diagnostics),
       transient_retries: Keyword.get(opts, :transient_retries, 0),
       reserved_cost_microunits: Keyword.get(opts, :reserved_cost_microunits),
       currency: Keyword.get(opts, :currency)

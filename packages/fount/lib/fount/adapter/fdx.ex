@@ -13,7 +13,8 @@ defmodule Fount.Adapter.FDX do
     # external entities. That is the correct behavior for screenplay text.
     with {:ok, simple} <- Saxy.SimpleForm.parse_string(xml, expand_entity: :keep),
          {:ok, paragraphs, metadata} <- extract(simple) do
-      fountain = paragraphs_to_fountain(paragraphs)
+      {fountain, provenance} = paragraphs_to_fountain(paragraphs)
+      metadata = Map.put(metadata, :paragraph_provenance, provenance)
 
       parse_opts =
         opts
@@ -109,14 +110,30 @@ defmodule Fount.Adapter.FDX do
   defp paragraphs_to_fountain(paragraphs) do
     dual_second_characters = dual_second_character_indexes(paragraphs)
 
-    paragraphs
-    |> Enum.with_index()
-    |> Enum.map(fn {paragraph, index} ->
-      next = Enum.at(paragraphs, index + 1)
-      paragraph_to_fountain(paragraph, next, index, dual_second_characters)
-    end)
-    |> IO.iodata_to_binary()
-    |> ensure_single_final_newline()
+    pieces =
+      paragraphs
+      |> Enum.with_index()
+      |> Enum.map(fn {paragraph, index} ->
+        next = Enum.at(paragraphs, index + 1)
+        paragraph_to_fountain(paragraph, next, index, dual_second_characters)
+      end)
+      |> Enum.map(&IO.iodata_to_binary/1)
+
+    fountain = pieces |> IO.iodata_to_binary() |> ensure_single_final_newline()
+
+    {provenance, _offset} =
+      Enum.zip(paragraphs, pieces)
+      |> Enum.with_index(1)
+      |> Enum.map_reduce(0, fn {{paragraph, piece}, ordinal}, offset ->
+        {%{
+           ordinal: ordinal,
+           type: paragraph.type,
+           byte_start: offset,
+           byte_end: min(offset + byte_size(piece), byte_size(fountain))
+         }, offset + byte_size(piece)}
+      end)
+
+    {fountain, provenance}
   end
 
   defp paragraph_to_fountain(paragraph, next, index, dual_second_characters) do

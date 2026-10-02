@@ -8,11 +8,12 @@
     "occurrences",
     "headings",
     "coverage",
-    "unresolved"
+    "unresolved",
+    "cue_decisions"
   ],
   "properties": {
     "schema_version": {
-      "const": "semantic_import_v1"
+      "const": "semantic_import_v2"
     },
     "chunk_id": {
       "type": "string",
@@ -91,10 +92,17 @@
       "items": {
         "$ref": "#/$defs/issue"
       }
+    },
+    "cue_decisions": {
+      "type": "array",
+      "maxItems": 25000,
+      "items": {
+        "$ref": "#/$defs/cue_decision"
+      }
     }
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:fount:semantic-import:v1",
+  "$id": "urn:fount:semantic-import:v2",
   "$defs": {
     "evidence": {
       "type": "object",
@@ -466,6 +474,62 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 1000
+        }
+      }
+    },
+    "cue_decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "literal_element_id",
+        "disposition",
+        "entity_id",
+        "reason_code",
+        "evidence"
+      ],
+      "properties": {
+        "literal_element_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "disposition": {
+          "enum": [
+            "character",
+            "non_character",
+            "unresolved"
+          ]
+        },
+        "entity_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reason_code": {
+          "enum": [
+            "supported_speaker",
+            "printed_text",
+            "message_header",
+            "organization_or_prop",
+            "ambiguous_identity",
+            "ambiguous_role",
+            "insufficient_evidence"
+          ]
+        },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "items": {
+            "$ref": "#/$defs/evidence"
+          }
         }
       }
     }

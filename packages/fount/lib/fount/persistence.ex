@@ -166,6 +166,7 @@ defmodule Fount.Persistence do
               bytes: artifact["original_bytes"],
               render_hash: artifact["render_hash"],
               losses: artifact["fidelity"]["losses"] || [],
+              metadata: artifact["fidelity"]["metadata"] || %{},
               revision_id: revision_id
             }
           end
@@ -1007,7 +1008,7 @@ defmodule Fount.Persistence do
         import.bytes,
         ID.hash(import.bytes),
         import.render_hash || model.revision.render_hash,
-        json(%{"losses" => import[:losses] || []})
+        json(%{"losses" => import[:losses] || [], "metadata" => import[:metadata] || %{}})
       ]
     )
 

@@ -12,7 +12,7 @@ defmodule FountWeb.SemanticFixtureAdapter do
       provider: :semantic_fixture,
       model: @model,
       adapter_opts: opts,
-      metadata: %{fixture: :semantic_import_v1}
+      metadata: %{fixture: :semantic_import_v2}
     )
   end
 
@@ -61,7 +61,7 @@ defmodule FountWeb.SemanticFixtureAdapter do
 
   defp maybe_miss_person(%{"entities" => entities} = object, request, opts) do
     if Keyword.get(opts, :miss_person_first_pass, false) and
-         not String.contains?(Request.user_prompt(request), "source_self_review_v1") do
+         not String.contains?(Request.user_prompt(request), "source_self_review_v2") do
       ids = entities |> Enum.filter(&(&1["label"] == "EVELYN")) |> Enum.map(& &1["local_id"])
 
       object
@@ -137,6 +137,7 @@ defmodule FountWeb.SemanticFixtureAdapter do
         "entities" => [],
         "occurrences" => [],
         "headings" => [],
+        "cue_decisions" => [],
         "coverage" => %{"processed_span_ids" => [], "omitted" => omitted}
       })
     else
@@ -170,12 +171,39 @@ defmodule FountWeb.SemanticFixtureAdapter do
     {entities, occurrences} = add_document_fixture(entities, occurrences, payload)
     {entities, occurrences} = add_physical_presence_fixture(entities, occurrences, payload)
 
+    entities = add_alias_context(entities, payload)
+    {entities, occurrences} = group_named_literals(entities, occurrences)
+
+    decisions =
+      Enum.flat_map(elements, fn element ->
+        if element["kind"] == "character" do
+          occurrence =
+            Enum.find(occurrences, &(&1["literal_element_id"] == element["element_id"]))
+
+          [
+            %{
+              "literal_element_id" => element["element_id"],
+              "disposition" =>
+                if(occurrence["role"] == "speaker", do: "character", else: "non_character"),
+              "entity_id" =>
+                if(occurrence["role"] == "speaker", do: occurrence["entity_id"], else: nil),
+              "reason_code" =>
+                if(occurrence["role"] == "speaker", do: "supported_speaker", else: "printed_text"),
+              "evidence" => occurrence["evidence"]
+            }
+          ]
+        else
+          []
+        end
+      end)
+
     %{
-      "schema_version" => "semantic_import_v1",
+      "schema_version" => "semantic_import_v2",
       "chunk_id" => envelope["chunk_id"],
       "entities" => Enum.reverse(entities),
       "occurrences" => Enum.reverse(occurrences),
       "headings" => Enum.reverse(headings),
+      "cue_decisions" => decisions,
       "coverage" => %{
         "processed_span_ids" => [payload["span_id"]],
         "omitted" => []
@@ -201,13 +229,18 @@ defmodule FountWeb.SemanticFixtureAdapter do
       |> Enum.flat_map(fn {label, members} ->
         labels = Enum.map(members, &String.upcase(&1["label"] || ""))
 
-        if length(members) >= 2 and Enum.any?(labels, &String.starts_with?(&1, "DR. ")) do
+        if alias_group?(members, labels) do
           [
             %{
               "members" => Enum.map(members, & &1["ref"]),
               "relation" => "same_entity",
               "label" => label,
-              "kind" => hd(members)["kind"]
+              "kind" => hd(members)["kind"],
+              "reason_code" => "explicit_alias",
+              "explanation" =>
+                "The source explicitly identifies the professional and familiar names.",
+              "evidence" =>
+                Enum.flat_map(members, & &1["evidence"]) |> Enum.uniq() |> Enum.take(32)
             }
           ]
         else
@@ -229,7 +262,11 @@ defmodule FountWeb.SemanticFixtureAdapter do
               "members" => Enum.map(members, & &1["ref"]),
               "relation" => "separate_entities",
               "label" => label,
-              "kind" => "character"
+              "kind" => "character",
+              "reason_code" => "separate_context",
+              "explanation" => "The generic speaker occurrences are independently scoped.",
+              "evidence" =>
+                Enum.flat_map(members, & &1["evidence"]) |> Enum.uniq() |> Enum.take(32)
             }
           ]
         else
@@ -248,10 +285,24 @@ defmodule FountWeb.SemanticFixtureAdapter do
 
     case kind do
       "character" ->
-        entity = entity(local, "character", character_label(element["literal"]), evidence)
+        printed = element["literal"] in ["WORK ORDER", "NETWORK + AUDIO", "COUNT ONE:"]
+
+        entity =
+          entity(
+            local,
+            if(printed, do: "document_text", else: "character"),
+            character_label(element["literal"]),
+            evidence
+          )
 
         occurrence =
-          occurrence("occ-#{index}", local, "speaker", element["element_id"], evidence)
+          occurrence(
+            "occ-#{index}",
+            local,
+            if(printed, do: "printed_text", else: "speaker"),
+            element["element_id"],
+            evidence
+          )
 
         {[entity | entities], [occurrence | occurrences], headings}
 
@@ -288,9 +339,48 @@ defmodule FountWeb.SemanticFixtureAdapter do
     end
   end
 
+  defp alias_group?(members, labels) do
+    length(members) >= 2 and Enum.any?(labels, &String.starts_with?(&1, "DR. ")) and
+      alias_proven?(members)
+  end
+
+  defp alias_proven?(members), do: Enum.all?(members, &(length(&1["evidence"]) > 1))
+
+  defp add_alias_context(entities, payload) do
+    case exact_phrase(payload, "MIRA VALE is DR. MIRA VALE, her professional name.") do
+      nil -> entities
+      proof -> Enum.map(entities, &add_alias_proof(&1, proof))
+    end
+  end
+
+  defp add_alias_proof(%{"label" => label} = row, proof)
+       when label in ["MIRA VALE", "DR. MIRA VALE"] do
+    Map.update!(row, "evidence", &(&1 ++ [proof]))
+  end
+
+  defp add_alias_proof(row, _proof), do: row
+
+  defp group_named_literals(entities, occurrences) do
+    {kept, remap} =
+      Enum.reduce(entities, {[], %{}}, fn entity, {kept, remap} ->
+        existing =
+          Enum.find(kept, &(&1["kind"] == "character" and &1["label"] == entity["label"]))
+
+        if entity["kind"] == "character" and entity["label"] not in ["GUARD", "COP", "NURSE"] and
+             existing do
+          {kept, Map.put(remap, entity["local_id"], existing["local_id"])}
+        else
+          {[entity | kept], remap}
+        end
+      end)
+
+    {kept,
+     Enum.map(occurrences, &Map.update!(&1, "entity_id", fn id -> Map.get(remap, id, id) end))}
+  end
+
   defp evidence_for(element, payload) do
-    start = element["source_byte_start"] - payload["byte_start"]
-    finish = element["source_byte_end"] - payload["byte_start"]
+    start = element["content_byte_start"] - payload["byte_start"]
+    finish = element["content_byte_end"] - payload["byte_start"]
 
     if start >= 0 and finish > start and finish <= byte_size(payload["text"]) do
       quote = binary_part(payload["text"], start, finish - start)

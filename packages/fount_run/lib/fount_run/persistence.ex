@@ -1373,7 +1373,7 @@ defmodule FountRun.Persistence do
     id = ID.v4()
 
     initial_stage =
-      if plan.operation_parameters["workflow"] == "semantic_import_v1",
+      if plan.operation_parameters["workflow"] == "semantic_import_v2",
         do: "semantic_intake",
         else: "intake"
 

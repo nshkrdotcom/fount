@@ -189,14 +189,12 @@ defmodule FountWeb.UX03ReadingReviewFinishIntegrationTest do
   test "UX03 cast facts keep literal cues distinct from confirmed people and prose presence" do
     assert {:ok, %{access: access}} = launch("cast")
     assert {:ok, context} = ProjectContext.load("test-owner", access["key"])
-    [character | _] = context.semantic.characters
-
-    assert character.dialogue_block_count > 0
-    assert character.review_state == "unreviewed"
-    assert character.speaking_occurrences > 0
-    assert character.presence_occurrences == 0
-    assert character.mention_occurrences == 0
-    assert character.core_character_id == nil
+    assert context.semantic.characters == []
+    [group | _] = context.semantic.cue_groups
+    assert group.cue_count > 0
+    assert group.verification == "unassessed"
+    assert Enum.all?(group.occurrences, &(&1.role == "unknown"))
+    assert Enum.all?(group.occurrences, &is_binary(&1.dialogue_block_id))
     assert context.current.cast == %{}
   end
 

@@ -55,6 +55,9 @@ defmodule FountWeb.SemanticContext do
       inventory = manual["result"] || %{}
       latest_current = latest_model(assessment_history)
       latest = latest_current || List.first(model_history)
+      issues = review_partition_issues(current_entities, revision_entities, history)
+      result = conflict_result(assessment["result"] || %{}, issues)
+      state = conflict_state(assessment_state(head, persisted, latest_current, latest), issues)
 
       {:ok,
        %{
@@ -68,12 +71,14 @@ defmodule FountWeb.SemanticContext do
          source_sha256: assessment["source_sha256"],
          revision_id: assessment["revision_id"],
          inventory: inventory,
+         cue_groups: cue_groups(inventory, revision_entities, result),
+         resolution_issues: issues,
          entities: projection,
          characters: character_profiles(projection, persisted, inventory),
          locations: location_profiles(projection),
          canonical_cast: canonical_cast(inventory),
          review_history: history,
-         assessment_state: assessment_state(head, persisted, latest_current, latest),
+         assessment_state: state,
          coverage: assessment_field(latest, "coverage"),
          usage: assessment_field(latest, "usage"),
          assessment_error: assessment_field(latest, "error")
@@ -83,27 +88,94 @@ defmodule FountWeb.SemanticContext do
     end
   end
 
+  defp conflict_state(state, [_ | _]) when state in [:ready, :partial], do: :partial
+  defp conflict_state(state, _issues), do: state
+
+  defp conflict_result(result, issues) do
+    conflicted = MapSet.new(Enum.flat_map(issues, & &1["literal_element_ids"]))
+
+    Map.update(
+      result,
+      "cue_decisions",
+      [],
+      &Enum.map(&1, fn row -> conflict_decision(row, conflicted) end)
+    )
+  end
+
+  defp conflict_decision(row, conflicted) do
+    if MapSet.member?(conflicted, row["literal_element_id"]),
+      do: Map.put(row, "disposition", "unresolved"),
+      else: row
+  end
+
   defp assessment_field(nil, _key), do: %{}
   defp assessment_field(assessment, key), do: assessment[key] || %{}
 
   @doc "Retains unassessed literal source inventory when an interpretation reports partial coverage."
-  def include_partial_literals(current_rows, revision_rows, %{"status" => "partial"}) do
+  def include_partial_literals(current_rows, revision_rows, %{"status" => "partial"} = assessment) do
     covered =
       current_rows
       |> Enum.flat_map(&(get_in(&1, ["payload", "occurrences"]) || []))
       |> Enum.map(& &1["literal_element_id"])
       |> MapSet.new()
 
+    decided =
+      assessment
+      |> get_in(["result", "cue_decisions"])
+      |> List.wrap()
+      |> Enum.map(& &1["literal_element_id"])
+      |> MapSet.new()
+
     literals =
       Enum.filter(revision_rows, fn row ->
         row["assessment_origin"] == "manual" and
-          not MapSet.member?(covered, get_in(row, ["payload", "element_id"]))
+          not MapSet.member?(covered, get_in(row, ["payload", "element_id"])) and
+          not MapSet.member?(decided, get_in(row, ["payload", "element_id"]))
       end)
 
     Enum.uniq_by(current_rows ++ literals, & &1["handle_id"])
   end
 
   def include_partial_literals(current_rows, _revision_rows, _assessment), do: current_rows
+
+  @doc "Groups unverified syntax occurrences for browsing without creating person identities."
+  def cue_groups(inventory, rows, result) do
+    handles =
+      rows
+      |> Enum.filter(&(&1["assessment_origin"] == "manual"))
+      |> Map.new(&{get_in(&1, ["payload", "element_id"]), &1["handle_id"]})
+
+    decided =
+      Map.new(result["cue_decisions"] || [], &{&1["literal_element_id"], &1["disposition"]})
+
+    (inventory["character_cues"] || [])
+    |> Enum.reject(&(decided[&1["element_id"]] in ["character", "non_character"]))
+    |> Enum.group_by(& &1["literal"])
+    |> Enum.map(fn {spelling, cues} ->
+      %{
+        group_id:
+          Fount.ID.v5(inventory["screenplay_id"], [
+            "cue-group:",
+            inventory["revision_id"],
+            ":",
+            spelling
+          ]),
+        display_spelling: spelling,
+        cue_count: length(cues),
+        verification:
+          if(Enum.any?(cues, &(decided[&1["element_id"]] == "unresolved")),
+            do: "unresolved",
+            else: "unassessed"
+          ),
+        occurrences:
+          Enum.map(
+            cues,
+            &Map.put(occurrence(&1, &1["local_id"]), :handle_id, handles[&1["element_id"]])
+          )
+      }
+    end)
+    |> Enum.sort_by(&{String.downcase(&1.display_spelling), &1.group_id})
+  end
 
   @doc "Carries human-reviewed handles across reassessments without reviving unreviewed historical suggestions."
   def select_entity_rows(current_rows, revision_rows, history)
@@ -124,13 +196,31 @@ defmodule FountWeb.SemanticContext do
       end)
       |> Enum.uniq_by(& &1["handle_id"])
 
+    {current_rows, _issues} = FountWeb.SemanticPartitions.reconcile(current_rows, carried)
     current_rows ++ carried
+  end
+
+  defp review_partition_issues(current_rows, revision_rows, history) do
+    active =
+      history |> active_review_events() |> Enum.flat_map(&event_handle_ids/1) |> MapSet.new()
+
+    current = MapSet.new(current_rows, & &1["handle_id"])
+
+    reviewed =
+      Enum.filter(
+        revision_rows,
+        &(MapSet.member?(active, &1["handle_id"]) and not MapSet.member?(current, &1["handle_id"]))
+      )
+      |> Enum.uniq_by(& &1["handle_id"])
+
+    {_rows, issues} = FountWeb.SemanticPartitions.reconcile(current_rows, reviewed)
+    issues
   end
 
   defp latest_model(rows) do
     Enum.find(
       rows,
-      &(&1["schema_version"] == "semantic_import_v1" and
+      &(&1["schema_version"] == "semantic_import_v2" and
           &1["origin"] in ["model", "deterministic_fixture"])
     )
   end
@@ -224,7 +314,7 @@ defmodule FountWeb.SemanticContext do
   end
 
   defp apply_event(%{"action" => "confirm", "target_handle_id" => id}, state),
-    do: update_entity(state, id, &Map.put(&1, :review_state, "confirmed"))
+    do: update_entity(state, id, &confirm_entity/1)
 
   defp apply_event(%{"action" => "reject", "target_handle_id" => id}, state),
     do: update_entity(state, id, &Map.put(&1, :review_state, "rejected"))
@@ -326,6 +416,18 @@ defmodule FountWeb.SemanticContext do
     state |> Map.put(id, %{entity | occurrences: kept}) |> Map.put(new_id, new_entity)
   end
 
+  defp confirm_entity(entity) do
+    occurrences =
+      Enum.map(entity.occurrences, fn occurrence ->
+        if entity.source_origin == "manual" and entity.kind == "character" and
+             occurrence.role == "unknown",
+           do: %{occurrence | role: "speaker"},
+           else: occurrence
+      end)
+
+    %{entity | review_state: "confirmed", occurrences: occurrences}
+  end
+
   defp consolidate_merges(state) do
     state
     |> Enum.reduce(state, fn {id, entity}, acc ->
@@ -395,7 +497,7 @@ defmodule FountWeb.SemanticContext do
 
   defp occurrences(payload, local_id) do
     case value(payload, "occurrences") do
-      rows when is_list(rows) and rows != [] -> Enum.map(rows, &occurrence(&1, local_id))
+      rows when is_list(rows) -> Enum.map(rows, &occurrence(&1, local_id))
       _ -> [occurrence(payload, local_id)]
     end
   end
@@ -450,11 +552,12 @@ defmodule FountWeb.SemanticContext do
 
     semantic =
       entities
-      |> Enum.filter(&(&1.kind == "character" and &1.review_state != "rejected"))
+      |> Enum.filter(&visible_person?/1)
       |> Enum.map(&character_profile(&1, screenplay, confirmed_ids))
 
     legacy =
       canonical_cast(inventory)
+      |> Enum.filter(&(&1["review_state"] == "confirmed"))
       |> Enum.map(fn row ->
         %{
           id: row["core_character_id"],
@@ -483,15 +586,22 @@ defmodule FountWeb.SemanticContext do
     |> Enum.sort_by(&{String.downcase(&1.display_name || ""), &1.id})
   end
 
+  defp visible_person?(entity) do
+    entity.kind == "character" and entity.occurrences != [] and entity.review_state != "rejected" and
+      (entity.source_origin != "manual" or entity.review_state == "confirmed")
+  end
+
   defp character_profile(entity, screenplay, confirmed_ids) do
     dialogue_blocks =
       entity.occurrences
+      |> Enum.filter(&(&1.role == "speaker"))
       |> Enum.map(& &1.dialogue_block_id)
       |> Enum.reject(&is_nil/1)
       |> Enum.uniq()
 
     scene_ordinals =
       entity.occurrences
+      |> Enum.filter(&(&1.role == "physical_presence"))
       |> Enum.map(& &1.scene_ordinal)
       |> Enum.reject(&is_nil/1)
       |> Enum.uniq()
@@ -517,9 +627,21 @@ defmodule FountWeb.SemanticContext do
       mention_occurrences: Enum.count(entity.occurrences, &(&1.role == "mentioned")),
       appearance_ordinals: scene_ordinals,
       appearance_count: length(scene_ordinals),
+      speaking_scene_ordinals: role_scenes(entity.occurrences, "speaker"),
+      presence_scene_ordinals: scene_ordinals,
+      mention_scene_ordinals: role_scenes(entity.occurrences, "mentioned"),
       dialogue_block_count: length(dialogue_blocks),
       occurrences: entity.occurrences
     }
+  end
+
+  defp role_scenes(occurrences, role) do
+    occurrences
+    |> Enum.filter(&(&1.role == role))
+    |> Enum.map(& &1.scene_ordinal)
+    |> Enum.reject(&is_nil/1)
+    |> Enum.uniq()
+    |> Enum.sort()
   end
 
   def location_profiles(entities) do

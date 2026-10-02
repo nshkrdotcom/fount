@@ -13,7 +13,7 @@ defmodule FountRun.SemanticAssessmentHandler do
   def execute(%{"stage" => stage} = claim, opts) when stage in @stages do
     result =
       with {:ok, envelope} <- PipelineRequest.validate(claim["request"]),
-           "semantic_import_v1" <- envelope["kind"],
+           "semantic_import_v2" <- envelope["kind"],
            :ok <- verify_checkpoint(claim, envelope, opts) do
         execute_stage(stage, claim, envelope, opts)
       else
@@ -145,7 +145,16 @@ defmodule FountRun.SemanticAssessmentHandler do
     with {:ok, client} <- inference(opts),
          {:ok, completion_opts} <- completion_opts(repo, claim, opts) do
       reconcile_result(
-        normalize_reconciliation(SemanticAssessment.reconcile(client, results, completion_opts)),
+        normalize_reconciliation(
+          SemanticAssessment.reconcile(
+            client,
+            results,
+            Keyword.merge(completion_opts,
+              plan: runtime["plan"],
+              binding: prompt_binding(envelope["semantic_request"], runtime["source"])
+            )
+          )
+        ),
         repo,
         claim,
         envelope,
@@ -167,6 +176,7 @@ defmodule FountRun.SemanticAssessmentHandler do
              runtime["reconciliation"],
              binding,
              limits: request["limits"] || %{},
+             plan: runtime["plan"],
              expected_chunk_count: get_in(runtime, ["plan", "chunk_count"]) || 0
            ),
          runtime <- Map.put(runtime, "aggregate", aggregate),
@@ -269,6 +279,7 @@ defmodule FountRun.SemanticAssessmentHandler do
              runtime["reconciliation"],
              prompt_binding(request, source),
              limits: request["limits"],
+             plan: runtime["plan"],
              expected_chunk_count: runtime["plan"]["chunk_count"]
            ),
          true <- aggregate == expected or {:error, :semantic_checkpoint_aggregate_mismatch} do
@@ -433,7 +444,7 @@ defmodule FountRun.SemanticAssessmentHandler do
          budget: budget,
          decode_repairs: min(limits.decode_repairs, 1),
          transient_retries: limits.transient_retries,
-         dispatch_hook: DispatchHook.new(repo, claim, opts),
+         dispatch_hook: DispatchHook.new(repo, claim, Keyword.put(opts, :audit_validation, true)),
          reserved_cost_microunits: Keyword.get(opts, :reserved_cost_microunits),
          currency: Keyword.get(opts, :currency)
        ]}

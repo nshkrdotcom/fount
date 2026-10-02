@@ -204,7 +204,10 @@ defmodule Fount.Intelligence.ImportAssessmentTest do
           "members" => ["chunk-1:a", "chunk-2:b"],
           "relation" => "possible_same_entity",
           "label" => "ALEX",
-          "kind" => "character"
+          "kind" => "character",
+          "reason_code" => "ambiguous_identity",
+          "explanation" => "The supplied names do not establish identity.",
+          "evidence" => hd(a["entities"])["evidence"] ++ hd(b["entities"])["evidence"]
         }
       ],
       "unresolved" => []
@@ -214,7 +217,11 @@ defmodule Fount.Intelligence.ImportAssessmentTest do
     assert {:ok, aggregate} = ImportAssessment.assemble([a, b], possible, binding)
     assert length(aggregate["entities"]) == 2
 
-    same = put_in(possible, ["groups", Access.at(0), "relation"], "same_entity")
+    same =
+      possible
+      |> put_in(["groups", Access.at(0), "relation"], "same_entity")
+      |> put_in(["groups", Access.at(0), "reason_code"], "explicit_identity")
+
     assert {:ok, merged} = ImportAssessment.assemble([a, b], same, binding)
     assert length(merged["entities"]) == 1
     assert length(merged["occurrences"]) == 2
@@ -278,6 +285,7 @@ defmodule Fount.Intelligence.ImportAssessmentTest do
         }
       ],
       "headings" => [],
+      "cue_decisions" => [],
       "coverage" => %{"processed_span_ids" => chunk["payload_span_ids"], "omitted" => []},
       "unresolved" => []
     }

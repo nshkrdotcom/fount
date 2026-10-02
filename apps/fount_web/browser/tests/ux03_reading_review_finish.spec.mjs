@@ -131,10 +131,13 @@ test('UX03 cast/location facts and manual table read remain provider-free and cr
 
   await openWorkspace(page, `/p/${key}/cast`);
   await expect(page.getByRole('heading', {name: 'Cast', exact: true})).toBeVisible();
-  await expect(page.locator('.character-grid')).toContainText('literal dialogue blocks');
-  await expect(page.locator('.character-grid')).toContainText('unreviewed');
+  await expect(page.locator('.compact-character-card')).toHaveCount(0);
+  const group = page.locator('.source-cue-group').first();
+  await group.locator('summary').first().click();
+  const cue = group.locator('.source-cue-occurrence').first();
+  await cue.locator('summary').click();
+  await cue.getByRole('button', {name: 'Confirm this speaker occurrence'}).click();
   const firstIdentity = page.locator('.compact-character-card').first();
-  await firstIdentity.getByRole('button', {name: 'Confirm person'}).click();
   await expect(firstIdentity).toContainText('confirmed');
   await openWorkspace(page, `/p/${key}/locations`);
   await expect(page.getByRole('heading', {name: 'Locations', exact: true})).toBeVisible();

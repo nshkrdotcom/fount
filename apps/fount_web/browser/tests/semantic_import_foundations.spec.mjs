@@ -11,6 +11,14 @@ async function login(page){
   await expect(page.locator('.phx-connected')).toBeVisible();
 }
 
+async function openSourceCue(page, occurrence = 0) {
+  const group = page.locator('.source-cue-group').filter({hasText: 'GUARD'}).first();
+  await group.locator('summary').first().click();
+  const cue = group.locator('.source-cue-occurrence').nth(occurrence);
+  await cue.locator('summary').click();
+  return cue;
+}
+
 test('SI01 import keeps source cues unreviewed, manual review creates zero Runs, and Cast/Locations are separate', async ({page})=>{
   await login(page);
   const key=await importProject(page,`si01-${Date.now()}`,source);
@@ -20,19 +28,17 @@ test('SI01 import keeps source cues unreviewed, manual review creates zero Runs,
   await expect(page.getByRole('heading',{name:'Cast',exact:true})).toBeVisible();
   await expect(page.locator('#semantic-assessment-status')).toContainText(process.env.FOUNT_SEMANTIC_ASSESSMENT_MODE === 'deterministic_fixture' ? 'Not assessed' : 'Not configured');
   await expect(page.locator('#semantic-assessment-status')).toContainText(process.env.FOUNT_SEMANTIC_ASSESSMENT_MODE === 'deterministic_fixture' ? 'gpt-6.1-sol' : 'Not configured');
-  await expect(page.locator('.character-grid')).toContainText('GUARD');
-  await expect(page.locator('.character-grid').getByRole('heading',{name:'GUARD',exact:true})).toHaveCount(2);
-  await expect(page.locator('.character-grid')).toContainText('GUARD (O.S.)');
-  await expect(page.locator('.character-grid')).not.toContainText('AUTHORIZED PERSONNEL ONLY');
-  await expect(page.locator('.character-grid')).not.toContainText('STICKY NOTE: KEEP OUT');
-  await expect(page.locator('.character-grid')).not.toContainText('WORK ORDER 17-B');
-  await expect(page.locator('.character-grid')).not.toContainText('ALEX');
-  await expect(page.locator('.character-grid')).toContainText('YOUNG MARA');
-  await expect(page.locator('.character-grid')).toContainText('MARA');
-  await expect(page.locator('.character-grid')).toContainText('unreviewed');
+  await expect(page.locator('#unverified-source-cues')).toContainText('GUARD');
+  await expect(page.locator('#unverified-source-cues')).toContainText('YOUNG MARA');
+  await expect(page.locator('#unverified-source-cues')).toContainText('MARA');
+  await expect(page.locator('#unverified-source-cues')).not.toContainText('AUTHORIZED PERSONNEL ONLY');
+  await expect(page.locator('#unverified-source-cues')).not.toContainText('WORK ORDER 17-B');
+  await expect(page.locator('.compact-character-card')).toHaveCount(0);
+  await expect(page.locator('#unverified-source-cues')).toContainText('Unverified source cues');
 
+  const cue = await openSourceCue(page);
+  await cue.getByRole('button',{name:'Confirm this speaker occurrence'}).click();
   const first=page.locator('.compact-character-card').first();
-  await first.getByRole('button',{name:'Confirm person'}).click();
   await expect(first).toContainText('confirmed');
   expect(projectRunCount(key)).toBe(0);
 
@@ -55,13 +61,13 @@ test('SI01 stale source review is recovered across two tabs without creating a R
   const key=await importProject(firstPage,`si01-conflict-${Date.now()}`,source);
   await openWorkspace(firstPage, `/p/${key}/cast`);
   await openWorkspace(stalePage, `/p/${key}/cast`);
-  await expect(firstPage.locator('.compact-character-card').first()).toBeVisible();
-  await expect(stalePage.locator('.compact-character-card').first()).toBeVisible();
+  const firstCue = await openSourceCue(firstPage);
+  const staleCue = await openSourceCue(stalePage, 1);
 
-  await firstPage.locator('.compact-character-card').first().getByRole('button',{name:'Confirm person'}).click();
+  await firstCue.getByRole('button',{name:'Confirm this speaker occurrence'}).click();
   await expect(firstPage.locator('.compact-character-card').first()).toContainText('confirmed');
 
-  await stalePage.locator('.compact-character-card').nth(1).getByRole('button',{name:'Reject as cast'}).click();
+  await staleCue.getByRole('button',{name:'Exclude this cue from people'}).click();
   await expect(stalePage.locator('main')).toContainText('Source review changed in another tab');
   await expect(stalePage.locator('.semantic-history')).toContainText('conflict');
   expect(projectRunCount(key)).toBe(0);
@@ -81,7 +87,8 @@ for (const viewport of [
     const key=await importProject(page,`si01-layout-${viewport.width}-${Date.now()}`,source+'\nEXT. ROAD - LATER\n\nA cart rolls away.\n\nINT. HALL - UNKNOWABLE\n\nSilence.\n');
     for (const destination of ['cast','locations']) {
       await openWorkspace(page, `/p/${key}/${destination}`);
-      const confirm=page.getByRole('button',{name:destination==='cast'?'Confirm person':'Confirm place'}).first();
+      if (destination === 'cast') await openSourceCue(page);
+      const confirm=page.getByRole('button',{name:destination==='cast'?'Confirm this speaker occurrence':'Confirm place'}).first();
       await confirm.focus();
       await page.keyboard.press('Enter');
       await expect(page.locator('.semantic-history')).toContainText('applied');
@@ -115,8 +122,9 @@ test('SI01 review exports exact provenance and promotion advances only through t
   };
   const before=await exported();
   await openWorkspace(page, `/p/${key}/cast`);
+  const cue = await openSourceCue(page);
+  await cue.getByRole('button',{name:'Confirm this speaker occurrence'}).focus();
   const first=page.locator('.compact-character-card').first();
-  await first.getByRole('button',{name:'Confirm person'}).focus();
   await page.keyboard.press('Enter');
   await expect(first).toContainText('confirmed');
   const reviewed=await exported();
@@ -170,8 +178,8 @@ test('SI01 navigation preserves a review held at the transport boundary until it
   await login(page);
   const key = await importProject(page, 'si01-pending-review-navigation', source);
   await openWorkspace(page, `/p/${key}/cast`);
-  const card = page.locator('.compact-character-card').first();
-  await card.getByRole('button', {name: 'Confirm person'}).click();
+  const card = await openSourceCue(page);
+  await card.getByRole('button', {name: 'Confirm this speaker occurrence'}).click();
   await held;
   await expect(card.locator('form.phx-submit-loading')).toHaveCount(1);
   const navigation = openWorkspace(page, `/p/${key}/locations`);

@@ -163,6 +163,45 @@ defmodule FountRun.ExecutionStore do
     tx(repo, fn -> provider_result_locked(repo, operation_id, result) end)
   end
 
+  @doc "Records bounded local validation separately from transport response evidence."
+  def provider_validation(repo, claim, operation_id, result) when is_map(result) do
+    tx(repo, fn ->
+      run = locked_run(repo, claim["run_id"])
+      ensure_claim_owner!(repo, run, claim, :commit)
+
+      row =
+        one(repo, "SELECT * FROM fount_run_provider_requests WHERE operation_id=$1 FOR UPDATE", [
+          operation_id
+        ]) || rollback(repo, :provider_request_not_found)
+
+      cond do
+        row["run_id"] != claim["run_id"] or row["step_id"] != claim["step_id"] ->
+          rollback(repo, :provider_validation_binding_mismatch)
+
+        byte_size(Jason.encode!(result)) > 8_000 ->
+          rollback(repo, :provider_validation_too_large)
+
+        row["validation_result"] == result ->
+          :ok
+
+        not is_nil(row["validation_result"]) ->
+          rollback(repo, :provider_validation_conflict)
+
+        row["status"] != "succeeded" ->
+          rollback(repo, :provider_response_unavailable)
+
+        true ->
+          q!(
+            repo,
+            "UPDATE fount_run_provider_requests SET validation_result=$2::jsonb,updated_at=now() WHERE operation_id=$1",
+            [operation_id, result]
+          )
+
+          :ok
+      end
+    end)
+  end
+
   defp provider_result_locked(repo, operation_id, result) do
     row =
       one(repo, "SELECT * FROM fount_run_provider_requests WHERE operation_id=$1 FOR UPDATE", [

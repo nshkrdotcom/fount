@@ -61,6 +61,19 @@ defmodule FountWeb.ProjectToolsLive do
     {:noreply, assign(socket, :cast_query, params["name"] || "") |> assign(:cast_page, 0)}
   end
 
+  def handle_event("cue_page", %{"group_id" => id, "direction" => direction}, socket) do
+    case Enum.find(socket.assigns.cue_groups, &(&1.group_id == id)) do
+      nil ->
+        {:noreply, socket}
+
+      group ->
+        pages = socket.assigns.cue_occurrence_pages
+        delta = if direction == "next", do: 1, else: -1
+        page = min(max(Map.get(pages, id, 0) + delta, 0), div(max(group.cue_count - 1, 0), 20))
+        {:noreply, assign(socket, :cue_occurrence_pages, Map.put(pages, id, page))}
+    end
+  end
+
   @impl true
   def handle_event("cast_page", %{"direction" => direction}, socket) do
     delta = if direction == "next", do: 1, else: -1
@@ -367,6 +380,24 @@ defmodule FountWeb.ProjectToolsLive do
       nil -> {:noreply, assign(socket, :error, "That dialogue line is no longer in this source.")}
       false -> {:noreply, assign(socket, :error, "Choose a dialogue or parenthetical line.")}
       {:error, reason} -> {:noreply, assign(socket, :error, creative_error(reason))}
+    end
+  end
+
+  def handle_event("read_source_cue", %{"element_id" => element_id}, socket) do
+    cue =
+      socket.assigns.cue_groups
+      |> Enum.flat_map(& &1.occurrences)
+      |> Enum.find(&(&1.element_id == element_id))
+
+    if cue do
+      profile = %{id: element_id, display_name: cue.literal, occurrences: [cue]}
+
+      {:ok, dialogue} =
+        FountWeb.SemanticContext.character_dialogue(socket.assigns.context.current, profile)
+
+      {:noreply, socket |> assign(:character_dialogue, dialogue) |> assign(:error, nil)}
+    else
+      {:noreply, assign(socket, :error, "Source cue is unavailable in this revision.")}
     end
   end
 
@@ -1003,12 +1034,19 @@ defmodule FountWeb.ProjectToolsLive do
     project_id = context.project["id"]
     project_runs = runs(owner, project_id)
     characters = semantic_characters(context)
+    cue_groups = Map.get(context.semantic, :cue_groups, [])
     cast_query = socket.assigns[:cast_query] || ""
 
     cast_query =
-      if Enum.any?(characters, &(&1.display_name == cast_query)), do: cast_query, else: ""
+      if Enum.any?(characters, &(&1.display_name == cast_query)) or
+           Enum.any?(cue_groups, &(&1.display_spelling == cast_query)), do: cast_query, else: ""
 
-    matching_count = Enum.count(characters, &(cast_query == "" or &1.display_name == cast_query))
+    matching_count =
+      max(
+        Enum.count(characters, &(cast_query == "" or &1.display_name == cast_query)),
+        Enum.count(cue_groups, &(cast_query == "" or &1.display_spelling == cast_query))
+      )
+
     cast_page = min(socket.assigns[:cast_page] || 0, div(max(matching_count - 1, 0), 20))
 
     note_filters =
@@ -1035,6 +1073,11 @@ defmodule FountWeb.ProjectToolsLive do
     |> assign(:cast_query, cast_query)
     |> assign(:cast_page, cast_page)
     |> assign(:characters, characters)
+    |> assign(:cue_groups, cue_groups)
+    |> assign(
+      :cue_occurrence_pages,
+      Map.take(socket.assigns[:cue_occurrence_pages] || %{}, Enum.map(cue_groups, & &1.group_id))
+    )
     |> assign(:locations, semantic_locations(context))
     |> assign(:estimates, FountWeb.ScreenplayIndex.estimates(context.current))
     |> assign(:note_filters, note_filters)
@@ -1069,9 +1112,20 @@ defmodule FountWeb.ProjectToolsLive do
     |> Enum.slice(page * 20, 20)
   end
 
-  defp cast_groups(characters) do
-    characters |> Enum.frequencies_by(& &1.display_name) |> Enum.sort()
+  defp cast_groups(characters, groups) do
+    (Enum.map(groups, &{&1.display_spelling, &1.cue_count}) ++
+       Map.to_list(Enum.frequencies_by(characters, & &1.display_name)))
+    |> Enum.sort()
   end
+
+  defp visible_cue_groups(groups, query, page) do
+    groups
+    |> Enum.filter(&(query == "" or &1.display_spelling == query))
+    |> Enum.slice(page * 20, 20)
+  end
+
+  defp visible_cue_occurrences(group, pages),
+    do: Enum.slice(group.occurrences, Map.get(pages, group.group_id, 0) * 20, 20)
 
   defp semantic_characters(%{semantic: %{characters: characters}}) when is_list(characters),
     do: characters
@@ -2584,19 +2638,21 @@ defmodule FountWeb.ProjectToolsLive do
           Apply the SI01 host migration, then reload this exact revision. No fallback identity facts were fabricated.
         </FountWeb.CoreComponents.alert>
 
-        <section :if={length(@characters) > 20} class="card" id="literal-cue-browser">
+        <section
+          :if={@cue_groups != [] || length(@characters) > 20}
+          class="card"
+          id="literal-cue-browser"
+        >
           <h2>Browse source cue groups</h2>
           <p>
-            {length(@characters)} source occurrences or assessed identities; {length(
-              cast_groups(@characters)
-            )} distinct spellings. Repeated spelling does not prove the same person. Showing at most 20 review cards at a time.
+            {length(@characters)} suggested or reviewed people; {length(@cue_groups)} unverified source cue groups. Repeated spelling does not prove the same person. Showing at most 20 cards in each section.
           </p>
           <form id="cast-cue-filter" phx-change="browse_cast">
             <label for="cast-cue-name">Cue spelling</label>
             <select id="cast-cue-name" name="cast[name]">
               <option value="">All spellings</option>
               <option
-                :for={{name, count} <- cast_groups(@characters)}
+                :for={{name, count} <- cast_groups(@characters, @cue_groups)}
                 value={name}
                 selected={name == @cast_query}
               >
@@ -2609,13 +2665,16 @@ defmodule FountWeb.ProjectToolsLive do
             phx-click="cast_page"
             phx-value-direction="previous"
             disabled={@cast_page == 0}
-          >Previous occurrences</button>
+          >Previous groups</button>
           <button
             type="button"
             phx-click="cast_page"
             phx-value-direction="next"
-            disabled={length(visible_cast(@characters, @cast_query, @cast_page + 1)) == 0}
-          >Next occurrences</button>
+            disabled={
+              length(visible_cast(@characters, @cast_query, @cast_page + 1)) == 0 &&
+                length(visible_cue_groups(@cue_groups, @cast_query, @cast_page + 1)) == 0
+            }
+          >Next groups</button>
           <p>Page {@cast_page + 1}</p>
         </section>
         <details
@@ -2635,6 +2694,74 @@ defmodule FountWeb.ProjectToolsLive do
             Parser confidence about people: unknown. Model assessment includes a separate source self-review. Export source review JSON for every parser decision, source range and anomaly.
           </p>
         </details>
+        <section
+          :if={@cue_groups != []}
+          id="unverified-source-cues"
+          aria-label="Unverified source cues"
+        >
+          <h2>Unverified source cues</h2>
+          <p>
+            These are syntax candidates, not people identities or verified speeches. Review an individual occurrence, or explicitly assess this draft.
+          </p>
+          <details
+            :for={group <- visible_cue_groups(@cue_groups, @cast_query, @cast_page)}
+            class="card source-cue-group"
+            id={"cue-group-#{group.group_id}"}
+          >
+            <summary>
+              {group.display_spelling} · {group.cue_count} parsed cues · {group.verification}
+            </summary>
+            <p>Identity unresolved. Equal spelling alone does not establish the same person.</p>
+            <p>Occurrence page {Map.get(@cue_occurrence_pages, group.group_id, 0) + 1}</p>
+            <button
+              type="button"
+              phx-click="cue_page"
+              phx-value-group_id={group.group_id}
+              phx-value-direction="previous"
+              disabled={Map.get(@cue_occurrence_pages, group.group_id, 0) == 0}
+            >Previous cues</button>
+            <button
+              type="button"
+              phx-click="cue_page"
+              phx-value-group_id={group.group_id}
+              phx-value-direction="next"
+              disabled={
+                (Map.get(@cue_occurrence_pages, group.group_id, 0) + 1) * 20 >= group.cue_count
+              }
+            >Next cues</button>
+            <details
+              :for={occurrence <- visible_cue_occurrences(group, @cue_occurrence_pages)}
+              class="source-cue-occurrence"
+              id={"source-cue-#{occurrence.element_id}"}
+            >
+              <summary>Scene {occurrence.scene_ordinal || "—"} · {occurrence.literal}</summary>
+              <a href={"/p/#{@project["key"]}?source=current#node-#{occurrence.element_id}"}>View exact source evidence</a>
+              <button
+                type="button"
+                phx-click="read_source_cue"
+                phx-value-element_id={occurrence.element_id}
+              >Read literal dialogue</button>
+              <form :if={occurrence.handle_id} phx-submit="semantic_review" class="inline-form">
+                <input type="hidden" name="review[target_handle_id]" value={occurrence.handle_id} />
+                <input
+                  type="hidden"
+                  name="review[expected_version]"
+                  value={Map.get(@semantic, :version, 0)}
+                />
+                <button name="review[action]" value="confirm" type="submit">Confirm this speaker occurrence</button>
+                <button name="review[action]" value="reject" type="submit">Exclude this cue from people</button>
+              </form>
+            </details>
+          </details>
+        </section>
+        <FountWeb.CoreComponents.alert
+          :for={issue <- Map.get(@semantic, :resolution_issues, [])}
+          kind="warning"
+          title="Human review grouping conflict"
+        >
+          {issue["explanation"]}
+        </FountWeb.CoreComponents.alert>
+        <h2 :if={@characters != []}>Suggested and reviewed people</h2>
         <div class="character-grid">
           <article
             :for={character <- visible_cast(@characters, @cast_query, @cast_page)}
@@ -2648,7 +2775,7 @@ defmodule FountWeb.ProjectToolsLive do
               )}</span>
             </div>
             <p>
-              {character.dialogue_block_count} literal dialogue blocks · {character.appearance_count} source scenes · {character.speaking_occurrences} speaking occurrences
+              {character.dialogue_block_count} literal dialogue blocks · {character.appearance_count} physical-presence scenes · {character.speaking_occurrences} speaking occurrences
             </p>
             <p :if={character.presence_occurrences > 0 || character.mention_occurrences > 0}>
               {character.presence_occurrences} physical-presence assertions · {character.mention_occurrences} mention assertions

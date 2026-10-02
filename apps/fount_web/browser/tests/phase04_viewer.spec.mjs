@@ -31,7 +31,8 @@ test('U01-U05 project viewer preserves escaped IR, dual dialogue, scene focus an
   await page.keyboard.press('ArrowDown');
   await expect(links.nth(1)).toBeFocused();
   await openWorkspace(page, `/p/${key}/cast`);
-  await expect(page.getByRole('heading', {name:'MARA', exact:true})).toBeVisible();
+  await expect(page.locator('#unverified-source-cues')).toContainText('MARA');
+  await expect(page.locator('.compact-character-card')).toHaveCount(0);
 });
 
 test('U04 narrow reduced-motion source reading remains legible and does not inject markup', async ({page}) => {

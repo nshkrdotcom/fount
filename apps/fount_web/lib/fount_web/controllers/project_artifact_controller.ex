@@ -100,7 +100,7 @@ defmodule FountWeb.ProjectArtifactController do
          %{assessment_id: assessment_id, source_sha256: source_sha256} = semantic <-
            context.semantic do
       json(conn, %{
-        "kind" => "fount.semantic_source_review_v1",
+        "kind" => "fount.semantic_source_review_v2",
         "project" => context.project["title"],
         "source" => %{
           "screenplay_id" => context.current.id,
@@ -138,6 +138,12 @@ defmodule FountWeb.ProjectArtifactController do
           Enum.map(Map.get(semantic, :model_assessment_history, []), &plain/1),
         "review_version" => semantic.version,
         "entities" => Enum.map(semantic.entities, &plain/1),
+        "characters" => Enum.map(semantic.characters, &plain/1),
+        "cue_groups" => Enum.map(semantic.cue_groups, &plain/1),
+        "assessment_result" => semantic.assessment_result,
+        "cue_decisions" => semantic.assessment_result["cue_decisions"] || [],
+        "relations" => semantic.assessment_result["relations"] || [],
+        "resolution_issues" => semantic.resolution_issues,
         "review_history" => Enum.map(semantic.review_history, &plain/1),
         "canonical_cast" => semantic.canonical_cast,
         "provenance" => %{

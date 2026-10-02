@@ -9,6 +9,7 @@ defmodule FountRun.DispatchHook do
     fn
       :before, dispatch -> before_dispatch(repo, claim, ref, dispatch, opts)
       :after, dispatch -> after_dispatch(repo, ref, dispatch, opts)
+      :validation, dispatch -> record_validation(repo, claim, ref, dispatch)
     end
   end
 
@@ -24,13 +25,15 @@ defmodule FountRun.DispatchHook do
             :ok
 
           {:ok, {:reuse, response}} ->
+            remember_validation(ref, dispatch, operation_id, opts)
             {:reuse, response}
 
           {:error, _} = error ->
             error
         end
 
-      {:reuse, response, _operation_id} ->
+      {:reuse, response, operation_id} ->
+        remember_validation(ref, dispatch, operation_id, opts)
         {:reuse, response}
 
       {:error, _} = error ->
@@ -38,10 +41,20 @@ defmodule FountRun.DispatchHook do
     end
   end
 
+  defp remember_validation(ref, dispatch, operation_id, opts) do
+    if Keyword.get(opts, :audit_validation, false),
+      do: Process.put({__MODULE__, ref, dispatch_key(dispatch)}, operation_id)
+  end
+
   defp after_dispatch(repo, ref, dispatch, opts) do
     key = {__MODULE__, ref, dispatch_key(dispatch)}
 
-    case Process.delete(key) do
+    operation_id =
+      if Keyword.get(opts, :audit_validation, false),
+        do: Process.get(key),
+        else: Process.delete(key)
+
+    case operation_id do
       nil ->
         {:error, :provider_operation_identity_missing}
 
@@ -51,6 +64,30 @@ defmodule FountRun.DispatchHook do
         case ExecutionStore.provider_result(repo, operation_id, dispatch.result) do
           {:ok, _row} ->
             maybe_fault(opts, :after_provider_response_persisted)
+            :ok
+
+          {:error, _} = error ->
+            error
+        end
+    end
+  end
+
+  defp record_validation(repo, claim, ref, dispatch) do
+    key = {__MODULE__, ref, dispatch_key(dispatch)}
+
+    case Process.get(key) do
+      nil ->
+        {:error, :provider_operation_identity_missing}
+
+      operation_id ->
+        case ExecutionStore.provider_validation(
+               repo,
+               claim,
+               operation_id,
+               dispatch.validation_result
+             ) do
+          {:ok, _} ->
+            Process.delete(key)
             :ok
 
           {:error, _} = error ->

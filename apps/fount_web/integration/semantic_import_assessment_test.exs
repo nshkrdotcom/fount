@@ -11,6 +11,8 @@ defmodule FountWeb.SI02SemanticImportAssessmentIntegrationTest do
   !WORK ORDER
   AUTHORIZED STAFF ONLY
 
+  MIRA VALE is DR. MIRA VALE, her professional name.
+
   DR. MIRA VALE (O.S.)
   Bring me the chart.
 
@@ -90,6 +92,22 @@ defmodule FountWeb.SI02SemanticImportAssessmentIntegrationTest do
     assert "DR. MIRA VALE" in [mira.display_name | mira.aliases]
     assert "MIRA VALE" in [mira.display_name | mira.aliases]
     assert mira.presence_occurrences == 0
+    assert mira.appearance_count == 0
+    assert mira.speaking_scene_ordinals == [1]
+
+    validations =
+      Ecto.Adapters.SQL.query!(
+        Fount.Repo,
+        "SELECT status, validation_result FROM fount_run_provider_requests WHERE run_id=$1::text::uuid ORDER BY intended_at",
+        [run["id"]]
+      ).rows
+
+    assert validations != []
+
+    assert Enum.all?(validations, fn [status, validation] ->
+             status == "succeeded" and validation["outcome"] == "passed" and
+               validation["validator_version"] == "semantic_import_v2"
+           end)
 
     guards = Enum.filter(semantic.characters, &(&1.display_name == "GUARD"))
     assert length(guards) == 2
@@ -99,6 +117,8 @@ defmodule FountWeb.SI02SemanticImportAssessmentIntegrationTest do
     assert evelyn
     assert evelyn.speaking_occurrences == 0
     assert evelyn.presence_occurrences == 1
+    assert evelyn.presence_scene_ordinals == [1]
+    assert evelyn.appearance_count == 1
 
     assert {:ok, progress_before} = FountRun.progress(Fount.Repo, run["id"], owner_context(run))
     assert Enum.all?(progress_before["steps"], &is_nil(get_in(&1, ["result", "candidate_id"])))
@@ -290,6 +310,52 @@ defmodule FountWeb.SI02SemanticImportAssessmentIntegrationTest do
              ).rows
   end
 
+  test "missing v2 host schema is actionable and manual import rolls back all records" do
+    fixture_service!()
+    assert {:ok, %{project: project}} = create_import("Before missing v2 schema")
+
+    Ecto.Adapters.SQL.query!(
+      Fount.Repo,
+      "ALTER TABLE fount_web_semantic_assessments DROP CONSTRAINT semantic_assessment_schema_version",
+      []
+    )
+
+    Ecto.Adapters.SQL.query!(
+      Fount.Repo,
+      "ALTER TABLE fount_web_semantic_assessments ADD CONSTRAINT semantic_assessment_schema_version CHECK (schema_version IN ('source_inventory_v2','semantic_import_v1'))",
+      []
+    )
+
+    assert {:error, :semantic_schema_missing} =
+             Launch.assess_project("test-owner", project["id"], %{"command_id" => "missing-v2"})
+
+    assert Store.list_project_runs(Fount.Repo, "test-owner", project["id"], limit: 20) == []
+
+    Ecto.Adapters.SQL.query!(
+      Fount.Repo,
+      "ALTER TABLE fount_web_semantic_assessments DROP CONSTRAINT semantic_assessment_schema_version",
+      []
+    )
+
+    Ecto.Adapters.SQL.query!(
+      Fount.Repo,
+      "ALTER TABLE fount_web_semantic_assessments ADD CONSTRAINT semantic_assessment_schema_version CHECK (schema_version IN ('source_inventory_v1','semantic_import_v1')) NOT VALID",
+      []
+    )
+
+    counts = fn ->
+      Ecto.Adapters.SQL.query!(
+        Fount.Repo,
+        "SELECT (SELECT count(*) FROM fount_web_projects),(SELECT count(*) FROM screenplays),(SELECT count(*) FROM fount_web_semantic_assessments)",
+        []
+      ).rows
+    end
+
+    before = counts.()
+    assert {:error, :semantic_schema_missing} = create_import("Missing manual v2")
+    assert counts.() == before
+  end
+
   test "JSON-text fallback uses the same trusted validator and exact request policy" do
     Application.put_env(:fount_web, :semantic_assessment,
       mode: :deterministic_fixture,
@@ -378,7 +444,7 @@ defmodule FountWeb.SI02SemanticImportAssessmentIntegrationTest do
     assert context.semantic.latest_assessment["result"]["unresolved"] != []
   end
 
-  test "a large manual import exposes grouped cue counts and only twenty occurrence cards", %{
+  test "a large manual import exposes one source group and no fabricated people", %{
     conn: conn
   } do
     source = "INT. ROOM - DAY\n\n" <> String.duplicate("MIRA\nHello.\n\n", 70)
@@ -394,11 +460,10 @@ defmodule FountWeb.SI02SemanticImportAssessmentIntegrationTest do
     conn = FountWeb.ConnCase.login(conn)
     assert {:ok, view, html} = live(conn, "/p/#{project["key"]}/cast")
     assert html =~ "MIRA (70)"
-    assert has_element?(view, ".compact-character-card:nth-child(20)")
-    refute has_element?(view, ".compact-character-card:nth-child(21)")
+    refute has_element?(view, ".compact-character-card")
+    assert has_element?(view, ".source-cue-group")
+    assert html =~ "Unverified source cues"
     assert html =~ "Import parser audit"
-    view |> element("button[phx-value-direction=next]") |> render_click()
-    assert render(view) =~ "Page 2"
     assert Store.list_project_runs(Fount.Repo, "test-owner", project["id"], limit: 20) == []
   end
 
@@ -423,6 +488,21 @@ defmodule FountWeb.SI02SemanticImportAssessmentIntegrationTest do
                SemanticStore.assessment(Fount.Repo, "test-owner", project["id"], assessment["id"])
 
       assert row["result"] == %{}
+
+      assert [[validation]] =
+               Ecto.Adapters.SQL.query!(
+                 Fount.Repo,
+                 "SELECT validation_result FROM fount_run_provider_requests WHERE run_id=$1::text::uuid",
+                 [run["id"]]
+               ).rows
+
+      assert validation["outcome"] == "failed"
+
+      assert validation["error_code"] ==
+               if(is_nil(model),
+                 do: "semantic_returned_model_missing",
+                 else: "semantic_returned_model_mismatch"
+               )
 
       assert [[1]] =
                Ecto.Adapters.SQL.query!(
@@ -666,6 +746,13 @@ defmodule FountWeb.SI02SemanticImportAssessmentIntegrationTest do
 
     assert_receive {:semantic_fixture_request, _}
 
+    assert [[nil]] =
+             Ecto.Adapters.SQL.query!(
+               Fount.Repo,
+               "SELECT validation_result FROM fount_run_provider_requests WHERE run_id=$1::text::uuid",
+               [run["id"]]
+             ).rows
+
     Ecto.Adapters.SQL.query!(
       Fount.Repo,
       "UPDATE fount_run_steps SET lease_expires_at=now()-interval '1 second' WHERE run_id=$1::text::uuid AND status='running'",
@@ -676,6 +763,15 @@ defmodule FountWeb.SI02SemanticImportAssessmentIntegrationTest do
     assert_receive {:semantic_fixture_request, _}
     refute_receive {:semantic_fixture_request, _}
     complete_semantic_run(run)
+
+    validations =
+      Ecto.Adapters.SQL.query!(
+        Fount.Repo,
+        "SELECT validation_result FROM fount_run_provider_requests WHERE run_id=$1::text::uuid",
+        [run["id"]]
+      ).rows
+
+    assert Enum.all?(validations, fn [row] -> row["outcome"] == "passed" end)
   end
 
   test "explicit omissions persist partial coverage without source mutation", %{conn: conn} do
@@ -693,7 +789,8 @@ defmodule FountWeb.SI02SemanticImportAssessmentIntegrationTest do
     assert {:ok, context} = ProjectContext.load("test-owner", project["key"])
     assert context.semantic.assessment_state == :partial
     assert context.semantic.locations != []
-    assert context.semantic.characters != []
+    assert context.semantic.characters == []
+    assert context.semantic.cue_groups != []
     conn = FountWeb.ConnCase.login(conn)
 
     for section <- ["cast", "locations"] do

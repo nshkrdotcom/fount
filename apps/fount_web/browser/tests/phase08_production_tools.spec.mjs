@@ -40,8 +40,8 @@ test('S01-S03 literal retrieval, cast and location facts stay source-bound', asy
   await expect(page).toHaveURL(/#node-/);
   await openSection(page,key,'cast');
   await expect(page.getByRole('heading',{name:'Cast',exact:true})).toBeVisible();
-  await expect(page.locator('.character-grid')).toContainText('literal dialogue blocks');
-  await expect(page.locator('.character-grid')).toContainText('unreviewed');
+  await expect(page.locator('#unverified-source-cues')).toContainText('parsed cues');
+  await expect(page.locator('.compact-character-card')).toHaveCount(0);
   await expect(page.locator('#semantic-assessment-status')).toContainText(process.env.FOUNT_SEMANTIC_ASSESSMENT_MODE === 'deterministic_fixture' ? 'Not assessed' : 'Not configured');
   await openSection(page,key,'locations');
   await expect(page.getByRole('heading',{name:'Locations',exact:true})).toBeVisible();

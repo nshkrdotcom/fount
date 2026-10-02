@@ -1,4 +1,5 @@
 defmodule Fount.Intelligence.ImportAssessment do
+  alias Fount.Intelligence.{ImportCueDecisions, ImportIdentity}
   alias Fount.Semantics.SourceInventory
 
   @moduledoc """
@@ -10,12 +11,12 @@ defmodule Fount.Intelligence.ImportAssessment do
 
   import Bitwise
 
-  @schema_path Path.expand("../../../priv/import_assessment_v1.schema.json", __DIR__)
+  @schema_path Path.expand("../../../priv/import_assessment_v2.schema.json", __DIR__)
   @external_resource @schema_path
   @schema @schema_path |> File.read!() |> Jason.decode!()
 
-  @schema_version "semantic_import_v1"
-  @prompt_version "semantic_import_prompt_v2_self_review"
+  @schema_version "semantic_import_v2"
+  @prompt_version "semantic_import_prompt_v3_cue_dispositions"
   @entity_kinds ~w(character location document_text prop organization unknown)
   @roles ~w(speaker physical_presence mentioned printed_text message_sender location_heading location_reference unknown)
   @certainty ~w(supported uncertain unresolved)
@@ -49,7 +50,15 @@ defmodule Fount.Intelligence.ImportAssessment do
         "items" => %{
           "type" => "object",
           "additionalProperties" => false,
-          "required" => ["members", "relation", "label", "kind"],
+          "required" => [
+            "members",
+            "relation",
+            "label",
+            "kind",
+            "reason_code",
+            "explanation",
+            "evidence"
+          ],
           "properties" => %{
             "members" => %{
               "type" => "array",
@@ -61,7 +70,18 @@ defmodule Fount.Intelligence.ImportAssessment do
               "enum" => ["same_entity", "possible_same_entity", "separate_entities"]
             },
             "label" => %{"type" => "string", "minLength" => 1, "maxLength" => 240},
-            "kind" => %{"enum" => @entity_kinds}
+            "kind" => %{"enum" => @entity_kinds},
+            "reason_code" => %{
+              "enum" =>
+                ~w(explicit_alias explicit_identity continuous_scene_identity specific_name_with_consistent_context ambiguous_identity separate_context)
+            },
+            "explanation" => %{"type" => "string", "minLength" => 1, "maxLength" => 1_200},
+            "evidence" => %{
+              "type" => "array",
+              "minItems" => 1,
+              "maxItems" => 32,
+              "items" => @schema["$defs"]["evidence"]
+            }
           }
         }
       },
@@ -263,7 +283,12 @@ defmodule Fount.Intelligence.ImportAssessment do
         "Ranges listed in excluded_ranges are hidden Fountain boneyards, ranges listed in note_ranges are inline notes, and ranges listed in metadata_ranges are title-page/front-matter metadata; none is admissible cast/location semantic evidence.",
         "byte_start and byte_end are UTF-8 byte offsets relative to the referenced span text and quote must equal that exact byte slice.",
         "When a listed literal element exactly supports an occurrence, copy its element_id into literal_element_id; otherwise use null.",
-        "Return every payload span in coverage.processed_span_ids or coverage.omitted with an allowed reason."
+        "Return every payload span in coverage.processed_span_ids or coverage.omitted with an allowed reason.",
+        "Return exactly one cue_decision for every owned character cue in processed payload. Printed material needs a non_character decision even when it has no entity/occurrence.",
+        "Each literal reference and cue decision must quote evidence intersecting that exact cue content interval. An existing ID from a different cue is invalid.",
+        "Do not assign the same generic label to one person without identity evidence. Preserve separately scoped people and ambiguity.",
+        "A cue extending beyond this payload cannot support a complete speaker decision: mark it unresolved with insufficient_evidence.",
+        "Inspect raw action/prose for physical presence and mentions absent from the cue list."
       ],
       "spans" => chunk["spans"]
     }
@@ -279,13 +304,17 @@ defmodule Fount.Intelligence.ImportAssessment do
     envelope =
       extraction_prompt(chunk, binding) |> String.replace_prefix(prefix, "") |> Jason.decode!()
 
-    summary = review_summary(proposed["entities"])
+    summary = review_summary(proposed)
 
     envelope =
       envelope
-      |> Map.put("review_pass", "source_self_review_v1")
+      |> Map.put("review_pass", "source_self_review_v2")
       |> Map.put("proposed_entity_summary", summary)
-      |> Map.put("proposal_summary_truncated", length(proposed["entities"]) > length(summary))
+      |> Map.put(
+        "proposal_summary_truncated",
+        length(proposed["entities"]) + length(proposed["cue_decisions"]) +
+          length(proposed["occurrences"]) > length(summary)
+      )
       |> Map.update!("rules", fn rules ->
         rules ++
           [
@@ -299,17 +328,25 @@ defmodule Fount.Intelligence.ImportAssessment do
     prefix <> Jason.encode!(envelope)
   end
 
-  defp review_summary(entities) do
+  defp review_summary(proposed) do
+    rows =
+      Enum.map(proposed["cue_decisions"], &Map.put(&1, "summary_type", "cue_decision")) ++
+        Enum.map(
+          proposed["entities"],
+          &Map.take(&1, ~w(local_id kind label aliases certainty evidence))
+        ) ++
+        Enum.map(
+          proposed["occurrences"],
+          &Map.take(&1, ~w(entity_id role literal_element_id evidence))
+        )
+
     {summary, _bytes} =
-      entities
-      |> Enum.take(200)
-      |> Enum.reduce_while({[], 0}, fn entity, {rows, bytes} ->
-        row = Map.take(entity, ~w(kind label))
+      Enum.reduce_while(rows, {[], 0}, fn row, {kept, bytes} ->
         size = byte_size(Jason.encode!(row))
 
         if bytes + size > 8_000,
-          do: {:halt, {rows, bytes}},
-          else: {:cont, {[row | rows], bytes + size}}
+          do: {:halt, {kept, bytes}},
+          else: {:cont, {[row | kept], bytes + size}}
       end)
 
     Enum.reverse(summary)
@@ -324,7 +361,7 @@ defmodule Fount.Intelligence.ImportAssessment do
          :ok <-
            exact_keys(
              object,
-             ~w(schema_version chunk_id entities occurrences headings coverage unresolved)
+             ~w(schema_version chunk_id entities occurrences headings coverage unresolved cue_decisions)
            ),
          true <- object["schema_version"] == @schema_version or {:error, :wrong_schema_version},
          true <- object["chunk_id"] == chunk["chunk_id"] or {:error, :wrong_chunk_id},
@@ -332,6 +369,7 @@ defmodule Fount.Intelligence.ImportAssessment do
          :ok <- bounded_list(object, "occurrences", 25_000),
          :ok <- bounded_list(object, "headings", 5_000),
          :ok <- bounded_list(object, "unresolved", 5_000),
+         :ok <- bounded_list(object, "cue_decisions", 25_000),
          span_index <- span_index(chunk),
          :ok <- validate_entities(object["entities"], span_index),
          :ok <-
@@ -343,16 +381,30 @@ defmodule Fount.Intelligence.ImportAssessment do
            ),
          :ok <- validate_headings(object["headings"], object["entities"], span_index),
          :ok <- validate_issues(object["unresolved"], span_index, object["entities"]),
-         :ok <- validate_coverage(object["coverage"], chunk) do
+         :ok <- validate_coverage(object["coverage"], chunk),
+         true <-
+           ImportCueDecisions.references_correlated?(object["occurrences"], binding, chunk) or
+             {:error, :literal_evidence_mismatch},
+         :ok <-
+           ImportCueDecisions.validate(
+             object,
+             chunk,
+             binding,
+             &valid_evidence_list?(&1, span_index, 32)
+           ) do
       :ok
     else
       {:error, _} = error -> error
     end
   end
 
-  @doc "A compact evidence-bearing reconciliation prompt; it never includes raw source outside validated quotes."
+  @doc "A bounded reconciliation prompt with source-linked evidence, roles and payload context."
   def reconciliation_prompt(chunk_results, opts \\ []) when is_list(chunk_results) do
     max_bytes = Keyword.get(opts, :max_bytes, 96_000)
+
+    plan = Keyword.get(opts, :plan, %{})
+    spans = span_bindings(plan)
+    binding = Keyword.get(opts, :binding, %{})
 
     entities =
       Enum.flat_map(chunk_results, fn result ->
@@ -365,19 +417,23 @@ defmodule Fount.Intelligence.ImportAssessment do
             "label" => entity["label"],
             "certainty" => entity["certainty"],
             "aliases" => Enum.map(entity["aliases"], &Map.take(&1, ["label", "relation"])),
-            "evidence" =>
-              entity["evidence"] |> Enum.take(2) |> Enum.map(&Map.take(&1, ["span_id", "quote"]))
+            "evidence" => Enum.take(entity["evidence"], 2),
+            "absolute_evidence" => absolute_reconciliation_evidence(entity, spans),
+            "roles" => reconciliation_roles(result, entity, binding),
+            "source_context" => reconciliation_context(entity, plan)
           }
         end)
       end)
 
     payload = %{
-      "task" => "semantic_import_reconcile_v1",
+      "task" => "semantic_import_reconcile_v2",
       "rules" => [
         "Only group references when the supplied evidence supports the relation.",
         "Generic same-label people remain separate unless evidence supports sameness.",
         "Use possible_same_entity instead of merging ambiguous aliases or age variants.",
-        "Never add a member not present in the input list."
+        "Never add a member not present in the input list.",
+        "Group kinds must match every member. Every relation requires supplied exact evidence for every member and a bounded explanation.",
+        "Same labels alone do not prove sameness. Explicit aliases, identity statements, scene continuity or specific names with consistent context may support it."
       ],
       "entities" => entities
     }
@@ -389,6 +445,73 @@ defmodule Fount.Intelligence.ImportAssessment do
     if byte_size(prompt) <= max_bytes,
       do: {:ok, prompt},
       else: {:partial, :reconciliation_context_limit, byte_size(prompt)}
+  end
+
+  defp absolute_reconciliation_evidence(entity, spans) do
+    entity["evidence"]
+    |> Enum.take(2)
+    |> Enum.filter(&Map.has_key?(spans, &1["span_id"]))
+    |> Enum.map(&ImportIdentity.absolute_evidence(&1, spans))
+  end
+
+  defp reconciliation_roles(result, entity, binding) do
+    literals = Map.new(binding["literal_elements"] || [], &{&1["element_id"], &1})
+
+    result["occurrences"]
+    |> Enum.filter(&(&1["entity_id"] == entity["local_id"]))
+    |> Enum.map(&role_context(&1, literals))
+    |> Enum.uniq()
+    |> Enum.take(20)
+  end
+
+  defp role_context(row, literals) do
+    literal = literals[row["literal_element_id"]] || %{}
+
+    Map.take(row, ~w(role literal_element_id))
+    |> Map.merge(Map.take(literal, ~w(scene_id scene_ordinal)))
+  end
+
+  defp reconciliation_context(entity, plan) do
+    payloads =
+      (plan["chunks"] || [])
+      |> Enum.flat_map(& &1["spans"])
+      |> Enum.reject(& &1["context_only"])
+      |> Map.new(&{&1["span_id"], &1})
+
+    entity["evidence"] |> Enum.take(2) |> Enum.flat_map(&source_context(&1, payloads))
+  end
+
+  defp source_context(evidence, payloads) do
+    case payloads[evidence["span_id"]] do
+      nil ->
+        []
+
+      span ->
+        start = retreat_to_forward_boundary(span["text"], max(evidence["byte_start"] - 100, 0))
+
+        finish =
+          retreat_utf8_boundary(
+            span["text"],
+            min(evidence["byte_end"] + 100, byte_size(span["text"]))
+          )
+
+        raw = binary_part(span["text"], start, finish - start)
+        text = utf8_head(raw, 400)
+        finish = start + byte_size(text)
+
+        [
+          %{
+            "span_id" => evidence["span_id"],
+            "context_byte_start" => span["byte_start"] + start,
+            "context_byte_end" => span["byte_start"] + finish,
+            "text" => text,
+            "context_only" => true,
+            "excluded_ranges_in_payload" => span["excluded_ranges"],
+            "note_ranges_in_payload" => span["note_ranges"],
+            "metadata_ranges_in_payload" => span["metadata_ranges"]
+          }
+        ]
+    end
   end
 
   def validate_reconciliation(object, chunk_results)
@@ -404,7 +527,8 @@ defmodule Fount.Intelligence.ImportAssessment do
          groups when is_list(groups) and length(groups) <= 5_000 <- object["groups"],
          unresolved when is_list(unresolved) and length(unresolved) <= 5_000 <-
            object["unresolved"],
-         true <- Enum.all?(groups, &valid_group?(&1, allowed)),
+         true <-
+           Enum.all?(groups, &valid_group?(&1, allowed, reconciliation_entities(chunk_results))),
          true <- unique_group_members?(groups),
          true <- Enum.all?(unresolved, &valid_reconcile_issue?(&1, allowed)) do
       :ok
@@ -416,6 +540,16 @@ defmodule Fount.Intelligence.ImportAssessment do
   @doc "Namespaces chunk-local IDs and applies only explicit same_entity reconciliation groups."
   def assemble(chunk_results, reconciliation, binding, opts \\ [])
       when is_list(chunk_results) and is_map(binding) do
+    with :ok <-
+           validate_reconciliation(
+             reconciliation || %{"groups" => [], "unresolved" => []},
+             chunk_results
+           ) do
+      assemble_validated(chunk_results, reconciliation, binding, opts)
+    end
+  end
+
+  defp assemble_validated(chunk_results, reconciliation, binding, opts) do
     requested = stringify_map(Keyword.get(opts, :limits, %{}))
 
     limits = assembly_limits(requested)
@@ -460,7 +594,29 @@ defmodule Fount.Intelligence.ImportAssessment do
       |> Map.put("completed_chunks", length(chunk_results))
       |> Map.put("complete", complete_coverage?(chunk_results, expected_chunks))
 
-    unresolved = aggregate_unresolved(chunk_results, reconciliation)
+    decisions = ImportCueDecisions.remap(chunk_results, remap)
+
+    unresolved =
+      aggregate_unresolved(chunk_results, reconciliation) ++
+        ImportCueDecisions.unresolved(decisions) ++
+        resolution_issues(entity_rows, occurrences, headings, reconciliation)
+
+    coverage =
+      coverage
+      |> Map.put(
+        "owned_cues",
+        Enum.count(binding["literal_elements"] || [], &(&1["kind"] == "character"))
+      )
+      |> Map.put("decided_cues", length(decisions))
+      |> Map.put("unresolved_cues", Enum.count(decisions, &(&1["disposition"] == "unresolved")))
+
+    coverage =
+      Map.put(coverage, "unassessed_cues", max(coverage["owned_cues"] - length(decisions), 0))
+
+    coverage =
+      Map.put(coverage, "complete", coverage["complete"] and coverage["unassessed_cues"] == 0)
+
+    spans = span_bindings(Keyword.get(opts, :plan, %{}))
 
     aggregate = %{
       "schema_version" => @schema_version,
@@ -468,12 +624,29 @@ defmodule Fount.Intelligence.ImportAssessment do
       "entities" => entity_rows,
       "occurrences" => occurrences,
       "headings" => headings,
+      "cue_decisions" => decisions,
+      "relations" => reconciliation["groups"],
+      "span_bindings" => spans,
       "coverage" => coverage,
       "unresolved" => unresolved,
       "binding" => binding
     }
 
+    validate_aggregate(aggregate, limits)
+  end
+
+  defp validate_aggregate(aggregate, limits) do
+    decisions = aggregate["cue_decisions"]
+    occurrences = aggregate["occurrences"]
+    entity_rows = aggregate["entities"]
+
     cond do
+      not unique_decisions?(decisions) or not literal_ownership_valid?(occurrences) ->
+        {:error, :duplicate_cue_ownership}
+
+      length(decisions) > limits["max_occurrences"] ->
+        {:error, :cue_decision_limit_exceeded}
+
       length(entity_rows) > limits["max_entities"] ->
         {:error, :entity_limit_exceeded}
 
@@ -486,6 +659,46 @@ defmodule Fount.Intelligence.ImportAssessment do
       true ->
         {:ok, aggregate}
     end
+  end
+
+  def span_bindings(plan) do
+    (plan["chunks"] || [])
+    |> Enum.flat_map(& &1["spans"])
+    |> Enum.reject(& &1["context_only"])
+    |> Map.new(&{&1["span_id"], Map.take(&1, ~w(byte_start byte_end))})
+  end
+
+  defp unique_decisions?(rows) do
+    ids = Enum.map(rows, & &1["literal_element_id"])
+    length(ids) == length(Enum.uniq(ids))
+  end
+
+  defp resolution_issues(entities, occurrences, headings, reconciliation) do
+    uncertain =
+      Enum.filter(
+        entities ++ occurrences ++ headings,
+        &(&1["certainty"] in ~w(uncertain unresolved))
+      )
+
+    possible = Enum.filter(reconciliation["groups"], &(&1["relation"] == "possible_same_entity"))
+
+    Enum.map(uncertain, fn row ->
+      %{
+        "span_ids" => Enum.map(row["evidence"], & &1["span_id"]) |> Enum.uniq(),
+        "entity_ids" => [],
+        "reason_code" => "insufficient_evidence",
+        "explanation" =>
+          "Uncertain required interpretation: " <> (row["local_id"] || row["heading_span_id"])
+      }
+    end) ++
+      Enum.map(possible, fn row ->
+        %{
+          "span_ids" => [],
+          "entity_ids" => row["members"],
+          "reason_code" => "ambiguous_identity",
+          "explanation" => row["explanation"]
+        }
+      end)
   end
 
   defp complete_coverage?(results, expected) do
@@ -510,7 +723,7 @@ defmodule Fount.Intelligence.ImportAssessment do
   end
 
   defp validate_entities(entities, spans) do
-    local_ids = Enum.map(entities, & &1["local_id"])
+    local_ids = Enum.map(entities, fn row -> if is_map(row), do: row["local_id"], else: nil end)
 
     cond do
       Enum.any?(entities, &(not valid_entity?(&1, spans))) -> {:error, :invalid_entity}
@@ -544,7 +757,7 @@ defmodule Fount.Intelligence.ImportAssessment do
 
   defp validate_occurrences(rows, entities, spans, literal_ids) do
     kinds = Map.new(entities, &{&1["local_id"], &1["kind"]})
-    local_ids = Enum.map(rows, & &1["local_id"])
+    local_ids = Enum.map(rows, fn row -> if is_map(row), do: row["local_id"], else: nil end)
 
     if Enum.all?(rows, &valid_occurrence?(&1, kinds, spans, literal_ids)) and
          length(local_ids) == length(Enum.uniq(local_ids)) and literal_ownership_valid?(rows),
@@ -606,7 +819,9 @@ defmodule Fount.Intelligence.ImportAssessment do
   end
 
   defp validate_issues(rows, spans, entities) do
-    ids = MapSet.new(Enum.map(entities, & &1["local_id"]))
+    ids =
+      MapSet.new(Enum.map(entities, fn row -> if is_map(row), do: row["local_id"], else: nil end))
+
     if Enum.all?(rows, &valid_issue?(&1, spans, ids)), do: :ok, else: {:error, :invalid_issue}
   end
 
@@ -691,16 +906,60 @@ defmodule Fount.Intelligence.ImportAssessment do
     match?(%{context_only: false}, Map.get(spans, span_id))
   end
 
-  defp valid_group?(row, allowed) when is_map(row) do
-    exact_keys?(row, ~w(members relation label kind)) and is_list(row["members"]) and
-      length(row["members"]) >= 2 and length(row["members"]) <= 64 and
-      Enum.all?(row["members"], &MapSet.member?(allowed, &1)) and
-      length(Enum.uniq(row["members"])) == length(row["members"]) and
-      row["relation"] in ~w(same_entity possible_same_entity separate_entities) and
-      nonempty(row["label"], 240) and row["kind"] in @entity_kinds
+  defp reconciliation_entities(results) do
+    Map.new(
+      Enum.flat_map(results, fn result ->
+        Enum.map(result["entities"], &{namespaced(result["chunk_id"], &1["local_id"]), &1})
+      end)
+    )
   end
 
-  defp valid_group?(_, _), do: false
+  defp valid_group?(row, allowed, entities) when is_map(row) do
+    exact_keys?(row, ~w(members relation label kind reason_code explanation evidence)) and
+      valid_group_members?(row["members"], allowed) and
+      row["relation"] in ~w(same_entity possible_same_entity separate_entities) and
+      nonempty(row["label"], 240) and row["kind"] in @entity_kinds and
+      nonempty(row["explanation"], 1_200) and relation_reason?(row) and
+      supplied_group_evidence?(row, entities)
+  end
+
+  defp valid_group?(_, _, _), do: false
+
+  defp valid_group_members?(members, allowed) do
+    is_list(members) and length(members) >= 2 and length(members) <= 64 and
+      Enum.all?(members, &MapSet.member?(allowed, &1)) and
+      length(Enum.uniq(members)) == length(members)
+  end
+
+  defp relation_reason?(%{"relation" => "same_entity", "reason_code" => reason}),
+    do:
+      reason in ~w(explicit_alias explicit_identity continuous_scene_identity specific_name_with_consistent_context)
+
+  defp relation_reason?(%{
+         "relation" => "possible_same_entity",
+         "reason_code" => "ambiguous_identity"
+       }),
+       do: true
+
+  defp relation_reason?(%{
+         "relation" => "separate_entities",
+         "reason_code" => "separate_context"
+       }),
+       do: true
+
+  defp relation_reason?(_), do: false
+
+  defp supplied_group_evidence?(row, entities) do
+    members = Enum.map(row["members"], &entities[&1])
+    supplied = Enum.flat_map(members, &Enum.take(&1["evidence"], 2))
+
+    is_list(row["evidence"]) and row["evidence"] != [] and length(row["evidence"]) <= 32 and
+      Enum.all?(members, &(&1["kind"] == row["kind"])) and
+      Enum.all?(row["evidence"], &(&1 in supplied)) and
+      Enum.all?(members, fn member ->
+        Enum.any?(Enum.take(member["evidence"], 2), &(&1 in row["evidence"]))
+      end)
+  end
 
   defp unique_group_members?(groups) do
     merged =
@@ -1157,11 +1416,15 @@ defmodule Fount.Intelligence.ImportAssessment do
         %{
           "element_id" => item.element_id,
           "kind" => item.kind,
-          "role" => item.occurrence_role,
+          "role" =>
+            if(item.kind == "character", do: "speaker_candidate", else: item.occurrence_role),
+          "content_byte_start" => item.content_span.byte_start,
+          "content_byte_end" => item.content_span.byte_end,
           "literal" => item.literal,
           "source_byte_start" => start,
           "source_byte_end" => finish,
           "dialogue_block_id" => Map.get(item, :dialogue_block_id),
+          "fdx_paragraph" => Map.get(item, :fdx_paragraph),
           "scene_id" => item.scene_id,
           "scene_ordinal" => item.scene_ordinal
         }
@@ -1173,17 +1436,8 @@ defmodule Fount.Intelligence.ImportAssessment do
 
   defp literal_source_element(_, _), do: []
 
-  defp literal_elements_for_chunk(binding, chunk) do
-    start = chunk["source_byte_start"]
-    finish = chunk["source_byte_end"]
-
-    binding
-    |> Map.get("literal_elements", [])
-    |> Enum.filter(fn row ->
-      is_integer(row["source_byte_start"]) and is_integer(row["source_byte_end"]) and
-        row["source_byte_start"] < finish and row["source_byte_end"] > start
-    end)
-  end
+  defp literal_elements_for_chunk(binding, chunk),
+    do: ImportCueDecisions.owned_elements(binding, chunk)
 
   defp exact_keys(map, keys),
     do: if(exact_keys?(map, keys), do: :ok, else: {:error, :unexpected_keys})

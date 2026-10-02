@@ -31,13 +31,13 @@ defmodule FountWorkshop.Writing.Completion do
     else
       attempt(client, %{
         original: original,
+        validator: validator,
+        repairs: repairs,
         prompt: original,
         schema: schema,
         schema_prompt: schema_prompt,
         name: name,
-        validator: validator,
         mode: mode,
-        repairs: repairs,
         initial_repairs: repairs,
         transport_retry: 0,
         trace: [],
@@ -66,14 +66,11 @@ defmodule FountWorkshop.Writing.Completion do
 
   defp attempt(client, state) do
     %{
-      original: original,
       prompt: prompt,
       schema: schema,
       schema_prompt: schema_prompt,
       name: name,
-      validator: validator,
       mode: mode,
-      repairs: repairs,
       trace: trace,
       opts: opts
     } = state
@@ -102,62 +99,145 @@ defmodule FountWorkshop.Writing.Completion do
         {:error, safe_provider_error(error), Enum.reverse(trace)}
 
       {:ok, response} ->
-        entry = %{
-          "purpose" => name,
-          "mode" => mode,
-          "request_sha256" => hash(request),
-          "response_sha256" =>
-            hash(
-              Jason.encode!(%{
-                "text" => Map.get(response, :text),
-                "object" => Map.get(response, :object)
-              })
-            ),
-          "model" => json_value(Map.get(response, :model)),
-          "provider" => json_value(Map.get(response, :provider)),
-          "finish_reason" => json_value(Map.get(response, :finish_reason)),
-          "response_id" => Map.get(response, :id),
-          "usage" => json_value(Map.get(response, :usage))
-        }
-
-        decoded = decode_response(mode, response)
-
-        validated =
-          with {:ok, object} <- decoded,
-               :ok <- validator.(object) do
-            {:ok, object}
-          end
-
-        case validated do
-          {:ok, object} ->
-            {:ok, object, Enum.reverse([entry | trace])}
-
-          {:error, errors} when repairs > 0 ->
-            repair_prompt =
-              original <>
-                "\nThe previous response failed local validation. Correct only the output " <>
-                "representation and these errors. Do not alter writer requirements or base IDs.\n" <>
-                inspect(errors, limit: 100, printable_limit: 8_000)
-
-            repair_prompt =
-              choose_repair_prompt(mode, errors, response, schema_prompt, opts, repair_prompt)
-
-            attempt(client, %{
-              state
-              | prompt: repair_prompt,
-                repairs: repairs - 1,
-                trace: [Map.put(entry, "validation", "failed") | trace]
-            })
-
-          {:error, errors} ->
-            {:error, {:invalid_completion, errors},
-             Enum.reverse([Map.put(entry, "validation", "failed") | trace])}
-
-          other ->
-            {:error, {:invalid_validator_result, other}, Enum.reverse([entry | trace])}
-        end
+        finish_response(client, state, response, request)
     end
   end
+
+  defp finish_response(client, state, response, request) do
+    %{
+      original: original,
+      name: name,
+      schema_prompt: schema_prompt,
+      validator: validator,
+      mode: mode,
+      repairs: repairs,
+      trace: trace,
+      opts: opts
+    } = state
+
+    entry = %{
+      "purpose" => name,
+      "mode" => mode,
+      "request_sha256" => hash(request),
+      "response_sha256" =>
+        hash(
+          Jason.encode!(%{
+            "text" => Map.get(response, :text),
+            "object" => Map.get(response, :object)
+          })
+        ),
+      "model" => json_value(Map.get(response, :model)),
+      "provider" => json_value(Map.get(response, :provider)),
+      "finish_reason" => json_value(Map.get(response, :finish_reason)),
+      "response_id" => Map.get(response, :id),
+      "usage" => json_value(Map.get(response, :usage))
+    }
+
+    decoded = decode_response(mode, response)
+
+    validated = validate_response(response, opts, decoded, validator)
+    validated = audited_result(state, request, decoded, validated)
+
+    case validated do
+      {:error, {:validation_audit_failed, reason}} ->
+        {:error, {:validation_audit_failed, reason}, Enum.reverse([entry | trace])}
+
+      {:error, :semantic_returned_model_missing} ->
+        {:error, :semantic_returned_model_missing, Enum.reverse([entry | trace])}
+
+      {:error, {:semantic_returned_model_mismatch, _} = reason} ->
+        {:error, reason, Enum.reverse([entry | trace])}
+
+      {:ok, object} ->
+        {:ok, object, Enum.reverse([entry | trace])}
+
+      {:error, errors} when repairs > 0 ->
+        repair_prompt =
+          original <>
+            "\nThe previous response failed local validation. Correct only the output " <>
+            "representation and these errors. Do not alter writer requirements or base IDs.\n" <>
+            inspect(errors, limit: 100, printable_limit: 8_000)
+
+        repair_prompt =
+          choose_repair_prompt(mode, errors, response, schema_prompt, opts, repair_prompt)
+
+        attempt(client, %{
+          state
+          | prompt: repair_prompt,
+            repairs: repairs - 1,
+            trace: [Map.put(entry, "validation", "failed") | trace]
+        })
+
+      {:error, errors} ->
+        {:error, {:invalid_completion, errors},
+         Enum.reverse([Map.put(entry, "validation", "failed") | trace])}
+
+      other ->
+        {:error, {:invalid_validator_result, other}, Enum.reverse([entry | trace])}
+    end
+  end
+
+  defp validate_response(response, opts, decoded, validator) do
+    with :ok <- validate_expected_model(response, opts),
+         {:ok, object} <- decoded,
+         :ok <- validator.(object),
+         do: {:ok, object}
+  end
+
+  defp audited_result(state, request, decoded, validated) do
+    case audit_validation(state, request, decoded, validated) do
+      :ok -> validated
+      {:error, reason} -> {:error, {:validation_audit_failed, reason}}
+    end
+  end
+
+  defp audit_validation(state, request, decoded, validated) do
+    if Keyword.get(state.opts, :audit_validation, false) do
+      result = %{
+        "validator_version" => Keyword.fetch!(state.opts, :validator_version),
+        "outcome" => if(match?({:ok, _}, validated), do: "passed", else: "failed"),
+        "error_code" => validation_error_code(validated),
+        "facts" => [],
+        "related_ids" => [],
+        "ranges" => []
+      }
+
+      result = Map.merge(result, validation_diagnostics(state.opts, decoded))
+
+      dispatch_hook(state.opts, :validation, %{
+        request_sha256: hash(request),
+        dispatch_index: length(state.trace) + 1,
+        transport_retry: state.transport_retry,
+        validation_result: result
+      })
+    else
+      :ok
+    end
+  end
+
+  defp validation_diagnostics(opts, decoded) do
+    case Keyword.get(opts, :validation_diagnostics) do
+      callback when is_function(callback, 1) -> callback.(decoded_object(decoded))
+      _ -> %{}
+    end
+  end
+
+  defp decoded_object({:ok, object}), do: object
+  defp decoded_object(_), do: nil
+
+  defp validate_expected_model(response, opts) do
+    case {Keyword.get(opts, :expected_model), Map.get(response, :model)} do
+      {nil, _} -> :ok
+      {_expected, nil} -> {:error, :semantic_returned_model_missing}
+      {same, same} -> :ok
+      {_expected, actual} -> {:error, {:semantic_returned_model_mismatch, actual}}
+    end
+  end
+
+  defp validation_error_code({:ok, _}), do: nil
+  defp validation_error_code({:error, code}) when is_atom(code), do: Atom.to_string(code)
+  defp validation_error_code({:error, {code, _}}) when is_atom(code), do: Atom.to_string(code)
+  defp validation_error_code(_), do: "invalid_completion"
 
   defp decode_response("json_schema", response) do
     case Map.get(response, :object) do

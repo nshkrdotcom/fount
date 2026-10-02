@@ -12,7 +12,7 @@ defmodule FountRun.PipelineRequest do
     with {:ok, value} <- ClosedMap.normalize(value, @keys) do
       case Map.get(value, "kind") do
         "screenplay_v1" -> validate_screenplay(value)
-        "semantic_import_v1" -> validate_semantic(value)
+        "semantic_import_v2" -> validate_semantic(value)
         _ -> {:error, :invalid_pipeline_request_kind}
       end
     end
@@ -22,7 +22,7 @@ defmodule FountRun.PipelineRequest do
     do: validate(%{"kind" => "screenplay_v1", "workshop_request" => workshop_request})
 
   def semantic(semantic_request) when is_map(semantic_request),
-    do: validate(%{"kind" => "semantic_import_v1", "semantic_request" => semantic_request})
+    do: validate(%{"kind" => "semantic_import_v2", "semantic_request" => semantic_request})
 
   defp validate_screenplay(value) do
     with nil <- Map.get(value, "semantic_request"),

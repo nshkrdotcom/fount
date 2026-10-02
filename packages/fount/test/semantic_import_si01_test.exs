@@ -4,6 +4,25 @@ defmodule Fount.SemanticImportSI01Test do
   alias Fount.Screenplay
   alias Fount.Semantics.{SourceInventory, SourceReview}
 
+  test "FDX typed paragraph provenance maps exact visible bytes without changing the import artifact" do
+    xml =
+      ~s(<FinalDraft><Content><Paragraph Type="Scene Heading"><Text>INT. ROOM - DAY</Text></Paragraph><Paragraph Type="Character"><Text>MIRA</Text></Paragraph><Paragraph Type="Dialogue"><Text>Hello.</Text></Paragraph></Content></FinalDraft>)
+
+    assert {:ok, screenplay, _losses} = Screenplay.from_fdx(xml, cast_resolution: :manual)
+    inventory = SourceInventory.build(screenplay)
+    [cue] = inventory.character_cues
+    assert cue.fdx_paragraph["type"] == "Character"
+    assert cue.fdx_paragraph["ordinal"] == 2
+    assert {:ok, exported} = Screenplay.to_fdx(screenplay)
+    assert exported.data == xml
+
+    assert binary_part(
+             Screenplay.to_fountain(screenplay),
+             cue.content_span.byte_start,
+             cue.content_span.byte_end - cue.content_span.byte_start
+           ) == "MIRA"
+  end
+
   test "forced action wins before automatic uppercase character detection and source roundtrips" do
     source =
       "Title: Café\r\nAuthor: Zoë\r\n\r\n/* hidden\r\nFALSE CUE\r\n*/\r\n\r\nINT. SHOP - NIGHT\r\n\r\n!AUTHORIZED PERSONNEL ONLY\r\n!SECOND WARNING\r\nDO NOT ENTER\r\n\r\n!Mixed Case Notice\r\n\r\n@Mara (O.S.)\r\n(quietly)\r\nHello.\r\n\r\n@Renée^\r\nOui.\r\n"
@@ -59,7 +78,7 @@ defmodule Fount.SemanticImportSI01Test do
     assert screenplay.cast == %{}
     assert inventory.counts.literal_character_cues == 2
     assert inventory.counts.canonical_cast == 0
-    assert Enum.all?(inventory.character_cues, &(&1.occurrence_role == "speaker"))
+    assert Enum.all?(inventory.character_cues, &(&1.occurrence_role == "unknown"))
     assert Enum.all?(inventory.character_cues, &is_binary(&1.dialogue_block_id))
     assert Enum.map(inventory.character_cues, & &1.literal) == ["GUARD", "GUARD"]
   end

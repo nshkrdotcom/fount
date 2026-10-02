@@ -98,7 +98,8 @@ defmodule Fount.Screenplay do
         revision_id: model.revision.id,
         render_hash: model.revision.render_hash,
         id: ID.v4(),
-        losses: result.losses
+        losses: result.losses,
+        metadata: Model.plain(result.metadata)
       }
 
       {:ok, %{model | import: import}, result.losses}

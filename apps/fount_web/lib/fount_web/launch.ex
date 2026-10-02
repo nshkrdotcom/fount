@@ -29,6 +29,7 @@ defmodule FountWeb.Launch do
     project_kind = if Map.get(attrs, "example", false), do: "example", else: "screenplay"
 
     with :ok <- validate_project_title(title),
+         :ok <- inventory_schema_ready(),
          {:ok, root, import} <- project_root(kind, title, source, filename),
          {:ok, key} <- generated_project_key(owner_id, title),
          {:ok, _created} <- Persistence.create(Fount.Repo, key, root),
@@ -88,15 +89,34 @@ defmodule FountWeb.Launch do
     end
   end
 
+  defp inventory_schema_ready do
+    case SQL.query(
+           Fount.Repo,
+           """
+           SELECT EXISTS (SELECT 1 FROM pg_constraint
+             WHERE conrelid=to_regclass('public.fount_web_semantic_assessments')
+               AND conname='semantic_assessment_schema_version'
+               AND position('source_inventory_v2' in pg_get_constraintdef(oid)) > 0)
+           """,
+           [],
+           log: false
+         ) do
+      {:ok, %{rows: [[true]]}} -> :ok
+      {:ok, _} -> {:error, :semantic_schema_missing}
+      {:error, _} -> {:error, :storage_error}
+    end
+  end
+
   defp assessment_audit_schema_ready do
     case SQL.query(
            Fount.Repo,
            """
-           SELECT EXISTS (
-             SELECT 1 FROM information_schema.columns
+           SELECT (SELECT count(*) FROM information_schema.columns
              WHERE table_schema='public' AND table_name='fount_run_provider_requests'
-               AND column_name='request_snapshot'
-           )
+               AND column_name IN ('request_snapshot','validation_result')) = 2
+           AND EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid=to_regclass('public.fount_web_semantic_assessments')
+             AND conname='semantic_assessment_schema_version'
+             AND position('semantic_import_v2' in pg_get_constraintdef(oid)) > 0)
            """,
            [],
            log: false
@@ -286,7 +306,7 @@ defmodule FountWeb.Launch do
       "protected_material" => [],
       "client_idempotency_key" => "semantic-import:" <> project["id"] <> ":" <> command_id,
       "operation_parameters" => %{
-        "workflow" => "semantic_import_v1",
+        "workflow" => "semantic_import_v2",
         "request_fingerprint" => request_fingerprint,
         "selection_fingerprint" => CanonicalJSON.hash(%{"revision_id" => root.revision.id})
       },

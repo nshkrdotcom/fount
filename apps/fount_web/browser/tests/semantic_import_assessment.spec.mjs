@@ -2,7 +2,7 @@ import {test, expect} from '@playwright/test';
 import {openWorkspace, projectRunCount, workspaceReady} from './workspace_helpers.mjs';
 
 const token=process.env.FOUNT_OWNER_TOKEN || 'browser-owner-token';
-const source=`Title: SI02 BROWSER\n\nINT. MERCY HOSPITAL - RECORDS WINDOW - LATE NIGHT (2031)\n\n!WORK ORDER\nAUTHORIZED STAFF ONLY\n\nDR. MIRA VALE (O.S.)\nBring me the chart.\n\nMIRA VALE\nThank you.\n\nGUARD\nWest door.\n\nGUARD\nEast door.\n\nEVELYN enters carrying a sealed envelope.\n`;
+const source=`Title: SI02 BROWSER\n\nINT. MERCY HOSPITAL - RECORDS WINDOW - LATE NIGHT (2031)\n\n!WORK ORDER\nAUTHORIZED STAFF ONLY\n\nMIRA VALE is DR. MIRA VALE, her professional name.\n\nDR. MIRA VALE (O.S.)\nBring me the chart.\n\nMIRA VALE\nThank you.\n\nGUARD\nWest door.\n\nGUARD\nEast door.\n\nEVELYN enters carrying a sealed envelope.\n`;
 
 async function login(page){
   await page.goto('/login');

@@ -2,7 +2,7 @@ defmodule FountWeb.SemanticStore do
   @moduledoc "Source-bound semantic inventory, SI02 assessment history and human review persistence."
 
   alias Ecto.Adapters.SQL
-  alias Fount.Intelligence.ImportAssessment
+  alias Fount.Intelligence.{ImportAssessment, ImportIdentity}
   alias Fount.Screenplay.Model
   alias Fount.Semantics.{SourceInventory, SourceReview}
   alias Fount.Writing.CanonicalJSON
@@ -418,7 +418,9 @@ defmodule FountWeb.SemanticStore do
     provenance =
       Map.merge(assessment["provenance"] || %{}, %{
         "partial_reason" => payload["partial_reason"],
-        "immutable_result" => true
+        "immutable_result" => true,
+        "review_diffs" =>
+          Enum.flat_map(payload["usage_trace"] || [], &List.wrap(&1["review_diff"]))
       })
 
     SQL.query!(
@@ -615,11 +617,31 @@ defmodule FountWeb.SemanticStore do
     end)
   end
 
+  defp reviewed_source_handle(repo, owner, project, screenplay, item) do
+    case query(
+           repo,
+           """
+           SELECT e.handle_id::text FROM fount_web_semantic_assessment_entities e
+           JOIN fount_web_semantic_assessments a ON a.id=e.assessment_id
+           WHERE a.owner_id=$1 AND a.project_id=$2::text::uuid AND a.revision_id=$3::text::uuid
+             AND a.origin='manual' AND e.payload->>'element_id'=$4
+             AND EXISTS(SELECT 1 FROM fount_web_semantic_review_events r WHERE r.target_handle_id=e.handle_id AND r.outcome='applied')
+           ORDER BY a.inserted_at DESC LIMIT 1
+           """,
+           [owner, project["id"], screenplay.revision.id, item.element_id]
+         ) do
+      [%{"handle_id" => handle}] -> handle
+      _ -> nil
+    end
+  end
+
   defp insert_inventory_entities(repo, owner, project, screenplay, assessment_id, inventory) do
     items = inventory.character_cues ++ inventory.scene_headings
 
     Enum.each(items, fn item ->
-      handle_id = Fount.ID.v5(assessment_id, ["source-handle:", item.local_id])
+      handle_id =
+        reviewed_source_handle(repo, owner, project, screenplay, item) ||
+          Fount.ID.v5(project["id"], [screenplay.revision.id, ":source-handle:", item.local_id])
 
       SQL.query!(
         repo,
@@ -688,19 +710,29 @@ defmodule FountWeb.SemanticStore do
     occurrences = result["occurrences"] || []
     headings = result["headings"] || []
 
+    {:ok, screenplay} =
+      Fount.Persistence.load_revision(
+        repo,
+        assessment["screenplay_id"],
+        assessment["revision_id"]
+      )
+
+    entities = result["entities"] || []
+
+    handles =
+      Enum.map(entities, fn entity ->
+        rows = Enum.filter(occurrences, &(&1["entity_id"] == entity["local_id"]))
+        ImportIdentity.handle(assessment, entity, rows, result["span_bindings"])
+      end)
+
+    if length(handles) != length(Enum.uniq(handles)),
+      do: repo.rollback(:duplicate_identity_support)
+
     Enum.each(result["entities"] || [], fn entity ->
       entity_occurrences = Enum.filter(occurrences, &(&1["entity_id"] == entity["local_id"]))
 
-      linked_literal =
-        entity_occurrences
-        |> Enum.map(& &1["literal_element_id"])
-        |> Enum.reject(&is_nil/1)
-        |> Enum.find(&Map.has_key?(literal_index, &1))
-
       handle_id =
-        if linked_literal,
-          do: literal_index[linked_literal].handle_id,
-          else: model_handle_id(assessment, entity)
+        ImportIdentity.handle(assessment, entity, entity_occurrences, result["span_bindings"])
 
       SQL.query!(
         repo,
@@ -721,10 +753,17 @@ defmodule FountWeb.SemanticStore do
       )
 
       hydrated =
-        Enum.map(entity_occurrences, &hydrate_model_occurrence(&1, literal_index, headings))
+        Enum.map(
+          entity_occurrences,
+          &hydrate_model_occurrence(&1, literal_index, headings, result, screenplay)
+        )
 
       payload =
         entity
+        |> Map.put(
+          "support_set",
+          ImportIdentity.support_set(entity["kind"], entity_occurrences, result["span_bindings"])
+        )
         |> Map.put("occurrences", hydrated)
         |> Map.put(
           "headings",
@@ -781,29 +820,12 @@ defmodule FountWeb.SemanticStore do
     end
   end
 
-  defp model_handle_id(assessment, entity) do
-    first = entity["evidence"] |> List.wrap() |> List.first() || %{}
-
-    Fount.ID.v5(assessment["screenplay_id"], [
-      "semantic-model-handle:",
-      assessment["project_id"],
-      ":",
-      assessment["source_sha256"],
-      ":",
-      entity["kind"],
-      ":",
-      first["span_id"] || "none",
-      ":",
-      to_string(first["byte_start"] || 0),
-      ":",
-      to_string(first["byte_end"] || 0)
-    ])
-  end
-
-  defp hydrate_model_occurrence(occurrence, literal_index, headings) do
+  defp hydrate_model_occurrence(occurrence, literal_index, headings, result, screenplay) do
     literal_id = occurrence["literal_element_id"]
     manual = if is_binary(literal_id), do: literal_index[literal_id], else: nil
-    base = if manual, do: manual.payload, else: %{}
+
+    base =
+      if manual, do: manual.payload, else: prose_source_context(occurrence, result, screenplay)
 
     heading =
       Enum.find(headings, fn row -> evidence_overlap?(row["evidence"], occurrence["evidence"]) end)
@@ -816,6 +838,28 @@ defmodule FountWeb.SemanticStore do
     |> Map.put("certainty", occurrence["certainty"])
     |> Map.put("evidence", occurrence["evidence"] || [])
     |> maybe_put_heading_parts(heading)
+  end
+
+  defp prose_source_context(occurrence, result, screenplay) do
+    first =
+      occurrence["evidence"] |> hd() |> ImportIdentity.absolute_evidence(result["span_bindings"])
+
+    element =
+      Enum.find(Fount.Query.elements(screenplay), fn element ->
+        (element.source_span && element.source_span.byte_start <= first["byte_start"]) and
+          element.source_span.byte_end > first["byte_start"]
+      end)
+
+    scene = if element, do: Fount.Query.scene_for(screenplay, element.id)
+    ordinal = if scene, do: Enum.find_index(screenplay.ir.scenes, &(&1.id == scene.id)) + 1
+
+    %{
+      "element_id" => element && element.id,
+      "scene_id" => scene && scene.id,
+      "scene_ordinal" => ordinal,
+      "source_span" => Map.take(first, ~w(byte_start byte_end)),
+      "literal" => first["quote"]
+    }
   end
 
   defp maybe_put_heading_parts(payload, nil), do: payload
@@ -1307,6 +1351,11 @@ defmodule FountWeb.SemanticStore do
 
   defp storage_reason(%Postgrex.Error{postgres: %{code: code}})
        when code in [:undefined_table, :undefined_column],
+       do: :semantic_schema_missing
+
+  defp storage_reason(%Postgrex.Error{
+         postgres: %{code: :check_violation, constraint: "semantic_assessment_schema_version"}
+       }),
        do: :semantic_schema_missing
 
   defp storage_reason(%Postgrex.Error{postgres: %{code: :foreign_key_violation}}),

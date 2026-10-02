@@ -495,7 +495,8 @@ defmodule FountWeb.Phase08ProductionToolsIntegrationTest do
              })
 
     assert {:ok, context} = ProjectContext.load("test-owner", project["key"])
-    [source_character | _] = context.semantic.characters
+    source_character = context.semantic.entities |> Enum.find(&(&1.kind == "character"))
+    source_character = %{semantic_handle_id: source_character.handle_id}
 
     assert {:ok, _} =
              SemanticStore.review(

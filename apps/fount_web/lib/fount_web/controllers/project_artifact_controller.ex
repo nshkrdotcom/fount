@@ -110,7 +110,7 @@ defmodule FountWeb.ProjectArtifactController do
           "source_artifact_id" => semantic.assessment["source_artifact_id"],
           "render_sha256" => semantic.assessment["render_sha256"],
           "source_name" => context.project["source_name"],
-          "representation" => "manual_source_inventory"
+          "representation" => semantic.assessment["origin"] || "manual"
         },
         "assessment" => %{
           "id" => assessment_id,
@@ -121,15 +121,27 @@ defmodule FountWeb.ProjectArtifactController do
           "parser_version" => semantic.assessment["parser_version"],
           "model" => semantic.assessment["model"],
           "run_id" => semantic.assessment["run_id"],
-          "coverage" => semantic.assessment["coverage"]
+          "coverage" => semantic.assessment["coverage"],
+          "prompt_version" => semantic.assessment["prompt_version"],
+          "reasoning_effort" => semantic.assessment["reasoning_effort"],
+          "provider_family" => semantic.assessment["provider_family"],
+          "provider_returned_model" => semantic.assessment["provider_returned_model"],
+          "usage" => semantic.assessment["usage"],
+          "limits" => semantic.assessment["limits"],
+          "provenance" => semantic.assessment["provenance"]
         },
+        "assessment_state" => to_string(semantic.assessment_state),
+        "latest_assessment" => plain(semantic.latest_assessment),
+        "assessment_history" => Enum.map(semantic.assessment_history, &plain/1),
+        "historical_model_assessments" => Enum.map(Map.get(semantic, :model_assessment_history, []), &plain/1),
         "review_version" => semantic.version,
         "entities" => Enum.map(semantic.entities, &plain/1),
         "review_history" => Enum.map(semantic.review_history, &plain/1),
         "canonical_cast" => semantic.canonical_cast,
         "provenance" => %{
-          "manual_review_only" => true,
-          "model_assessment" => "not_configured_until_SI02",
+          "manual_review_available_without_provider" => true,
+          "model_entities_require_human_review" => true,
+          "human_review_precedence" => true,
           "screenplay_accepted_by_review" => false
         }
       })

@@ -80,22 +80,196 @@ defmodule FountWeb.Services do
   def observe_provider(_, _), do: {:error, :observe_configuration_invalid}
 
   def worker_step_opts(owner_id, screenplay_id, run) do
-    with {:ok, observe} <- observe_provider(screenplay_id, run) do
-      base =
-        [
-          inference: inference_client(),
-          lease_ms: 15_000,
-          heartbeat_ms: 5_000,
-          delivery_destination: Path.join("runs", run["id"]),
-          artifact_root: Application.fetch_env!(:fount_web, :artifact_root)
-        ]
-        |> maybe_put_observe(observe)
+    if semantic_run?(run) do
+      semantic_worker_step_opts(owner_id, run)
+    else
+      with {:ok, observe} <- observe_provider(screenplay_id, run) do
+        base =
+          [
+            inference: inference_client(),
+            lease_ms: 15_000,
+            heartbeat_ms: 5_000,
+            delivery_destination: Path.join("runs", run["id"]),
+            artifact_root: Application.fetch_env!(:fount_web, :artifact_root)
+          ]
+          |> maybe_put_observe(observe)
 
-      with {:ok, approval_opts} <- approval_opts(owner_id, screenplay_id, run) do
-        {:ok, base ++ approval_opts}
+        with {:ok, approval_opts} <- approval_opts(owner_id, screenplay_id, run) do
+          {:ok, base ++ approval_opts}
+        end
       end
     end
   end
+
+  @doc "Returns a secret-free, provider-free preflight summary for SI02 assessment controls."
+  def assessment_service_summary do
+    case semantic_assessment_config() do
+      {:ok, :disabled, _config} ->
+        %{
+          "mode" => "disabled",
+          "label" => "Not configured",
+          "configured" => false,
+          "model" => FountWorkshop.SemanticAssessment.model(),
+          "reasoning_effort" => Atom.to_string(FountWorkshop.SemanticAssessment.reasoning_effort()),
+          "reason" => "semantic assessment is disabled"
+        }
+
+      {:ok, :codex, config} ->
+        cli_path = Keyword.get(config, :cli_path, "codex")
+
+        case FountWorkshop.SemanticAssessment.preflight(
+               cli_path: cli_path,
+               auth_asserted: Keyword.get(config, :auth_asserted, false)
+             ) do
+          {:ok, _} ->
+            %{
+              "mode" => "codex",
+              "label" => "Codex",
+              "configured" => true,
+              "model" => FountWorkshop.SemanticAssessment.model(),
+              "reasoning_effort" => Atom.to_string(FountWorkshop.SemanticAssessment.reasoning_effort()),
+              "provider_family" => "codex"
+            }
+
+          {:error, reason} ->
+            %{
+              "mode" => "codex",
+              "label" => "Codex unavailable",
+              "configured" => false,
+              "model" => FountWorkshop.SemanticAssessment.model(),
+              "reasoning_effort" => Atom.to_string(FountWorkshop.SemanticAssessment.reasoning_effort()),
+              "reason" => semantic_reason(reason)
+            }
+        end
+
+      {:ok, :deterministic_fixture, config} ->
+        configured = valid_fixture_factory?(Keyword.get(config, :client_factory))
+
+        %{
+          "mode" => "deterministic_fixture",
+          "label" => "Deterministic fixture",
+          "configured" => configured,
+          "model" => FountWorkshop.SemanticAssessment.model(),
+          "reasoning_effort" => Atom.to_string(FountWorkshop.SemanticAssessment.reasoning_effort()),
+          "provider_family" => "fixture",
+          "reason" => if(configured, do: nil, else: "fixture client is not configured")
+        }
+
+      {:error, reason} ->
+        %{
+          "mode" => "invalid",
+          "label" => "Invalid assessment configuration",
+          "configured" => false,
+          "model" => FountWorkshop.SemanticAssessment.model(),
+          "reasoning_effort" => Atom.to_string(FountWorkshop.SemanticAssessment.reasoning_effort()),
+          "reason" => semantic_reason(reason)
+        }
+    end
+  end
+
+  def assessment_client do
+    case semantic_assessment_config() do
+      {:ok, :codex, config} ->
+        cli_path = Keyword.get(config, :cli_path, "codex")
+        auth_asserted = Keyword.get(config, :auth_asserted, false)
+
+        with {:ok, _} <-
+               FountWorkshop.SemanticAssessment.preflight(
+                 cli_path: cli_path,
+                 auth_asserted: auth_asserted
+               ),
+             {:ok, client} <-
+               FountWorkshop.SemanticAssessment.build_client(
+                 cli_path: cli_path
+               ) do
+          {:ok, client}
+        end
+
+      {:ok, :deterministic_fixture, config} ->
+        fixture_client(Keyword.get(config, :client_factory))
+
+      {:ok, :disabled, _} ->
+        {:error, :semantic_assessment_not_configured}
+
+      {:error, _} ->
+        {:error, :semantic_assessment_configuration_invalid}
+    end
+  end
+
+  defp semantic_worker_step_opts(owner_id, run) do
+    with {:ok, client} <- assessment_client() do
+      callback = fn
+        :status, payload ->
+          FountWeb.SemanticStore.update_assessment_status(
+            Fount.Repo,
+            owner_id,
+            payload["assessment_id"],
+            payload["status"],
+            payload["error"],
+            run["id"]
+          )
+
+        :progress, payload ->
+          FountWeb.SemanticStore.update_assessment_progress(
+            Fount.Repo,
+            owner_id,
+            payload["assessment_id"],
+            payload["coverage"] || %{},
+            run["id"]
+          )
+
+        :result, payload ->
+          FountWeb.SemanticStore.persist_assessment_result(Fount.Repo, owner_id, payload)
+      end
+
+      {:ok,
+       [
+         inference: client,
+         semantic_store: callback,
+         lease_ms: 15_000,
+         heartbeat_ms: 5_000,
+         artifact_root: Application.fetch_env!(:fount_web, :artifact_root)
+       ]}
+    end
+  end
+
+  defp semantic_run?(run),
+    do: get_in(run, ["plan", "operation_parameters", "workflow"]) == "semantic_import_v1"
+
+  defp semantic_assessment_config do
+    case Application.fetch_env(:fount_web, :semantic_assessment) do
+      {:ok, config} when is_list(config) and Keyword.keyword?(config) ->
+        case Keyword.get(config, :mode) do
+          mode when mode in [:disabled, :codex, :deterministic_fixture] -> {:ok, mode, config}
+          _ -> {:error, :invalid_mode}
+        end
+
+      _ ->
+        {:error, :missing_config}
+    end
+  end
+
+  defp valid_fixture_factory?({module, function, args})
+       when is_atom(module) and is_atom(function) and is_list(args),
+       do: true
+
+  defp valid_fixture_factory?(_), do: false
+
+  defp fixture_client({module, function, args}) when is_atom(module) and is_atom(function) and is_list(args) do
+    case apply(module, function, args) do
+      {:ok, client} -> {:ok, client}
+      client when is_map(client) or is_struct(client) -> {:ok, client}
+      _ -> {:error, :semantic_fixture_client_invalid}
+    end
+  rescue
+    _ -> {:error, :semantic_fixture_client_invalid}
+  end
+
+  defp fixture_client(_), do: {:error, :semantic_fixture_client_invalid}
+
+  defp semantic_reason(reason) when is_atom(reason), do: Atom.to_string(reason) |> String.replace("_", " ")
+  defp semantic_reason({reason, _}) when is_atom(reason), do: semantic_reason(reason)
+  defp semantic_reason(_), do: "assessment preflight failed"
 
   defp approval_opts(owner_id, screenplay_id, run) do
     case get_in(run, ["policy", "policy", "approver", "type"]) do

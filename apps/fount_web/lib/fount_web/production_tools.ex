@@ -4,7 +4,7 @@ defmodule FountWeb.ProductionTools do
   alias Fount.{Persistence, Query, Screenplay, Search, Target}
   alias Fount.Screenplay.Model
   alias Fount.Writing.{Approval, Authority, CanonicalJSON, Principal}
-  alias FountWeb.{ProductionStore, ScreenplayIndex, ScreenplayViews, Store}
+  alias FountWeb.{ProductionStore, ScreenplayIndex, ScreenplayViews, SemanticContext, Store}
   alias FountWorkshop.{TableRead, Usefulness}
 
   @search_types ~w(action character dialogue parenthetical transition centered lyric section synopsis page_break note boneyard blank scene_heading)
@@ -512,6 +512,7 @@ defmodule FountWeb.ProductionTools do
            Model.refresh(screenplay).revision.content_hash == persisted.revision.content_hash or
              {:error, :source_content_mismatch},
          {:ok, packet} <- TableRead.packet(screenplay, selection) do
+      packet = semantic_table_read_packet(repo, owner, stored, persisted, packet)
       title = blank_to_nil(Map.get(attrs, "title"))
 
       packet =
@@ -528,6 +529,13 @@ defmodule FountWeb.ProductionTools do
       })
     else
       {:error, _} = error -> error
+    end
+  end
+
+  defp semantic_table_read_packet(repo, owner, project, screenplay, packet) do
+    case SemanticContext.load(repo, owner, project, screenplay) do
+      {:ok, %{characters: characters}} -> SemanticContext.annotate_table_read(packet, characters)
+      _ -> packet
     end
   end
 

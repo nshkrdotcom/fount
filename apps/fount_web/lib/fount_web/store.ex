@@ -259,7 +259,7 @@ defmodule FountWeb.Store do
     end
   end
 
-  @run_statuses ~w(queued running paused waiting_for_decision waiting_for_approval partial completed_candidate completed_accepted stopped failed)
+  @run_statuses ~w(queued running paused waiting_for_decision waiting_for_approval partial completed_candidate completed_accepted completed_nonmutating stopped failed)
 
   def list_run_accesses(repo, owner, opts \\ []) do
     limit = opts |> Keyword.get(:limit, 50) |> min(50) |> max(1)
@@ -322,7 +322,7 @@ defmodule FountWeb.Store do
       FROM fount_web_runs wr
       JOIN fount_web_projects p ON p.id=wr.project_id
       JOIN fount_runs r ON r.id=wr.run_id
-      WHERE wr.launched_at IS NOT NULL AND r.status NOT IN ('completed_candidate','completed_accepted','stopped','failed')
+      WHERE wr.launched_at IS NOT NULL AND r.status NOT IN ('completed_candidate','completed_accepted','completed_nonmutating','stopped','failed')
       ORDER BY wr.launched_at,wr.run_id
       """,
       []

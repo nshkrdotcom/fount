@@ -1,10 +1,10 @@
 defmodule FountWeb.SemanticContext do
-  @moduledoc "Provider-free SI01 source inventory, manual interpretation projection, and Core-promotion adapter."
+  @moduledoc "Source-bound literal inventory, SI02 assessment projection, manual review precedence, and Core-promotion adapter."
 
   alias Fount.{Persistence, Query, Screenplay}
   alias FountWeb.{ProductionStore, SemanticStore, Store}
 
-  @doc "Loads or creates the deterministic source inventory for an exact owned project revision."
+  @doc "Loads the literal inventory plus the newest usable source-bound interpretation for one owned revision."
   def load(repo, owner, project, %Screenplay{} = screenplay)
       when is_binary(owner) and is_map(project) do
     with {:ok, stored} <- Store.project(repo, owner, project["id"]),
@@ -16,19 +16,39 @@ defmodule FountWeb.SemanticContext do
            persisted.revision.content_hash == screenplay.revision.content_hash or
              {:error, :source_content_mismatch},
          {:ok, head} <- Persistence.load(repo, stored["key"]),
-         {:ok, assessment} <- SemanticStore.ensure_inventory(repo, owner, stored, persisted),
-         entities when is_list(entities) <- SemanticStore.entities(repo, assessment["id"]),
+         {:ok, manual} <- SemanticStore.ensure_inventory(repo, owner, stored, persisted),
+         {:ok, assessment} <-
+           SemanticStore.resolved_assessment_for_revision(
+             repo,
+             owner,
+             stored["id"],
+             persisted.revision.id
+           ),
+         current_entities when is_list(current_entities) <- SemanticStore.entities(repo, assessment["id"]),
+         revision_entities when is_list(revision_entities) <-
+           SemanticStore.entity_rows_for_revision(repo, owner, stored["id"], persisted.revision.id),
          history when is_list(history) <-
-           SemanticStore.review_history(repo, owner, stored["id"], assessment["id"]),
+           SemanticStore.review_history_for_revision(repo, owner, stored["id"], persisted.revision.id),
          {:ok, version} <-
-           SemanticStore.current_version(repo, owner, stored["id"], assessment["id"]) do
+           SemanticStore.current_version(repo, owner, stored["id"], assessment["id"]),
+         assessment_history when is_list(assessment_history) <-
+           SemanticStore.assessment_history(repo, owner, stored["id"], persisted.revision.id),
+         model_history when is_list(model_history) <-
+           SemanticStore.model_assessment_history(repo, owner, stored["id"]) do
+      entities = select_entity_rows(current_entities, revision_entities, history)
       projection = project_entities(entities, history)
-      inventory = assessment["result"] || %{}
+      inventory = manual["result"] || %{}
+      latest_current = latest_model(assessment_history)
+      latest = latest_current || List.first(model_history)
 
       {:ok,
        %{
          assessment: assessment,
          assessment_id: assessment["id"],
+         assessment_result: assessment["result"] || %{},
+         assessment_history: assessment_history,
+         model_assessment_history: model_history,
+         latest_assessment: latest,
          version: version,
          source_sha256: assessment["source_sha256"],
          revision_id: assessment["revision_id"],
@@ -38,16 +58,58 @@ defmodule FountWeb.SemanticContext do
          locations: location_profiles(projection),
          canonical_cast: canonical_cast(inventory),
          review_history: history,
-         assessment_state:
-           if(head.revision.id == persisted.revision.id,
-             do: :not_configured_si02,
-             else: :historical
-           )
+         assessment_state: assessment_state(head, persisted, latest_current, latest),
+         coverage: if(latest, do: latest["coverage"] || %{}, else: %{}),
+         usage: if(latest, do: latest["usage"] || %{}, else: %{}),
+         assessment_error: if(latest, do: latest["error"] || %{}, else: %{})
        }}
     else
       {:error, _} = error -> error
     end
   end
+
+  @doc "Carries human-reviewed handles across reassessments without reviving unreviewed historical suggestions."
+  def select_entity_rows(current_rows, revision_rows, history)
+      when is_list(current_rows) and is_list(revision_rows) and is_list(history) do
+    active_handles =
+      history
+      |> active_review_events()
+      |> Enum.flat_map(&event_handle_ids/1)
+      |> MapSet.new()
+
+    current_handles = MapSet.new(Enum.map(current_rows, & &1["handle_id"]))
+
+    carried =
+      revision_rows
+      |> Enum.filter(fn row ->
+        MapSet.member?(active_handles, row["handle_id"]) and
+          not MapSet.member?(current_handles, row["handle_id"])
+      end)
+      |> Enum.uniq_by(& &1["handle_id"])
+
+    current_rows ++ carried
+  end
+
+  defp latest_model(rows) do
+    Enum.find(rows, &(&1["schema_version"] == "semantic_import_v1" and &1["origin"] in ["model", "deterministic_fixture"]))
+  end
+
+  defp assessment_state(head, persisted, _latest_current, _latest_any)
+       when head.revision.id != persisted.revision.id,
+       do: :historical
+
+  defp assessment_state(_head, persisted, nil, %{"revision_id" => revision_id})
+       when revision_id != persisted.revision.id,
+       do: :stale
+
+  defp assessment_state(_head, _persisted, nil, nil), do: :not_assessed
+  defp assessment_state(_head, _persisted, %{"status" => "queued"}, _), do: :queued
+  defp assessment_state(_head, _persisted, %{"status" => "running"}, _), do: :running
+  defp assessment_state(_head, _persisted, %{"status" => "partial"}, _), do: :partial
+  defp assessment_state(_head, _persisted, %{"status" => "ready"}, _), do: :ready
+  defp assessment_state(_head, _persisted, %{"status" => "failed"}, _), do: :failed
+  defp assessment_state(_head, _persisted, %{"status" => "cancelled"}, _), do: :cancelled
+  defp assessment_state(_head, _persisted, _latest_current, _latest_any), do: :unknown
 
   def project_entities(rows, history) when is_list(rows) and is_list(history) do
     base =
@@ -60,13 +122,15 @@ defmodule FountWeb.SemanticContext do
            handle_id: handle_id,
            kind: row["kind"],
            label: row["label"],
-           review_state: "unreviewed",
-           aliases: [],
+           review_state: suggested_state(row["assessment_origin"] || row["created_origin"]),
+           aliases: model_aliases(payload),
            parent_handle_id: nil,
            time: nil,
            merged_into: nil,
-           occurrences: [occurrence(payload, row["local_id"])],
-           source_origin: row["created_origin"] || "manual"
+           occurrences: occurrences(payload, row["local_id"]),
+           certainty: value(payload, "certainty"),
+           evidence: value(payload, "evidence") || row["evidence"] || [],
+           source_origin: row["assessment_origin"] || row["created_origin"] || "manual"
          }}
       end)
 
@@ -83,7 +147,7 @@ defmodule FountWeb.SemanticContext do
     consolidate_merges(projected)
   end
 
-  defp active_review_events(history) do
+  def active_review_events(history) do
     applied = Enum.filter(history, &(&1["outcome"] == "applied"))
 
     {active_rev, _disabled} =
@@ -104,6 +168,18 @@ defmodule FountWeb.SemanticContext do
       end)
 
     active_rev
+  end
+
+  defp event_handle_ids(event) do
+    payload = event["payload"] || %{}
+
+    [
+      event["target_handle_id"],
+      payload["into_handle_id"],
+      payload["parent_handle_id"],
+      payload["new_handle_id"]
+    ]
+    |> Enum.filter(&is_binary/1)
   end
 
   defp apply_event(%{"action" => "confirm", "target_handle_id" => id}, state),
@@ -202,7 +278,7 @@ defmodule FountWeb.SemanticContext do
         label: List.first(moved).literal || entity.label,
         occurrences: moved,
         merged_into: nil,
-        review_state: "unreviewed",
+        review_state: entity.review_state,
         aliases: []
     }
 
@@ -262,7 +338,12 @@ defmodule FountWeb.SemanticContext do
   defp merged_review_state("confirmed", _), do: "confirmed"
   defp merged_review_state(_, "confirmed"), do: "confirmed"
   defp merged_review_state("rejected", "rejected"), do: "rejected"
+  defp merged_review_state("suggested", _), do: "suggested"
+  defp merged_review_state(_, "suggested"), do: "suggested"
   defp merged_review_state(_, _), do: "unreviewed"
+
+  defp suggested_state(origin) when origin in ["model", "deterministic_fixture"], do: "suggested"
+  defp suggested_state(_), do: "unreviewed"
 
   defp update_entity(state, id, fun) do
     case Map.fetch(state, id) do
@@ -271,22 +352,53 @@ defmodule FountWeb.SemanticContext do
     end
   end
 
-  defp occurrence(payload, local_id) do
+  defp occurrences(payload, local_id) do
+    case value(payload, "occurrences") do
+      rows when is_list(rows) and rows != [] -> Enum.map(rows, &occurrence(&1, local_id))
+      _ -> [occurrence(payload, local_id)]
+    end
+  end
+
+  defp occurrence(payload, fallback_local_id) do
     parts = value(payload, "parts") || %{}
 
     %{
-      local_id: local_id,
-      element_id: value(payload, "element_id"),
+      local_id: value(payload, "local_id") || fallback_local_id,
+      element_id: value(payload, "element_id") || value(payload, "literal_element_id"),
       dialogue_block_id: value(payload, "dialogue_block_id"),
-      literal: value(payload, "literal") || value(payload, "raw") || "",
+      literal: value(payload, "literal") || value(payload, "raw") || evidence_quote(payload),
       raw: value(payload, "raw"),
-      role: value(payload, "occurrence_role") || "unknown",
+      role: value(payload, "occurrence_role") || value(payload, "role") || "unknown",
       scene_id: value(payload, "scene_id"),
       scene_ordinal: value(payload, "scene_ordinal"),
       source_span: value(payload, "source_span"),
-      evidence: value(payload, "evidence") || %{},
+      evidence: value(payload, "evidence") || [],
       parts: parts
     }
+  end
+
+  defp evidence_quote(payload) do
+    payload
+    |> value("evidence")
+    |> List.wrap()
+    |> List.first()
+    |> case do
+      %{} = row -> row["quote"] || ""
+      _ -> ""
+    end
+  end
+
+  defp model_aliases(payload) do
+    payload
+    |> value("aliases")
+    |> List.wrap()
+    |> Enum.map(fn
+      %{} = row -> row["label"] || row[:label]
+      value when is_binary(value) -> value
+      _ -> nil
+    end)
+    |> Enum.reject(&(&1 in [nil, ""]))
+    |> Enum.uniq()
   end
 
   def character_profiles(entities, screenplay, inventory) do
@@ -404,6 +516,52 @@ defmodule FountWeb.SemanticContext do
       subplace: value(parts, "subplace"),
       unknown_modifiers: value(parts, "unknown_modifiers") || []
     }
+  end
+
+  @doc "Annotates a human table-read packet with source-bound semantic speaker identities without changing source cues or dialogue."
+  def annotate_table_read(packet, characters) when is_map(packet) and is_list(characters) do
+    by_block =
+      Enum.reduce(characters, %{}, fn profile, acc ->
+        identity = %{
+          "handle_id" => profile.semantic_handle_id,
+          "display_name" => profile.display_name,
+          "review_state" => profile.review_state,
+          "representation" => profile.representation
+        }
+
+        profile.occurrences
+        |> Enum.filter(&(&1.role == "speaker" and is_binary(&1.dialogue_block_id)))
+        |> Enum.reduce(acc, fn occurrence, index ->
+          Map.update(index, occurrence.dialogue_block_id, [identity], fn rows ->
+            [identity | rows] |> Enum.uniq_by(& &1["handle_id"])
+          end)
+        end)
+      end)
+
+    turns =
+      Enum.map(packet["turns"] || [], fn turn ->
+        case Map.get(by_block, turn["id"], []) do
+          [identity] -> Map.put(turn, "semantic_identity", identity)
+          [] -> turn
+          identities -> Map.put(turn, "semantic_identity_candidates", Enum.sort_by(identities, & &1["display_name"]))
+        end
+      end)
+
+    roster =
+      turns
+      |> Enum.flat_map(fn turn ->
+        case turn["semantic_identity"] do
+          %{} = identity -> [Map.put(identity, "source_cue", turn["cue"])]
+          _ -> []
+        end
+      end)
+      |> Enum.uniq_by(& &1["handle_id"])
+      |> Enum.sort_by(&{String.downcase(&1["display_name"] || ""), &1["handle_id"] || ""})
+
+    packet
+    |> Map.put("turns", turns)
+    |> Map.put("semantic_roster", roster)
+    |> Map.put("semantic_roster_claim", "Interpretation metadata only; source cue/dialogue text is unchanged.")
   end
 
   def character_dialogue(%Screenplay{} = screenplay, profile) when is_map(profile) do

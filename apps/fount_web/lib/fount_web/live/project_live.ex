@@ -13,6 +13,7 @@ defmodule FountWeb.ProjectLive do
       |> assign(:project_cards, [])
       |> assign(:pending_import, nil)
       |> assign(:preferences, prefs)
+      |> assign(:assessment_service, FountWeb.Services.assessment_service_summary())
       |> assign(:error, nil)
       |> allow_upload(:screenplay,
         accept: ~w(.fountain .fdx),
@@ -62,11 +63,15 @@ defmodule FountWeb.ProjectLive do
         supplied_title = params |> Map.get("title", "") |> String.trim()
         title = if supplied_title == "", do: pending.suggested_title, else: supplied_title
 
+        assess_source = truthy?(params["assess_source"])
+        socket = maybe_remember_assessment_default(socket, params, assess_source)
+
         attrs = %{
           "kind" => "import",
           "title" => title,
           "filename" => pending.filename,
-          "source" => pending.source
+          "source" => pending.source,
+          "assess_source" => assess_source
         }
 
         create_and_open(
@@ -133,14 +138,60 @@ defmodule FountWeb.ProjectLive do
             do: "/p/#{project["key"]}/write",
             else: "/p/#{project["key"]}"
 
-        {:noreply, socket |> put_flash(:info, flash) |> push_navigate(to: path)}
+        {flash_kind, flash_text} = maybe_launch_import_assessment(socket, project, attrs, flash)
+        {:noreply, socket |> put_flash(flash_kind, flash_text) |> push_navigate(to: path)}
 
       {:error, reason} ->
         {:noreply, assign(socket, :error, human_error(reason))}
     end
   end
 
-  defp load_projects(socket) do
+
+
+  defp maybe_launch_import_assessment(socket, project, %{"assess_source" => true}, _fallback) do
+    case FountWeb.Launch.assess_project(socket.assigns.current_owner, project["id"], %{
+           "command_id" => Fount.ID.v4()
+         }) do
+      {:ok, %{access: access}} ->
+        case FountWeb.WorkerSupervisor.start_run(access) do
+          {:ok, _pid} ->
+            {:info,
+             "Screenplay imported. Source assessment started as durable Work with gpt-6.1-sol (low); current screenplay text remains unchanged."}
+
+          {:error, _reason} ->
+            {:error,
+             "Screenplay imported. The assessment task was saved but its worker could not start; open Work to retry. Current screenplay text is unchanged."}
+        end
+
+      {:error, reason} ->
+        {:error,
+         "Screenplay imported, but source assessment did not start (#{assessment_error(reason)}). Manual reading and source review remain available."}
+    end
+  end
+
+  defp maybe_launch_import_assessment(_socket, _project, _attrs, fallback), do: {:info, fallback}
+
+  defp assessment_error(:semantic_assessment_not_configured), do: "assessment service is not configured"
+  defp assessment_error(:project_screenplay_mismatch), do: "the source revision changed"
+  defp assessment_error(:semantic_schema_missing), do: "the SI02 migration is not applied"
+  defp assessment_error(_), do: "the durable assessment launch failed"
+
+  defp truthy?(value), do: value in [true, "true", "on", "1", 1]
+
+  defp maybe_remember_assessment_default(socket, params, assess_source) do
+    if truthy?(params["remember_assessment_default"]) and socket.assigns.assessment_service["configured"] do
+      case FountWeb.Store.put_owner_preferences(Fount.Repo, socket.assigns.current_owner, %{
+             "semantic_assessment_default" => assess_source
+           }) do
+        {:ok, preferences} -> assign(socket, :preferences, preferences)
+        {:error, _} -> socket
+      end
+    else
+      socket
+    end
+  end
+
+    defp load_projects(socket) do
     case FountWeb.Store.list_projects(Fount.Repo, socket.assigns.current_owner, limit: 24) do
       projects when is_list(projects) ->
         cards =
@@ -356,6 +407,31 @@ defmodule FountWeb.ProjectLive do
             value={@pending_import.suggested_title}
             maxlength="160"
           />
+          <div class="semantic-import-consent">
+            <label :if={@assessment_service["configured"]}>
+              <input
+                type="checkbox"
+                name="project[assess_source]"
+                value="true"
+                checked={Map.get(@preferences, "semantic_assessment_default", false) == true}
+              />
+              Assess cast &amp; locations after import
+            </label>
+            <label :if={@assessment_service["configured"]} class="scope-note">
+              <input
+                type="checkbox"
+                name="project[remember_assessment_default]"
+                value="true"
+              />
+              Remember this assessment choice for future imports
+            </label>
+            <p :if={@assessment_service["configured"]} class="scope-note">
+              Uses {@assessment_service["model"]} with {@assessment_service["reasoning_effort"]} reasoning. The screenplay source ({@pending_import.import["source_bytes"]} bytes) is sent to the configured assessment service after the import commits. Assessment never accepts or rewrites screenplay text.
+            </p>
+            <p :if={!@assessment_service["configured"]} class="scope-note">
+              Model assessment: {@assessment_service["label"]}. Import and manual Cast/Locations review remain provider-free.
+            </p>
+          </div>
           <button type="submit">Open screenplay</button>
         </form>
       </section>

@@ -73,13 +73,13 @@ defmodule FountRun.Persistence do
              optional_enum(
                filter,
                "status",
-               ~w(queued running paused waiting_for_decision waiting_for_approval partial completed_candidate completed_accepted stopped failed)
+               ~w(queued running paused waiting_for_decision waiting_for_approval partial completed_candidate completed_accepted completed_nonmutating stopped failed)
              ),
            :ok <-
              optional_enum(
                filter,
                "stage",
-               ~w(intake investigate plan write check iterate decide deliver)
+               ~w(intake investigate plan write check iterate decide deliver semantic_intake semantic_plan semantic_extract semantic_reconcile semantic_validate semantic_persist)
              ) do
         conditions = ["screenplay_id=$1::text::uuid", "owner_type=$2", "owner_id=$3"]
         params = [context.screenplay_id, Atom.to_string(context.owner.type), context.owner.id]
@@ -1372,9 +1372,14 @@ defmodule FountRun.Persistence do
   defp insert_or_replay_run(repo, plan, policy, key, input_fp, context, _opts) do
     id = ID.v4()
 
+    initial_stage =
+      if plan.operation_parameters["workflow"] == "semantic_import_v1",
+        do: "semantic_intake",
+        else: "intake"
+
     sql = ~S"""
     INSERT INTO fount_runs(id,owner_type,owner_id,screenplay_id,client_idempotency_key,input_fingerprint,current_plan_version,current_policy_version,status,stage,iteration,current_fencing_token,lock_version)
-    VALUES($1::text::uuid,$2,$3,$4::text::uuid,$5,$6,1,1,'queued','intake',0,0,1)
+    VALUES($1::text::uuid,$2,$3,$4::text::uuid,$5,$6,1,1,'queued',$7,0,0,1)
     ON CONFLICT(owner_type,owner_id,client_idempotency_key) DO NOTHING RETURNING id::text
     """
 
@@ -1385,7 +1390,8 @@ defmodule FountRun.Persistence do
         context.owner.id,
         plan.screenplay_id,
         key,
-        input_fp
+        input_fp,
+        initial_stage
       ])
 
     case result.rows do

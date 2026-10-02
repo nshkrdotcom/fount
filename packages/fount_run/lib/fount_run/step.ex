@@ -3,7 +3,7 @@ defmodule FountRun.Step do
   alias Fount.Writing.CanonicalJSON
   alias FountRun.ClosedMap
 
-  @stages ~w(intake investigate plan write check iterate decide deliver)
+  @stages ~w(intake investigate plan write check iterate decide deliver semantic_intake semantic_plan semantic_extract semantic_reconcile semantic_validate semantic_persist)
   @keys ~w(stage iteration branch_id input_revision_id input_candidate_id idempotency_key request)
 
   def validate(attrs) do

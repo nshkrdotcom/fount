@@ -1,0 +1,473 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "chunk_id",
+    "entities",
+    "occurrences",
+    "headings",
+    "coverage",
+    "unresolved"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "semantic_import_v1"
+    },
+    "chunk_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120
+    },
+    "entities": {
+      "type": "array",
+      "maxItems": 5000,
+      "items": {
+        "$ref": "#/$defs/entity"
+      }
+    },
+    "occurrences": {
+      "type": "array",
+      "maxItems": 25000,
+      "items": {
+        "$ref": "#/$defs/occurrence"
+      }
+    },
+    "headings": {
+      "type": "array",
+      "maxItems": 5000,
+      "items": {
+        "$ref": "#/$defs/heading"
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "processed_span_ids",
+        "omitted"
+      ],
+      "properties": {
+        "processed_span_ids": {
+          "type": "array",
+          "maxItems": 25000,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          }
+        },
+        "omitted": {
+          "type": "array",
+          "maxItems": 25000,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "span_id",
+              "reason"
+            ],
+            "properties": {
+              "span_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 120
+              },
+              "reason": {
+                "enum": [
+                  "excluded_content",
+                  "unsupported_scope",
+                  "insufficient_evidence"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "unresolved": {
+      "type": "array",
+      "maxItems": 5000,
+      "items": {
+        "$ref": "#/$defs/issue"
+      }
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:fount:semantic-import:v1",
+  "$defs": {
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "span_id",
+        "byte_start",
+        "byte_end",
+        "quote"
+      ],
+      "properties": {
+        "span_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "byte_start": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "byte_end": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "quote": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8000
+        }
+      }
+    },
+    "alias": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "label",
+        "relation",
+        "evidence"
+      ],
+      "properties": {
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 240
+        },
+        "relation": {
+          "enum": [
+            "alias",
+            "age_variant",
+            "spelling_variant",
+            "possible_same_person",
+            "possible_same_place"
+          ]
+        },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "items": {
+            "$ref": "#/$defs/evidence"
+          }
+        }
+      }
+    },
+    "entity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "local_id",
+        "kind",
+        "label",
+        "aliases",
+        "certainty",
+        "confidence",
+        "evidence"
+      ],
+      "properties": {
+        "local_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "kind": {
+          "enum": [
+            "character",
+            "location",
+            "document_text",
+            "prop",
+            "organization",
+            "unknown"
+          ]
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 240
+        },
+        "aliases": {
+          "type": "array",
+          "maxItems": 128,
+          "items": {
+            "$ref": "#/$defs/alias"
+          }
+        },
+        "certainty": {
+          "enum": [
+            "supported",
+            "uncertain",
+            "unresolved"
+          ]
+        },
+        "confidence": {
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 128,
+          "items": {
+            "$ref": "#/$defs/evidence"
+          }
+        }
+      }
+    },
+    "occurrence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "local_id",
+        "entity_id",
+        "role",
+        "literal_element_id",
+        "certainty",
+        "evidence"
+      ],
+      "properties": {
+        "local_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "entity_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "role": {
+          "enum": [
+            "speaker",
+            "physical_presence",
+            "mentioned",
+            "printed_text",
+            "message_sender",
+            "location_heading",
+            "location_reference",
+            "unknown"
+          ]
+        },
+        "literal_element_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 240
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "certainty": {
+          "enum": [
+            "supported",
+            "uncertain",
+            "unresolved"
+          ]
+        },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "items": {
+            "$ref": "#/$defs/evidence"
+          }
+        }
+      }
+    },
+    "heading": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "heading_span_id",
+        "place_entity_id",
+        "parent_place_label",
+        "subplace_label",
+        "geography_label",
+        "time_of_day",
+        "date_or_era",
+        "relative_time",
+        "modifiers",
+        "certainty",
+        "evidence"
+      ],
+      "properties": {
+        "heading_span_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "place_entity_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 240
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "parent_place_label": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 240
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "subplace_label": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 240
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "geography_label": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 240
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "time_of_day": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 240
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "date_or_era": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 240
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "relative_time": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 240
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "modifiers": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 240
+          }
+        },
+        "certainty": {
+          "enum": [
+            "supported",
+            "uncertain",
+            "unresolved"
+          ]
+        },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "items": {
+            "$ref": "#/$defs/evidence"
+          }
+        }
+      }
+    },
+    "issue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "span_ids",
+        "entity_ids",
+        "reason_code",
+        "explanation"
+      ],
+      "properties": {
+        "span_ids": {
+          "type": "array",
+          "maxItems": 128,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          }
+        },
+        "entity_ids": {
+          "type": "array",
+          "maxItems": 128,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          }
+        },
+        "reason_code": {
+          "enum": [
+            "ambiguous_identity",
+            "ambiguous_role",
+            "ambiguous_heading",
+            "insufficient_evidence",
+            "conflicting_evidence",
+            "excluded_content",
+            "unsupported_scope"
+          ]
+        },
+        "explanation": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        }
+      }
+    }
+  }
+}

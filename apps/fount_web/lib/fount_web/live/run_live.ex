@@ -1099,7 +1099,7 @@ defmodule FountWeb.RunLive do
           phx-click="launch"
           disabled={
             !@live_connected ||
-              @run["status"] in ~w(completed_candidate completed_accepted stopped failed)
+              @run["status"] in ~w(completed_candidate completed_accepted completed_nonmutating stopped failed)
           }
         >Start / resume task</button>
         <p class="warning">
@@ -1417,7 +1417,7 @@ defmodule FountWeb.RunLive do
           <button
             disabled={
               !@live_connected ||
-                @run["status"] in ~w(completed_candidate completed_accepted stopped failed)
+                @run["status"] in ~w(completed_candidate completed_accepted completed_nonmutating stopped failed)
             }
             phx-click="launch"
           >Ensure worker is running</button>

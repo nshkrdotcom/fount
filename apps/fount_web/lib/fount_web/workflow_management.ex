@@ -16,7 +16,7 @@ defmodule FountWeb.WorkflowManagement do
   @policy_form_keys @gate_keys ++
                       @limit_keys ++
                       ~w(completion approver owner_fallback_enabled route_choice route_reviewer_key money_enabled currency max_microunits max_currency_units)
-  @terminal ~w(completed_candidate completed_accepted stopped failed)
+  @terminal ~w(completed_candidate completed_accepted completed_nonmutating stopped failed)
   @max_instruction_bytes 4_096
   @max_scope_targets 64
   @max_multi_launch 8

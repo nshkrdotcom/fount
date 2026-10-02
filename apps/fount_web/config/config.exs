@@ -20,6 +20,8 @@ config :fount_web, :demo,
 
 config :fount_web, :observe, mode: :sandbox
 
+config :fount_web, :semantic_assessment, mode: :disabled
+
 config :fount_web, :authoring,
   autosave_ms: 60_000,
   history_limit: 30,

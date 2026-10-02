@@ -863,9 +863,10 @@ defmodule FountRun.ExecutionStore do
          "waiting_for_approval",
          "partial",
          "completed_candidate",
-         "completed_accepted"
+         "completed_accepted",
+         "completed_nonmutating"
        ] or
-         stage not in [nil, "write", "iterate", "decide", "deliver"] do
+         stage not in [nil, "write", "iterate", "decide", "deliver", "semantic_plan", "semantic_extract", "semantic_reconcile", "semantic_validate", "semantic_persist"] do
       rollback(repo, :invalid_checkpoint_transition)
     end
 

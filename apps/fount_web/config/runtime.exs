@@ -119,6 +119,32 @@ observe_config =
 
 config :fount_web, :observe, observe_config
 
+semantic_assessment_mode =
+  System.get_env("FOUNT_SEMANTIC_ASSESSMENT_MODE", "disabled")
+  |> String.trim()
+
+semantic_assessment_config =
+  case semantic_assessment_mode do
+    "disabled" ->
+      [mode: :disabled]
+
+    "codex" ->
+      cli_path = optional_nonblank.("CODEX_PATH") || "codex"
+      auth_asserted = System.get_env("FOUNT_CODEX_AUTH_ASSERTED", "false") |> String.trim() |> String.downcase() == "true"
+      [mode: :codex, cli_path: cli_path, auth_asserted: auth_asserted]
+
+    "deterministic_fixture" when config_env() == :test ->
+      [
+        mode: :deterministic_fixture,
+        client_factory: {FountWeb.SemanticFixtureAdapter, :client, []}
+      ]
+
+    other ->
+      raise "FOUNT_SEMANTIC_ASSESSMENT_MODE must be disabled or codex (or deterministic_fixture in test), got #{inspect(other)}"
+  end
+
+config :fount_web, :semantic_assessment, semantic_assessment_config
+
 if config_env() == :prod do
   database_url = System.fetch_env!("FOUNT_DATABASE_URL")
   secret_key_base = System.fetch_env!("SECRET_KEY_BASE")

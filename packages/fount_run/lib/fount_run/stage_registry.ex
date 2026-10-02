@@ -1,7 +1,7 @@
 defmodule FountRun.StageRegistry do
   @moduledoc "Closed stage-handler registry for the durable headless screenplay pipeline."
 
-  @stages ~w(intake investigate plan write check iterate decide deliver)
+  @stages ~w(intake investigate plan write check iterate decide deliver semantic_intake semantic_plan semantic_extract semantic_reconcile semantic_validate semantic_persist)
 
   def new(overrides \\ %{})
 
@@ -16,7 +16,13 @@ defmodule FountRun.StageRegistry do
           "check" => FountRun.PipelineHandler,
           "iterate" => FountRun.PipelineHandler,
           "decide" => FountRun.CompletionHandler,
-          "deliver" => FountRun.DeliveryHandler
+          "deliver" => FountRun.DeliveryHandler,
+          "semantic_intake" => FountRun.SemanticAssessmentHandler,
+          "semantic_plan" => FountRun.SemanticAssessmentHandler,
+          "semantic_extract" => FountRun.SemanticAssessmentHandler,
+          "semantic_reconcile" => FountRun.SemanticAssessmentHandler,
+          "semantic_validate" => FountRun.SemanticAssessmentHandler,
+          "semantic_persist" => FountRun.SemanticAssessmentHandler
         },
         stringify_keys(overrides)
       )

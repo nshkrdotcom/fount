@@ -6,7 +6,7 @@ defmodule FountRun.Control do
   alias FountRun.{ActorContext, Persistence}
 
   @open_approval ~w(pending reviewed ready unknown)
-  @terminal_run ~w(completed_candidate completed_accepted stopped failed)
+  @terminal_run ~w(completed_candidate completed_accepted completed_nonmutating stopped failed)
 
   def update_plan(repo, run_id, attrs, %ActorContext{} = context, opts)
       when is_map(attrs) and is_list(opts) do

@@ -49,7 +49,206 @@ defmodule FountWeb.Launch do
     end
   end
 
-  @doc "Parses an uploaded screenplay for the UX01 preview without writing project or Run state."
+
+
+  @doc "Starts one source-bound, non-mutating SI02 assessment Run for the current accepted revision."
+  def assess_project(owner_id, project_id, attrs)
+      when is_binary(owner_id) and is_binary(project_id) and is_map(attrs) do
+    command_id = Map.get(attrs, "command_id", "") |> String.trim()
+
+    with :ok <- validate_authoring_command(command_id),
+         service <- FountWeb.Services.assessment_service_summary(),
+         true <- service["configured"] == true or {:error, :semantic_assessment_not_configured},
+         {:ok, project} <- FountWeb.Store.project(Fount.Repo, owner_id, project_id),
+         {:ok, root} <- Persistence.load(Fount.Repo, project["key"]),
+         true <- root.id == project["screenplay_id"] or {:error, :project_screenplay_mismatch},
+         {:ok, descriptor} <- Fount.Intelligence.ImportAssessment.source_descriptor(root),
+         {:ok, source_plan} <-
+           Fount.Intelligence.ImportAssessment.plan_source(descriptor["visible_source"],
+             limits: Fount.Intelligence.ImportAssessment.default_limits(),
+             scene_starts: descriptor["scene_starts"] || [],
+             metadata_ranges: descriptor["metadata_ranges"] || []
+           ),
+         {:ok, context} <- FountWeb.Actors.owner_context(owner_id, root.id) do
+      assessment_launch_transaction(
+        owner_id,
+        project,
+        root,
+        descriptor,
+        source_plan,
+        service,
+        command_id,
+        context
+      )
+    else
+      false -> {:error, :semantic_assessment_not_configured}
+      {:error, _} = error -> error
+    end
+  end
+
+  defp assessment_launch_transaction(
+         owner_id,
+         project,
+         root,
+         descriptor,
+         source_plan,
+         service,
+         command_id,
+         context
+       ) do
+    Fount.Repo.transaction(fn ->
+      limits =
+        Fount.Intelligence.ImportAssessment.default_limits()
+        |> Map.put("max_inference_calls", 2 * (source_plan["chunk_count"] + 1))
+
+      provider_family = service["provider_family"] || "codex"
+      service_key = if service["mode"] == "deterministic_fixture", do: "deterministic_fixture", else: "codex"
+      origin = if service_key == "deterministic_fixture", do: "deterministic_fixture", else: "model"
+
+      request_identity = %{
+        "project_id" => project["id"],
+        "screenplay_id" => root.id,
+        "revision_id" => root.revision.id,
+        "source_artifact_id" => descriptor["source_artifact_id"],
+        "source_sha256" => descriptor["source_sha256"],
+        "render_sha256" => descriptor["render_sha256"],
+        "source_basis" => descriptor["source_basis"],
+        "schema_version" => Fount.Intelligence.ImportAssessment.schema_version(),
+        "prompt_version" => Fount.Intelligence.ImportAssessment.prompt_version(),
+        "model" => FountWorkshop.SemanticAssessment.model(),
+        "reasoning_effort" => Atom.to_string(FountWorkshop.SemanticAssessment.reasoning_effort()),
+        "provider_family" => provider_family,
+        "service_key" => service_key,
+        "command_id" => command_id,
+        "limits" => limits
+      }
+
+      request_fingerprint = CanonicalJSON.hash(request_identity)
+
+      reserve_attrs =
+        request_identity
+        |> Map.put("request_fingerprint", request_fingerprint)
+        |> Map.put("origin", origin)
+        |> Map.put("provenance", %{
+          "source_basis" => descriptor["source_basis"],
+          "source_bytes" => source_plan["source_bytes"],
+          "chunk_count" => source_plan["chunk_count"],
+          "service_mode" => service["mode"],
+          "launch" => "explicit_or_consented_import"
+        })
+
+      with {:ok, assessment} <-
+             FountWeb.SemanticStore.reserve_assessment(
+               Fount.Repo,
+               owner_id,
+               project,
+               root,
+               reserve_attrs
+             ),
+           semantic_request <-
+             request_identity
+             |> Map.put("assessment_id", assessment["id"]),
+           {:ok, envelope} <- PipelineRequest.semantic(semantic_request),
+           {:ok, run} <-
+             FountRun.start_run(
+               Fount.Repo,
+               semantic_run_attrs(root, project, request_fingerprint, command_id, limits),
+               context
+             ),
+           {:ok, access} <-
+             FountWeb.Store.register_run(Fount.Repo, %{
+               run_id: run["id"],
+               project_id: project["id"],
+               owner_id: owner_id,
+               preset: "semantic-import",
+               journey: "semantic_import",
+               display_label: "Source assessment"
+             }),
+           :ok <-
+             FountWeb.SemanticStore.bind_run(
+               Fount.Repo,
+               owner_id,
+               project["id"],
+               assessment["id"],
+               run["id"]
+             ),
+           {:ok, _step} <-
+             FountRun.enqueue_step(
+               Fount.Repo,
+               run["id"],
+               semantic_intake(root, envelope, assessment["id"]),
+               context
+             ) do
+        %{
+          project: project,
+          assessment: assessment,
+          run: run,
+          access:
+            Map.merge(access, %{
+              "screenplay_id" => root.id,
+              "key" => project["key"],
+              "title" => project["title"]
+            })
+        }
+      else
+        {:error, reason} -> Fount.Repo.rollback(reason)
+      end
+    end)
+  end
+
+  defp semantic_run_attrs(root, project, request_fingerprint, command_id, limits) do
+    %{
+      "screenplay_id" => root.id,
+      "base_revision_id" => root.revision.id,
+      "goal" => "Assess exact screenplay source semantics without changing screenplay canon",
+      "scope" => %{
+        "kind" => "semantic_import",
+        "project_id" => project["id"],
+        "revision_id" => root.revision.id
+      },
+      "constraints" => ["non_mutating", "source_bound_evidence", "human_review_precedence"],
+      "protected_material" => [],
+      "client_idempotency_key" => "semantic-import:" <> command_id,
+      "operation_parameters" => %{
+        "workflow" => "semantic_import_v1",
+        "request_fingerprint" => request_fingerprint,
+        "selection_fingerprint" => CanonicalJSON.hash(%{"revision_id" => root.revision.id})
+      },
+      "policy" => %{
+        "gates" => %{
+          "investigation_scope" => "automatic",
+          "strategy_choice" => "automatic",
+          "candidate_generation" => "automatic",
+          "iteration" => "automatic"
+        },
+        "completion" => "nonmutating",
+        "approver" => nil,
+        "fallback_approver" => nil,
+        "route_choice" => %{"rule" => "pause_on_material_tradeoff"},
+        "limits" => %{
+          "max_iterations" => 0,
+          "max_malformed_repairs_per_call" => 1,
+          "max_transient_retries" => 2,
+          "max_inference_calls" => limits["max_inference_calls"],
+          "max_measurement_states" => 0,
+          "money" => nil
+        }
+      }
+    }
+  end
+
+  defp semantic_intake(root, envelope, assessment_id) do
+    %{
+      "stage" => "semantic_intake",
+      "iteration" => 0,
+      "branch_id" => "semantic",
+      "input_revision_id" => root.revision.id,
+      "idempotency_key" => "semantic-intake:" <> assessment_id,
+      "request" => envelope
+    }
+  end
+
+    @doc "Parses an uploaded screenplay for the UX01 preview without writing project or Run state."
   def preview_import(source, filename) when is_binary(source) and is_binary(filename) do
     with :ok <- validate_import_source(source), do: parse(source, filename)
   end

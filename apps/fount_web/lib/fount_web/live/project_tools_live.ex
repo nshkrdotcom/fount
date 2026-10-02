@@ -43,6 +43,66 @@ defmodule FountWeb.ProjectToolsLive do
   end
 
   @impl true
+  def handle_event("assess_source", _params, socket) do
+    owner = socket.assigns.current_owner
+    project = socket.assigns.project
+
+    case FountWeb.Launch.assess_project(owner, project["id"], %{"command_id" => Fount.ID.v4()}) do
+      {:ok, %{access: access}} ->
+        case FountWeb.WorkerSupervisor.start_run(access) do
+          {:ok, _pid} ->
+            {:noreply,
+             socket
+             |> reload_semantic_context()
+             |> assign(:notice, "Source assessment started as durable Work. Current screenplay text is unchanged.")
+             |> assign(:error, nil)}
+
+          {:error, {:already_started, _pid}} ->
+            {:noreply,
+             socket
+             |> reload_semantic_context()
+             |> assign(:notice, "Source assessment is already running. Current screenplay text is unchanged.")
+             |> assign(:error, nil)}
+
+          {:error, _reason} ->
+            {:noreply,
+             socket
+             |> reload_semantic_context()
+             |> assign(:error, "The assessment task was saved but its worker could not start. Open Work to retry it.")}
+        end
+
+      {:error, reason} ->
+        {:noreply, assign(socket, :error, semantic_assessment_error(reason))}
+    end
+  end
+
+  def handle_event("cancel_semantic_assessment", _params, socket) do
+    latest = Map.get(socket.assigns.semantic, :latest_assessment)
+
+    with %{"id" => assessment_id, "run_id" => run_id, "status" => status}
+         when is_binary(run_id) and status in ["queued", "running"] <- latest,
+         {:ok, actor_context} <-
+           FountWeb.Actors.owner_context(socket.assigns.current_owner, socket.assigns.context.current.id),
+         {:ok, _run} <- FountRun.stop_run(Fount.Repo, run_id, actor_context),
+         :ok <-
+           FountWeb.SemanticStore.update_assessment_status(
+             Fount.Repo,
+             socket.assigns.current_owner,
+             assessment_id,
+             "cancelled",
+             nil,
+             run_id
+           ) do
+      {:noreply,
+       socket
+       |> reload_semantic_context()
+       |> assign(:notice, "Assessment cancelled. Completed source review and screenplay text remain unchanged.")
+       |> assign(:error, nil)}
+    else
+      _ -> {:noreply, assign(socket, :error, "That assessment is no longer cancellable. Reload to see its current state.")}
+    end
+  end
+
   def handle_event("start_task", %{"task" => params}, socket) do
     journey = Map.get(params, "journey", "opening")
     command_id = Fount.ID.v4()
@@ -917,6 +977,7 @@ defmodule FountWeb.ProjectToolsLive do
     |> assign(:protection_options, CreativeWorkspace.protection_options(context.current))
     |> assign(:target_options, ProductionTools.target_options(context.current))
     |> assign(:semantic, context.semantic)
+    |> assign(:semantic_service, FountWeb.Services.assessment_service_summary())
     |> assign(:characters, semantic_characters(context))
     |> assign(:locations, semantic_locations(context))
     |> assign(:estimates, FountWeb.ScreenplayIndex.estimates(context.current))
@@ -1427,6 +1488,8 @@ defmodule FountWeb.ProjectToolsLive do
     |> to_string()
     |> String.replace("completed_candidate", "proposed writing ready")
     |> String.replace("completed_accepted", "accepted")
+    |> String.replace("completed_nonmutating", "assessment complete")
+    |> String.replace("suggested", "suggested")
     |> String.replace("waiting_for_decision", "needs a decision")
     |> String.replace("waiting_for_approval", "needs review")
     |> String.replace("_", " ")
@@ -1451,6 +1514,109 @@ defmodule FountWeb.ProjectToolsLive do
 
   defp task_error(_),
     do: "The task could not be created. Manual reading and writing remain available."
+
+  defp reload_semantic_context(socket) do
+    case ProjectContext.load(socket.assigns.current_owner, socket.assigns.project["key"]) do
+      {:ok, context} -> assign_project(socket, context)
+      _ -> socket
+    end
+  end
+
+  defp semantic_assessment_label(%{assessment_state: :not_assessed}), do: "Not assessed"
+  defp semantic_assessment_label(%{assessment_state: :queued}), do: "Queued"
+  defp semantic_assessment_label(%{assessment_state: :running}), do: "Assessing"
+  defp semantic_assessment_label(%{assessment_state: :partial}), do: "Partial suggestions"
+  defp semantic_assessment_label(%{assessment_state: :ready}), do: "Suggestions ready"
+  defp semantic_assessment_label(%{assessment_state: :failed}), do: "Failed"
+  defp semantic_assessment_label(%{assessment_state: :cancelled}), do: "Cancelled"
+  defp semantic_assessment_label(%{assessment_state: :historical}), do: "Historical"
+  defp semantic_assessment_label(%{assessment_state: :stale}), do: "Stale assessment"
+  defp semantic_assessment_label(_), do: "Source review"
+
+  defp semantic_assessment_detail(semantic, service) do
+    latest = Map.get(semantic, :latest_assessment)
+    coverage = Map.get(semantic, :coverage) || %{}
+
+    cond do
+      is_nil(latest) and service["configured"] == false ->
+        "No model assessment ran. #{service["label"]}. Literal source review remains available and creates no Run."
+
+      is_nil(latest) ->
+        "No model assessment has run for this exact revision. A request uses #{service["model"]} with #{service["reasoning_effort"]} reasoning and never accepts screenplay changes."
+
+      latest["status"] == "running" ->
+        processed = coverage["completed_chunks"] || coverage["processed_chunks"] || coverage["processed_span_ids"] || []
+        total = coverage["chunk_count"] || coverage["total_chunks"]
+        if is_integer(processed) and is_integer(total), do: "Assessing #{processed} of #{total} source chunks.", else: "Assessment is running as durable Work. Reading and manual review remain available."
+
+      latest["status"] == "queued" ->
+        "Assessment is queued as durable Work. Reading and manual review remain available."
+
+      latest["status"] == "failed" ->
+        "Assessment failed without changing the screenplay. The exact failure is retained in Work; retry creates a new source-bound attempt."
+
+      Map.get(semantic, :assessment_state) == :stale ->
+        "The newest assessment belongs to an earlier screenplay revision. It remains historical evidence and is not used as current interpretation; reassessment is explicit."
+
+      latest["status"] == "cancelled" ->
+        "Assessment was cancelled. Existing manual review and screenplay text remain unchanged; reassessment is explicit."
+
+      latest["status"] == "partial" ->
+        "Validated suggestions are partial; omitted or unresolved coverage remains explicit. Human review takes precedence."
+
+      latest["status"] == "ready" ->
+        "Validated suggestions are source-bound and remain suggestions until human review. Confirming an interpretation does not accept screenplay changes."
+
+      true ->
+        "Assessment state is retained with this exact source revision."
+    end
+  end
+
+  defp semantic_assessment_running?(%{assessment_state: state}), do: state in [:queued, :running]
+  defp semantic_assessment_running?(_), do: false
+
+  defp semantic_assessment_launchable?(semantic, service) do
+    service["configured"] == true and not semantic_assessment_running?(semantic) and
+      Map.get(semantic, :assessment_state) != :historical
+  end
+
+  defp semantic_assessment_action(%{assessment_state: :failed}), do: "Retry assessment"
+  defp semantic_assessment_action(%{assessment_state: :cancelled}), do: "Restart assessment"
+  defp semantic_assessment_action(%{assessment_state: state}) when state in [:ready, :partial, :stale], do: "Reassess this draft"
+  defp semantic_assessment_action(_), do: "Assess this draft"
+
+  defp semantic_assessment_history(semantic), do: Map.get(semantic, :model_assessment_history, [])
+
+  defp semantic_assessment_run_key(semantic, runs) do
+    run_id = get_in(semantic, [:latest_assessment, "run_id"])
+    case Enum.find(runs, &(&1["run_id"] == run_id)) do
+      nil -> nil
+      run -> run["display_key"]
+    end
+  end
+
+  defp semantic_evidence_quote(occurrence) do
+    occurrence
+    |> Map.get(:evidence, [])
+    |> List.wrap()
+    |> List.first()
+    |> case do
+      %{} = evidence -> evidence["quote"] || evidence[:quote] || ""
+      _ -> ""
+    end
+  end
+
+  defp semantic_assessment_error(:semantic_assessment_not_configured),
+    do: "Source assessment is not configured. Manual source review remains available."
+
+  defp semantic_assessment_error(:project_screenplay_mismatch),
+    do: "The screenplay changed before assessment could be bound. Reload and assess the current draft."
+
+  defp semantic_assessment_error(:semantic_schema_missing),
+    do: "Apply the SI02 database migration before starting source assessment."
+
+  defp semantic_assessment_error(_),
+    do: "Source assessment could not be started. No screenplay text changed."
 
   defp semantic_review_payload(%{"action" => action} = params), do: review_payload(action, params)
   defp semantic_review_payload(_), do: {:error, :invalid_review_action}
@@ -2286,11 +2452,33 @@ defmodule FountWeb.ProjectToolsLive do
 
         <section class="card semantic-assessment-strip" id="semantic-assessment-status">
           <div>
-            <p class="eyebrow">Model assessment</p><strong>Not configured</strong>
+            <p class="eyebrow">Model assessment</p><strong>{semantic_assessment_label(@semantic)}</strong>
           </div>
-          <p>
-            Coming in SI02. Manual source review is fully available now and remains provider-free.
-          </p>
+          <p>{semantic_assessment_detail(@semantic, @semantic_service)}</p>
+          <div class="inline-actions">
+            <button
+              :if={semantic_assessment_launchable?(@semantic, @semantic_service)}
+              type="button"
+              phx-click="assess_source"
+            >{semantic_assessment_action(@semantic)}</button>
+            <button
+              :if={semantic_assessment_running?(@semantic)}
+              type="button"
+              phx-click="cancel_semantic_assessment"
+            >Cancel assessment</button>
+            <a
+              :if={semantic_assessment_run_key(@semantic, @runs)}
+              href={"/p/#{@project["key"]}/activity/#{semantic_assessment_run_key(@semantic, @runs)}"}
+            >Open in Work</a>
+          </div>
+          <details :if={semantic_assessment_history(@semantic) != []}>
+            <summary>Assessment history</summary>
+            <ul class="plain-list">
+              <li :for={item <- semantic_assessment_history(@semantic)}>
+                {human_status(item["status"])} · {item["model"] || "model identity unavailable"} · {item["reasoning_effort"] || "effort unavailable"}
+              </li>
+            </ul>
+          </details>
         </section>
 
         <FountWeb.CoreComponents.alert
@@ -2457,6 +2645,9 @@ defmodule FountWeb.ProjectToolsLive do
                 >
                   Scene {occurrence.scene_ordinal || "—"} · {occurrence.raw || occurrence.literal}
                 </a>
+                <blockquote :if={semantic_evidence_quote(occurrence) != ""} class="source-evidence">
+                  “{semantic_evidence_quote(occurrence)}”
+                </blockquote>
                 <form phx-submit="semantic_review" class="inline-form">
                   <input
                     type="hidden"
@@ -2636,9 +2827,21 @@ defmodule FountWeb.ProjectToolsLive do
         </p>
         <section class="card semantic-assessment-strip">
           <div>
-            <p class="eyebrow">Model assessment</p><strong>Not configured</strong>
+            <p class="eyebrow">Model assessment</p><strong>{semantic_assessment_label(@semantic)}</strong>
           </div>
-          <p>Coming in SI02. Manual location review is available now.</p>
+          <p>{semantic_assessment_detail(@semantic, @semantic_service)}</p>
+          <div class="inline-actions">
+            <button
+              :if={semantic_assessment_launchable?(@semantic, @semantic_service)}
+              type="button"
+              phx-click="assess_source"
+            >{semantic_assessment_action(@semantic)}</button>
+            <button
+              :if={semantic_assessment_running?(@semantic)}
+              type="button"
+              phx-click="cancel_semantic_assessment"
+            >Cancel assessment</button>
+          </div>
         </section>
 
         <p :if={@locations == [] && not Map.get(@semantic, :error)}>
